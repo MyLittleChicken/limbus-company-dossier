@@ -55,6 +55,18 @@
 | [02-pipeline.md](docs/adr/02-pipeline.md) | 변환·적재 파이프라인 — TypeScript, Prisma(마이그레이션 러너 미사용) | 채택 |
 | [03-localized-text.md](docs/adr/03-localized-text.md) | 다국어 표시 문자열 — 로케일별 행 분리, 한국어·영어, 빌드 시점 토큰 치환 | 채택 |
 
+## 개발 환경 설정
+
+클론 후 한 번 실행한다.
+
+```
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit`이 `data/` 아래 파일의 커밋을 막는다. 이 디렉토리는 Project Moon 저작물에서
+유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
+`.gitignore`가 1차 방어이고 훅은 `git add -f`로 무시 규칙을 넘긴 경우를 잡는 2차 방어다.
+
 ## 라이선스
 
 이 저장소의 **코드와 문서**는 [MIT License](LICENSE.md)를 따른다. 상업적 이용을 포함해 자유롭게 사용·수정·재배포할 수 있다.

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# 게임 데이터가 저장소에 들어가는 것을 막는다.
+#
+# 근거: docs/01-data-source.md 7절 — 추출 애셋과 추출 파생 데이터는 커밋하지 않는다.
+#       docs/adr/01-data-storage.md 6절 — 정규화 산출물도 같은 취급.
+#
+# .gitignore가 1차 방어이고 이 훅은 2차 방어다. `git add -f`로 무시 규칙을 넘긴
+# 경우를 잡는다. 우회하려면 `git commit --no-verify`를 쓴다.
+#
+# 적용: git config core.hooksPath .githooks
+
+ALLOW="data/README.md
+data/manifest.json
+data/coverage.json"
+
+MAX_BYTES=$((5 * 1024 * 1024))
+
+blocked=""
+oversize=""
+
+while IFS= read -r -d '' f; do
+	case "$f" in
+	data/*)
+		if ! printf '%s\n' "$ALLOW" | grep -qxF "$f"; then
+			blocked="$blocked  $f
+"
+		fi
+		;;
+	esac
+
+	size=$(git cat-file -s ":$f" 2>/dev/null) || size=0
+	if [ "$size" -gt "$MAX_BYTES" ]; then
+		oversize="$oversize  $f ($((size / 1024 / 1024)) MB)
+"
+	fi
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+
+status=0
+
+if [ -n "$blocked" ]; then
+	printf '커밋 거부 — data/ 아래 추적 대상이 아닌 파일이 있다:\n\n%s\n' "$blocked" >&2
+	printf '이 디렉토리는 Project Moon 저작물에서 유래한 로컬 스냅샷이며 재배포하지 않는다.\n' >&2
+	printf '추적하는 파일은 README.md · manifest.json · coverage.json 셋뿐이다.\n\n' >&2
+	printf '해제하려면:  git restore --staged <파일>\n' >&2
+	status=1
+fi
+
+if [ -n "$oversize" ]; then
+	[ $status -eq 1 ] && printf '\n' >&2
+	printf '커밋 거부 — 상한(%s MB)을 넘는 파일이 있다:\n\n%s\n' "$((MAX_BYTES / 1024 / 1024))" "$oversize" >&2
+	printf '애셋이나 덤프가 섞여 들어갔는지 확인한다.\n' >&2
+	status=1
+fi
+
+exit $status
