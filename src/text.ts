@@ -57,6 +57,26 @@ export const STATUS_DIRS = ['mechanics', 'mirror-dungeon', 'gifts'] as const;
  * `mirror-dungeon` 에 258, `gifts` 에 7로 흩어져 있다. 처음에 `mechanics` 만 읽어
  * 258종이 결손으로 잡혔다.
  */
+const HANGUL = /[가-힣]/;
+
+/** 번역 대신 들어간 자리표시자. 실측 32회 등장하며 영어 파일에도 이 한국어가 그대로 있다. */
+const PLACEHOLDERS = new Set(['버프 이름']);
+
+/**
+ * 표제어의 적합도. 같은 id 가 여러 파일에 있을 때 무엇을 택할지 정한다.
+ *
+ * **먼저 등장한 것을 택하면 안 된다.** `loc-en/EGOgift.json` 은 영어 로케일인데 내용이
+ * 한국어인 미번역 스텁이고, 파일명이 사전순으로 앞서 이긴다. 그 결과 기프트 9001–9040 의
+ * 영문명이 한국어로 굳었다. 로케일과 언어가 맞는 쪽을 택해야 한다.
+ */
+function score(term: Term, locale: 'loc-ko' | 'loc-en'): number {
+	const name = term.name;
+	if (!name) return 0;
+	if (PLACEHOLDERS.has(name.trim())) return -1;
+	const hasHangul = HANGUL.test(name);
+	return hasHangul === (locale === 'loc-ko') ? 2 : 1;
+}
+
 export function collectLocale(locale: 'loc-ko' | 'loc-en', report: Report): LocaleIndex {
 	const out = new Map<LocaleDir, Map<string, Term>>();
 	for (const dir of LOCALE_DIRS) {
@@ -71,14 +91,13 @@ export function collectLocale(locale: 'loc-ko' | 'loc-en', report: Report): Loca
 					bucket.set(key, entry);
 					continue;
 				}
-				// 같은 디렉토리 안에서 같은 id 가 다른 이름으로 있다. 구버전 표기나
-				// `버프 이름` 같은 자리표시자가 섞인 결과다. 먼저 등장한 것을 유지하되 드러낸다.
-				if (entry.name && seen.name && entry.name !== seen.name) {
-					report.note(
-						`로케일 표제어 중복 (${locale}/${dir})`,
-						key,
-						`${seen.name} / ${entry.name}`,
-					);
+				if (!entry.name || !seen.name || entry.name === seen.name) continue;
+				// 적합도가 높은 쪽으로 교체한다. 같으면 먼저 등장한 것을 유지해 순서 의존을 막는다.
+				if (score(entry, locale) > score(seen, locale)) {
+					bucket.set(key, entry);
+					report.note(`로케일 표제어 교체 (${locale}/${dir})`, key, `${seen.name} → ${entry.name}`);
+				} else {
+					report.note(`로케일 표제어 중복 (${locale}/${dir})`, key, `${seen.name} / ${entry.name}`);
 				}
 			}
 		}
@@ -103,14 +122,29 @@ export function buildTokenTable(index: LocaleIndex): Map<string, string> {
 }
 
 /**
- * 스포일러 마크업을 제거한다.
+ * Unity 리치텍스트 태그 이름. 게임 텍스트에 실제로 등장하는 것만 담는다.
  *
- * 소속 태그 94종 중 5종에 `<color=...><s>...</s></color>` 가 섞여 있는데,
- * **그중 2종은 닫는 태그가 `</s>` 가 아니라 `<s>` 로 깨져 있다.**
- * 짝을 맞추는 패턴 대신 모든 태그를 지우는 방식이라야 그 2종도 걸린다.
+ * **꺾쇠를 무조건 지우면 안 된다.** 게임은 `<혈귀>` · `<라만차랜드>` · `<획득 조건>` 처럼
+ * 꺾쇠 자체를 키워드 표기로 쓴다. 전부 지우면 `<라만차랜드>소속, <혈귀>(상위 권속)인 아군` 이
+ * `소속, (상위 권속)인 아군` 이 되어 주어가 사라진다. 실측 리터럴 100종이 이런 표기다.
+ */
+const UNITY_TAGS = [
+	'color', 'style', 'b', 'i', 'u', 's', 'size', 'mark', 'sprite', 'link', 'noparse',
+	'font', 'br', 'align', 'cspace', 'indent', 'line-height', 'lowercase', 'uppercase',
+	'smallcaps', 'margin', 'nobr', 'pos', 'space', 'voffset', 'width', 'alpha',
+	'gradient', 'rotate', 'sup', 'sub',
+] as const;
+
+const MARKUP = new RegExp(`</?(?:${UNITY_TAGS.join('|')})\\b[^>]*>`, 'gi');
+
+/**
+ * Unity 리치텍스트만 제거한다. 리터럴 꺾쇠 표기는 보존한다.
+ *
+ * 소속 태그 5종에 섞인 스포일러 마크업도 여기서 걸린다. **그중 2종은 닫는 태그가
+ * `</s>` 가 아니라 `<s>` 로 깨져 있는데**, 짝을 맞추지 않고 태그 단위로 지우므로 함께 처리된다.
  */
 export function stripMarkup(text: string): string {
-	return text.replace(/<[^>]*>/g, '').trim();
+	return text.replace(MARKUP, '').trim();
 }
 
 const TOKEN = /\[([A-Za-z][A-Za-z0-9_ ]*)\]/g;
@@ -150,7 +184,9 @@ export function toDisplay(
 	context: string,
 ): string {
 	if (!raw) return '';
-	return substituteTokens(stripMarkup(raw), table, report, context);
+	// 치환값 자체가 마크업을 품은 표제어가 있다(예: `중지 - 원한 문신 [<s>큰 누님</s>]`).
+	// 치환 뒤 한 번 더 정제하지 않으면 그 마크업이 표시용 텍스트에 남는다.
+	return stripMarkup(substituteTokens(stripMarkup(raw), table, report, context));
 }
 
 /**

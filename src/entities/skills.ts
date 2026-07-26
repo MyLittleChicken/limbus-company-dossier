@@ -308,6 +308,20 @@ export function buildSkills(ctx: Ctx) {
 		}
 		ctx.report.note('패시브 정의가 보강 출처에만 있음(발동 조건 없음)', row.passiveId);
 	}
+	// 정본에 정의가 없는 스킬은 집합에서 빠질 뿐 아니라 리포트에도 안 남는다.
+	// 보강 출처가 인격에 배정한 스킬과 대조해 그 차이를 드러낸다.
+	const built = new Set(skill.map((s) => s.id));
+	for (const detail of mjDetails.values()) {
+		const assigned = [
+			...(detail.attackSkills ?? []).map((s) => s.skillId),
+			...(detail.defenseSkills ?? []),
+		];
+		for (const skillId of assigned) {
+			if (skillId === undefined || built.has(skillId)) continue;
+			ctx.report.unmapped('인격에 배정된 스킬이 정본에 없음', String(skillId), String(detail.id));
+		}
+	}
+
 	// 같은 패시브가 여러 단계에 중복 등재된다. 열쇠는 (인격, 패시브, 종류)이고
 	// 의미상 값은 **해금되는 가장 이른 단계**이므로 최소값으로 접는다.
 	const folded = new Map<string, (typeof identityPassive)[number]>();
