@@ -110,7 +110,7 @@ interface MjAssociation {
 }
 
 export function buildAffiliations(ctx: Ctx) {
-	// 정본은 limbus-assets 의 태그 목록이다. 마크업을 지우면 93종이 된다.
+	// 정본은 limbus-assets 의 태그 목록이다. 95항목이며 마크업 제거 후 고유 93종이 된다.
 	const list = readJson<string[]>('identities', 'limbus-assets', 'identity_tag_list.json');
 	const ids = [...new Set(list.map(stripMarkup).filter(Boolean))].sort();
 

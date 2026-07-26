@@ -21,9 +21,9 @@ export const OUT = join(ROOT, 'build', 'data');
  * 문자열을 코드 곳곳에 흩지 않기 위해 여기서만 정의한다.
  */
 export const SOURCE = {
-	/** E.G.O · 기프트 · 합성 · 층별 팩 · 상태 · 소속 · 거울 던전 */
+	/** E.G.O · 기프트 · 합성 · 스킬 · 패시브 · 층별 팩 · 상태 · 소속 · 거울 던전 */
 	assets: 'limbus-assets',
-	/** 수감자 · 인격 · 스킬 · 패시브 · 테마 팩 · 죄악 · 키워드 */
+	/** 수감자 · 인격 · 테마 팩 · 죄악 · 키워드 (스킬·패시브는 ADR-04 2.1 정정으로 assets) */
 	mj: 'limbus-data-mj',
 	/** 표시 문자열 (한국어 정본) */
 	ko: 'loc-ko',

@@ -48,7 +48,7 @@ data/
 | `limbus-assets` | github.com/eldritchtools/limbus-assets | `774883d7` | current |
 | `limbus-data-mj` | github.com/monthofjune/limbus_data | `97c38567` | current |
 | `loc-ko` / `loc-en` / `loc-ja` | github.com/x1bViolet/Limbus-Localization-Files | `595947fc` / `ccfff8e3` / `2f98ddb4` | current |
-| `shared-library` | github.com/eldritchtools/limbus-shared-library | `2b0bfb6b` | superseded (데이터 5파일만 잔존, 대조용) |
+| `shared-library` | github.com/eldritchtools/limbus-shared-library | `2b0bfb6b` | superseded (280파일 잔존 — 인격 상세 163 · E.G.O 상세 105 · 집계 10 · 애셋 2) |
 | `md-resource` | github.com/eldritchtools/limbus-mirror-dungeon-resource | `beeb89ea` | 거울 던전 DB 스키마 2개만 잔존 |
 | `v1-local` | 로컬 `../limbus-mirror-tracker-v1` | `a31aff0c` | superseded (고유 애셋 16개만 잔존) |
 

@@ -2,7 +2,7 @@
  * E.G.O 기프트와 합성 레시피.
  *
  * 정본 배정(ADR-04 2.1)  limbus-assets — 456종 완전집합. mj 는 441종으로 15종이 없다.
- * 허용 보강(ADR-04 2.2)
+ * 허용 보강(ADR-04 2.3)
  *   gift.mdCost   limbus-data-mj `cost`   441/456 만 존재하므로 15종은 빈다
  *   gift_pack     limbus-data-mj `packs`  정본에 없다. 교차 검증 불가한 단일 출처다
  */

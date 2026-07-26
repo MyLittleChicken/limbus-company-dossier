@@ -53,8 +53,8 @@
 | 상태 | `limbus-assets` | 유일한 출처다 |
 | 소속 | `limbus-assets` | 93종 전량. mj는 64종뿐이다 |
 | 죄악 · 키워드 | `limbus-data-mj` | 유일한 목록 출처다 |
-| 거울 던전 구성 | `limbus-assets` | 은총·역경이 여기에만 있다 |
-| 표시 문자열 | `loc-ko` · `loc-en` | `docs/adr/03-localized-text.md` |
+| 거울 던전 구성 | `limbus-assets` | 은총·제약이 여기에만 있다 |
+| 표시 문자열 | `loc-ko` · `loc-en` | `03-localized-text.md` |
 
 인격의 정본을 `limbus-data-mj`로 두는 근거는 필드 대조다. mj의 `identities.json` +
 `identities_detail.json`이 `limbus-assets`의 인격 필드를 모두 덮으면서 `mentalCondition` ·
@@ -121,7 +121,7 @@ MD 코스트를 잃고, `limbus-data-mj`로 통일하면 기프트 15종과 전�
 값이 어긋날 수 있다. 정본을 하나로 고정하면 그 위험이 사라지고, 보강은 빈칸을 채우는 것이므로
 충돌할 대상이 없다.
 
-## 4. `docs/adr/01-data-storage.md` 7절 정정
+## 4. `01-data-storage.md` 7절 정정
 
 7절은 필드 단위 출처를 산출물에 남기지 않기로 하면서 이렇게 적었다.
 

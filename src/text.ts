@@ -30,7 +30,7 @@ export type LocaleDir = (typeof LOCALE_DIRS)[number];
  * 디렉토리별로 나뉜 로케일 색인.
  *
  * **id 공간이 엔티티마다 겹친다.** `1001` 은 팩(잊혀진 자들)이면서 동시에 다른 디렉토리의
- * 기프트(신도의 가면)이기도 하다. 실측 95종 133회가 충돌한다. 평평한 맵으로 합치면
+ * 기프트(신도의 가면)이기도 하다. 실측 40종이 두 개 이상의 디렉토리에 겹친다. 평평한 맵으로 합치면
  * 조회가 엉뚱한 엔티티의 이름을 돌려준다. 조회할 때 어느 디렉토리를 볼지 지정해야 한다.
  */
 export type LocaleIndex = ReadonlyMap<LocaleDir, ReadonlyMap<string, Term>>;
@@ -49,7 +49,7 @@ export function lookupTerm(
 	return undefined;
 }
 
-/** 상태 표제어가 놓인 디렉토리. 실측 mechanics 1,207 · mirror-dungeon 258 · gifts 7. */
+/** 상태 표제어가 놓인 디렉토리. 실측 mechanics 1,214 · mirror-dungeon 258 (합 1,472). */
 export const STATUS_DIRS = ['mechanics', 'mirror-dungeon', 'gifts'] as const;
 
 /**
@@ -197,7 +197,7 @@ export function toDisplay(
  * 키워드 식별자를 정규화한다.
  *
  * **대소문자가 소스마다 다르다** — 기프트는 `Burn`, 키워드 목록은 `burn` 이다.
- * 정규화하지 않으면 기프트 456종 전부가 외래 키 위반이 된다.
+ * 정규화하지 않으면 키워드를 가진 기프트 336종이 전부 외래 키 위반이 된다.
  * 원본의 `Keywordless` 는 값이 아니라 부재를 뜻하므로 null 로 바꾼다.
  */
 export function normalizeKeyword(raw: string | null | undefined): string | null {
