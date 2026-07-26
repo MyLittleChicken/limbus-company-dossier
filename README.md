@@ -5,7 +5,36 @@
 
 ## 현재 상태
 
-기획 단계. 구현 코드는 아직 없다. 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+**1단계(데이터베이스 구축) 완료.** 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+
+| 항목 | 상태 |
+| --- | --- |
+| 원본 데이터 수집 | 완료 — 6,486 파일, 체크섬 전수 검증 |
+| 수집기 (원격 → 원본) | 완료 — 빈 상태에서 1,749 파일 복원 · 체크섬 전수 대조 |
+| 의사결정 기록 | 완료 — ADR 4건 |
+| 데이터베이스 스키마 | 완료 — 47 테이블 · 외래 키 45 |
+| 변환기 (원본 → 정규화 JSON) | 완료 — 47/47 테이블 · 미분류 입력 0 |
+| 적재기 (JSON → PostgreSQL) | 완료 — 50,121행 적재 |
+| 검증 스크립트 | 완료 — 40건 전부 실행 · 40건 통과 |
+| 2단계 (웹페이지 구축) | 미착수 |
+
+값의 정확성은 원본과 전수 대조해 스칼라 필드 불일치 0을 확인했다.
+인격 184 · E.G.O 110 · 기프트 456 · 팩 117이 수집 시점 실측(`data/coverage.json`)과 일치하고,
+기준 버전(`MD7` · 스냅샷 `2026-07-25`)을 함께 기록했다.
+
+`docs/00-product.md` 6절의 1단계 성공 기준인 "누락 없이 구축"을 충족한다. 인격에 배정된
+스킬 836종이 모두 적재되고, 원본이 수치를 갖지 않는 6종은 분류만 담아 **0으로 지어내지 않는다.**
+어느 출처에도 없는 값은 비워 두고 리포트에 남긴다.
+
+### 알려진 한계
+
+- **기프트–팩 관계 10,115행은 대조할 출처가 없다.** 전체 관계의 81%다([adr/04](docs/adr/04-source-authority.md) 2.3).
+- **원본을 게임 클라이언트와 대조한 적이 없다**([04-data-inventory.md](docs/04-data-inventory.md) 10절).
+- 원본 결손으로 채울 수 없는 것 — 소속 한국어 12종 · 상태 이름 자리표시자 7종 ·
+  스킬 이름 3종(동기화 1단계) · 스킬 수치 6종 · 스킬 이름과 코인 설명의 한국어 3종(영문 노출).
+- 스킬 6종의 정의를 갱신 중단된 과거 스냅샷에서 받는다([adr/04](docs/adr/04-source-authority.md) 2.3).
+- 코인 918행은 어느 언어로도 설명이 없다. 효과 없는 코인이라 결손이 아니다.
+- 추천에 필요한 효과 분해와 조건 정의는 이 단계에 없다. 3단계의 저작 대상이다.
 
 ## 무엇을 만드는가
 
@@ -54,6 +83,7 @@
 | [01-data-storage.md](docs/adr/01-data-storage.md) | 데이터 저장 형식 — 정규화 JSON으로 정리하고 PostgreSQL에 적재·검증 | 채택 |
 | [02-pipeline.md](docs/adr/02-pipeline.md) | 변환·적재 파이프라인 — TypeScript, Prisma(마이그레이션 러너 미사용) | 채택 |
 | [03-localized-text.md](docs/adr/03-localized-text.md) | 다국어 표시 문자열 — 로케일별 행 분리, 한국어·영어, 빌드 시점 토큰 치환 | 채택 |
+| [04-source-authority.md](docs/adr/04-source-authority.md) | 출처 권위 — 엔티티별 정본 하나, 정본에 없는 필드만 보강 | 채택 |
 
 ## 개발 환경 설정
 
@@ -66,6 +96,34 @@ git config core.hooksPath .githooks
 `.githooks/pre-commit`이 `data/` 아래 파일의 커밋을 막는다. 이 디렉토리는 Project Moon 저작물에서
 유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
 `.gitignore`가 1차 방어이고 훅은 `git add -f`로 무시 규칙을 넘긴 경우를 잡는 2차 방어다.
+
+### 데이터 파이프라인
+
+클론 직후 `data/`에는 원본이 없다(커밋하지 않는다). 아래를 순서대로 실행하면 원격에서
+원본을 받아 데이터베이스까지 채운다.
+
+```
+npm install
+cp .env.example .env
+
+npm run fetch                  # 원격 5곳 → data/entities/*.json (1,749개)
+npm run db:up                  # PostgreSQL 컨테이너 기동
+npm run db:ddl < prisma/schema.sql
+npm run convert                # 원본 → build/data/*.json (47개)
+npm run load                   # JSON → PostgreSQL
+npm run verify                 # coverage.json 과 대조
+```
+
+컨테이너는 현재 **podman**으로 띄운다. `compose.yaml`은 Docker와도 호환되며 추후 전환한다.
+
+`npm run fetch`는 `data/manifest.json`이 파일마다 기록한 출처·경로·체크섬대로 내려받고
+**1,749개 전부의 체크섬을 대조한다.** 하나라도 어긋나거나 받지 못하면 종료 코드 1이다.
+커밋을 고정해 받으므로 최신 데이터가 아니라 **검증된 스냅샷**이 그대로 재현된다.
+이미지 4,737개는 변환기가 읽지 않아 기본에서 빠지며 `npm run fetch -- --assets`로 포함한다.
+
+`build/`는 추출 파생 데이터라 커밋하지 않는다([adr/01](docs/adr/01-data-storage.md) 6절).
+`prisma/schema.sql`은 `prisma migrate diff` 산출물이며, 마이그레이션 러너를 쓰지 않으므로
+데이터베이스에 관리 테이블이 생기지 않는다([adr/02](docs/adr/02-pipeline.md) 3.2).
 
 ## 커밋·PR 제목 규약
 

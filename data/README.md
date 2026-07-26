@@ -36,7 +36,7 @@ data/
 │
 ├── meta/                      83   수집 메타 · 갱신 이력 · 로드맵
 │
-├── manifest.json                   출처 · 커밋 · 파일별 SHA-256 · 원본 경로
+├── manifest.json                   출처 · 커밋 · 파일별 체크섬 · 원본 경로 (수집기의 레시피)
 ├── coverage.json                   완전성 검증 결과
 └── README.md
 ```
@@ -48,7 +48,7 @@ data/
 | `limbus-assets` | github.com/eldritchtools/limbus-assets | `774883d7` | current |
 | `limbus-data-mj` | github.com/monthofjune/limbus_data | `97c38567` | current |
 | `loc-ko` / `loc-en` / `loc-ja` | github.com/x1bViolet/Limbus-Localization-Files | `595947fc` / `ccfff8e3` / `2f98ddb4` | current |
-| `shared-library` | github.com/eldritchtools/limbus-shared-library | `2b0bfb6b` | superseded (데이터 5파일만 잔존, 대조용) |
+| `shared-library` | github.com/eldritchtools/limbus-shared-library | `2b0bfb6b` | superseded (280파일 잔존 — 인격 상세 163 · E.G.O 상세 105 · 집계 10 · 애셋 2) |
 | `md-resource` | github.com/eldritchtools/limbus-mirror-dungeon-resource | `beeb89ea` | 거울 던전 DB 스키마 2개만 잔존 |
 | `v1-local` | 로컬 `../limbus-mirror-tracker-v1` | `a31aff0c` | superseded (고유 애셋 16개만 잔존) |
 
@@ -115,5 +115,20 @@ data/
 
 ## 재수집·검증
 
-`manifest.json`의 커밋 해시로 동일 스냅샷을 재현하고 `sha256`으로 변조·손상을 검증한다.
+```
+npm run fetch              # entities/ · meta/ 1,749개
+npm run fetch -- --assets  # 이미지 4,721개까지
+```
+
+`manifest.json`의 커밋 해시로 동일 스냅샷을 재현하고 파일마다 체크섬을 대조한다.
+받지 못했거나 어긋난 파일이 하나라도 있으면 종료 코드 1이다.
 `coverage.json`에 엔티티·애셋·다국어 커버리지, 무결성, 깊이 분포가 기계 판독 가능한 형태로 들어 있다.
+
+**대조 기준은 `sha256`이 아니라 `sha256Lf`다.** 최초 수집이 `core.autocrlf=true`인
+Windows에서 이루어져 로컬 파일의 줄 끝이 CRLF로 바뀌었고, `sha256`은 그 변환된 바이트를
+담고 있다. 즉 상류의 내용이 아니라 **수집한 기계의 산물**이라 다른 환경에서 재현되지 않는다
+(1,749개 중 1,742개가 해당). `sha256Lf`는 줄 끝을 LF로 되돌린 내용의 체크섬이라
+상류 저장소의 규약과 무관하게 일치한다. 수집기도 LF로 정규화해 저장한다.
+
+`v1-local` 출처의 16개(`assets/icons` · `assets/misc`)는 원격이 아니라 이전 프로젝트에서
+온 것이라 내려받을 수 없다. 수집기가 이를 제외하고 그 사실을 출력한다.

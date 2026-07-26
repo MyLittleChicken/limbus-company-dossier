@@ -1,0 +1,753 @@
+// 거울 던전 정보·추천 서비스 — 게임 데이터 스키마
+//
+// 결정 근거
+//   docs/adr/01-data-storage.md   정규화 JSON → PostgreSQL 적재·검증
+//   docs/adr/02-pipeline.md       Prisma는 DDL 생성기와 ORM으로만 사용, 마이그레이션 러너 미사용
+//   docs/adr/03-localized-text.md 표시 문자열은 로케일별 행으로 분리
+//   docs/02-data-model.md         엔티티 정의와 함정
+//
+//   docs/adr/04-source-authority.md 엔티티별 정본 출처와 허용 보강
+//
+// 원칙
+//   1. 원본 게임 id를 기본 키로 쓴다. 자체 id를 부여하지 않는다.
+//   2. 파생 값을 저장하지 않는다.
+//   3. N:M 관계는 독립 테이블로 표현한다.
+//   4. 표시 문자열을 엔티티에서 분리한다.
+//   5. 이 스키마는 게임 데이터만 담는다. 추천용 저작 데이터와 런 기록은 범위 밖이다.
+//   6. 엔티티마다 정본 출처가 하나다. 정본에 있는 값을 다른 출처로 덮어쓰지 않는다.
+//
+// 정본 배정 (ADR-04 2.1)
+//   limbus-data-mj  수감자 · 인격 · 스킬 · 패시브 · 테마 팩 · 죄악 · 키워드
+//   limbus-assets   E.G.O · 기프트 · 합성 레시피 · 층별 등장 팩 · 상태 · 소속 · 거울 던전
+//   loc-ko/en       표시 문자열 전량
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 열거값
+// ─────────────────────────────────────────────────────────────
+
+/// 죄악 속성 7종
+enum Sin {
+  wrath
+  lust
+  sloth
+  gluttony
+  gloom
+  pride
+  envy
+}
+
+/// 공격 타입 3종
+enum AtkType {
+  slash
+  pierce
+  blunt
+}
+
+/// 방어 스킬 구분
+enum DefType {
+  attack
+  guard
+  evade
+  counter
+}
+
+/// 등급 체계는 5종이다. 다만 2026-07-25 스냅샷의 E.G.O 110종에는 ALEPH 등급으로 출시된 것이
+/// 아직 없어 실측 분포는 ZAYIN 20 · TETH 32 · HE 40 · WAW 18이다.
+/// 데이터에 없다는 이유로 ALEPH을 빼면 출시 시점에 적재가 깨진다.
+enum EgoRank {
+  ZAYIN
+  TETH
+  HE
+  WAW
+  ALEPH
+}
+
+/// 표시 문자열 로케일. 한국어가 정본이고 영어는 결손 폴백을 겸한다.
+enum Locale {
+  ko
+  en
+}
+
+enum Difficulty {
+  normal
+  hard
+}
+
+/// 상태의 성격. 실측 분포 Positive 678 · Neutral 416 · Negative 378.
+enum BuffType {
+  Positive
+  Negative
+  Neutral
+}
+
+// ─────────────────────────────────────────────────────────────
+// 데이터셋 — 기준 게임 버전 스탬프
+// ─────────────────────────────────────────────────────────────
+
+/// 데이터셋 전체에 기준 버전을 남긴다. 버전이 다른 데이터를 섞지 않는다.
+model Dataset {
+  id           Int      @id @default(1)
+  gameVersion  String
+  mdVersion    String?
+  snapshotDate DateTime @db.Date
+  sourceAnchor String
+  generatedAt  DateTime
+
+  @@map("dataset")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 수감자 · 인격
+// ─────────────────────────────────────────────────────────────
+
+model Sinner {
+  id         Int          @id
+  identities Identity[]
+  egos       Ego[]
+  texts      SinnerText[]
+
+  @@map("sinner")
+}
+
+model SinnerText {
+  sinnerId Int
+  locale   Locale
+  name     String
+  sinner   Sinner @relation(fields: [sinnerId], references: [id], onDelete: Cascade)
+
+  @@id([sinnerId, locale])
+  @@map("sinner_text")
+}
+
+/// 전투에 편성하는 단위. 기본 인격 id는 `1{수감자번호:02}01` 규칙을 따른다.
+model Identity {
+  id            Int      @id
+  sinnerId      Int
+  /// 게임 표기 0 / 00 / 000 에 대응하는 1–3
+  rarity        Int
+  season        Int
+  releaseDate   DateTime @db.Date
+  /// hp는 스칼라가 아니라 기본값과 레벨당 증가량으로 주어진다
+  hpBase        Int
+  hpPerLevel    Float
+  defCorrection Int
+  /// 스태거 구간 임계값. **길이가 인격마다 다르다** — 실측 분포 1개 32 · 2개 67 · 3개 85
+  breakSection  Int[]
+
+  sinner       Sinner                @relation(fields: [sinnerId], references: [id], onDelete: Cascade)
+  texts        IdentityText[]
+  resists      IdentityResist[]
+  speeds       IdentitySpeed[]
+  affiliations IdentityAffiliation[]
+  statuses     IdentityStatus[]
+  skills       Skill[]
+  passives     IdentityPassive[]
+
+  @@index([sinnerId])
+  @@map("identity")
+}
+
+model IdentityText {
+  identityId Int
+  locale     Locale
+  /// 한국어 원본에서는 `title`이 인격명이고 `name`은 수감자명이다. 여기에는 인격명을 담는다.
+  name       String
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, locale])
+  @@map("identity_text")
+}
+
+/// 인격의 저항은 죄악이 아니라 **공격 타입** 3종을 축으로 한다. E.G.O와 축이 다르다.
+model IdentityResist {
+  identityId Int
+  atkType    AtkType
+  value      Float
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, atkType])
+  @@map("identity_resist")
+}
+
+/// 속도는 동기화 단계마다 최소·최대 쌍으로 주어진다. 원본이 길이 4의 배열이다.
+model IdentitySpeed {
+  identityId Int
+  uptie      Int
+  min        Int
+  max        Int
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, uptie])
+  @@map("identity_speed")
+}
+
+/// 인격 분류용 태그. 키는 원본 영문 태그를 유지하고 표시만 로케일 행에서 가져온다.
+model Affiliation {
+  id         String                @id
+  identities IdentityAffiliation[]
+  texts      AffiliationText[]
+
+  @@map("affiliation")
+}
+
+model AffiliationText {
+  affiliationId String
+  locale        Locale
+  name          String
+  affiliation   Affiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
+
+  @@id([affiliationId, locale])
+  @@map("affiliation_text")
+}
+
+model IdentityAffiliation {
+  identityId    Int
+  affiliationId String
+  identity      Identity    @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  affiliation   Affiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, affiliationId])
+  @@index([affiliationId])
+  @@map("identity_affiliation")
+}
+
+model IdentityStatus {
+  identityId Int
+  statusId   String
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  status     Status   @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, statusId])
+  @@index([statusId])
+  @@map("identity_status")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 스킬
+// ─────────────────────────────────────────────────────────────
+
+/// 인격에 종속한다. 독립 조회 대상이 아니다.
+model Skill {
+  id         Int      @id
+  identityId Int
+  /// 덱 매수. 원본 `num`은 코인 수가 아니라 덱 매수다. S1은 3, S2는 2, S3은 1, 0은 대체·조건부 스킬.
+  deckCount  Int
+  /// **죄악 속성이 없는 스킬이 131건 있다.** 원본이 `none`으로 표기하며 패닉·조건부 스킬이 해당한다.
+  affinity   Sin?
+  /// 공격 스킬은 slash/pierce/blunt, 방어 스킬은 guard/evade/counter
+  atkType    AtkType?
+  defType    DefType
+  tier       Int
+
+  identity Identity     @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  stages   SkillStage[]
+
+  @@index([identityId])
+  @@map("skill")
+}
+
+/// 동기화 단계별 최종값. 원본은 1→4 델타이므로 **앞 단계부터 병합한 결과**를 담는다.
+model SkillStage {
+  skillId         Int
+  uptie           Int
+  baseValue       Int
+  coinValue       Int
+  atkWeight       Int?
+  levelCorrection Int?
+
+  skill Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  coins SkillCoin[]
+  texts SkillStageText[]
+
+  @@id([skillId, uptie])
+  @@map("skill_stage")
+}
+
+/// 코인 하나가 원소 하나다. **개수에 상한을 두지 않는다** — 실측 최대 9개.
+model SkillCoin {
+  skillId Int
+  uptie   Int
+  index   Int
+  type    String
+
+  stage SkillStage      @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+  texts SkillCoinText[]
+
+  @@id([skillId, uptie, index])
+  @@map("skill_coin")
+}
+
+model SkillStageText {
+  skillId Int
+  uptie   Int
+  locale  Locale
+  name    String
+  desc    String
+  descRaw String
+
+  stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, locale])
+  @@map("skill_stage_text")
+}
+
+model SkillCoinText {
+  skillId Int
+  uptie   Int
+  index   Int
+  locale  Locale
+  desc    String
+  descRaw String
+
+  coin SkillCoin @relation(fields: [skillId, uptie, index], references: [skillId, uptie, index], onDelete: Cascade)
+
+  @@id([skillId, uptie, index, locale])
+  @@map("skill_coin_text")
+}
+
+/// 인격 패시브. 전투 패시브와 지원 패시브가 해금 동기화 단계를 갖는다.
+model Passive {
+  id       String  @id
+  /// 발동 조건의 종류. 원본이 `{type, requirement[]}` 구조다.
+  condType String?
+
+  texts        PassiveText[]
+  holders      IdentityPassive[]
+  requirements PassiveRequirement[]
+
+  @@map("passive")
+}
+
+/// 발동 조건의 요구치. 예: 우울 죄악 자원 4 이상.
+model PassiveRequirement {
+  passiveId String
+  index     Int
+  type      String
+  value     Int
+  passive   Passive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, index])
+  @@map("passive_requirement")
+}
+
+model PassiveText {
+  passiveId String
+  locale    Locale
+  name      String
+  desc      String
+  descRaw   String
+  passive   Passive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, locale])
+  @@map("passive_text")
+}
+
+model IdentityPassive {
+  identityId Int
+  passiveId  String
+  /// combat | support
+  kind       String
+  /// 해금되는 동기화 단계
+  uptie      Int
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  passive  Passive  @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, passiveId, kind])
+  @@index([passiveId])
+  @@map("identity_passive")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E.G.O
+// ─────────────────────────────────────────────────────────────
+
+model Ego {
+  id                Int      @id
+  sinnerId          Int
+  rank              EgoRank
+  season            Int
+  releaseDate       DateTime @db.Date
+  /// 각성 시 죄악 속성과 공격 타입
+  awakenAffinity    Sin
+  awakenAtkType     AtkType
+  /// 침식 시 속성. 침식이 없는 E.G.O가 12종 있다.
+  corrosionAffinity Sin?
+  corrosionAtkType  AtkType?
+  extractable       Boolean  @default(false)
+  maxThreadspin     Int?
+
+  sinner   Sinner       @relation(fields: [sinnerId], references: [id], onDelete: Cascade)
+  texts    EgoText[]
+  costs    EgoCost[]
+  resists  EgoResist[]
+  statuses EgoStatus[]
+  passives EgoPassive[]
+
+  @@index([sinnerId])
+  @@map("ego")
+}
+
+model EgoText {
+  egoId  Int
+  locale Locale
+  name   String
+  ego    Ego    @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, locale])
+  @@map("ego_text")
+}
+
+/// 죄악 자원 소모량. E.G.O 기능의 핵심이며 팀의 죄악 공급과 대응해 읽는다.
+model EgoCost {
+  egoId  Int
+  sin    Sin
+  amount Int
+  ego    Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, sin])
+  @@map("ego_cost")
+}
+
+/// E.G.O의 저항은 **죄악** 7종을 축으로 한다. 인격과 축이 다르다.
+model EgoResist {
+  egoId Int
+  sin   Sin
+  value Float
+  ego   Ego   @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, sin])
+  @@map("ego_resist")
+}
+
+model EgoStatus {
+  egoId    Int
+  statusId String
+  ego      Ego    @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  status   Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, statusId])
+  @@index([statusId])
+  @@map("ego_status")
+}
+
+/// 상시 효과. **요약 파일에 없고 개별 상세 파일에만 존재한다.**
+model EgoPassive {
+  egoId Int
+  index Int
+  ego   Ego              @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  texts EgoPassiveText[]
+
+  @@id([egoId, index])
+  @@map("ego_passive")
+}
+
+model EgoPassiveText {
+  egoId   Int
+  index   Int
+  locale  Locale
+  name    String
+  desc    String
+  descRaw String
+  passive EgoPassive @relation(fields: [egoId, index], references: [egoId, index], onDelete: Cascade)
+
+  @@id([egoId, index, locale])
+  @@map("ego_passive_text")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E.G.O 기프트
+// ─────────────────────────────────────────────────────────────
+
+/// 거울 던전에서 획득하는 강화 요소. 정보 제공의 중심 엔티티다.
+model Gift {
+  id          Int     @id
+  /// 1–5 및 EX
+  tier        String
+  /// 상태 키워드 7종 또는 공격 타입 3종. 원본의 `Keywordless`는 null로 적재한다.
+  /// **대소문자가 소스마다 다르다** — 기프트는 `Burn`, 키워드 목록은 `burn`이라 소문자로 정규화해야 조인된다.
+  keywordId   String?
+  affinity    Sin
+  enhanceable Boolean @default(false)
+  hardOnly    Boolean @default(false)
+  /// 거울 던전 내 획득 비용
+  mdCost      Int?
+  /// 애셋 스프라이트 키. **애셋을 id로 추정해 찾으면 안 된다.**
+  sprite      String
+
+  keyword        Keyword?            @relation(fields: [keywordId], references: [id])
+  texts          GiftText[]
+  packs          GiftPack[]
+  exclusivePacks GiftExclusivePack[]
+  recipes        FusionRecipe[]      @relation("recipeResult")
+  usedIn         FusionSlotOption[]
+
+  @@index([keywordId])
+  @@index([affinity])
+  @@map("gift")
+}
+
+/// 강화 단계마다 이름과 설명이 다르다. 로컬라이즈 소스에서는 별도 id를 갖는다
+/// (`강화 단계 id = 기본 id + 10000 × 단계`).
+model GiftText {
+  giftId       Int
+  locale       Locale
+  /// 0 = 기본, 1 = +, 2 = ++
+  enhanceLevel Int
+  name         String
+  desc         String
+  descRaw      String
+  gift         Gift   @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, locale, enhanceLevel])
+  @@map("gift_text")
+}
+
+/// 팩별 등장 기프트 풀. 최대 관계이며 **교차 검증되지 않은 단일 출처**다
+/// (docs/adr/01-data-storage.md 7절).
+model GiftPack {
+  giftId Int
+  packId String
+  gift   Gift   @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  pack   Pack   @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, packId])
+  @@index([packId])
+  @@map("gift_pack")
+}
+
+/// 전용 관계. 비어 있는 것은 결손이 아니라 범용 풀이라는 뜻이다.
+model GiftExclusivePack {
+  giftId Int
+  packId String
+  gift   Gift   @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  pack   Pack   @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, packId])
+  @@index([packId])
+  @@map("gift_exclusive_pack")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 합성 레시피
+// ─────────────────────────────────────────────────────────────
+
+/// 한 기프트가 여러 레시피를 가질 수 있다.
+model FusionRecipe {
+  id           String @id
+  resultGiftId Int
+  index        Int
+
+  result Gift         @relation("recipeResult", fields: [resultGiftId], references: [id], onDelete: Cascade)
+  slots  FusionSlot[]
+
+  @@unique([resultGiftId, index])
+  @@map("fusion_recipe")
+}
+
+/// 재료 슬롯. `count`개를 `options` 중에서 채운다 — 같은 슬롯 안에서 대체 가능하다.
+model FusionSlot {
+  recipeId String
+  index    Int
+  count    Int
+
+  recipe  FusionRecipe       @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  options FusionSlotOption[]
+
+  @@id([recipeId, index])
+  @@map("fusion_slot")
+}
+
+model FusionSlotOption {
+  recipeId  String
+  slotIndex Int
+  giftId    Int
+
+  slot FusionSlot @relation(fields: [recipeId, slotIndex], references: [recipeId, index], onDelete: Cascade)
+  gift Gift       @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, slotIndex, giftId])
+  @@index([giftId])
+  @@map("fusion_slot_option")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 테마 팩 · 층
+// ─────────────────────────────────────────────────────────────
+
+/// 층 진입 시 선택하는 단위. 추천의 최종 대상이다.
+/// 정본은 `limbus-data-mj`이며 `bossEncounters`만 `limbus-assets`에서 보강한다(ADR-04 2.2).
+model Pack {
+  id            String  @id
+  category      String
+  chapter       String?
+  /// 변형 구분. `normal` 등
+  variant       String?
+  /// 애셋은 id가 아니라 이 값으로 찾는다
+  sprite        String
+  /// 중첩 팩 여부. 6–10층 구간에 배정된다
+  superposition Boolean @default(false)
+  /// 극한 팩 여부. 11–15층 구간에 배정된다
+  extreme       Boolean @default(false)
+  /// 팩이 차지하는 층 수
+  floorLength   Int?
+
+  texts          PackText[]
+  gifts          GiftPack[]
+  exclusiveGifts GiftExclusivePack[]
+  bosses         PackBossEncounter[]
+  floors         FloorPack[]
+
+  @@index([category])
+  @@map("pack")
+}
+
+model PackText {
+  packId String
+  locale Locale
+  name   String
+  pack   Pack   @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, locale])
+  @@map("pack_text")
+}
+
+model PackBossEncounter {
+  packId      String
+  encounterId String
+  pack        Pack   @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, encounterId])
+  @@map("pack_boss_encounter")
+}
+
+/// 난이도·층 구간별 등장 팩. "이번 층에 어떤 팩이 나오는가"의 판단 근거다.
+/// 원본은 hard가 1,2,3,4,5,6–10,11–15 구간이고 normal이 1–5다.
+model FloorPack {
+  difficulty Difficulty
+  floorRange String
+  packId     String
+  pack       Pack       @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([difficulty, floorRange, packId])
+  @@index([packId])
+  @@map("floor_pack")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 상태 · 죄악 · 키워드
+// ─────────────────────────────────────────────────────────────
+
+/// 기프트와 스킬이 다루는 상태. **판정은 이름 매칭이 아니라 이 메타데이터로 한다.**
+model Status {
+  id       String   @id
+  buffType BuffType
+  /// 아이콘이 없는 수치 변화형 상태가 254종 있다
+  sprite   String?
+
+  texts      StatusText[]
+  identities IdentityStatus[]
+  egos       EgoStatus[]
+
+  @@map("status")
+}
+
+model StatusText {
+  statusId String
+  locale   Locale
+  name     String
+  desc     String
+  descRaw  String
+  status   Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([statusId, locale])
+  @@map("status_text")
+}
+
+model SinInfo {
+  sin       Sin       @id
+  order     Int
+  attribute String
+  texts     SinText[]
+
+  @@map("sin_info")
+}
+
+model SinText {
+  sin    Sin
+  locale Locale
+  name   String
+  info   SinInfo @relation(fields: [sin], references: [sin], onDelete: Cascade)
+
+  @@id([sin, locale])
+  @@map("sin_text")
+}
+
+/// 기프트의 연관 키워드 축. 상태 키워드 7종에 공격 타입 3종을 더한 10종을 하나의 축으로 다룬다.
+model Keyword {
+  id    String        @id
+  order Int
+  gifts Gift[]
+  texts KeywordText[]
+
+  @@map("keyword")
+}
+
+model KeywordText {
+  keywordId String
+  locale    Locale
+  name      String
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@id([keywordId, locale])
+  @@map("keyword_text")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 거울 던전 구성
+// ─────────────────────────────────────────────────────────────
+
+/// 버전마다 구성이 바뀐다. 데이터셋은 한 시점의 한 버전을 담는다.
+model MirrorDungeon {
+  version     String @id
+  totalFloors Int
+  baseFloors  Int
+
+  graces GraceOption[]
+
+  @@map("mirror_dungeon")
+}
+
+/// 시작 시 선택하는 은총.
+model GraceOption {
+  id      String @id
+  version String
+  index   Int
+  cost    Int
+
+  dungeon MirrorDungeon     @relation(fields: [version], references: [version], onDelete: Cascade)
+  texts   GraceOptionText[]
+
+  @@map("grace_option")
+}
+
+model GraceOptionText {
+  graceId String
+  locale  Locale
+  name    String
+  /// 강화 단계별 효과 설명. 원본이 단계별 문자열 배열이다.
+  descs   String[]
+  grace   GraceOption @relation(fields: [graceId], references: [id], onDelete: Cascade)
+
+  @@id([graceId, locale])
+  @@map("grace_option_text")
+}

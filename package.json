@@ -1,0 +1,33 @@
+{
+  "name": "limbus-mirror-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "림버스 컴퍼니 거울 던전 정보·추천 서비스 — 게임 데이터 파이프라인",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "schema:validate": "prisma validate",
+    "schema:format": "prisma format",
+    "schema:ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/schema.sql",
+    "generate": "prisma generate",
+    "typecheck": "tsc --noEmit",
+    "fetch": "tsx src/fetch.ts",
+    "convert": "tsx src/convert.ts",
+    "load": "tsx src/load.ts",
+    "db:up": "podman run -d --name limbus-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=limbus -p 5432:5432 -v limbus-pgdata:/var/lib/postgresql/data docker.io/library/postgres:17-alpine",
+    "db:ddl": "podman exec -i limbus-postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1",
+    "verify": "tsx src/verify.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0"
+  }
+}
