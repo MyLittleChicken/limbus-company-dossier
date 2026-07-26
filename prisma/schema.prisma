@@ -241,7 +241,8 @@ model Skill {
   identityId Int
   /// 덱 매수. 원본 `num`은 코인 수가 아니라 덱 매수다. S1은 3, S2는 2, S3은 1, 0은 대체·조건부 스킬.
   deckCount  Int
-  affinity   Sin
+  /// **죄악 속성이 없는 스킬이 131건 있다.** 원본이 `none`으로 표기하며 패닉·조건부 스킬이 해당한다.
+  affinity   Sin?
   /// 공격 스킬은 slash/pierce/blunt, 방어 스킬은 guard/evade/counter
   atkType    AtkType?
   defType    DefType

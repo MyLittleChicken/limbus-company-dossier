@@ -1,0 +1,31 @@
+# 개발용 PostgreSQL.
+#
+# 게임 데이터는 패치마다 전체 재생성하므로(ADR-01) 이 볼륨은 언제든 버려도 된다.
+# 런 기록이 들어오는 시점부터는 사정이 달라지며, 그때 별도로 다룬다.
+#
+#   podman compose up -d      기동
+#   podman compose down -v    정지하고 볼륨까지 제거
+
+services:
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    container_name: limbus-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: limbus
+      # 한국어 정렬·비교를 위해 로케일을 명시한다.
+      LANG: ko_KR.utf8
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - limbus-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d limbus"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  limbus-pgdata:

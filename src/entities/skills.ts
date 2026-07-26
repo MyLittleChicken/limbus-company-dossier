@@ -104,7 +104,7 @@ export function buildSkills(ctx: Ctx) {
 		id: number;
 		identityId: number;
 		deckCount: number;
-		affinity: string;
+		affinity: string | null;
 		atkType: string | null;
 		defType: string;
 		tier: number;
@@ -179,7 +179,8 @@ export function buildSkills(ctx: Ctx) {
 				identityId,
 				// 방어 스킬과 조건부 스킬은 덱 매수가 없다. 0 으로 둔다.
 				deckCount: deckCounts.get(skillId) ?? 0,
-				affinity: base.affinity ?? 'gloom',
+				// 원본이 `none` 으로 표기하는 스킬이 131건 있다. 열거값이 아니므로 null 로 둔다.
+				affinity: base.affinity && base.affinity !== 'none' ? base.affinity : null,
 				atkType: base.atkType ?? null,
 				defType: base.defType ?? 'attack',
 				tier: entry.tier ?? 1,
@@ -307,7 +308,16 @@ export function buildSkills(ctx: Ctx) {
 		}
 		ctx.report.note('패시브 정의가 보강 출처에만 있음(발동 조건 없음)', row.passiveId);
 	}
-	const linked = identityPassive.filter((row) => known.has(row.passiveId));
+	// 같은 패시브가 여러 단계에 중복 등재된다. 열쇠는 (인격, 패시브, 종류)이고
+	// 의미상 값은 **해금되는 가장 이른 단계**이므로 최소값으로 접는다.
+	const folded = new Map<string, (typeof identityPassive)[number]>();
+	for (const row of identityPassive) {
+		if (!known.has(row.passiveId)) continue;
+		const key = `${row.identityId}|${row.passiveId}|${row.kind}`;
+		const seen = folded.get(key);
+		if (seen === undefined || row.uptie < seen.uptie) folded.set(key, row);
+	}
+	const linked = [...folded.values()];
 
 	ctx.report.rows('skill', skill.length);
 	ctx.report.rows('skill_stage', stage.length);

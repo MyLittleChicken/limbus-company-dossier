@@ -25,7 +25,7 @@ interface MjIdentity {
 	sinnerId: number;
 	/** 게임 표기 0 / 00 / 000 에 대응하는 1–3. 실측 분포 1:12 · 2:51 · 3:121 */
 	star: number;
-	season: number;
+	season?: number;
 	updatedDate: number;
 	/** 수감자명이다. 인격명은 title 이다 */
 	name: string;
@@ -47,6 +47,8 @@ interface MjDetail {
 interface AssetIdentity {
 	tags?: string[];
 	statuses?: string[];
+	/** 정본에 `season` 이 없는 2종을 채우는 데 쓴다(ADR-04 2.3 보강). */
+	season?: number;
 }
 
 export function buildIdentities(ctx: Ctx) {
@@ -112,11 +114,23 @@ export function buildIdentities(ctx: Ctx) {
 		const releaseDate = toIsoDate(m.updatedDate);
 		if (releaseDate === null) ctx.report.unmapped('출시일 형식 불명', String(m.updatedDate), String(m.id));
 
+		// 정본에 season 이 없는 인격이 2종 있다. 보강 출처에서 받는다.
+		const asset = assets[String(m.id)];
+		const fallbackSeason = asset?.season;
+		if (m.season === undefined || m.season === null) {
+			if (fallbackSeason === undefined) {
+				ctx.report.unmapped('시즌을 어느 출처에서도 못 찾음', String(m.id), m.title);
+				continue;
+			}
+			ctx.report.note('시즌이 보강 출처에만 있음', String(m.id), m.title);
+		}
+		const season: number = m.season ?? fallbackSeason ?? 0;
+
 		identity.push({
 			id: m.id,
 			sinnerId: m.sinnerId,
 			rarity: m.star,
-			season: m.season,
+			season,
 			releaseDate,
 			hpBase: detail.hp?.defaultStat ?? 0,
 			hpPerLevel: detail.hp?.incrementByLevel ?? 0,
@@ -145,7 +159,6 @@ export function buildIdentities(ctx: Ctx) {
 		}
 
 		// 관계는 어휘의 정본에서 가져온다(ADR-04 2.2).
-		const asset = assets[String(m.id)];
 		for (const raw of asset?.tags ?? []) {
 			const affiliationId = stripMarkup(raw);
 			if (!affiliationId) continue;

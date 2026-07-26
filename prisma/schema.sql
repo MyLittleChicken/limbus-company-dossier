@@ -130,7 +130,7 @@ CREATE TABLE "skill" (
     "id" INTEGER NOT NULL,
     "identityId" INTEGER NOT NULL,
     "deckCount" INTEGER NOT NULL,
-    "affinity" "Sin" NOT NULL,
+    "affinity" "Sin",
     "atkType" "AtkType",
     "defType" "DefType" NOT NULL,
     "tier" INTEGER NOT NULL,
