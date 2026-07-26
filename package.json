@@ -13,7 +13,8 @@
     "schema:format": "prisma format",
     "schema:ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/schema.sql",
     "generate": "prisma generate",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "convert": "tsx src/convert.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
