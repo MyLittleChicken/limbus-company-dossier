@@ -1,6 +1,6 @@
 # 데이터 소스 (Data Source)
 
-> 상태: 초안 v0.1 / 최종 수정 2026-07-25
+> 상태: 초안 v0.1 / 최종 수정 2026-07-26
 > 1단계(데이터베이스 구축) 착수 전 문서. 대상은 **정보 제공에 필요한 엔티티 데이터**로 한정한다.
 > 추천에 필요한 관계·메카닉 데이터는 `06-recommendation-engine.md`에서 다룬다.
 > 수집한 데이터의 생성 경로는 `03-data-provenance.md`, 실제 수집 결과와 완전성 근거는 `04-data-inventory.md`에 있다.
@@ -39,7 +39,7 @@
 | 엔티티 | 수량 | 주요 필드 | 한국어 커버리지 |
 | --- | --- | --- | --- |
 | 인격 | 184 (`sinnerId` 1–12) | `name` `rank` `season` `skillKeywordList` `skillTypes[]` `defenseSkillTypes[]` `hp` `resists` `tags` | 184/184 |
-| 인격 상세 | 184개 개별 파일 | `skills{}` — uptie별 `coins[]` `coinValue` `desc` | — |
+| 인격 상세 | 184개 개별 파일 | `skills{}` — 동기화(`uptie`)별 `coins[]` `coinValue` `desc` | — |
 | E.G.O | 110 | `cost`(죄악 자원 소모) `rank` `sinnerId` `awakeningType` `resists` | 110/110 |
 | E.G.O 상세 | 110개 개별 파일 | `passiveList[].desc` `awakeningSkills` `corrosionSkills` | 없음(영문만) |
 | E.G.O 기프트 | 456 | `names[]`(강화 단계별) `search_desc` `keyword` `tier` `affinity` `exclusiveTo` `recipes` | 456/456 |
@@ -52,7 +52,7 @@
 
 - **`identities.json`의 `num`은 코인 수가 아니라 덱 매수**(S1×3, S2×2, S3×1). 코인 정보는 개별 상세 파일에만 있다.
 - **코인 수에 상한을 두면 안 된다.** 실측 분포 1–5개에 9개가 1건 존재한다.
-- 개별 상세의 `data[]`는 **uptie 1~4 델타**다. 앞에서부터 병합해야 최종값이 나온다.
+- 개별 상세의 `data[]`는 **동기화(`uptie`) 1~4 델타**다. 앞에서부터 병합해야 최종값이 나온다.
 - **E.G.O 패시브는 요약 파일에 없다.** `data/egos/<id>.json`에만 존재한다.
 - **`World_of_*_Icon.png`는 거울 던전 테마팩이 아니다.** 인격 스토리의 세계관 아이콘이다.
 - 소속 `tags`에 `<color=...><s>...</s></color>` 형태의 스포일러 마크업이 섞여 있어 정제가 필요하다.

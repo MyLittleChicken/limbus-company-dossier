@@ -37,17 +37,58 @@
 | --- | --- | --- | --- |
 | [00-product.md](docs/00-product.md) | 제품 정의 — 문제 인식, 대상 사용자, 제품 구조, 단계별 범위, 성공 기준, 리스크 | 전체 착수 전 | 작성됨 |
 | [01-data-source.md](docs/01-data-source.md) | 데이터 소스 — 인격·E.G.O·기프트·팩 데이터의 출처, 확보 범위, IP 준수 사항 | 1단계 착수 전 | 작성됨 |
-| `02-data-model.md` | 엔티티 스키마와 관계 정의 | 1단계 착수 전 | 예정 |
+| [02-data-model.md](docs/02-data-model.md) | 엔티티 스키마와 관계 정의 | 1단계 착수 전 | 작성됨 |
 | [03-data-provenance.md](docs/03-data-provenance.md) | 데이터 출처 분석 — 추출 데이터와 저작 데이터의 구분, 계층별 신뢰도 | 1단계 착수 전 | 작성됨 |
 | [04-data-inventory.md](docs/04-data-inventory.md) | 데이터 수집 완전성 근거 — 출처 19종, 교차 대조 결과, 갭 규명 | 1단계 착수 전 | 작성됨 |
-| `05-ui-foundation.md` | 화면 구조와 디자인 기반 설계 | 2단계 착수 전 | 예정 |
-| `06-recommendation-engine.md` | 추천 엔진 설계 — 엔티티 간 메카닉 정의와 점수화 규칙 | 3단계 착수 전 | 예정 |
-| `07-recommendation-system.md` | 런 상태 입력 흐름과 추천·근거 제시 방식 설계 | 4단계 착수 전 | 예정 |
+| `docs/05-ui-foundation.md` | 화면 구조와 디자인 기반 설계 | 2단계 착수 전 | 예정 |
+| `docs/06-recommendation-engine.md` | 추천 엔진 설계 — 엔티티 간 메카닉 정의와 점수화 규칙 | 3단계 착수 전 | 예정 |
+| `docs/07-recommendation-system.md` | 런 상태 입력 흐름과 추천·근거 제시 방식 설계 | 4단계 착수 전 | 예정 |
 
 ### 아키텍처 결정 기록 (ADR)
 
 기술 스택, 데이터 저장 방식, 배포 환경처럼 되돌리기 어려운 결정은 `docs/adr/`에 남긴다.
 결정이 필요한 시점마다 `01`부터 순번을 붙여 파일을 하나씩 추가하며, 위 문서 번호와는 독립적인 체계다.
+
+| ADR | 결정 | 상태 |
+| --- | --- | --- |
+| [01-data-storage.md](docs/adr/01-data-storage.md) | 데이터 저장 형식 — 정규화 JSON으로 정리하고 PostgreSQL에 적재·검증 | 채택 |
+| [02-pipeline.md](docs/adr/02-pipeline.md) | 변환·적재 파이프라인 — TypeScript, Prisma(마이그레이션 러너 미사용) | 채택 |
+| [03-localized-text.md](docs/adr/03-localized-text.md) | 다국어 표시 문자열 — 로케일별 행 분리, 한국어·영어, 빌드 시점 토큰 치환 | 채택 |
+
+## 개발 환경 설정
+
+클론 후 한 번 실행한다.
+
+```
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit`이 `data/` 아래 파일의 커밋을 막는다. 이 디렉토리는 Project Moon 저작물에서
+유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
+`.gitignore`가 1차 방어이고 훅은 `git add -f`로 무시 규칙을 넘긴 경우를 잡는 2차 방어다.
+
+## 커밋·PR 제목 규약
+
+[Conventional Commits](https://www.conventionalcommits.org/)를 따른다.
+`main`은 squash 병합만 허용하므로 **PR 제목이 곧 `main`의 커밋 제목**이 된다.
+
+```
+type(scope): 설명
+```
+
+| type | 용도 |
+| --- | --- |
+| `feat` | 기능 추가 |
+| `fix` | 버그 수정 |
+| `docs` | 문서 |
+| `refactor` | 동작 변경 없는 코드 정리 |
+| `test` | 테스트 |
+| `chore` | 빌드·설정·도구 |
+
+scope는 선택이며 `adr` · `data` · `pipeline` · `web`처럼 대상 영역을 적는다.
+설명은 한국어 명사구로 쓰고 마침표를 붙이지 않는다.
+
+브랜치 이름도 `type/설명` 형태를 쓴다 (예: `docs/adr-data-layer`).
 
 ## 라이선스
 
