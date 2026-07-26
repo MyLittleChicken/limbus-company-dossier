@@ -67,6 +67,29 @@ git config core.hooksPath .githooks
 유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
 `.gitignore`가 1차 방어이고 훅은 `git add -f`로 무시 규칙을 넘긴 경우를 잡는 2차 방어다.
 
+## 커밋·PR 제목 규약
+
+[Conventional Commits](https://www.conventionalcommits.org/)를 따른다.
+`main`은 squash 병합만 허용하므로 **PR 제목이 곧 `main`의 커밋 제목**이 된다.
+
+```
+type(scope): 설명
+```
+
+| type | 용도 |
+| --- | --- |
+| `feat` | 기능 추가 |
+| `fix` | 버그 수정 |
+| `docs` | 문서 |
+| `refactor` | 동작 변경 없는 코드 정리 |
+| `test` | 테스트 |
+| `chore` | 빌드·설정·도구 |
+
+scope는 선택이며 `adr` · `data` · `pipeline` · `web`처럼 대상 영역을 적는다.
+설명은 한국어 명사구로 쓰고 마침표를 붙이지 않는다.
+
+브랜치 이름도 `type/설명` 형태를 쓴다 (예: `docs/adr-data-layer`).
+
 ## 라이선스
 
 이 저장소의 **코드와 문서**는 [MIT License](LICENSE.md)를 따른다. 상업적 이용을 포함해 자유롭게 사용·수정·재배포할 수 있다.
