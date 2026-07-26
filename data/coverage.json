@@ -1,0 +1,383 @@
+{
+  "checkedAt": "2026-07-26",
+  "snapshot": "2026-07-25",
+  "structure": {
+    "maxDepth": 4,
+    "limit": 5
+  },
+  "entities": {
+    "인격": {
+      "canonical": "limbus-assets",
+      "count": 184,
+      "sources": {
+        "limbus-assets": 184,
+        "limbus-data-mj": 184,
+        "shared-library": 163,
+        "loc-ko": 186,
+        "loc-en": 186,
+        "loc-ja": 186
+      },
+      "agreement": {
+        "limbus-assets": true,
+        "limbus-data-mj": true,
+        "shared-library": false,
+        "loc-ko": true,
+        "loc-en": true,
+        "loc-ja": true
+      },
+      "extraInSource": {
+        "loc-ko": 2,
+        "loc-en": 2,
+        "loc-ja": 2
+      }
+    },
+    "E.G.O": {
+      "canonical": "limbus-assets",
+      "count": 110,
+      "sources": {
+        "limbus-assets": 110,
+        "limbus-data-mj": 110,
+        "shared-library": 105,
+        "loc-ko": 110,
+        "loc-en": 110,
+        "loc-ja": 110
+      },
+      "agreement": {
+        "limbus-assets": true,
+        "limbus-data-mj": true,
+        "shared-library": false,
+        "loc-ko": true,
+        "loc-en": true,
+        "loc-ja": true
+      },
+      "extraInSource": {}
+    },
+    "거울 던전 기프트": {
+      "canonical": "limbus-assets",
+      "count": 456,
+      "sources": {
+        "limbus-assets": 456,
+        "limbus-data-mj": 441,
+        "shared-library": 381
+      },
+      "agreement": {
+        "limbus-assets": true,
+        "limbus-data-mj": false,
+        "shared-library": false
+      },
+      "extraInSource": {},
+      "localizeSuperset": {
+        "ko": 793,
+        "en": 799,
+        "ja": 799
+      }
+    },
+    "테마 팩": {
+      "canonical": "limbus-assets",
+      "count": 117,
+      "sources": {
+        "limbus-assets": 117,
+        "limbus-data-mj": 117,
+        "loc-ko": 117,
+        "loc-en": 117,
+        "loc-ja": 117
+      },
+      "agreement": {
+        "limbus-assets": true,
+        "limbus-data-mj": true,
+        "loc-ko": true,
+        "loc-en": true,
+        "loc-ja": true
+      },
+      "extraInSource": {}
+    }
+  },
+  "details": {
+    "인격 상세 (limbus-assets)": {
+      "universe": 184,
+      "have": 184,
+      "missing": 0,
+      "missingIds": []
+    },
+    "인격 상세 (monthofjune)": {
+      "universe": 184,
+      "have": 184,
+      "missing": 0,
+      "missingIds": []
+    },
+    "E.G.O 상세 (limbus-assets)": {
+      "universe": 110,
+      "have": 110,
+      "missing": 0,
+      "missingIds": []
+    },
+    "E.G.O 상세 (monthofjune)": {
+      "universe": 110,
+      "have": 110,
+      "missing": 0,
+      "missingIds": []
+    },
+    "기프트 상세 (monthofjune)": {
+      "universe": 441,
+      "have": 441,
+      "missing": 0,
+      "missingIds": []
+    },
+    "팩 상세 (monthofjune)": {
+      "universe": 117,
+      "have": 117,
+      "missing": 0,
+      "missingIds": []
+    }
+  },
+  "assets": {
+    "인격 이미지": {
+      "files": 712,
+      "covered": 184,
+      "universe": 184,
+      "missingIds": []
+    },
+    "E.G.O 이미지": {
+      "files": 318,
+      "covered": 110,
+      "universe": 110,
+      "missingIds": []
+    },
+    "기프트 이미지": {
+      "files": 476,
+      "covered": 456,
+      "universe": 456,
+      "matchKey": "srcPath",
+      "missingIds": [],
+      "orphanFiles": [
+        "9815"
+      ]
+    },
+    "테마 팩 이미지": {
+      "files": 154,
+      "covered": 117,
+      "universe": 117,
+      "matchKey": "sprite"
+    },
+    "스킬 아이콘": {
+      "files": 984,
+      "covered": 824,
+      "universe": 837,
+      "egoSkillsExcluded": 208,
+      "missingIds": [
+        "1000104",
+        "1021207",
+        "1041205",
+        "1041206",
+        "1071006",
+        "1071506",
+        "1071507",
+        "1081405",
+        "1101205",
+        "1101206",
+        "1111510",
+        "1111511",
+        "1121607"
+      ]
+    },
+    "상태 이미지": {
+      "files": 1192,
+      "covered": 1218,
+      "universe": 1218,
+      "totalStatuses": 1472
+    }
+  },
+  "localization": {
+    "인격": {
+      "universe": 184,
+      "ko": 184,
+      "en": 184,
+      "ja": 184
+    },
+    "E.G.O": {
+      "universe": 110,
+      "ko": 110,
+      "en": 110,
+      "ja": 110
+    },
+    "거울 던전 기프트": {
+      "universe": 456,
+      "ko": 456,
+      "en": 456,
+      "ja": 456
+    }
+  },
+  "mechanics": {
+    "statuses": 1472,
+    "keywords": [
+      "burn",
+      "bleed",
+      "tremor",
+      "rupture",
+      "sinking",
+      "poise",
+      "charge",
+      "slash",
+      "pierce",
+      "blunt"
+    ],
+    "sins": [
+      "wrath",
+      "lust",
+      "sloth",
+      "gluttony",
+      "gloom",
+      "pride",
+      "envy"
+    ],
+    "terms": 483,
+    "rarities": [
+      "zayin",
+      "teth",
+      "he",
+      "waw",
+      "aleph"
+    ],
+    "skills": 1045,
+    "passives": 709
+  },
+  "mirrorDungeon": {
+    "totalFloors": 15,
+    "baseFloors": 5,
+    "winFloorIdx": 4,
+    "tierFloors": {
+      "normal": [
+        1,
+        5
+      ],
+      "hard": [
+        1,
+        5
+      ],
+      "superposition": [
+        6,
+        10
+      ],
+      "extreme": [
+        11,
+        15
+      ]
+    },
+    "floorTierCaps": [
+      [
+        1,
+        2
+      ],
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    ],
+    "giftCombineMixed": [
+      {
+        "aEgoGiftIds": [
+          9105,
+          9110,
+          9116,
+          9121,
+          9126,
+          9131,
+          9136
+        ],
+        "aEgoGiftRequiredNum": 2,
+        "bEgoGiftIds": [
+          9142,
+          9147,
+          9152
+        ],
+        "bEgoGiftRequiredNum": 3,
+        "resultEgoGiftId": 9083
+      }
+    ],
+    "floorPackTable": {
+      "hard": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "11-15",
+        "6-10"
+      ],
+      "normal": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    "choiceEvents": 159,
+    "encounterDetailFiles": 251,
+    "packsWithFloors": 96,
+    "packsWithGifts": 117
+  },
+  "integrity": {
+    "files": 6489,
+    "json": 1742,
+    "bom": 12,
+    "parseFailed": [],
+    "giftPackForward": 0,
+    "giftPackReverse": 0,
+    "depthDistribution": {
+      "1": 3,
+      "3": 83,
+      "4": 6403
+    },
+    "maxDepth": 4
+  },
+  "gaps": [
+    {
+      "severity": "INFO",
+      "area": "인격/shared-library",
+      "detail": "기준 대비 21건 없음"
+    },
+    {
+      "severity": "INFO",
+      "area": "E.G.O/shared-library",
+      "detail": "기준 대비 5건 없음"
+    },
+    {
+      "severity": "INFO",
+      "area": "거울 던전 기프트/limbus-data-mj",
+      "detail": "기준 대비 15건 없음"
+    },
+    {
+      "severity": "INFO",
+      "area": "거울 던전 기프트/shared-library",
+      "detail": "기준 대비 75건 없음"
+    },
+    {
+      "severity": "WARN",
+      "area": "스킬 아이콘",
+      "detail": "인격 스킬 13종 아이콘 없음"
+    }
+  ]
+}
