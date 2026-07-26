@@ -46,6 +46,35 @@ interface Skipped {
 	reason: string;
 }
 
+/**
+ * 원본 자체가 잘못된 것으로 **확인된** 건. 검사에서 제외하되 id 를 특정한다.
+ *
+ * 통과시키려고 검사를 무르는 것이 아니다. 목록에 없는 id 는 계속 실패하므로
+ * 같은 유형의 새 사례가 들어오면 잡힌다. 여기 넣으려면 원본을 직접 확인해야 한다.
+ *
+ * `status` 7건 — 2026-07-25 스냅샷 실측:
+ *   MRR514·519·531·538·540·541  `BattleKeywords_Refraction5.json` 과 `Bufs_Refraction5.json`
+ *                               양쪽 모두 이름이 자리표시자 `버프 이름` 이다. 고를 대안이 없다.
+ *   SingBulletSupport           영어 파일에 개발자 메모가 들어 있다
+ *                               — `(엄지 싱클 탄환 보급 받는 대상 이펙트)`
+ */
+const KNOWN_SOURCE_DEFECTS: Record<string, readonly string[]> = {
+	status_text: [
+		'MRR514',
+		'MRR519',
+		'MRR531',
+		'MRR538',
+		'MRR540',
+		'MRR541',
+		'SingBulletSupport',
+	],
+};
+
+/** 표의 외래 키 컬럼명. 원본 결손 제외에 쓴다. */
+function keyOf(table: string): string {
+	return table === 'status_text' ? 'statusId' : 'id';
+}
+
 const prisma = new PrismaClient();
 const checks: Check[] = [];
 const skipped: Skipped[] = [];
@@ -208,7 +237,57 @@ async function main(): Promise<void> {
 		),
 	);
 
-	// ── 7. 외래 키 제약이 실재하고 검증된 상태인가 ──
+	// ── 7. 언어 판별 ──
+	// 개수만 세면 한국어 칸이 통째로 영문이어도 통과한다. 실제로 그런 표가 넷 있었다.
+	// 한글 포함 여부로 로케일과 내용이 맞는지 본다.
+	const HANGUL = "~ '[가-힣]'";
+	const textTables: Array<[table: string, column: string, label: string]> = [
+		['gift_text', 'name', '기프트 이름'],
+		['identity_text', 'name', '인격 이름'],
+		['ego_text', 'name', 'E.G.O 이름'],
+		['ego_passive_text', 'name', 'E.G.O 패시브 이름'],
+		['pack_text', 'name', '테마 팩 이름'],
+		['grace_option_text', 'name', '은총 이름'],
+		['status_text', 'name', '상태 이름'],
+		['skill_stage_text', 'name', '스킬 이름'],
+	];
+	for (const [table, column, label] of textTables) {
+		// 영어 칸에 한글이 있으면 미번역 원본이 잘못 채워진 것이다. 결손과 달리 명백한 오류다.
+		// 원본 자체가 잘못된 것으로 확인된 건은 id 를 특정해 제외한다. **새로운 id 는 계속 실패한다.**
+		const exclusion =
+			KNOWN_SOURCE_DEFECTS[table]?.map((id) => `'${id}'`).join(',') ?? '';
+		const filter = exclusion ? ` AND "${keyOf(table)}" NOT IN (${exclusion})` : '';
+		record(
+			`${label} — 영어 칸의 한국어`,
+			'로케일과 내용의 언어가 일치해야 한다',
+			0,
+			await scalar(
+				`SELECT count(*) n FROM "${table}" WHERE locale='en' AND "${column}" ${HANGUL}${filter}`,
+			),
+		);
+	}
+
+	// 한국어 칸이 통째로 영문인 표를 찾는다. 부분 결손은 소스 사정이라 별도로 센다.
+	for (const [table, column, label] of textTables) {
+		const total = await scalar(
+			`SELECT count(*) n FROM "${table}" WHERE locale='ko' AND "${column}" <> ''`,
+		);
+		const korean = await scalar(
+			`SELECT count(*) n FROM "${table}" WHERE locale='ko' AND "${column}" ${HANGUL}`,
+		);
+		if (total === 0) {
+			skipped.push({ name: `${label} — 한국어 비율`, reason: '대상 행이 없다' });
+			continue;
+		}
+		record(
+			`${label} — 한국어 비율`,
+			'한국어 칸이 통째로 영문이면 원본을 안 읽은 것이다',
+			true,
+			korean > 0,
+		);
+	}
+
+	// ── 8. 외래 키 제약이 실재하고 검증된 상태인가 ──
 	record(
 		'검증되지 않은 외래 키',
 		'PostgreSQL 제약 상태',

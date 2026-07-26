@@ -107,6 +107,13 @@ function main(): void {
 
 	console.log(`\n산출 위치: ${OUT}\n`);
 	console.log(report.format());
+
+	// 게이트는 판정까지 해야 게이트다. 리포트만 찍고 성공으로 끝나면 후속 단계가
+	// 미분류 입력을 안은 채 그대로 적재한다.
+	if (report.hasUnmapped) {
+		console.error('\n처리하지 못한 입력이 있다. 적재 전에 해소해야 한다.');
+		process.exitCode = 1;
+	}
 }
 
 main();

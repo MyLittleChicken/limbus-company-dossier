@@ -53,7 +53,8 @@ export function readJsonDir<T = unknown>(...segments: string[]): Map<string, T> 
 	const dir = join(ENTITIES, ...segments);
 	const out = new Map<string, T>();
 	if (!existsSync(dir)) return out;
-	for (const name of readdirSync(dir)) {
+	// 정렬하지 않으면 산출물의 행 순서가 파일시스템 구현에 의존한다(ADR-02 원칙 3).
+	for (const name of readdirSync(dir).sort()) {
 		if (!name.endsWith('.json')) continue;
 		out.set(name.slice(0, -'.json'.length), readJson<T>(...segments, name));
 	}

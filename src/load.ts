@@ -108,9 +108,11 @@ async function main(): Promise<void> {
 
 	try {
 		// 전체 재생성이므로 넣기 전에 비운다. 자식부터 지워야 외래 키에 걸리지 않는다.
+		// **한 트랜잭션으로 묶는다.** 중간에 실패하면 데이터베이스가 부분 적재 상태로 남는다.
 		console.log('기존 데이터를 비운다');
+		await prisma.$transaction(async (tx) => {
 		for (const [table] of [...ORDER].reverse()) {
-			await prisma.$executeRawUnsafe(`DELETE FROM "${table}"`);
+			await tx.$executeRawUnsafe(`DELETE FROM "${table}"`);
 		}
 
 		for (const [table, delegate] of ORDER) {
@@ -119,7 +121,7 @@ async function main(): Promise<void> {
 				counts.set(table, 0);
 				continue;
 			}
-			const client = prisma as unknown as Record<
+			const client = tx as unknown as Record<
 				string,
 				{ createMany: (args: { data: Row[] }) => Promise<{ count: number }> }
 			>;
@@ -131,9 +133,10 @@ async function main(): Promise<void> {
 				const result = await handle.createMany({ data: rows.slice(i, i + CHUNK) });
 				inserted += result.count;
 			}
-			counts.set(table, inserted);
-			process.stdout.write(`  ${table.padEnd(24)} ${String(inserted).padStart(7)}\n`);
-		}
+				counts.set(table, inserted);
+				process.stdout.write(`  ${table.padEnd(24)} ${String(inserted).padStart(7)}\n`);
+			}
+		}, { timeout: 600_000, maxWait: 60_000 });
 
 		const total = [...counts.values()].reduce((a, b) => a + b, 0);
 		console.log(`\n적재 완료 — 테이블 ${counts.size}개 · ${total.toLocaleString('ko-KR')}행`);
