@@ -80,6 +80,17 @@ export function writeTable(name: string, rows: readonly unknown[]): void {
 	writeFileSync(path, `${JSON.stringify(rows, null, '\t')}\n`, 'utf8');
 }
 
+/**
+ * 레코드 목록을 꺼낸다.
+ *
+ * **같은 출처 안에서도 컨테이너가 다르다** — mj 의 `identities.json` 은 배열이고
+ * `identities_detail.json` 은 객체다. 호출 측이 매번 분기하지 않도록 여기서 흡수한다.
+ */
+export function toRecords<T>(source: Record<string, T> | T[] | null | undefined): T[] {
+	if (source === null || source === undefined) return [];
+	return Array.isArray(source) ? source : Object.values(source);
+}
+
 /** 게임 로컬라이즈 파일의 공통 껍데기. 최상위가 dataList 하나뿐이다. */
 export interface DataList<T> {
 	dataList?: T[];

@@ -7,13 +7,13 @@
  *   상태            limbus-assets   (유일한 출처)
  */
 import { readJson } from '../io.js';
-import { stripMarkup, toDisplay, type Term } from '../text.js';
+import { stripMarkup, toDisplay, lookupTerm, STATUS_DIRS, type LocaleIndex } from '../text.js';
 import type { Report } from '../report.js';
 
 export interface Ctx {
 	report: Report;
 	tokens: { ko: ReadonlyMap<string, string>; en: ReadonlyMap<string, string> };
-	terms: { ko: ReadonlyMap<string, Term>; en: ReadonlyMap<string, Term> };
+	terms: { ko: LocaleIndex; en: LocaleIndex };
 }
 
 const LOCALES = ['ko', 'en'] as const;
@@ -164,7 +164,7 @@ export function buildStatuses(ctx: Ctx) {
 	for (const [id, v] of Object.entries(src)) {
 		rows.push({ id, buffType: v.buffType, sprite: v.srcPath ?? null });
 		for (const locale of LOCALES) {
-			const hit = ctx.terms[locale].get(id);
+			const hit = lookupTerm(ctx.terms[locale], id, STATUS_DIRS);
 			if (locale === 'ko' && hit === undefined) missingKo += 1;
 			const rawName = hit?.name ?? v.name;
 			const rawDesc = hit?.desc ?? v.desc ?? '';

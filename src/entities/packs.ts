@@ -10,7 +10,7 @@
  * 층 정보는 두 출처가 겹치는 유일한 지점이다. 정본을 쓰되 대조 결과를 리포트에 남긴다.
  */
 import { readJson } from '../io.js';
-import { stripMarkup } from '../text.js';
+import { stripMarkup, lookupTerm } from '../text.js';
 import type { Ctx } from './basics.js';
 
 const LOCALES = ['ko', 'en'] as const;
@@ -81,8 +81,8 @@ export function buildPacks(ctx: Ctx) {
 		});
 
 		// 한국어는 정본이 직접 갖고 있다. 없으면 로케일 파일, 그것도 없으면 영문을 유지한다.
-		const ko = p.nameKo ?? ctx.terms.ko.get(id)?.name ?? p.name;
-		const en = ctx.terms.en.get(id)?.name ?? p.name;
+		const ko = p.nameKo ?? lookupTerm(ctx.terms.ko, id, ['packs'])?.name ?? p.name;
+		const en = lookupTerm(ctx.terms.en, id, ['packs'])?.name ?? p.name;
 		packText.push({ packId: id, locale: 'ko', name: stripMarkup(ko) });
 		packText.push({ packId: id, locale: 'en', name: stripMarkup(en) });
 

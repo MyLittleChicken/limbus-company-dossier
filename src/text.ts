@@ -20,7 +20,35 @@ export interface Term {
 }
 
 /** 로컬라이즈 파일이 흩어져 있는 디렉토리. 한 곳만 읽으면 결손이 생긴다. */
-const LOCALE_DIRS = ['mechanics', 'mirror-dungeon', 'gifts', 'identities', 'egos', 'packs'];
+const LOCALE_DIRS = ['mechanics', 'mirror-dungeon', 'gifts', 'identities', 'egos', 'packs'] as const;
+
+export type LocaleDir = (typeof LOCALE_DIRS)[number];
+
+/**
+ * 디렉토리별로 나뉜 로케일 색인.
+ *
+ * **id 공간이 엔티티마다 겹친다.** `1001` 은 팩(잊혀진 자들)이면서 동시에 다른 디렉토리의
+ * 기프트(신도의 가면)이기도 하다. 실측 95종 133회가 충돌한다. 평평한 맵으로 합치면
+ * 조회가 엉뚱한 엔티티의 이름을 돌려준다. 조회할 때 어느 디렉토리를 볼지 지정해야 한다.
+ */
+export type LocaleIndex = ReadonlyMap<LocaleDir, ReadonlyMap<string, Term>>;
+
+/** 지정한 디렉토리들에서 순서대로 찾는다. 앞선 디렉토리가 우선한다. */
+export function lookupTerm(
+	index: LocaleIndex,
+	id: string | number,
+	dirs: readonly LocaleDir[],
+): Term | undefined {
+	const key = String(id);
+	for (const dir of dirs) {
+		const hit = index.get(dir)?.get(key);
+		if (hit !== undefined) return hit;
+	}
+	return undefined;
+}
+
+/** 상태 표제어가 놓인 디렉토리. 실측 mechanics 1,207 · mirror-dungeon 258 · gifts 7. */
+export const STATUS_DIRS = ['mechanics', 'mirror-dungeon', 'gifts'] as const;
 
 /**
  * 로케일 표제어를 전부 모은다.
@@ -29,15 +57,29 @@ const LOCALE_DIRS = ['mechanics', 'mirror-dungeon', 'gifts', 'identities', 'egos
  * `mirror-dungeon` 에 258, `gifts` 에 7로 흩어져 있다. 처음에 `mechanics` 만 읽어
  * 258종이 결손으로 잡혔다.
  */
-export function collectLocale(locale: 'loc-ko' | 'loc-en'): Map<string, Term> {
-	const out = new Map<string, Term>();
+export function collectLocale(locale: 'loc-ko' | 'loc-en', report: Report): LocaleIndex {
+	const out = new Map<LocaleDir, Map<string, Term>>();
 	for (const dir of LOCALE_DIRS) {
+		const bucket = new Map<string, Term>();
+		out.set(dir, bucket);
 		for (const file of readJsonGlob<DataList<Term>>([dir, locale], '')) {
 			for (const entry of file.dataList ?? []) {
 				if (entry.id === undefined || entry.id === null) continue;
 				const key = String(entry.id);
-				// 먼저 등장한 표제어를 유지한다. 뒤 파일이 덮어쓰면 결과가 파일 순서에 의존한다.
-				if (!out.has(key)) out.set(key, entry);
+				const seen = bucket.get(key);
+				if (seen === undefined) {
+					bucket.set(key, entry);
+					continue;
+				}
+				// 같은 디렉토리 안에서 같은 id 가 다른 이름으로 있다. 구버전 표기나
+				// `버프 이름` 같은 자리표시자가 섞인 결과다. 먼저 등장한 것을 유지하되 드러낸다.
+				if (entry.name && seen.name && entry.name !== seen.name) {
+					report.note(
+						`로케일 표제어 중복 (${locale}/${dir})`,
+						key,
+						`${seen.name} / ${entry.name}`,
+					);
+				}
 			}
 		}
 	}
@@ -47,13 +89,15 @@ export function collectLocale(locale: 'loc-ko' | 'loc-en'): Map<string, Term> {
 /**
  * 내부 토큰 치환표를 만든다.
  *
- * 치환 대상은 `id → name` 이다. 실측 기준 기프트 설명문의 토큰 119종 1,513회가
- * 100% 치환된다.
+ * 토큰은 상태 식별자이므로 상태 표제어가 놓인 디렉토리만 본다. 실측 기준 기프트
+ * 설명문의 토큰 119종 1,513회가 100% 치환된다.
  */
-export function buildTokenTable(terms: ReadonlyMap<string, Term>): Map<string, string> {
+export function buildTokenTable(index: LocaleIndex): Map<string, string> {
 	const table = new Map<string, string>();
-	for (const [id, term] of terms) {
-		if (term.name) table.set(id, term.name);
+	for (const dir of STATUS_DIRS) {
+		for (const [id, term] of index.get(dir) ?? []) {
+			if (term.name && !table.has(id)) table.set(id, term.name);
+		}
 	}
 	return table;
 }

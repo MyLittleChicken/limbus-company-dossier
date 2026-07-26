@@ -11,7 +11,7 @@
  */
 import { writeTable, OUT } from './io.js';
 import { Report } from './report.js';
-import { buildTokenTable, collectLocale } from './text.js';
+import { buildTokenTable, collectLocale, type LocaleIndex } from './text.js';
 import {
 	buildSins,
 	buildKeywords,
@@ -21,14 +21,16 @@ import {
 } from './entities/basics.js';
 import { buildGifts } from './entities/gifts.js';
 import { buildPacks } from './entities/packs.js';
+import { buildIdentities } from './entities/identities.js';
 
 function main(): void {
 	const report = new Report();
 
 	// 로케일 표제어를 먼저 모은다. 치환표와 표시 문자열이 모두 이것에 의존한다.
-	const terms = { ko: collectLocale('loc-ko'), en: collectLocale('loc-en') };
+	const terms = { ko: collectLocale('loc-ko', report), en: collectLocale('loc-en', report) };
 	const tokens = { ko: buildTokenTable(terms.ko), en: buildTokenTable(terms.en) };
-	console.log(`로케일 표제어: 한국어 ${terms.ko.size}종 · 영어 ${terms.en.size}종`);
+	const termCount = (i: LocaleIndex) => [...i.values()].reduce((n, m) => n + m.size, 0);
+	console.log(`로케일 표제어: 한국어 ${termCount(terms.ko)}종 · 영어 ${termCount(terms.en)}종`);
 
 	const ctx: Ctx = { report, tokens, terms };
 
@@ -56,6 +58,16 @@ function main(): void {
 	writeTable('fusion_recipe', gifts.recipes);
 	writeTable('fusion_slot', gifts.slots);
 	writeTable('fusion_slot_option', gifts.options);
+
+	const ids = buildIdentities(ctx);
+	writeTable('sinner', ids.sinner);
+	writeTable('sinner_text', ids.sinnerText);
+	writeTable('identity', ids.identity);
+	writeTable('identity_text', ids.identityText);
+	writeTable('identity_resist', ids.resists);
+	writeTable('identity_speed', ids.speeds);
+	writeTable('identity_affiliation', ids.affiliations);
+	writeTable('identity_status', ids.statuses);
 
 	const packs = buildPacks(ctx);
 	writeTable('pack', packs.pack);

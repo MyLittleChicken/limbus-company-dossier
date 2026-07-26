@@ -7,7 +7,7 @@
  *   gift_pack     limbus-data-mj `packs`  정본에 없다. 교차 검증 불가한 단일 출처다
  */
 import { readJson } from '../io.js';
-import { normalizeKeyword, toDisplay, stripMarkup } from '../text.js';
+import { normalizeKeyword, toDisplay, stripMarkup, lookupTerm } from '../text.js';
 import type { Ctx } from './basics.js';
 
 const LOCALES = ['ko', 'en'] as const;
@@ -88,7 +88,7 @@ export function buildGifts(ctx: Ctx) {
 		for (let level = 0; level < g.names.length; level += 1) {
 			const locId = String(id + ENHANCE_ID_STRIDE * level);
 			for (const locale of LOCALES) {
-				const hit = ctx.terms[locale].get(locId);
+				const hit = lookupTerm(ctx.terms[locale], locId, ['gifts']);
 				const rawName = hit?.name ?? g.names[level] ?? g.names[0] ?? '';
 				const rawDesc = hit?.desc ?? g.descs?.[level] ?? '';
 				giftText.push({
