@@ -139,9 +139,15 @@ export function buildEgos(ctx: Ctx) {
 		if (list.length === 0) ctx.report.note('E.G.O 패시브 없음', key, e.name);
 		list.forEach((p, index) => {
 			passive.push({ egoId: id, index });
+			// 한국어는 정본에 없다. 로케일 파일의 id 규칙이 `egoId × 100 + 11 + index` 다.
+			const locId = String(id * 100 + 11 + index);
 			for (const locale of LOCALES) {
-				const rawName = p.name ?? '';
-				const rawDesc = p.desc ?? '';
+				const hit = lookupTerm(ctx.terms[locale], locId, ['egos']);
+				if (locale === 'ko' && hit === undefined) {
+					ctx.report.unmapped('E.G.O 패시브 한국어 없음', locId, e.name);
+				}
+				const rawName = hit?.name ?? p.name ?? '';
+				const rawDesc = hit?.desc ?? p.desc ?? '';
 				passiveText.push({
 					egoId: id,
 					index,
@@ -222,13 +228,25 @@ export function buildMirrorDungeon(ctx: Ctx) {
 	const grace: Array<{ id: string; version: string; index: number; cost: number }> = [];
 	const graceText: Array<{ graceId: string; locale: Locale; name: string; descs: string[] }> = [];
 
+	// 은총 이름의 한국어는 정본에 없다. 로케일 파일이 별도 id 체계를 쓰므로
+	// **영문명을 열쇠로 삼아** 대응을 찾는다. 실측 10/10 이 해소된다.
+	const koByEnglish = new Map<string, string>();
+	for (const dir of ['mirror-dungeon'] as const) {
+		for (const [id, term] of ctx.terms.en.get(dir) ?? []) {
+			const korean = ctx.terms.ko.get(dir)?.get(id)?.name;
+			if (term.name && korean) koByEnglish.set(term.name, korean);
+		}
+	}
+
 	for (const g of details.grace ?? []) {
 		grace.push({ id: g.id, version, index: g.index, cost: g.cost });
+		const korean = koByEnglish.get(g.name);
+		if (korean === undefined) ctx.report.unmapped('은총 한국어 없음', g.id, g.name);
 		for (const locale of LOCALES) {
 			graceText.push({
 				graceId: g.id,
 				locale,
-				name: stripMarkup(g.name),
+				name: stripMarkup(locale === 'ko' ? (korean ?? g.name) : g.name),
 				// 강화 단계별 효과가 문자열 배열의 배열이다. 단계마다 한 줄로 합친다.
 				descs: (g.descs ?? []).map((step) => step.join(' · ')),
 			});

@@ -6,7 +6,7 @@
  *   소속            limbus-assets   (93종 전량. mj 는 64종뿐)
  *   상태            limbus-assets   (유일한 출처)
  */
-import { readJson } from '../io.js';
+import { readJson, readJsonGlob, type DataList } from '../io.js';
 import { stripMarkup, toDisplay, lookupTerm, STATUS_DIRS, type LocaleIndex } from '../text.js';
 import type { Report } from '../report.js';
 
@@ -99,6 +99,11 @@ export function buildKeywords(ctx: Ctx) {
 
 // ── 소속 ──────────────────────────────────────────────────────
 
+interface UnitKeyword {
+	id?: string;
+	content?: string;
+}
+
 interface MjAssociation {
 	name: string;
 	nameKo: string;
@@ -109,8 +114,8 @@ export function buildAffiliations(ctx: Ctx) {
 	const list = readJson<string[]>('identities', 'limbus-assets', 'identity_tag_list.json');
 	const ids = [...new Set(list.map(stripMarkup).filter(Boolean))].sort();
 
-	// 한국어는 mj 의 associations 로 보강한다. 64종뿐이므로 나머지는 영문을 유지한다
-	// — 없는 표기를 만들어내지 않는다(02-data-model 6절).
+	// 한국어는 두 곳에서 받는다. mj 의 associations 는 64종뿐이라 그것만으로는 35종이 빈다.
+	// 로케일 파일 `UnitKeyword*.json` 이 내부 id 로 영↔한 쌍을 갖고 있어 대부분을 채운다.
 	const ko = new Map<string, string>();
 	const assoc = readJson<Record<string, MjAssociation>>(
 		'identities',
@@ -118,6 +123,24 @@ export function buildAffiliations(ctx: Ctx) {
 		'associations.json',
 	);
 	for (const v of Object.values(assoc)) if (v.name && v.nameKo) ko.set(v.name, v.nameKo);
+
+	// 영문 로케일의 `content` 를 키로 삼아 한국어 `content` 를 잇는다.
+	const enById = new Map<string, string>();
+	for (const file of readJsonGlob<DataList<UnitKeyword>>(
+		['identities', 'loc-en'],
+		'UnitKeyword',
+	)) {
+		for (const e of file.dataList ?? []) if (e.id && e.content) enById.set(e.id, e.content);
+	}
+	for (const file of readJsonGlob<DataList<UnitKeyword>>(
+		['identities', 'loc-ko'],
+		'UnitKeyword',
+	)) {
+		for (const e of file.dataList ?? []) {
+			const english = e.id ? enById.get(e.id) : undefined;
+			if (english && e.content && !ko.has(english)) ko.set(english, e.content);
+		}
+	}
 
 	const rows = ids.map((id) => ({ id }));
 	const texts: Array<{ affiliationId: string; locale: Locale; name: string }> = [];

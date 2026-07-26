@@ -8,7 +8,7 @@
  *
  * 정본은 동기화 1→4 **델타**로 저장한다. 앞 단계부터 병합해야 최종값이 나온다.
  */
-import { readJson, readJsonDir, toRecords } from '../io.js';
+import { readJson, readJsonDir, readJsonGlob, toRecords, type DataList } from '../io.js';
 import { stripMarkup, toDisplay } from '../text.js';
 import type { Ctx } from './basics.js';
 
@@ -66,6 +66,45 @@ interface MjPassive {
 	descKo?: string;
 }
 
+/**
+ * 로케일 파일의 스킬 텍스트. 코인 설명이 여기에만 한국어로 있다.
+ *
+ * 정본(limbus-assets)의 `coins[].descs` 는 영문뿐이라, 로케일 구분 없이 그것만 쓰면
+ * `[OnSucceedAttackHead] Inflict 1 침잠` 처럼 영문에 상태명만 치환된 혼종이 나온다.
+ * `(스킬 id, level, 코인 index)` 로 조인하면 정본의 코인 위치와 정확히 대응한다.
+ */
+interface LocSkill {
+	id?: string | number;
+	levelList?: Array<{
+		level?: number;
+		name?: string;
+		desc?: string;
+		coinlist?: Array<{ coindescs?: Array<{ desc?: string }> } | null>;
+	}>;
+}
+
+/** `(skillId, level, coinIndex)` → 코인 설명 */
+function collectCoinText(locale: 'loc-ko' | 'loc-en'): Map<string, string> {
+	const out = new Map<string, string>();
+	for (const file of readJsonGlob<DataList<LocSkill>>(['identities', locale], 'Skills')) {
+		for (const entry of file.dataList ?? []) {
+			if (entry.id === undefined || entry.id === null) continue;
+			for (const level of entry.levelList ?? []) {
+				(level.coinlist ?? []).forEach((coin, index) => {
+					const desc = (coin?.coindescs ?? [])
+						.map((d) => d.desc)
+						.filter((d): d is string => Boolean(d))
+						.join('\n');
+					if (!desc) return;
+					const key = `${entry.id}|${level.level ?? 1}|${index}`;
+					if (!out.has(key)) out.set(key, desc);
+				});
+			}
+		}
+	}
+	return out;
+}
+
 interface MjDetail {
 	id: number;
 	attackSkills?: Array<{ slot?: number; copies?: number; skillId?: number }>;
@@ -76,6 +115,7 @@ interface MjDetail {
 
 export function buildSkills(ctx: Ctx) {
 	const details = readJsonDir<AssetDetail>('identity-details', 'limbus-assets');
+	const coinTexts = { ko: collectCoinText('loc-ko'), en: collectCoinText('loc-en') };
 	const mjSkills = new Map(
 		toRecords(
 			readJson<Record<string, MjSkill> | MjSkill[]>('identities', 'limbus-data-mj', 'skills.json'),
@@ -224,8 +264,23 @@ export function buildSkills(ctx: Ctx) {
 
 				(merged.coins ?? []).forEach((c, index) => {
 					coin.push({ skillId, uptie, index, type: c.type ?? 'normal' });
+					const fallback = (c.descs ?? []).join('\n');
 					for (const locale of LOCALES) {
-						const rawDesc = (c.descs ?? []).join('\n');
+						// 로케일 파일도 변경된 단계만 담으므로 uptie 이하에서 가장 가까운 단계를 찾는다.
+						let rawDesc = '';
+						for (let level = uptie; level >= 1; level -= 1) {
+							const hit = coinTexts[locale].get(`${skillId}|${level}|${index}`);
+							if (hit !== undefined) {
+								rawDesc = hit;
+								break;
+							}
+						}
+						if (!rawDesc) {
+							rawDesc = fallback;
+							if (locale === 'ko' && fallback) {
+								ctx.report.note('코인 한국어 없음(영문 유지)', String(skillId));
+							}
+						}
 						coinText.push({
 							skillId,
 							uptie,

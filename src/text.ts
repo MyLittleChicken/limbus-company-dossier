@@ -17,6 +17,8 @@ export interface Term {
 	id?: string | number;
 	name?: string;
 	desc?: string;
+	/** UI 문자열 파일은 `name` 대신 이 필드를 쓴다. 색인 시 `name` 으로 정규화한다. */
+	content?: string;
 }
 
 /** 로컬라이즈 파일이 흩어져 있는 디렉토리. 한 곳만 읽으면 결손이 생긴다. */
@@ -86,6 +88,8 @@ export function collectLocale(locale: 'loc-ko' | 'loc-en', report: Report): Loca
 			for (const entry of file.dataList ?? []) {
 				if (entry.id === undefined || entry.id === null) continue;
 				const key = String(entry.id);
+				// 파일마다 표시명 필드가 다르다. `content` 만 있는 것은 `name` 으로 맞춘다.
+				if (!entry.name && entry.content) entry.name = entry.content;
 				const seen = bucket.get(key);
 				if (seen === undefined) {
 					bucket.set(key, entry);
