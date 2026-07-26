@@ -34,6 +34,28 @@ export const SOURCE = {
 export type SourceId = (typeof SOURCE)[keyof typeof SOURCE];
 
 /**
+ * 텍스트 파일인지 내용으로 판별한다.
+ *
+ * 확장자 목록으로 하면 빠뜨린다 — 실제로 `.sql` · `.py` · `.yml` 을 빠뜨려 6개 파일의
+ * 체크섬이 틀렸다. NUL 바이트는 텍스트에 나오지 않으므로 그것으로 가른다.
+ * 이진 파일의 줄 끝을 건드리면 파일이 깨지기 때문에 이 구분이 필요하다.
+ */
+export function isText(bytes: Buffer): boolean {
+	return !bytes.includes(0);
+}
+
+/**
+ * CRLF 를 LF 로 되돌린다.
+ *
+ * 상류 저장소마다 줄 끝 규약이 다르고, Windows 의 `core.autocrlf` 가 체크아웃 때 또 바꾼다.
+ * 줄 끝은 JSON 의 내용이 아니므로 그것 때문에 같은 파일이 달라 보이면 안 된다.
+ * 내용을 비교하거나 저장할 때는 이 정규화를 거친 바이트를 쓴다.
+ */
+export function toLf(bytes: Buffer): Buffer {
+	return Buffer.from(bytes.toString('latin1').split('\r\n').join('\n'), 'latin1');
+}
+
+/**
  * JSON 을 읽는다. UTF-8 BOM 이 있으면 제거한다.
  * 현행 스냅샷에서 BOM 보유 파일은 12개다.
  */
