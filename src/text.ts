@@ -4,7 +4,7 @@
  * ADR-02 원칙 4 — 정제 규칙을 한 곳에 모은다. 여러 파일에 흩어지면 패치 때 갱신 지점을 놓친다.
  * ADR-03 3.3 — 토큰 치환은 빌드 시점에 수행하고 원문도 함께 보관한다.
  */
-import { readJsonGlob, flattenDataList, type DataList } from './io.js';
+import { readJson, readJsonGlob, flattenDataList, type DataList } from './io.js';
 import type { Report } from './report.js';
 
 /**
@@ -121,6 +121,58 @@ export function buildTokenTable(index: LocaleIndex): Map<string, string> {
 		for (const [id, term] of index.get(dir) ?? []) {
 			if (term.name && !table.has(id)) table.set(id, term.name);
 		}
+	}
+	return table;
+}
+
+/** 발동 시점 표기의 어휘. 이 목록 자체가 무엇이 발동 시점 표기인지를 정의한다. */
+interface SkillTag {
+	text?: string;
+}
+
+/** 발동 시점 표기의 한국어. 정본(`skill_tags.json`)은 영어만 담는다. */
+interface TriggerTerm {
+	name?: string;
+	nameKo?: string;
+}
+
+/**
+ * 스킬·코인·패시브 설명문의 치환표. 상태 표에 **발동 시점 표기**를 덮어 얹는다.
+ *
+ * 대괄호 표기는 어휘가 둘이다. `[Sinking]` 은 상태이고 `[WhenUse]` 는 발동 시점이다.
+ * 상태 표만 쓰면 발동 시점 표기 40종 17,324회가 `[WhenUse]` 꼴로 화면에 새어나간다.
+ *
+ * **덮어쓰는 이유는 두 어휘가 같은 열쇠를 다른 뜻으로 쓰기 때문이다.** `StartBattle` 은
+ * 상태 어휘에서 거울 던전 조우 알림 `전투 발생!` 이지만 스킬 어휘에서는 발동 시점
+ * `[전투 시작시]` 다. 스킬 설명문 안의 표기는 스킬 어휘로 읽어야 한다(ADR-04 2.2 —
+ * 어휘가 출처를 정한다). 실측 충돌은 이 한 종뿐이고 나머지 39종은 상태 표에 없다.
+ *
+ * 정본은 `identities/limbus-assets/skill_tags.json`(72종, 영어)이고 한국어는
+ * `mechanics/limbus-data-mj/terms.json` 에서 보강한다(ADR-04 2.3). 두 출처가 겹치는
+ * 39종의 영문 표기를 전수 대조해 불일치 0을 확인했다.
+ */
+export function buildTriggerTable(
+	base: ReadonlyMap<string, string>,
+	locale: 'ko' | 'en',
+	report: Report,
+): Map<string, string> {
+	const tags = readJson<Record<string, SkillTag>>('identities', 'limbus-assets', 'skill_tags.json');
+	const terms = readJson<Record<string, TriggerTerm>>('mechanics', 'limbus-data-mj', 'terms.json');
+	const table = new Map(base);
+	for (const [key, tag] of Object.entries(tags)) {
+		// `text` 가 빈 문자열인 표기가 있다(`TabExplain`). 게임이 지우는 UI 표식이므로
+		// 빈 값 그대로가 정답이다. `??` 를 써서 빈 문자열이 폴백으로 넘어가지 않게 한다.
+		const en = tag.text ?? terms[key]?.name;
+		const value = locale === 'ko' ? (terms[key]?.nameKo ?? en) : en;
+		if (value === undefined) {
+			report.note(`발동 시점 표기에 표시 문자열이 없음 (${locale})`, key);
+			continue;
+		}
+		const prev = base.get(key);
+		if (prev !== undefined && prev !== value) {
+			report.note(`발동 시점 표기가 상태 표기를 대체 (${locale})`, key, `${prev} → ${value}`);
+		}
+		table.set(key, value);
 	}
 	return table;
 }

@@ -15,11 +15,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { ROOT } from './io.js';
+import { ROOT, readJson } from './io.js';
 
 interface Coverage {
 	snapshot: string;
-	entities: Record<string, { count: number }>;
+	entities: Record<string, { count: number; sources?: Record<string, number> }>;
 	localization: Record<string, { universe: number; ko: number; en: number }>;
 	mechanics: { statuses: number; keywords: string[]; sins: string[] };
 	mirrorDungeon: { totalFloors: number; baseFloors: number };
@@ -132,20 +132,25 @@ async function main(): Promise<void> {
 	];
 	for (const [label, textTable, fk] of localeMap) {
 		const spec = coverage.localization[label];
-		if (spec === undefined) {
-			for (const locale of ['ko', 'en'] as const) {
+		// `localization` 절에 없는 엔티티도 `entities[].sources` 에 로케일별 실측이 있다.
+		// 둘 다 수집 시점에 원본만 보고 적은 값이므로 어느 쪽을 읽든 기준의 성격은 같다.
+		const sources = coverage.entities[label]?.sources;
+		for (const locale of ['ko', 'en'] as const) {
+			const expected = spec?.[locale] ?? sources?.[`loc-${locale}`];
+			const basis = spec
+				? `coverage.localization["${label}"].${locale}`
+				: `coverage.entities["${label}"].sources["loc-${locale}"]`;
+			if (expected === undefined) {
 				skipped.push({
 					name: `${label} ${locale} 표시명`,
-					reason: 'coverage.localization 에 기준이 없다',
+					reason: 'coverage.json 에 로케일별 기준이 없다',
 				});
+				continue;
 			}
-			continue;
-		}
-		for (const locale of ['ko', 'en'] as const) {
 			record(
 				`${label} ${locale} 표시명`,
-				`coverage.localization["${label}"].${locale}`,
-				spec[locale],
+				basis,
+				expected,
 				await scalar(
 					`SELECT count(DISTINCT "${fk}") n FROM "${textTable}" WHERE locale='${locale}' AND name <> ''`,
 				),
@@ -287,7 +292,43 @@ async function main(): Promise<void> {
 		);
 	}
 
-	// ── 8. 외래 키 제약이 실재하고 검증된 상태인가 ──
+	// ── 8. 발동 시점 표기가 화면에 새어나가지 않는가 ──
+	// `[WhenUse]` 같은 내부 표기가 표시용 텍스트에 남으면 그대로 화면에 노출된다.
+	// 어휘 목록은 원본(`skill_tags.json`)에서 읽는다. 산출물에서 뽑으면 자기 확인이 된다.
+	const triggerKeys = Object.keys(
+		readJson<Record<string, unknown>>('identities', 'limbus-assets', 'skill_tags.json'),
+	);
+	const invalid = triggerKeys.filter((k) => !/^[A-Za-z0-9_]+$/.test(k));
+	if (invalid.length > 0) {
+		// 정규식에 그대로 넣을 수 없는 표제어가 생기면 검사를 조용히 좁히지 않고 알린다.
+		skipped.push({
+			name: '발동 시점 표기 미치환',
+			reason: `표제어에 영숫자 밖의 문자가 있다 (${invalid.join(',')})`,
+		});
+	} else {
+		const pattern = `\\[(${triggerKeys.join('|')})\\]`;
+		const descTables = [
+			'status_text',
+			'gift_text',
+			'skill_stage_text',
+			'skill_coin_text',
+			'passive_text',
+			'ego_passive_text',
+		];
+		const leaked = (
+			await Promise.all(
+				descTables.map((t) => scalar(`SELECT count(*) n FROM "${t}" WHERE "desc" ~ '${pattern}'`)),
+			)
+		).reduce((a, b) => a + b, 0);
+		record(
+			'발동 시점 표기 미치환',
+			`원본 어휘 ${triggerKeys.length}종이 표시용 텍스트에 남으면 안 된다`,
+			0,
+			leaked,
+		);
+	}
+
+	// ── 9. 외래 키 제약이 실재하고 검증된 상태인가 ──
 	record(
 		'검증되지 않은 외래 키',
 		'PostgreSQL 제약 상태',

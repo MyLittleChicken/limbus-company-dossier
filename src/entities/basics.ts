@@ -12,7 +12,10 @@ import type { Report } from '../report.js';
 
 export interface Ctx {
 	report: Report;
+	/** 상태 어휘의 치환표. 기프트·상태 설명문에 쓴다. */
 	tokens: { ko: ReadonlyMap<string, string>; en: ReadonlyMap<string, string> };
+	/** 상태 어휘 위에 발동 시점 어휘를 얹은 치환표. 스킬·코인·패시브 설명문에 쓴다. */
+	triggers: { ko: ReadonlyMap<string, string>; en: ReadonlyMap<string, string> };
 	terms: { ko: LocaleIndex; en: LocaleIndex };
 }
 

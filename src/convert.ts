@@ -11,7 +11,7 @@
  */
 import { writeTable, OUT } from './io.js';
 import { Report } from './report.js';
-import { buildTokenTable, collectLocale, type LocaleIndex } from './text.js';
+import { buildTokenTable, buildTriggerTable, collectLocale, type LocaleIndex } from './text.js';
 import {
 	buildSins,
 	buildKeywords,
@@ -31,10 +31,15 @@ function main(): void {
 	// 로케일 표제어를 먼저 모은다. 치환표와 표시 문자열이 모두 이것에 의존한다.
 	const terms = { ko: collectLocale('loc-ko', report), en: collectLocale('loc-en', report) };
 	const tokens = { ko: buildTokenTable(terms.ko), en: buildTokenTable(terms.en) };
+	// 스킬 설명문은 어휘가 하나 더 있다. 상태 표 위에 발동 시점 표기를 얹는다.
+	const triggers = {
+		ko: buildTriggerTable(tokens.ko, 'ko', report),
+		en: buildTriggerTable(tokens.en, 'en', report),
+	};
 	const termCount = (i: LocaleIndex) => [...i.values()].reduce((n, m) => n + m.size, 0);
 	console.log(`로케일 표제어: 한국어 ${termCount(terms.ko)}종 · 영어 ${termCount(terms.en)}종`);
 
-	const ctx: Ctx = { report, tokens, terms };
+	const ctx: Ctx = { report, tokens, triggers, terms };
 
 	const sins = buildSins(ctx);
 	writeTable('sin_info', sins.rows);

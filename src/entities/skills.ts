@@ -49,6 +49,11 @@ interface AssetDetail {
 
 interface MjSkill {
 	id: number;
+	/** 분류값. 정본에도 있으나 정본에 스킬 자체가 없는 6종에서는 이것만이 유일한 출처다. */
+	sin?: string;
+	attackType?: string;
+	defType?: string;
+	skillTier?: number;
 	levels?: Array<{
 		level?: number;
 		name?: string;
@@ -113,8 +118,20 @@ interface MjDetail {
 	supporterPassives?: Array<{ level?: number; passives?: number[] }>;
 }
 
+/** 스킬 하나의 출처와 내용. 정본에 없으면 보강 출처로 내려간다. */
+interface SkillSource {
+	identityId: number;
+	tier: number | undefined;
+	data: AssetStage[] | undefined;
+	/** canonical 정본 · supplement 구버전 스냅샷 · metadata 수치 없이 분류만 */
+	origin: 'canonical' | 'supplement' | 'metadata';
+}
+
 export function buildSkills(ctx: Ctx) {
 	const details = readJsonDir<AssetDetail>('identity-details', 'limbus-assets');
+	// 정본에 정의가 없는 스킬을 구버전 스냅샷에서 보강한다(ADR-04 2.3).
+	// 겹치는 699 스킬 2,035 단계를 전수 대조해 수치 불일치 0 을 확인했으므로 값이 어긋나지 않는다.
+	const supplement = readJsonDir<AssetDetail>('identity-details', 'shared-library');
 	const coinTexts = { ko: collectCoinText('loc-ko'), en: collectCoinText('loc-en') };
 	const mjSkills = new Map(
 		toRecords(
@@ -193,142 +210,216 @@ export function buildSkills(ctx: Ctx) {
 
 	const seenPassive = new Set<string>();
 
-	for (const [fileKey, detail] of details) {
-		const identityId = Number(fileKey);
-		if (!Number.isFinite(identityId)) {
-			ctx.report.unmapped('인격 상세 파일명이 id가 아님', fileKey);
-			continue;
-		}
-		const mjDetail = mjDetails.get(identityId);
-		const deckCounts = new Map<number, number>();
-		for (const s of mjDetail?.attackSkills ?? []) {
-			if (s.skillId !== undefined) deckCounts.set(s.skillId, s.copies ?? 0);
-		}
-
-		for (const [skillKey, entry] of Object.entries(detail.skills ?? {})) {
-			const skillId = Number(skillKey);
-			const stages = entry.data ?? [];
-			const base = stages[0];
-			if (base === undefined) {
-				ctx.report.unmapped('스킬에 동기화 단계가 없음', skillKey, String(identityId));
+	// ── 스킬 출처를 한 곳에 모은다. 정본 → 구버전 보강 → 분류만 순으로 내려간다. ──
+	const skillSources = new Map<number, SkillSource>();
+	const collect = (
+		source: ReadonlyMap<string, AssetDetail>,
+		origin: 'canonical' | 'supplement',
+	): void => {
+		for (const [fileKey, detail] of source) {
+			const identityId = Number(fileKey);
+			if (!Number.isFinite(identityId)) {
+				ctx.report.unmapped('인격 상세 파일명이 id가 아님', fileKey);
 				continue;
 			}
+			for (const [skillKey, entry] of Object.entries(detail.skills ?? {})) {
+				const skillId = Number(skillKey);
+				if (skillSources.has(skillId)) continue;
+				skillSources.set(skillId, { identityId, tier: entry.tier, data: entry.data, origin });
+			}
+		}
+	};
+	collect(details, 'canonical');
+	collect(supplement, 'supplement');
 
+	// 배정되었으나 두 곳 모두에 정의가 없는 스킬. 수치는 어디에도 없고 분류만 있다.
+	for (const detail of mjDetails.values()) {
+		const assigned = [
+			...(detail.attackSkills ?? []).map((s) => s.skillId),
+			...(detail.defenseSkills ?? []),
+		];
+		for (const skillId of assigned) {
+			if (skillId === undefined || skillSources.has(skillId)) continue;
+			skillSources.set(skillId, {
+				identityId: detail.id,
+				tier: undefined,
+				data: undefined,
+				origin: 'metadata',
+			});
+		}
+	}
+
+	// 인격별 덱 매수는 보강 출처가 준다.
+	const deckCounts = new Map<number, number>();
+	for (const detail of mjDetails.values()) {
+		for (const s of detail.attackSkills ?? []) {
+			if (s.skillId !== undefined) deckCounts.set(s.skillId, s.copies ?? 0);
+		}
+	}
+
+	// id 오름차순으로 돌아 산출 순서를 고정한다.
+	for (const skillId of [...skillSources.keys()].sort((a, b) => a - b)) {
+		const source = skillSources.get(skillId);
+		if (source === undefined) continue;
+		const { identityId, origin } = source;
+		const stages = source.data ?? [];
+		const base = stages[0];
+
+		if (base === undefined) {
+			// 수치가 없다. 분류만 담고 단계는 만들지 않는다 — 0 으로 채우면 없는 값을 지어내는 것이다.
+			const meta = mjSkills.get(skillId);
+			if (meta === undefined) {
+				ctx.report.unmapped('스킬 정의를 어느 출처에서도 못 찾음', String(skillId), String(identityId));
+				continue;
+			}
 			skill.push({
 				id: skillId,
 				identityId,
-				// 방어 스킬과 조건부 스킬은 덱 매수가 없다. 0 으로 둔다.
 				deckCount: deckCounts.get(skillId) ?? 0,
-				// 원본이 `none` 으로 표기하는 스킬이 131건 있다. 열거값이 아니므로 null 로 둔다.
-				affinity: base.affinity && base.affinity !== 'none' ? base.affinity : null,
-				atkType: base.atkType ?? null,
-				defType: base.defType ?? 'attack',
-				tier: entry.tier ?? 1,
+				affinity: meta.sin && meta.sin !== 'none' ? meta.sin : null,
+				atkType: meta.attackType ?? null,
+				defType: meta.defType ?? 'attack',
+				tier: meta.skillTier ?? 1,
 			});
-
-			// 델타 병합 — 앞 단계 값을 이어받고 이번 단계에 있는 것만 덮어쓴다.
-			let merged: AssetStage = {};
-			for (const delta of stages) {
-				merged = { ...merged, ...delta };
-				const uptie = delta.uptie ?? merged.uptie ?? 1;
-
-				stage.push({
-					skillId,
-					uptie,
-					baseValue: merged.baseValue ?? 0,
-					coinValue: merged.coinValue ?? 0,
-					atkWeight: merged.atkWeight ?? null,
-					levelCorrection: merged.levelCorrection ?? null,
-				});
-
-				// 보강 출처는 **변경된 단계만** 담는다. 없는 단계는 앞 단계 값을 이어받아야 한다.
-				// 이월하지 않으면 중간 단계만 영문으로 튄다.
-				const levels = mjSkills.get(skillId)?.levels ?? [];
-				const mjLevel = levels.reduce<(typeof levels)[number] | undefined>(
-					(carried, l) => ((l.level ?? 0) <= uptie ? l : carried),
-					undefined,
-				);
-				for (const locale of LOCALES) {
-					const rawName = (locale === 'ko' ? mjLevel?.nameKo : mjLevel?.name) ?? merged.name ?? '';
-					const rawDesc =
-						(locale === 'ko' ? mjLevel?.descKo : mjLevel?.desc) ?? merged.desc ?? '';
-					stageText.push({
-						skillId,
-						uptie,
-						locale,
-						name: stripMarkup(rawName),
-						desc: toDisplay(rawDesc, ctx.tokens[locale], ctx.report, `skill:${skillId}`),
-						descRaw: rawDesc,
-					});
-				}
-
-				(merged.coins ?? []).forEach((c, index) => {
-					coin.push({ skillId, uptie, index, type: c.type ?? 'normal' });
-					const fallback = (c.descs ?? []).join('\n');
-					for (const locale of LOCALES) {
-						// 로케일 파일도 변경된 단계만 담으므로 uptie 이하에서 가장 가까운 단계를 찾는다.
-						let rawDesc = '';
-						for (let level = uptie; level >= 1; level -= 1) {
-							const hit = coinTexts[locale].get(`${skillId}|${level}|${index}`);
-							if (hit !== undefined) {
-								rawDesc = hit;
-								break;
-							}
-						}
-						if (!rawDesc) {
-							rawDesc = fallback;
-							if (locale === 'ko' && fallback) {
-								ctx.report.note('코인 한국어 없음(영문 유지)', String(skillId));
-							}
-						}
-						coinText.push({
-							skillId,
-							uptie,
-							index,
-							locale,
-							desc: toDisplay(rawDesc, ctx.tokens[locale], ctx.report, `coin:${skillId}`),
-							descRaw: rawDesc,
-						});
-					}
-				});
-			}
+			ctx.report.note('스킬 수치가 어느 출처에도 없음(분류만 적재)', String(skillId), String(identityId));
+			continue;
 		}
 
-		for (const [passiveKey, entry] of Object.entries(detail.passiveData ?? {})) {
-			if (seenPassive.has(passiveKey)) continue;
-			seenPassive.add(passiveKey);
-			passive.push({ id: passiveKey, condType: entry.condition?.type ?? null });
-			(entry.condition?.requirement ?? []).forEach((req, index) => {
-				passiveReq.push({
-					passiveId: passiveKey,
-					index,
-					type: req.type ?? '',
-					value: req.value ?? 0,
-				});
+		if (origin === 'supplement') {
+			ctx.report.note('스킬 정의를 구버전 스냅샷에서 보강', String(skillId), String(identityId));
+		}
+
+		skill.push({
+			id: skillId,
+			identityId,
+			// 방어 스킬과 조건부 스킬은 덱 매수가 없다. 0 으로 둔다.
+			deckCount: deckCounts.get(skillId) ?? 0,
+			// 원본이 `none` 으로 표기하는 스킬이 131건 있다. 열거값이 아니므로 null 로 둔다.
+			affinity: base.affinity && base.affinity !== 'none' ? base.affinity : null,
+			atkType: base.atkType ?? null,
+			defType: base.defType ?? 'attack',
+			tier: source.tier ?? 1,
+		});
+
+		// 델타 병합 — 앞 단계 값을 이어받고 이번 단계에 있는 것만 덮어쓴다.
+		let merged: AssetStage = {};
+		for (const delta of stages) {
+			merged = { ...merged, ...delta };
+			const uptie = delta.uptie ?? merged.uptie ?? 1;
+
+			stage.push({
+				skillId,
+				uptie,
+				baseValue: merged.baseValue ?? 0,
+				coinValue: merged.coinValue ?? 0,
+				atkWeight: merged.atkWeight ?? null,
+				levelCorrection: merged.levelCorrection ?? null,
 			});
-			const mjPassive = mjPassives.get(Number(passiveKey));
+
+			// 보강 출처는 **변경된 단계만** 담는다. 없는 단계는 앞 단계 값을 이어받아야 한다.
+			// 이월하지 않으면 중간 단계만 영문으로 튄다.
+			const levels = mjSkills.get(skillId)?.levels ?? [];
+			const mjLevel = levels.reduce<(typeof levels)[number] | undefined>(
+				(carried, l) => ((l.level ?? 0) <= uptie ? l : carried),
+				undefined,
+			);
 			for (const locale of LOCALES) {
-				const rawName = (locale === 'ko' ? mjPassive?.nameKo : mjPassive?.name) ?? entry.name ?? '';
-				const rawDesc = (locale === 'ko' ? mjPassive?.descKo : mjPassive?.desc) ?? entry.desc ?? '';
-				passiveText.push({
-					passiveId: passiveKey,
+				const rawName = (locale === 'ko' ? mjLevel?.nameKo : mjLevel?.name) ?? merged.name ?? '';
+				const rawDesc =
+					(locale === 'ko' ? mjLevel?.descKo : mjLevel?.desc) ?? merged.desc ?? '';
+				// 한국어가 없으면 정본의 영문이 그대로 나간다(ADR-03 5절). 결손이므로 눈에 보이게 남긴다.
+				if (locale === 'ko' && !mjLevel?.nameKo) {
+					ctx.report.note(
+						rawName ? '스킬 이름 한국어 없음(영문 유지)' : '스킬 이름이 어느 출처에도 없음',
+						String(skillId),
+						`동기화 ${uptie}`,
+					);
+				}
+				stageText.push({
+					skillId,
+					uptie,
 					locale,
 					name: stripMarkup(rawName),
-					desc: toDisplay(rawDesc, ctx.tokens[locale], ctx.report, `passive:${passiveKey}`),
+					desc: toDisplay(rawDesc, ctx.triggers[locale], ctx.report, `skill:${skillId}`),
 					descRaw: rawDesc,
 				});
 			}
-		}
 
-		// 인격–패시브는 해금 단계를 함께 담는다. 정본 파일명이 인격 id 이므로 mj 를 쓴다.
+			(merged.coins ?? []).forEach((c, index) => {
+				coin.push({ skillId, uptie, index, type: c.type ?? 'normal' });
+				const fallback = (c.descs ?? []).join('\n');
+				for (const locale of LOCALES) {
+					// 로케일 파일도 변경된 단계만 담으므로 uptie 이하에서 가장 가까운 단계를 찾는다.
+					let rawDesc = '';
+					for (let level = uptie; level >= 1; level -= 1) {
+						const hit = coinTexts[locale].get(`${skillId}|${level}|${index}`);
+						if (hit !== undefined) {
+							rawDesc = hit;
+							break;
+						}
+					}
+					if (!rawDesc) {
+						rawDesc = fallback;
+						if (locale === 'ko' && fallback) {
+							ctx.report.note('코인 한국어 없음(영문 유지)', String(skillId));
+						}
+					}
+					coinText.push({
+						skillId,
+						uptie,
+						index,
+						locale,
+						desc: toDisplay(rawDesc, ctx.triggers[locale], ctx.report, `coin:${skillId}`),
+						descRaw: rawDesc,
+					});
+				}
+			});
+		}
+	}
+
+	// ── 패시브. 정본에 없는 것은 구버전 스냅샷에서 보강한다. ──
+	for (const source of [details, supplement]) {
+		for (const detail of source.values()) {
+			for (const [passiveKey, entry] of Object.entries(detail.passiveData ?? {})) {
+				if (seenPassive.has(passiveKey)) continue;
+				seenPassive.add(passiveKey);
+				passive.push({ id: passiveKey, condType: entry.condition?.type ?? null });
+				(entry.condition?.requirement ?? []).forEach((req, index) => {
+					passiveReq.push({
+						passiveId: passiveKey,
+						index,
+						type: req.type ?? '',
+						value: req.value ?? 0,
+					});
+				});
+				const mjPassive = mjPassives.get(Number(passiveKey));
+				for (const locale of LOCALES) {
+					const rawName =
+						(locale === 'ko' ? mjPassive?.nameKo : mjPassive?.name) ?? entry.name ?? '';
+					const rawDesc =
+						(locale === 'ko' ? mjPassive?.descKo : mjPassive?.desc) ?? entry.desc ?? '';
+					passiveText.push({
+						passiveId: passiveKey,
+						locale,
+						name: stripMarkup(rawName),
+						desc: toDisplay(rawDesc, ctx.triggers[locale], ctx.report, `passive:${passiveKey}`),
+						descRaw: rawDesc,
+					});
+				}
+			}
+		}
+	}
+
+	// 인격–패시브는 해금 단계를 함께 담는다. 어휘가 숫자 id 라 보강 출처를 그대로 쓴다.
+	for (const detail of mjDetails.values()) {
 		for (const [kind, groups] of [
-			['combat', mjDetail?.battlePassives ?? []],
-			['support', mjDetail?.supporterPassives ?? []],
+			['combat', detail.battlePassives ?? []],
+			['support', detail.supporterPassives ?? []],
 		] as const) {
 			for (const group of groups) {
 				for (const passiveId of group.passives ?? []) {
 					identityPassive.push({
-						identityId,
+						identityId: detail.id,
 						passiveId: String(passiveId),
 						kind,
 						uptie: group.level ?? 1,
@@ -338,13 +429,40 @@ export function buildSkills(ctx: Ctx) {
 		}
 	}
 
-	// 정본에 정의가 없고 보강 출처에만 있는 패시브가 6종 있다. 정본에 없는 것은 보강으로
-	// 채운다는 규칙(ADR-04 2.3)대로 이름과 설명만 받아 넣는다. 발동 조건은 정본에만 있으므로 빈다.
+	/**
+	 * 정본에 정의가 없는 패시브를 처리한다.
+	 *
+	 * **보강 출처가 스킬을 패시브로 잘못 올린 건이 있다.** 실측 16건(고유 6종)이 전부
+	 * 다음 세 조건을 동시에 만족한다 — 정본에 패시브 정의가 없고, mj `passives.json` 의
+	 * 항목이 이름·설명이 모두 null 인 껍데기이며, **같은 인격의 정본 스킬 id 다.**
+	 * 예를 들어 1011003 은 인격 10110 의 3번 공격 스킬이지 패시브가 아니다.
+	 * 이것을 받아들이면 이름 없는 패시브 6종을 지어내게 되므로 링크째 버리고 보고한다.
+	 *
+	 * 껍데기가 아닌 진짜 보강은 규칙(ADR-04 2.3)대로 받는다. 현행 스냅샷에는 해당 건이 없다.
+	 */
 	const known = new Set(passive.map((p) => p.id));
+	const rejected = new Set<string>();
 	for (const row of identityPassive) {
 		if (known.has(row.passiveId)) continue;
 		const mjPassive = mjPassives.get(Number(row.passiveId));
-		if (mjPassive === undefined) {
+		const isStub =
+			mjPassive !== undefined &&
+			!mjPassive.name &&
+			!mjPassive.nameKo &&
+			!mjPassive.desc &&
+			!mjPassive.descKo;
+		if (isStub && skillSources.get(Number(row.passiveId))?.identityId === row.identityId) {
+			if (!rejected.has(row.passiveId)) {
+				rejected.add(row.passiveId);
+				ctx.report.note(
+					'보강 출처가 스킬을 패시브로 등재(링크 버림)',
+					row.passiveId,
+					String(row.identityId),
+				);
+			}
+			continue;
+		}
+		if (mjPassive === undefined || isStub) {
 			ctx.report.unmapped('패시브 정의를 어느 출처에서도 못 찾음', row.passiveId, String(row.identityId));
 			continue;
 		}
@@ -357,14 +475,14 @@ export function buildSkills(ctx: Ctx) {
 				passiveId: row.passiveId,
 				locale,
 				name: stripMarkup(rawName),
-				desc: toDisplay(rawDesc, ctx.tokens[locale], ctx.report, `passive:${row.passiveId}`),
+				desc: toDisplay(rawDesc, ctx.triggers[locale], ctx.report, `passive:${row.passiveId}`),
 				descRaw: rawDesc,
 			});
 		}
 		ctx.report.note('패시브 정의가 보강 출처에만 있음(발동 조건 없음)', row.passiveId);
 	}
-	// 정본에 정의가 없는 스킬은 집합에서 빠질 뿐 아니라 리포트에도 안 남는다.
-	// 보강 출처가 인격에 배정한 스킬과 대조해 그 차이를 드러낸다.
+	// 배정된 스킬이 하나도 빠지지 않았는지 확인한다. 이제 정본·보강·분류 셋을 다 훑으므로
+	// 여기서 걸리는 것이 있으면 어느 출처에도 없다는 뜻이다.
 	const built = new Set(skill.map((s) => s.id));
 	for (const detail of mjDetails.values()) {
 		const assigned = [
@@ -373,7 +491,7 @@ export function buildSkills(ctx: Ctx) {
 		];
 		for (const skillId of assigned) {
 			if (skillId === undefined || built.has(skillId)) continue;
-			ctx.report.unmapped('인격에 배정된 스킬이 정본에 없음', String(skillId), String(detail.id));
+			ctx.report.unmapped('배정된 스킬을 어느 출처에서도 못 찾음', String(skillId), String(detail.id));
 		}
 	}
 

@@ -153,7 +153,7 @@ export function buildEgos(ctx: Ctx) {
 					index,
 					locale,
 					name: stripMarkup(rawName),
-					desc: toDisplay(rawDesc, ctx.tokens[locale], ctx.report, `ego-passive:${id}`),
+					desc: toDisplay(rawDesc, ctx.triggers[locale], ctx.report, `ego-passive:${id}`),
 					descRaw: rawDesc,
 				});
 			}
