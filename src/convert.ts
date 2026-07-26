@@ -19,6 +19,7 @@ import {
 	buildStatuses,
 	type Ctx,
 } from './entities/basics.js';
+import { buildGifts } from './entities/gifts.js';
 
 function main(): void {
 	const report = new Report();
@@ -45,6 +46,15 @@ function main(): void {
 	const statuses = buildStatuses(ctx);
 	writeTable('status', statuses.rows);
 	writeTable('status_text', statuses.texts);
+
+	const gifts = buildGifts(ctx);
+	writeTable('gift', gifts.gift);
+	writeTable('gift_text', gifts.giftText);
+	writeTable('gift_pack', gifts.giftPack);
+	writeTable('gift_exclusive_pack', gifts.exclusive);
+	writeTable('fusion_recipe', gifts.recipes);
+	writeTable('fusion_slot', gifts.slots);
+	writeTable('fusion_slot_option', gifts.options);
 
 	console.log(`\n산출 위치: ${OUT}\n`);
 	console.log(report.format());

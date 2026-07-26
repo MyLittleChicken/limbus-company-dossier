@@ -7,9 +7,14 @@
 import { readJsonGlob, flattenDataList, type DataList } from './io.js';
 import type { Report } from './report.js';
 
-/** 로컬라이즈 파일의 표제어 한 줄. */
+/**
+ * 로컬라이즈 파일의 표제어 한 줄.
+ *
+ * **`id` 의 타입이 파일마다 다르다** — 기프트는 정수 `9001`, 상태는 문자열 `"AreaAtk"` 다.
+ * 색인할 때 문자열로 통일하지 않으면 조회가 전부 빗나간다.
+ */
 export interface Term {
-	id?: string;
+	id?: string | number;
 	name?: string;
 	desc?: string;
 }
@@ -29,8 +34,10 @@ export function collectLocale(locale: 'loc-ko' | 'loc-en'): Map<string, Term> {
 	for (const dir of LOCALE_DIRS) {
 		for (const file of readJsonGlob<DataList<Term>>([dir, locale], '')) {
 			for (const entry of file.dataList ?? []) {
+				if (entry.id === undefined || entry.id === null) continue;
+				const key = String(entry.id);
 				// 먼저 등장한 표제어를 유지한다. 뒤 파일이 덮어쓰면 결과가 파일 순서에 의존한다.
-				if (entry.id && !out.has(entry.id)) out.set(entry.id, entry);
+				if (!out.has(key)) out.set(key, entry);
 			}
 		}
 	}
