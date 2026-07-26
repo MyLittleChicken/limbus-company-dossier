@@ -22,6 +22,7 @@ import {
 import { buildGifts } from './entities/gifts.js';
 import { buildPacks } from './entities/packs.js';
 import { buildIdentities } from './entities/identities.js';
+import { buildSkills } from './entities/skills.js';
 
 function main(): void {
 	const report = new Report();
@@ -68,6 +69,17 @@ function main(): void {
 	writeTable('identity_speed', ids.speeds);
 	writeTable('identity_affiliation', ids.affiliations);
 	writeTable('identity_status', ids.statuses);
+
+	const skills = buildSkills(ctx);
+	writeTable('skill', skills.skill);
+	writeTable('skill_stage', skills.stage);
+	writeTable('skill_coin', skills.coin);
+	writeTable('skill_stage_text', skills.stageText);
+	writeTable('skill_coin_text', skills.coinText);
+	writeTable('passive', skills.passive);
+	writeTable('passive_requirement', skills.passiveReq);
+	writeTable('passive_text', skills.passiveText);
+	writeTable('identity_passive', skills.identityPassive);
 
 	const packs = buildPacks(ctx);
 	writeTable('pack', packs.pack);

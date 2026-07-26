@@ -43,7 +43,8 @@
 
 | 엔티티 | 정본 | 근거 |
 | --- | --- | --- |
-| 수감자 · 인격 · 스킬 · 패시브 | `limbus-data-mj` | 스탯·스킬·패시브가 한 출처에 완결되고 한국어가 인라인이다 |
+| 수감자 · 인격 | `limbus-data-mj` | 스탯이 한 출처에 완결되고 한국어가 인라인이다 |
+| 스킬 · 패시브 | `limbus-assets` | **수치와 발동 조건이 여기에만 있다**(아래 정정) |
 | E.G.O | `limbus-assets` | 저항·침식·보유 상태·추출 정보가 여기에만 있다 |
 | E.G.O 기프트 | `limbus-assets` | 456종 완전집합이다. mj는 441종으로 15종이 없다 |
 | 합성 레시피 | `limbus-assets` | 대체 슬롯 구조(`{count, options[]}`)를 보존한다 |
@@ -57,12 +58,25 @@
 
 인격의 정본을 `limbus-data-mj`로 두는 근거는 필드 대조다. mj의 `identities.json` +
 `identities_detail.json`이 `limbus-assets`의 인격 필드를 모두 덮으면서 `mentalCondition` ·
-`panicSkill`을 추가로 갖는다. 스킬은 차이가 더 크다 — mj의 `skills.json`은 1,045건을 **변경된 단계만
-전체 스냅샷으로** 담아 병합이 필요 없고 한국어가 2,561/2,561 붙어 있다. `limbus-assets`는 184개
-파일에 1→4 델타로 흩어져 있고 영문뿐이다.
+`panicSkill`을 추가로 갖는다.
 
 E.G.O는 반대다. mj에는 `awakeningType` · `corrosionType` · `resists` · `statuses` · `extractable` ·
 `maxThreadspin`이 없다.
+
+**스킬·패시브 정본 정정 (2026-07-26).** 처음에는 한국어가 인라인이라는 이유로 `limbus-data-mj`를
+정본으로 두었으나, 구현 중 대조하니 **mj에는 수치가 없다.**
+
+| 필요한 값 | `limbus-assets` | `limbus-data-mj` |
+| --- | --- | --- |
+| `baseValue` · `coinValue` · `atkWeight` · `levelCorrection` | 있음 | **없음** |
+| 코인 종류(`type`) | 있음 | 설명 문자열만 |
+| 패시브 발동 조건(`condition.requirement`) | 있음 | **없음** |
+| 동기화 단계 | 1–4 전체(델타) | 변경된 단계만 |
+| 한국어 | 없음 | 있음 |
+
+`skill_stage`는 수치가 본체이므로 그것을 갖지 않은 출처를 정본으로 삼을 수 없다.
+정본을 `limbus-assets`로 바꾸고 한국어는 보강으로 받는다.
+**정본은 그 엔티티의 본체 필드를 갖는 쪽이어야 하며, 텍스트 편의로 정할 것이 아니다.**
 
 ### 2.2 관계의 정본은 어휘를 따른다
 
