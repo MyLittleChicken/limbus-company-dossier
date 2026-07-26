@@ -5,7 +5,18 @@
 
 ## 현재 상태
 
-기획 단계. 구현 코드는 아직 없다. 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+**1단계(데이터베이스 구축) 진행 중.** 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+
+| 항목 | 상태 |
+| --- | --- |
+| 원본 데이터 수집 | 완료 — 6,486 파일, 출처 3곳, 체크섬 전수 검증 |
+| 의사결정 기록 | 완료 — ADR 4건 |
+| 데이터베이스 스키마 | 완료 — 47 테이블, `prisma/schema.prisma` |
+| 변환기 (원본 → 정규화 JSON) | **미착수** |
+| 적재기 (JSON → PostgreSQL) | **미착수** |
+| 검증 스크립트 | **미착수** |
+
+데이터베이스에는 아직 한 행도 적재되지 않았다.
 
 ## 무엇을 만드는가
 
@@ -54,6 +65,7 @@
 | [01-data-storage.md](docs/adr/01-data-storage.md) | 데이터 저장 형식 — 정규화 JSON으로 정리하고 PostgreSQL에 적재·검증 | 채택 |
 | [02-pipeline.md](docs/adr/02-pipeline.md) | 변환·적재 파이프라인 — TypeScript, Prisma(마이그레이션 러너 미사용) | 채택 |
 | [03-localized-text.md](docs/adr/03-localized-text.md) | 다국어 표시 문자열 — 로케일별 행 분리, 한국어·영어, 빌드 시점 토큰 치환 | 채택 |
+| [04-source-authority.md](docs/adr/04-source-authority.md) | 출처 권위 — 엔티티별 정본 하나, 정본에 없는 필드만 보강 | 채택 |
 
 ## 개발 환경 설정
 
