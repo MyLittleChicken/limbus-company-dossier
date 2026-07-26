@@ -60,6 +60,13 @@ export function readJsonDir<T = unknown>(...segments: string[]): Map<string, T> 
 	return out;
 }
 
+/** 디렉토리의 JSON 파일명 목록. 파일명 자체가 정보를 담는 경우에 쓴다. */
+export function listJsonNames(...segments: string[]): string[] {
+	const dir = join(ENTITIES, ...segments);
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir).filter((n) => n.endsWith('.json'));
+}
+
 /** 접두어로 시작하는 JSON 파일들을 읽는다. 로컬라이즈처럼 파일이 쪼개진 경우에 쓴다. */
 export function readJsonGlob<T = unknown>(segments: string[], prefix: string): T[] {
 	const dir = join(ENTITIES, ...segments);

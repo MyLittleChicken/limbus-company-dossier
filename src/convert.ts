@@ -23,6 +23,7 @@ import { buildGifts } from './entities/gifts.js';
 import { buildPacks } from './entities/packs.js';
 import { buildIdentities } from './entities/identities.js';
 import { buildSkills } from './entities/skills.js';
+import { buildEgos, buildMirrorDungeon, buildDataset } from './entities/egos.js';
 
 function main(): void {
 	const report = new Report();
@@ -86,6 +87,23 @@ function main(): void {
 	writeTable('pack_text', packs.packText);
 	writeTable('pack_boss_encounter', packs.bosses);
 	writeTable('floor_pack', packs.floorPack);
+
+	const egos = buildEgos(ctx);
+	writeTable('ego', egos.ego);
+	writeTable('ego_text', egos.egoText);
+	writeTable('ego_cost', egos.cost);
+	writeTable('ego_resist', egos.resist);
+	writeTable('ego_status', egos.status);
+	writeTable('ego_passive', egos.passive);
+	writeTable('ego_passive_text', egos.passiveText);
+
+	const md = buildMirrorDungeon(ctx);
+	writeTable('mirror_dungeon', md.dungeon);
+	writeTable('grace_option', md.grace);
+	writeTable('grace_option_text', md.graceText);
+
+	const version = md.dungeon[0]?.version ?? 'unknown';
+	writeTable('dataset', buildDataset(ctx, version));
 
 	console.log(`\n산출 위치: ${OUT}\n`);
 	console.log(report.format());
