@@ -369,7 +369,11 @@ CREATE TABLE "pack" (
     "id" TEXT NOT NULL,
     "category" TEXT NOT NULL,
     "chapter" TEXT,
+    "variant" TEXT,
     "sprite" TEXT NOT NULL,
+    "superposition" BOOLEAN NOT NULL DEFAULT false,
+    "extreme" BOOLEAN NOT NULL DEFAULT false,
+    "floorLength" INTEGER,
 
     CONSTRAINT "pack_pkey" PRIMARY KEY ("id")
 );

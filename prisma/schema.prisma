@@ -6,12 +6,20 @@
 //   docs/adr/03-localized-text.md 표시 문자열은 로케일별 행으로 분리
 //   docs/02-data-model.md         엔티티 정의와 함정
 //
+//   docs/adr/04-source-authority.md 엔티티별 정본 출처와 허용 보강
+//
 // 원칙
 //   1. 원본 게임 id를 기본 키로 쓴다. 자체 id를 부여하지 않는다.
 //   2. 파생 값을 저장하지 않는다.
 //   3. N:M 관계는 독립 테이블로 표현한다.
 //   4. 표시 문자열을 엔티티에서 분리한다.
 //   5. 이 스키마는 게임 데이터만 담는다. 추천용 저작 데이터와 런 기록은 범위 밖이다.
+//   6. 엔티티마다 정본 출처가 하나다. 정본에 있는 값을 다른 출처로 덮어쓰지 않는다.
+//
+// 정본 배정 (ADR-04 2.1)
+//   limbus-data-mj  수감자 · 인격 · 스킬 · 패시브 · 테마 팩 · 죄악 · 키워드
+//   limbus-assets   E.G.O · 기프트 · 합성 레시피 · 층별 등장 팩 · 상태 · 소속 · 거울 던전
+//   loc-ko/en       표시 문자열 전량
 
 generator client {
   provider = "prisma-client-js"
@@ -52,6 +60,9 @@ enum DefType {
   counter
 }
 
+/// 등급 체계는 5종이다. 다만 2026-07-25 스냅샷의 E.G.O 110종에는 ALEPH 등급으로 출시된 것이
+/// 아직 없어 실측 분포는 ZAYIN 20 · TETH 32 · HE 40 · WAW 18이다.
+/// 데이터에 없다는 이유로 ALEPH을 빼면 출시 시점에 적재가 깨진다.
 enum EgoRank {
   ZAYIN
   TETH
@@ -129,7 +140,7 @@ model Identity {
   hpBase        Int
   hpPerLevel    Float
   defCorrection Int
-  /// 스태거 구간 임계값. 원본이 길이 3의 배열이다
+  /// 스태거 구간 임계값. **길이가 인격마다 다르다** — 실측 분포 1개 32 · 2개 67 · 3개 85
   breakSection  Int[]
 
   sinner       Sinner                @relation(fields: [sinnerId], references: [id], onDelete: Cascade)
@@ -462,6 +473,7 @@ model Gift {
   /// 1–5 및 EX
   tier        String
   /// 상태 키워드 7종 또는 공격 타입 3종. 원본의 `Keywordless`는 null로 적재한다.
+  /// **대소문자가 소스마다 다르다** — 기프트는 `Burn`, 키워드 목록은 `burn`이라 소문자로 정규화해야 조인된다.
   keywordId   String?
   affinity    Sin
   enhanceable Boolean @default(false)
@@ -572,13 +584,21 @@ model FusionSlotOption {
 // ─────────────────────────────────────────────────────────────
 
 /// 층 진입 시 선택하는 단위. 추천의 최종 대상이다.
+/// 정본은 `limbus-data-mj`이며 `bossEncounters`만 `limbus-assets`에서 보강한다(ADR-04 2.2).
 model Pack {
-  id       String  @id
-  /// 원본 `category`가 [분류, 장] 형태의 배열이라 둘로 나눈다
-  category String
-  chapter  String?
+  id            String  @id
+  category      String
+  chapter       String?
+  /// 변형 구분. `normal` 등
+  variant       String?
   /// 애셋은 id가 아니라 이 값으로 찾는다
-  sprite   String
+  sprite        String
+  /// 중첩 팩 여부. 6–10층 구간에 배정된다
+  superposition Boolean @default(false)
+  /// 극한 팩 여부. 11–15층 구간에 배정된다
+  extreme       Boolean @default(false)
+  /// 팩이 차지하는 층 수
+  floorLength   Int?
 
   texts          PackText[]
   gifts          GiftPack[]
