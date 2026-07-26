@@ -5,18 +5,28 @@
 
 ## 현재 상태
 
-**1단계(데이터베이스 구축) 진행 중.** 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+**1단계(데이터베이스 구축) 완료.** 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
 
 | 항목 | 상태 |
 | --- | --- |
 | 원본 데이터 수집 | 완료 — 6,486 파일, 출처 3곳, 체크섬 전수 검증 |
 | 의사결정 기록 | 완료 — ADR 4건 |
-| 데이터베이스 스키마 | 완료 — 47 테이블, `prisma/schema.prisma` |
-| 변환기 (원본 → 정규화 JSON) | **미착수** |
-| 적재기 (JSON → PostgreSQL) | **미착수** |
-| 검증 스크립트 | **미착수** |
+| 데이터베이스 스키마 | 완료 — 47 테이블 · 외래 키 45 |
+| 변환기 (원본 → 정규화 JSON) | 완료 — 47/47 테이블, 미분류 입력 0 |
+| 적재기 (JSON → PostgreSQL) | 완료 — **49,977행 적재** |
+| 검증 스크립트 | 완료 — 21건 통과 · 2건 미실행 |
+| 2단계 (웹페이지 구축) | 미착수 |
 
-데이터베이스에는 아직 한 행도 적재되지 않았다.
+`00-product.md` 6절의 1단계 성공 기준을 충족한다 — 인격 184 · E.G.O 110 · 기프트 456 · 팩 117이
+수집 시점 실측(`data/coverage.json`)과 일치하고, 기준 버전(`MD7` · 스냅샷 `2026-07-25`)을 함께 기록했다.
+
+### 완료 판정에 붙는 한계
+
+- **검증은 값의 정확성을 보지 않는다.** 행 수와 집합이 기준과 맞는지만 확인한다.
+- **기프트–팩 관계 10,115행은 대조할 출처가 없다.** 전체 관계의 81%다([adr/04](docs/adr/04-source-authority.md) 2.3).
+- **원본을 게임 클라이언트와 대조한 적이 없다**([04-data-inventory.md](docs/04-data-inventory.md) 10절).
+- 테마 팩 다국어 검증 2건은 기준이 없어 실행하지 못한다.
+- 추천에 필요한 효과 분해와 조건 정의는 이 단계에 없다. 3단계의 저작 대상이다.
 
 ## 무엇을 만드는가
 
@@ -78,6 +88,25 @@ git config core.hooksPath .githooks
 `.githooks/pre-commit`이 `data/` 아래 파일의 커밋을 막는다. 이 디렉토리는 Project Moon 저작물에서
 유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
 `.gitignore`가 1차 방어이고 훅은 `git add -f`로 무시 규칙을 넘긴 경우를 잡는 2차 방어다.
+
+### 데이터 파이프라인
+
+```
+npm install
+cp .env.example .env
+
+npm run db:up                  # PostgreSQL 컨테이너 기동
+npm run db:ddl < prisma/schema.sql
+npm run convert                # 원본 → build/data/*.json (47개)
+npm run load                   # JSON → PostgreSQL
+npm run verify                 # coverage.json 과 대조
+```
+
+컨테이너는 현재 **podman**으로 띄운다. `compose.yaml`은 Docker와도 호환되며 추후 전환한다.
+
+`build/`는 추출 파생 데이터라 커밋하지 않는다([adr/01](docs/adr/01-data-storage.md) 6절).
+`prisma/schema.sql`은 `prisma migrate diff` 산출물이며, 마이그레이션 러너를 쓰지 않으므로
+데이터베이스에 관리 테이블이 생기지 않는다([adr/02](docs/adr/02-pipeline.md) 3.2).
 
 ## 커밋·PR 제목 규약
 
