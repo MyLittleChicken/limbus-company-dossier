@@ -16,7 +16,7 @@
 | 변환기 (원본 → 정규화 JSON) | 완료 — 47/47 테이블 · 미분류 입력 0 |
 | 적재기 (JSON → PostgreSQL) | 완료 — 50,121행 적재 |
 | 검증 스크립트 | 완료 — 40건 전부 실행 · 40건 통과 |
-| 2단계 (웹페이지 구축) | 미착수 |
+| 2단계 (웹페이지 구축) | 선행 문서와 스택 ADR 작성 — 구현 미착수 |
 
 값의 정확성은 원본과 전수 대조해 스칼라 필드 불일치 0을 확인했다.
 인격 184 · E.G.O 110 · 기프트 456 · 팩 117이 수집 시점 실측(`data/coverage.json`)과 일치하고,
@@ -69,7 +69,7 @@
 | [02-data-model.md](docs/02-data-model.md) | 엔티티 스키마와 관계 정의 | 1단계 착수 전 | 작성됨 |
 | [03-data-provenance.md](docs/03-data-provenance.md) | 데이터 출처 분석 — 추출 데이터와 저작 데이터의 구분, 계층별 신뢰도 | 1단계 착수 전 | 작성됨 |
 | [04-data-inventory.md](docs/04-data-inventory.md) | 데이터 수집 완전성 근거 — 출처 19종, 교차 대조 결과, 갭 규명 | 1단계 착수 전 | 작성됨 |
-| `docs/05-ui-foundation.md` | 화면 구조와 디자인 기반 설계 | 2단계 착수 전 | 예정 |
+| [05-ui-foundation.md](docs/05-ui-foundation.md) | 화면 구조와 디자인 기반 — 화면 목록, 필터 축, 로케일·결손 표기, 이미지 애셋 정책 | 2단계 착수 전 | 작성됨 |
 | `docs/06-recommendation-engine.md` | 추천 엔진 설계 — 엔티티 간 메카닉 정의와 점수화 규칙 | 3단계 착수 전 | 예정 |
 | `docs/07-recommendation-system.md` | 런 상태 입력 흐름과 추천·근거 제시 방식 설계 | 4단계 착수 전 | 예정 |
 
@@ -84,6 +84,7 @@
 | [02-pipeline.md](docs/adr/02-pipeline.md) | 변환·적재 파이프라인 — TypeScript, Prisma(마이그레이션 러너 미사용) | 채택 |
 | [03-localized-text.md](docs/adr/03-localized-text.md) | 다국어 표시 문자열 — 로케일별 행 분리, 한국어·영어, 빌드 시점 토큰 치환 | 채택 |
 | [04-source-authority.md](docs/adr/04-source-authority.md) | 출처 권위 — 엔티티별 정본 하나, 정본에 없는 필드만 보강 | 채택 |
+| [05-web-serving.md](docs/adr/05-web-serving.md) | 웹 서빙 — Next.js(App Router), 요청 시점 서버 렌더, 서버 계산, 배포 환경 미정 | 채택 |
 
 ## 개발 환경 설정
 
