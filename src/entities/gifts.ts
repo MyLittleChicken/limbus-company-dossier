@@ -6,7 +6,7 @@
  *   gift.mdCost   limbus-data-mj `cost`   441/456 만 존재하므로 15종은 빈다
  *   gift_pack     limbus-data-mj `packs`  정본에 없다. 교차 검증 불가한 단일 출처다
  */
-import { readJson } from '../io.js';
+import { readJson, toRecords } from '../io.js';
 import { normalizeKeyword, toDisplay, stripMarkup, lookupTerm } from '../text.js';
 import type { Ctx } from './basics.js';
 
@@ -41,11 +41,27 @@ export function buildGifts(ctx: Ctx) {
 	const mjList = readJson<MjGift[]>('gifts', 'limbus-data-mj', 'gifts.json');
 	const mj = new Map(mjList.map((g) => [g.id, g]));
 
+	// **원본은 죄악이 아니라 색을 기록한다.** 정본(`limbus-assets`)의 `affinity` 는 그 색을
+	// 죄악으로 되바꾼 값이라 원본 어휘가 아니다. 색을 그대로 담은 곳은 보강 출처의
+	// `gifts_detail.json` 뿐이므로 거기서 가져온다. 변환은 우리가 하지 않는다.
+	const mjDetail = toRecords(
+		readJson<Record<string, { id: number; attributeType?: string }>>(
+			'gifts',
+			'limbus-data-mj',
+			'gifts_detail.json',
+		),
+	);
+	const attributeById = new Map(
+		mjDetail
+			.filter((d) => d.attributeType)
+			.map((d) => [d.id, d.attributeType as string] as const),
+	);
+
 	const gift: Array<{
 		id: number;
 		tier: string;
 		keywordId: string | null;
-		affinity: string;
+		attributeType: string | null;
 		enhanceable: boolean;
 		hardOnly: boolean;
 		mdCost: number | null;
@@ -67,17 +83,20 @@ export function buildGifts(ctx: Ctx) {
 	const options: Array<{ recipeId: string; slotIndex: number; giftId: number }> = [];
 
 	let missingCost = 0;
+	let missingAttribute = 0;
 
 	for (const [key, g] of Object.entries(assets)) {
 		const id = Number(key);
 		const supplement = mj.get(id);
 		if (supplement?.cost === undefined) missingCost += 1;
+		if (!attributeById.has(id)) missingAttribute += 1;
 
 		gift.push({
 			id,
 			tier: String(g.tier),
 			keywordId: normalizeKeyword(g.keyword),
-			affinity: g.affinity,
+			// 보강 출처에 없는 15종은 비운다. 정본의 죄악 값을 색으로 되돌려 채우지 않는다.
+			attributeType: attributeById.get(id) ?? null,
 			enhanceable: g.enhanceable === true,
 			hardOnly: g.hardonly === true,
 			mdCost: supplement?.cost ?? null,
@@ -153,6 +172,8 @@ export function buildGifts(ctx: Ctx) {
 	ctx.report.rows('fusion_slot_option', options.length);
 
 	if (missingCost > 0) ctx.report.note('MD 코스트 결손(보강 출처에 없음)', `${missingCost}종`);
+	if (missingAttribute > 0)
+		ctx.report.note('색 속성 결손(보강 출처에 없음)', `${missingAttribute}종`);
 	if (missingPool > 0) ctx.report.note('팩 전체 풀 결손(보강 출처에 없음)', `${missingPool}종`);
 
 	return { gift, giftText, giftPack, exclusive, recipes, slots, options };

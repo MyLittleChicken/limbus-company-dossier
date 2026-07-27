@@ -21,7 +21,6 @@ export interface GiftFilter {
 	q?: string | undefined;
 	tiers: string[];
 	keywords: string[];
-	affinities: string[];
 	enhanceable?: boolean | undefined;
 	hardOnly?: boolean | undefined;
 	/** 'exclusive' 전용 · 'general' 범용 */
@@ -40,7 +39,6 @@ export function readGiftFilter(params: SearchParams): GiftFilter {
 		q: one(params['q'])?.trim() || undefined,
 		tiers: multi(params['tier']),
 		keywords: multi(params['keyword']),
-		affinities: multi(params['affinity']),
 		enhanceable: bool('enhanceable'),
 		hardOnly: bool('hard'),
 		pool: pool === 'exclusive' || pool === 'general' ? pool : undefined,
@@ -61,7 +59,6 @@ function giftWhere(filter: GiftFilter, locale: Locale): Prisma.GiftWhereInput {
 		and.push({ OR: or });
 	}
 
-	if (filter.affinities.length) and.push({ affinity: { in: filter.affinities as Sin[] } });
 	if (filter.enhanceable !== undefined) and.push({ enhanceable: filter.enhanceable });
 	if (filter.hardOnly !== undefined) and.push({ hardOnly: filter.hardOnly });
 
@@ -112,7 +109,6 @@ export async function listGifts(locale: Locale, filter: GiftFilter) {
 		items: rows.map((g) => ({
 			id: g.id,
 			tier: g.tier,
-			affinity: g.affinity,
 			enhanceable: g.enhanceable,
 			hardOnly: g.hardOnly,
 			mdCost: g.mdCost,
@@ -197,7 +193,6 @@ export async function getGift(id: number, locale: Locale) {
 	return {
 		id: gift.id,
 		tier: gift.tier,
-		affinity: gift.affinity,
 		enhanceable: gift.enhanceable,
 		hardOnly: gift.hardOnly,
 		mdCost: gift.mdCost,

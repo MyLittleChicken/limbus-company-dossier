@@ -470,19 +470,24 @@ model EgoPassiveText {
 
 /// 거울 던전에서 획득하는 강화 요소. 정보 제공의 중심 엔티티다.
 model Gift {
-  id          Int     @id
+  id            Int     @id
   /// 1–5 및 EX
-  tier        String
+  tier          String
   /// 상태 키워드 7종 또는 공격 타입 3종. 원본의 `Keywordless`는 null로 적재한다.
   /// **대소문자가 소스마다 다르다** — 기프트는 `Burn`, 키워드 목록은 `burn`이라 소문자로 정규화해야 조인된다.
-  keywordId   String?
-  affinity    Sin
-  enhanceable Boolean @default(false)
-  hardOnly    Boolean @default(false)
+  keywordId     String?
+  /// **원본이 죄악이 아니라 색으로 기록한다.** `gifts_detail.json` 의 `attributeType` 이며
+  /// 값은 CRIMSON · SCARLET · AMBER · SHAMROCK · AZURE · INDIGO · VIOLET 이다.
+  /// 죄악에도 같은 색이 배정되어 있어(`sin_info.attribute`) 추출기들이 죄악으로 되바꿔 놓았으나,
+  /// 그 변환은 우리가 하지 않는다 — 원본 어휘를 그대로 둔다(02-data-model 원칙 3).
+  /// 15종은 보강 출처에 없어 비어 있다.
+  attributeType String?
+  enhanceable   Boolean @default(false)
+  hardOnly      Boolean @default(false)
   /// 거울 던전 내 획득 비용
-  mdCost      Int?
+  mdCost        Int?
   /// 애셋 스프라이트 키. **애셋을 id로 추정해 찾으면 안 된다.**
-  sprite      String
+  sprite        String
 
   keyword        Keyword?            @relation(fields: [keywordId], references: [id])
   texts          GiftText[]
@@ -492,7 +497,7 @@ model Gift {
   usedIn         FusionSlotOption[]
 
   @@index([keywordId])
-  @@index([affinity])
+  @@index([attributeType])
   @@map("gift")
 }
 

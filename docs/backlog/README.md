@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | [01-identity-tags.md](01-identity-tags.md) | 소속과 인격 태그의 분리 — `tags` 93종에 조직·계급·종족·메타가 섞여 있다 | 미착수 |
 | [02-locale-fallback.md](02-locale-fallback.md) | 한국어 폴백이 화면에 표기되지 않는다 — 파이프라인이 `ko` 행에 영문을 채운다 | 미착수 |
-| [03-gift-affinity.md](03-gift-affinity.md) | 기프트의 죄악 속성이 무엇인지 모른다 — 원본에 있으나 기능이 확인되지 않았다 | 미착수 |
+| [03-gift-affinity.md](03-gift-affinity.md) | 기프트의 색 속성을 어디에 쓰는지 모른다 — 원본 어휘로 되돌렸고 화면에서는 쓰지 않는다 | 표기 정정 완료 · 용도 미확인 |
 
 ## 규칙
 

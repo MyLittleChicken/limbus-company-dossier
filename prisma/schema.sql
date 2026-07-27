@@ -300,7 +300,7 @@ CREATE TABLE "gift" (
     "id" INTEGER NOT NULL,
     "tier" TEXT NOT NULL,
     "keywordId" TEXT,
-    "affinity" "Sin" NOT NULL,
+    "attributeType" TEXT,
     "enhanceable" BOOLEAN NOT NULL DEFAULT false,
     "hardOnly" BOOLEAN NOT NULL DEFAULT false,
     "mdCost" INTEGER,
@@ -548,7 +548,7 @@ CREATE INDEX "ego_status_statusId_idx" ON "ego_status"("statusId");
 CREATE INDEX "gift_keywordId_idx" ON "gift"("keywordId");
 
 -- CreateIndex
-CREATE INDEX "gift_affinity_idx" ON "gift"("affinity");
+CREATE INDEX "gift_attributeType_idx" ON "gift"("attributeType");
 
 -- CreateIndex
 CREATE INDEX "gift_pack_packId_idx" ON "gift_pack"("packId");

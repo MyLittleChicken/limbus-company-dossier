@@ -128,8 +128,6 @@ export async function getPack(id: string, locale: Locale) {
 	const shape = (row: Row) => ({
 		id: row.giftId,
 		tier: row.gift.tier,
-		affinity: row.gift.affinity,
-		keywordId: row.gift.keywordId,
 		keyword: row.gift.keyword ? nameOf(row.gift.keyword.texts, locale) : null,
 		icon: giftIcon(row.gift.sprite),
 		text: nameOf(row.gift.texts, locale),
@@ -171,7 +169,6 @@ export async function getPack(id: string, locale: Locale) {
 		distribution: {
 			tier: tally((g) => g.tier),
 			keyword: tally((g) => g.keyword?.name ?? null),
-			affinity: tally((g) => g.affinity),
 		},
 	};
 }

@@ -4,7 +4,7 @@ import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { getGift } from '@/lib/queries/gifts';
 import { Facts, Icon, IconTag, Name, Nothing, Panel, SecLabel } from '@/components/ui';
-import { keywordIcon, sinIcon } from '@/lib/assets';
+import { keywordIcon } from '@/lib/assets';
 
 export default async function GiftDetailPage({
 	params,
@@ -109,11 +109,6 @@ export default async function GiftDetailPage({
 						<Facts
 							rows={[
 								[ko ? '등급' : 'Tier', gift.tier],
-								[
-									// 원본 `affinity` 를 그대로 낸다. 게임에서의 역할은 확인되지 않았다.
-									ko ? '죄악 (원본 affinity)' : 'Sin (source: affinity)',
-									<IconTag key="s" src={sinIcon(gift.affinity)}>{gift.affinity}</IconTag>,
-								],
 								[
 									ko ? '키워드' : 'Keyword',
 									gift.keyword ? (

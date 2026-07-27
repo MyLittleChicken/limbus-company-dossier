@@ -79,8 +79,6 @@ export default async function PackDetailPage({
 								{bar(pack.distribution.tier, pack.gifts.length)}
 								<h4>{ko ? '키워드' : 'Keyword'}</h4>
 								{bar(pack.distribution.keyword, pack.gifts.length)}
-								<h4>{ko ? '죄악' : 'Sin'}</h4>
-								{bar(pack.distribution.affinity, pack.gifts.length)}
 							</div>
 						)}
 					</Panel>

@@ -14,7 +14,7 @@ import {
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, PickFilter, SearchBox, TriFilter } from '@/components/filters';
 import { Empty, Icon, IconTag, Name, Pager, SecLabel } from '@/components/ui';
-import { keywordIcon, sinIcon } from '@/lib/assets';
+import { keywordIcon } from '@/lib/assets';
 
 export default async function GiftsPage({
 	params,
@@ -68,15 +68,6 @@ export default async function GiftsPage({
 							// 키워드 없는 기프트 120종. 결손이 아니라 축의 값이다.
 							{ value: NO_KEYWORD, label: locale === 'ko' ? '없음' : 'None' },
 						]}
-					/>
-					<ChipFilter
-						param="affinity"
-						label={locale === 'ko' ? '죄악' : 'Sin'}
-						options={sins.map((s) => ({
-							value: s.id,
-							label: s.text?.name ?? s.id,
-							icon: sinIcon(s.id),
-						}))}
 					/>
 					<PickFilter
 						param="pool"

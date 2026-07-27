@@ -109,7 +109,7 @@
 | desc | 설명문. 정제된 텍스트를 사용한다 |
 | tier | 등급 (4.5) |
 | keyword | 연관 키워드. 상태 키워드 또는 공격 타입이며, 없는 경우도 있다 |
-| affinity | 죄악 속성 |
+| attributeType | **색 속성.** 원본이 `CRIMSON` · `SCARLET` · `AMBER` · `SHAMROCK` · `AZURE` · `INDIGO` · `VIOLET` 로 기록한다. 죄악에도 같은 색이 배정되어 있으나(4.1) 원본은 죄악이 아니라 색을 담으므로 그대로 둔다. 15종은 보강 출처에 없어 빈다 |
 | enhanceable | 강화 가능 여부 |
 | enhanceLevel | 강화 단계 |
 | exclusiveTo | 전용 테마 팩. 없으면 범용 풀에서 등장한다 |
