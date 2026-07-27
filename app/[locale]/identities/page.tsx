@@ -12,7 +12,8 @@ import {
 import { listSins } from '@/lib/queries/gifts';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
-import { Empty, Icon, Name, SecLabel } from '@/components/ui';
+import { Empty, Icon, IconOnly, Name, SecLabel } from '@/components/ui';
+import { rarityIcon } from '@/lib/assets';
 
 export default async function IdentitiesPage({
 	params,
@@ -62,11 +63,11 @@ export default async function IdentitiesPage({
 					<ChipFilter
 						param="rarity"
 						label={ko ? '등급' : 'Rarity'}
-						options={[
-							{ value: '1', label: '0' },
-							{ value: '2', label: '00' },
-							{ value: '3', label: '000' },
-						]}
+						options={[1, 2, 3].map((r) => ({
+							value: String(r),
+							label: '0'.repeat(r),
+							icon: rarityIcon(r),
+						}))}
 					/>
 					<ChipFilter
 						param="sin"
@@ -98,7 +99,7 @@ export default async function IdentitiesPage({
 										<Name value={i.text} notice={t.fallbackNotice} />
 									</strong>
 									<span className="card-meta">
-										<span className="tag">{'0'.repeat(i.rarity)}</span>
+										<IconOnly src={rarityIcon(i.rarity)} label={'0'.repeat(i.rarity)} />
 										<span className="tag">S{i.season}</span>
 									</span>
 								</div>

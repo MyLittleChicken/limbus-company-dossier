@@ -1,6 +1,6 @@
 import type { Locale, Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
-import { giftIcon, packIcon } from '@/lib/assets';
+import { giftIcon, packBossIcon, packIcon } from '@/lib/assets';
 import { localeFilter, multi, nameOf, one, type SearchParams } from './shared';
 
 /**
@@ -153,6 +153,8 @@ export async function getPack(id: string, locale: Locale) {
 		extreme: pack.extreme,
 		floorLength: pack.floorLength,
 		icon: packIcon(pack.sprite),
+		// 보스 층에는 보스가 함께 그려진 카드가 쓰인다(실측 40개).
+		bossIcon: packBossIcon(pack.sprite),
 		text: nameOf(pack.texts, locale),
 		bosses: pack.bosses.map((b) => ({
 			encounterId: b.encounterId,

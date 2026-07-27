@@ -5,7 +5,8 @@ import { UI } from '@/lib/ui-text';
 import { listGlossaryAxes, listStatuses, readGlossaryFilter } from '@/lib/queries/reference';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
-import { Empty, Icon, Name, Nothing, Pager, Panel, SecLabel } from '@/components/ui';
+import { Empty, Icon, IconTag, Name, Nothing, Pager, Panel, SecLabel } from '@/components/ui';
+import { keywordIcon, sinIcon } from '@/lib/assets';
 
 export default async function GlossaryPage({
 	params,
@@ -90,11 +91,11 @@ export default async function GlossaryPage({
 					<Panel title={ko ? '죄악' : 'Sins'} hint={axes.sins.length}>
 						<ul className="inline-list">
 							{axes.sins.map((s) => (
-								<li key={s.id} className="tag">
+								<IconTag key={s.id} src={sinIcon(s.id)}>
 									<Name value={s.text} notice={t.fallbackNotice} />
 									{/* 게임이 죄악마다 부여한 색 이름. 디자인 단계의 색 축이 된다. */}
 									<em className="attr">{s.attribute}</em>
-								</li>
+								</IconTag>
 							))}
 						</ul>
 					</Panel>
@@ -103,9 +104,9 @@ export default async function GlossaryPage({
 					<Panel title={ko ? '키워드' : 'Keywords'} hint={axes.keywords.length}>
 						<ul className="inline-list">
 							{axes.keywords.map((k) => (
-								<li key={k.id} className="tag">
+								<IconTag key={k.id} src={keywordIcon(k.id)}>
 									<Name value={k.text} notice={t.fallbackNotice} />
-								</li>
+								</IconTag>
 							))}
 						</ul>
 					</Panel>

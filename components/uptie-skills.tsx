@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Locale } from '@prisma/client';
 import type { IdentityDetail } from '@/lib/queries/identities';
-import { Name, Nothing } from './ui';
+import { IconTag, Name, Nothing } from './ui';
 
 /**
  * 인격 스킬.
@@ -68,14 +68,16 @@ export function UptieSkills({
 								<Nothing kind="missing">{ko ? '이름 없음' : 'Unnamed'}</Nothing>
 							)}
 						</strong>
-						<span className="tag">{skill.defType}</span>
+						<IconTag src={skill.icons.defType}>{skill.defType}</IconTag>
 						{skill.affinity ? (
-							<span className="tag">{skill.affinity}</span>
+							<IconTag src={skill.icons.sin}>{skill.affinity}</IconTag>
 						) : (
 							// 죄악이 없는 스킬이 131건 있다. 패닉·조건부 스킬이다.
 							<span className="tag absent">{ko ? '죄악 없음' : 'No sin'}</span>
 						)}
-						{skill.atkType ? <span className="tag">{skill.atkType}</span> : null}
+						{skill.atkType ? (
+							<IconTag src={skill.icons.atkType}>{skill.atkType}</IconTag>
+						) : null}
 						<span className="tag">
 							{ko ? '등급' : 'Tier'} {skill.tier}
 						</span>

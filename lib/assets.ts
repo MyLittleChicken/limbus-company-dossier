@@ -97,8 +97,46 @@ function lookup(category: AssetCategory, key: string | null | undefined): string
 /** 기프트 아이콘. 키는 `gift.sprite` 이며 id 가 아니다. */
 export const giftIcon = (sprite: string): string | null => lookup('gifts', sprite);
 
-/** 테마 팩 이미지. 키는 `pack.sprite` 다. */
+/**
+ * 테마 팩 이미지. 키는 `pack.sprite` 다.
+ *
+ * **보스 층 변형이 따로 있다.** `Amber_hard` 에 `Amber_hard_boss` 가 짝으로 있는 식이며
+ * 실측 40개다. 카드 그림 안에 그 층의 보스가 함께 그려져 있다.
+ * 난이도(`_normal` · `_hard` · `_effective`)는 이미 스프라이트 키에 들어 있고
+ * 우리 데이터에서는 난이도마다 별도 팩 행이다.
+ *
+ * `Canto_*` 계열은 보스 변형이 없다 — 그 자체가 보스전 팩이고 `bossEncounters` 를 갖는다.
+ */
 export const packIcon = (sprite: string): string | null => lookup('packs', sprite);
+
+/** 보스 층에 쓰이는 팩 그림. 없으면 null 이며 그것이 정상인 팩이 있다. */
+export const packBossIcon = (sprite: string): string | null => lookup('packs', `${sprite}_boss`);
+
+/** 인격 등급. 게임 표기 0 / 00 / 000 이 그대로 파일명이다(00-product 3절). */
+export const rarityIcon = (rarity: number): string | null =>
+	lookup('icons', '0'.repeat(Math.min(Math.max(rarity, 1), 3)));
+
+/** 죄악 7종. 파일명이 소문자 enum 값과 같다. */
+export const sinIcon = (sin: string): string | null => lookup('icons', sin);
+
+/** 공격 타입·방어 구분. 파일명이 첫 글자만 대문자다. */
+const capitalize = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1);
+
+export const atkTypeIcon = (atkType: string): string | null =>
+	lookup('icons', capitalize(atkType));
+
+export const defTypeIcon = (defType: string): string | null =>
+	defType === 'attack' ? null : lookup('icons', capitalize(defType));
+
+/** E.G.O 등급. enum 은 대문자이고 파일명은 소문자다. */
+export const egoRankIcon = (rank: string): string | null => lookup('icons', rank.toLowerCase());
+
+/**
+ * 기프트 연관 키워드. 상태 7종과 공격 타입 3종을 한 축으로 다룬다(02-data-model 4.3).
+ * 파일명이 첫 글자만 대문자라 그대로 쓰면 찾지 못한다.
+ */
+export const keywordIcon = (keywordId: string): string | null =>
+	lookup('icons', capitalize(keywordId));
 
 /** 상태 아이콘. 아이콘이 없는 수치 변화형 상태가 254종 있고 그것은 결손이 아니다. */
 export const statusIcon = (sprite: string | null): string | null => lookup('statuses', sprite);

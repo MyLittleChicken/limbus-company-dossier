@@ -100,8 +100,21 @@ export default async function PackDetailPage({
 
 				<aside>
 					<Panel title={ko ? '속성' : 'Attributes'}>
-						<div className="hero-icon">
-							<Icon src={pack.icon} alt="" size={160} shape="wide" />
+						<div className="hero-icon pack-arts">
+							<figure>
+								<Icon src={pack.icon} alt="" size={160} shape="wide" />
+								<figcaption>{ko ? '일반 층' : 'Normal floor'}</figcaption>
+							</figure>
+							{/*
+							 * 보스 층에는 보스가 함께 그려진 카드가 쓰인다. 없는 팩이 있고
+							 * Canto 계열은 그 자체가 보스전이라 변형을 갖지 않는다.
+							 */}
+							{pack.bossIcon ? (
+								<figure>
+									<Icon src={pack.bossIcon} alt="" size={160} shape="wide" />
+									<figcaption>{ko ? '보스 층' : 'Boss floor'}</figcaption>
+								</figure>
+							) : null}
 						</div>
 						<Facts
 							rows={[

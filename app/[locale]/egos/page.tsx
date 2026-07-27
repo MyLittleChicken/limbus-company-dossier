@@ -8,7 +8,8 @@ import { listSinners } from '@/lib/queries/identities';
 import { listSins } from '@/lib/queries/gifts';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox, TriFilter } from '@/components/filters';
-import { Empty, Icon, Name, SecLabel } from '@/components/ui';
+import { Empty, Icon, IconTag, Name, SecLabel } from '@/components/ui';
+import { atkTypeIcon, egoRankIcon, sinIcon } from '@/lib/assets';
 
 export default async function EgosPage({
 	params,
@@ -57,7 +58,7 @@ export default async function EgosPage({
 					<ChipFilter
 						param="rank"
 						label={ko ? '등급' : 'Rank'}
-						options={EGO_RANKS.map((r) => ({ value: r, label: r }))}
+						options={EGO_RANKS.map((r) => ({ value: r, label: r, icon: egoRankIcon(r) }))}
 					/>
 					<ChipFilter
 						param="sin"
@@ -84,12 +85,13 @@ export default async function EgosPage({
 										<Name value={e.text} notice={t.fallbackNotice} />
 									</strong>
 									<span className="card-meta">
-										<span className="tag">{e.rank}</span>
-										<span className="tag">{e.awakenAffinity}</span>
+										<IconTag src={egoRankIcon(e.rank)}>{e.rank}</IconTag>
+										<IconTag src={sinIcon(e.awakenAffinity)} label={e.awakenAffinity} />
+										<IconTag src={atkTypeIcon(e.awakenAtkType)} label={e.awakenAtkType} />
 										{e.costs.map((c) => (
-											<span key={c.sin} className="tag">
-												{c.sin} {c.amount}
-											</span>
+											<IconTag key={c.sin} src={sinIcon(c.sin)} label={c.sin}>
+												{c.amount}
+											</IconTag>
 										))}
 									</span>
 								</div>

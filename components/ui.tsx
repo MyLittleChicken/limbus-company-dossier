@@ -107,6 +107,41 @@ export function Icon({
 	);
 }
 
+/**
+ * 아이콘을 곁들인 태그.
+ *
+ * 죄악·등급·공격 타입처럼 게임이 고유 표기를 갖는 축은 그 표기를 따른다(05-ui-foundation 8절).
+ * 애셋이 없으면 글자만 남으므로 뜻이 사라지지 않는다.
+ */
+export function IconTag({
+	src,
+	children,
+	label,
+}: {
+	src: string | null;
+	children?: ReactNode;
+	label?: string | undefined;
+}) {
+	return (
+		<span className="tag tag-icon">
+			{src ? (
+				/* eslint-disable-next-line @next/next/no-img-element */
+				<img src={src} alt={children === undefined ? (label ?? '') : ''} width={16} height={16} />
+			) : null}
+			{children}
+		</span>
+	);
+}
+
+/** 아이콘만 쓰는 자리. 글자가 필요 없을 때 쓰되 대체 텍스트를 반드시 남긴다. */
+export function IconOnly({ src, label }: { src: string | null; label: string }) {
+	if (!src) return <span className="tag">{label}</span>;
+	return (
+		/* eslint-disable-next-line @next/next/no-img-element */
+		<img className="icon-inline" src={src} alt={label} title={label} width={20} height={20} />
+	);
+}
+
 export function Empty({ message }: { message: string }) {
 	return <p className="emptied">{message}</p>;
 }

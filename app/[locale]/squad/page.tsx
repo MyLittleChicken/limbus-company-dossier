@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { listSquad } from '@/lib/queries/squad';
-import { Icon, Name, Nothing, SecLabel } from '@/components/ui';
+import { Icon, IconOnly, IconTag, Name, Nothing, SecLabel } from '@/components/ui';
+import { egoRankIcon, rarityIcon, sinIcon } from '@/lib/assets';
 
 /**
  * 편성.
@@ -69,7 +70,7 @@ export default async function SquadPage({ params }: { params: Promise<{ locale: 
 													<strong>
 														<Name value={i.text} notice={t.fallbackNotice} />
 													</strong>
-													<span className="tag">{'0'.repeat(i.rarity)}</span>
+													<IconOnly src={rarityIcon(i.rarity)} label={'0'.repeat(i.rarity)} />
 												</span>
 											</Link>
 										</li>
@@ -93,12 +94,12 @@ export default async function SquadPage({ params }: { params: Promise<{ locale: 
 														<Name value={e.text} notice={t.fallbackNotice} />
 													</strong>
 													<span className="card-meta">
-														<span className="tag">{e.rank}</span>
+														<IconTag src={egoRankIcon(e.rank)}>{e.rank}</IconTag>
 														{/* 죄악 자원 소모는 E.G.O 기능의 핵심이다(02-data-model 3.4) */}
 														{e.costs.map((c) => (
-															<span key={c.sin} className="tag">
-																{c.sin} {c.amount}
-															</span>
+															<IconTag key={c.sin} src={sinIcon(c.sin)} label={c.sin}>
+																{c.amount}
+															</IconTag>
 														))}
 													</span>
 												</span>

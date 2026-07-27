@@ -1,6 +1,15 @@
 import type { Locale, Prisma, Sin } from '@prisma/client';
 import { db } from '@/lib/db';
-import { identityImage, sinnerIcon, skillFrame, skillIcon } from '@/lib/assets';
+import {
+	atkTypeIcon,
+	defTypeIcon,
+	identityImage,
+	rarityIcon,
+	sinIcon,
+	sinnerIcon,
+	skillFrame,
+	skillIcon,
+} from '@/lib/assets';
 import { localeFilter, multi, nameOf, one, textOf, type SearchParams } from './shared';
 
 /**
@@ -133,6 +142,7 @@ export async function getIdentity(id: number, locale: Locale) {
 		sinnerId: identity.sinnerId,
 		sinner: nameOf(identity.sinner.texts, locale),
 		rarity: identity.rarity,
+		rarityIcon: rarityIcon(identity.rarity),
 		season: identity.season,
 		releaseDate: identity.releaseDate,
 		hpBase: identity.hpBase,
@@ -176,6 +186,11 @@ export async function getIdentity(id: number, locale: Locale) {
 			// tier 는 표시용 숫자이면서 프레임 애셋을 고르는 키다.
 			// 아이콘이 없는 12종에서도 프레임은 뜨므로 그것이 대체 표시가 된다.
 			frame: skillFrame(s.affinity, s.tier, s.defType),
+			icons: {
+				sin: s.affinity ? sinIcon(s.affinity) : null,
+				atkType: s.atkType ? atkTypeIcon(s.atkType) : null,
+				defType: defTypeIcon(s.defType),
+			},
 			stages: s.stages.map((st) => ({
 				uptie: st.uptie,
 				baseValue: st.baseValue,

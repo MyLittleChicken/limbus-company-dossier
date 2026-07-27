@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { getIdentity } from '@/lib/queries/identities';
-import { Facts, Icon, Name, Nothing, Panel, SecLabel } from '@/components/ui';
+import { Facts, Icon, IconOnly, Name, Nothing, Panel, SecLabel } from '@/components/ui';
 import { UptieSkills } from '@/components/uptie-skills';
 
 export default async function IdentityDetailPage({
@@ -87,6 +87,10 @@ export default async function IdentityDetailPage({
 					<Panel title={ko ? '스탯' : 'Stats'}>
 						<Facts
 							rows={[
+								[
+									ko ? '등급' : 'Rarity',
+									<IconOnly key="r" src={identity.rarityIcon} label={'0'.repeat(identity.rarity)} />,
+								],
 								// hp 는 스칼라가 아니다. 기본값과 레벨당 증가량의 쌍이다.
 								[
 									ko ? '체력' : 'HP',

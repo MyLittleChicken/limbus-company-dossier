@@ -13,7 +13,8 @@ import {
 } from '@/lib/queries/gifts';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, PickFilter, SearchBox, TriFilter } from '@/components/filters';
-import { Empty, Icon, Name, Pager, SecLabel } from '@/components/ui';
+import { Empty, Icon, IconTag, Name, Pager, SecLabel } from '@/components/ui';
+import { keywordIcon, sinIcon } from '@/lib/assets';
 
 export default async function GiftsPage({
 	params,
@@ -59,7 +60,11 @@ export default async function GiftsPage({
 						param="keyword"
 						label={locale === 'ko' ? '키워드' : 'Keyword'}
 						options={[
-							...keywords.map((k) => ({ value: k.id, label: k.text?.name ?? k.id })),
+							...keywords.map((k) => ({
+								value: k.id,
+								label: k.text?.name ?? k.id,
+								icon: keywordIcon(k.id),
+							})),
 							// 키워드 없는 기프트 120종. 결손이 아니라 축의 값이다.
 							{ value: NO_KEYWORD, label: locale === 'ko' ? '없음' : 'None' },
 						]}
@@ -67,7 +72,11 @@ export default async function GiftsPage({
 					<ChipFilter
 						param="affinity"
 						label={locale === 'ko' ? '죄악' : 'Sin'}
-						options={sins.map((s) => ({ value: s.id, label: s.text?.name ?? s.id }))}
+						options={sins.map((s) => ({
+							value: s.id,
+							label: s.text?.name ?? s.id,
+							icon: sinIcon(s.id),
+						}))}
 					/>
 					<PickFilter
 						param="pool"
@@ -98,7 +107,12 @@ export default async function GiftsPage({
 									</strong>
 									<span className="card-meta">
 										<span className="tag">{g.tier}</span>
-										{g.keyword ? <span className="tag">{g.keyword.name}</span> : null}
+										<IconTag src={sinIcon(g.affinity)} label={g.affinity} />
+										{g.keyword ? (
+											<IconTag src={g.keywordId ? keywordIcon(g.keywordId) : null}>
+												{g.keyword.name}
+											</IconTag>
+										) : null}
 										{g.exclusiveCount > 0 ? (
 											<span className="tag tag-mark">
 												{locale === 'ko' ? '전용' : 'Exclusive'}

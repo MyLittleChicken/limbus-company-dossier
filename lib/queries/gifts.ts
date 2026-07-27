@@ -202,6 +202,7 @@ export async function getGift(id: number, locale: Locale) {
 		hardOnly: gift.hardOnly,
 		mdCost: gift.mdCost,
 		icon: giftIcon(gift.sprite),
+		keywordId: gift.keywordId,
 		keyword: gift.keyword ? nameOf(gift.keyword.texts, locale) : null,
 		stages,
 		exclusivePacks: gift.exclusivePacks.map((x) => ({

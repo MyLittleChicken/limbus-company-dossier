@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { getGift } from '@/lib/queries/gifts';
-import { Facts, Icon, Name, Nothing, Panel, SecLabel } from '@/components/ui';
+import { Facts, Icon, IconTag, Name, Nothing, Panel, SecLabel } from '@/components/ui';
+import { keywordIcon, sinIcon } from '@/lib/assets';
 
 export default async function GiftDetailPage({
 	params,
@@ -108,11 +109,11 @@ export default async function GiftDetailPage({
 						<Facts
 							rows={[
 								[ko ? '등급' : 'Tier', gift.tier],
-								[ko ? '죄악' : 'Sin', gift.affinity],
+								[ko ? '죄악' : 'Sin', <IconTag key="s" src={sinIcon(gift.affinity)}>{gift.affinity}</IconTag>],
 								[
 									ko ? '키워드' : 'Keyword',
 									gift.keyword ? (
-										gift.keyword.name
+										<IconTag src={keywordIcon(gift.keywordId ?? '')}>{gift.keyword.name}</IconTag>
 									) : (
 										// 120종이 키워드를 갖지 않는다. 결손이 아니다.
 										<Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>
