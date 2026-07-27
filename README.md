@@ -12,9 +12,9 @@
 | 원본 데이터 수집 | 완료 — 6,486 파일, 체크섬 전수 검증 |
 | 수집기 (원격 → 원본) | 완료 — 빈 상태에서 1,749 파일 복원 · 체크섬 전수 대조 |
 | 의사결정 기록 | 완료 — ADR 4건 |
-| 데이터베이스 스키마 | 완료 — 51 테이블 |
-| 변환기 (원본 → 정규화 JSON) | 완료 — 51/51 테이블 · 미분류 입력 0 |
-| 적재기 (JSON → PostgreSQL) | 완료 — 50,577행 적재 |
+| 데이터베이스 스키마 | 완료 — 52 테이블 |
+| 변환기 (원본 → 정규화 JSON) | 완료 — 52/52 테이블 · 미분류 입력 0 |
+| 적재기 (JSON → PostgreSQL) | 완료 — 52,781행 적재 |
 | 검증 스크립트 | 완료 — 40건 전부 실행 · 40건 통과 |
 | 2단계 (웹페이지 구축) | 조회·검색 화면 구현 — 화면 16종, 로컬 실행 |
 | 3단계 (추천 엔진) | 기반 엔진과 슬라이스 5종 — 화상·진동 덱으로 증명 |
@@ -121,7 +121,7 @@ cp .env.example .env
 npm run fetch                  # 원격 5곳 → data/entities/*.json (1,749개)
 npm run db:up                  # PostgreSQL 컨테이너 기동
 npm run db:ddl < prisma/schema.sql
-npm run convert                # 원본 → build/data/*.json (51개)
+npm run convert                # 원본 → build/data/*.json (52개)
 npm run load                   # JSON → PostgreSQL
 npm run verify                 # coverage.json 과 대조
 npm run engine:proof           # 추천 엔진 슬라이스 5종 증명
