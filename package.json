@@ -9,12 +9,16 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.pipeline.json && tsc --noEmit -p tsconfig.json",
     "schema:validate": "prisma validate",
     "schema:format": "prisma format",
     "schema:ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/schema.sql",
     "generate": "prisma generate",
-    "typecheck": "tsc --noEmit",
     "fetch": "tsx src/fetch.ts",
+    "assets": "tsx src/assets.ts",
     "convert": "tsx src/convert.ts",
     "load": "tsx src/load.ts",
     "db:up": "podman run -d --name limbus-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=limbus -p 5432:5432 -v limbus-pgdata:/var/lib/postgresql/data docker.io/library/postgres:17-alpine",
@@ -23,11 +27,20 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "@prisma/client": "^6.1.0"
+    "@prisma/client": "^6.1.0",
+    "next": "^16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "overrides": {
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.3"
   }
 }

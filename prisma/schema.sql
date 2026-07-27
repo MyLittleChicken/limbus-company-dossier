@@ -300,7 +300,7 @@ CREATE TABLE "gift" (
     "id" INTEGER NOT NULL,
     "tier" TEXT NOT NULL,
     "keywordId" TEXT,
-    "affinity" "Sin" NOT NULL,
+    "attributeType" TEXT,
     "enhanceable" BOOLEAN NOT NULL DEFAULT false,
     "hardOnly" BOOLEAN NOT NULL DEFAULT false,
     "mdCost" INTEGER,
@@ -396,6 +396,32 @@ CREATE TABLE "pack_boss_encounter" (
 );
 
 -- CreateTable
+CREATE TABLE "encounter" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "encounter_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "encounter_target" (
+    "encounterId" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "count" INTEGER,
+
+    CONSTRAINT "encounter_target_pkey" PRIMARY KEY ("encounterId","index")
+);
+
+-- CreateTable
+CREATE TABLE "encounter_target_text" (
+    "encounterId" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "locale" "Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "encounter_target_text_pkey" PRIMARY KEY ("encounterId","index","locale")
+);
+
+-- CreateTable
 CREATE TABLE "floor_pack" (
     "difficulty" "Difficulty" NOT NULL,
     "floorRange" TEXT NOT NULL,
@@ -469,6 +495,15 @@ CREATE TABLE "mirror_dungeon" (
 );
 
 -- CreateTable
+CREATE TABLE "mirror_dungeon_text" (
+    "version" TEXT NOT NULL,
+    "locale" "Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "mirror_dungeon_text_pkey" PRIMARY KEY ("version","locale")
+);
+
+-- CreateTable
 CREATE TABLE "grace_option" (
     "id" TEXT NOT NULL,
     "version" TEXT NOT NULL,
@@ -513,7 +548,7 @@ CREATE INDEX "ego_status_statusId_idx" ON "ego_status"("statusId");
 CREATE INDEX "gift_keywordId_idx" ON "gift"("keywordId");
 
 -- CreateIndex
-CREATE INDEX "gift_affinity_idx" ON "gift"("affinity");
+CREATE INDEX "gift_attributeType_idx" ON "gift"("attributeType");
 
 -- CreateIndex
 CREATE INDEX "gift_pack_packId_idx" ON "gift_pack"("packId");
@@ -529,6 +564,9 @@ CREATE INDEX "fusion_slot_option_giftId_idx" ON "fusion_slot_option"("giftId");
 
 -- CreateIndex
 CREATE INDEX "pack_category_idx" ON "pack"("category");
+
+-- CreateIndex
+CREATE INDEX "pack_boss_encounter_encounterId_idx" ON "pack_boss_encounter"("encounterId");
 
 -- CreateIndex
 CREATE INDEX "floor_pack_packId_idx" ON "floor_pack"("packId");
@@ -651,6 +689,15 @@ ALTER TABLE "pack_text" ADD CONSTRAINT "pack_text_packId_fkey" FOREIGN KEY ("pac
 ALTER TABLE "pack_boss_encounter" ADD CONSTRAINT "pack_boss_encounter_packId_fkey" FOREIGN KEY ("packId") REFERENCES "pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "pack_boss_encounter" ADD CONSTRAINT "pack_boss_encounter_encounterId_fkey" FOREIGN KEY ("encounterId") REFERENCES "encounter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "encounter_target" ADD CONSTRAINT "encounter_target_encounterId_fkey" FOREIGN KEY ("encounterId") REFERENCES "encounter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "encounter_target_text" ADD CONSTRAINT "encounter_target_text_encounterId_index_fkey" FOREIGN KEY ("encounterId", "index") REFERENCES "encounter_target"("encounterId", "index") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "floor_pack" ADD CONSTRAINT "floor_pack_packId_fkey" FOREIGN KEY ("packId") REFERENCES "pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -661,6 +708,9 @@ ALTER TABLE "sin_text" ADD CONSTRAINT "sin_text_sin_fkey" FOREIGN KEY ("sin") RE
 
 -- AddForeignKey
 ALTER TABLE "keyword_text" ADD CONSTRAINT "keyword_text_keywordId_fkey" FOREIGN KEY ("keywordId") REFERENCES "keyword"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mirror_dungeon_text" ADD CONSTRAINT "mirror_dungeon_text_version_fkey" FOREIGN KEY ("version") REFERENCES "mirror_dungeon"("version") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "grace_option" ADD CONSTRAINT "grace_option_version_fkey" FOREIGN KEY ("version") REFERENCES "mirror_dungeon"("version") ON DELETE CASCADE ON UPDATE CASCADE;

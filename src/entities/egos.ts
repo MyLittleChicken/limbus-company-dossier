@@ -5,7 +5,14 @@
  *   E.G.O 의 저항·침식·보유 상태·추출 정보와 거울 던전 은총이 여기에만 있다.
  * 허용 보강  limbus-data-mj — 한국어 E.G.O 명
  */
-import { readJson, readJsonDir, toRecords, listJsonNames } from '../io.js';
+import {
+	readJson,
+	readJsonDir,
+	readJsonGlob,
+	toRecords,
+	listJsonNames,
+	type DataList,
+} from '../io.js';
 import { stripMarkup, toDisplay, toIsoDate, lookupTerm } from '../text.js';
 import type { Ctx } from './basics.js';
 
@@ -253,10 +260,111 @@ export function buildMirrorDungeon(ctx: Ctx) {
 		}
 	}
 
+	// 버전 명칭. `MD7` → `mirrordungeon_name_7` 로 id 접미사가 버전 번호와 대응한다.
+	// 화면은 내부 키가 아니라 이 이름을 쓴다(05-ui-foundation 10절).
+	const dungeonText: Array<{ version: string; locale: Locale; name: string }> = [];
+	const versionNumber = /^MD(\d+)$/.exec(version)?.[1];
+	if (versionNumber === undefined) {
+		ctx.report.unmapped('거울 던전 버전 번호를 읽을 수 없음', version);
+	} else {
+		const key = `mirrordungeon_name_${versionNumber}`;
+		for (const locale of LOCALES) {
+			const file = readJson<DataList<{ id?: string; content?: string }>>(
+				'mirror-dungeon',
+				locale === 'ko' ? 'loc-ko' : 'loc-en',
+				'MirrorDungeonName.json',
+			);
+			const hit = (file.dataList ?? []).find((e) => e.id === key)?.content;
+			// 없으면 행을 만들지 않는다. 소비 측이 폴백을 판정할 수 있어야 한다(ADR-03 5절).
+			if (hit) dungeonText.push({ version, locale, name: stripMarkup(hit) });
+			else ctx.report.note('거울 던전 명칭 없음', `${locale}:${key}`);
+		}
+	}
+
 	ctx.report.rows('mirror_dungeon', dungeon.length);
+	ctx.report.rows('mirror_dungeon_text', dungeonText.length);
 	ctx.report.rows('grace_option', grace.length);
 	ctx.report.rows('grace_option_text', graceText.length);
-	return { dungeon, grace, graceText };
+	return { dungeon, dungeonText, grace, graceText };
+}
+
+// ── 인카운터 ──────────────────────────────────────────────────
+
+interface EncounterTargetSource {
+	name?: string;
+	num?: number;
+}
+
+/**
+ * 거울 던전 보스 조우.
+ *
+ * **이름은 담지 않는다.** 팩당 조우가 정확히 하나이고 조우 이름이 팩 이름과 같다(실측 75/75).
+ * 담을 값은 등장하는 적이며, 그것은 팩 데이터에 없다.
+ *
+ * 적 이름의 한국어는 정본에 없다. 로케일 파일이 숫자 id 체계를 쓰므로
+ * **영문명을 열쇠로** `loc-en` → id → `loc-ko` 를 잇는다(실측 498/498 이 이어진다).
+ */
+export function buildEncounters(ctx: Ctx) {
+	const koByEnglish = new Map<string, string>();
+	{
+		const byId = new Map<number, string>();
+		for (const file of readJsonGlob<DataList<{ id?: number; name?: string }>>(
+			['encounters', 'loc-ko'],
+			'Enemies',
+		)) {
+			for (const e of file.dataList ?? []) if (e.id !== undefined && e.name) byId.set(e.id, e.name);
+		}
+		for (const file of readJsonGlob<DataList<{ id?: number; name?: string }>>(
+			['encounters', 'loc-en'],
+			'Enemies',
+		)) {
+			for (const e of file.dataList ?? []) {
+				const korean = e.id === undefined ? undefined : byId.get(e.id);
+				if (e.name && korean && !koByEnglish.has(e.name)) koByEnglish.set(e.name, korean);
+			}
+		}
+	}
+
+	const rows: Array<{ id: string }> = [];
+	const targets: Array<{ encounterId: string; index: number; count: number | null }> = [];
+	const targetText: Array<{
+		encounterId: string;
+		index: number;
+		locale: Locale;
+		name: string;
+	}> = [];
+
+	for (const name of listJsonNames('encounters', 'limbus-assets')) {
+		if (!name.startsWith('md__')) continue;
+		const id = `md|${name.replace(/^md__/, '').replace(/\.json$/, '')}`;
+		const file = readJson<{ targets?: EncounterTargetSource[] }>(
+			'encounters',
+			'limbus-assets',
+			name,
+		);
+		rows.push({ id });
+
+		(file.targets ?? []).forEach((target, index) => {
+			if (!target.name) {
+				ctx.report.unmapped('인카운터 적 이름 없음', `${id}#${index}`);
+				return;
+			}
+			// 등장 수가 원본에 없는 경우가 있다. 1로 지어내지 않는다.
+			targets.push({ encounterId: id, index, count: target.num ?? null });
+			targetText.push({ encounterId: id, index, locale: 'en', name: stripMarkup(target.name) });
+			const korean = koByEnglish.get(target.name);
+			if (korean) {
+				targetText.push({ encounterId: id, index, locale: 'ko', name: stripMarkup(korean) });
+			} else {
+				ctx.report.note('인카운터 적 한국어 없음(영문 폴백)', target.name);
+			}
+		});
+	}
+
+	ctx.report.rows('encounter', rows.length);
+	ctx.report.rows('encounter_target', targets.length);
+	ctx.report.rows('encounter_target_text', targetText.length);
+	return { rows, targets, targetText };
 }
 
 // ── 데이터셋 스탬프 ───────────────────────────────────────────
