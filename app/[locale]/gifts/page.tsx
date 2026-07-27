@@ -107,7 +107,11 @@ export default async function GiftsPage({
 									</strong>
 									<span className="card-meta">
 										<span className="tag">{g.tier}</span>
-										<IconTag src={sinIcon(g.affinity)} label={g.affinity} />
+										{/*
+										 * 죄악 속성은 카드에 내지 않는다. 원본에 있는 값이지만 게임에서
+										 * 무엇을 하는지 확인되지 않았다(docs/backlog/03-gift-affinity.md).
+										 * 확인 전까지 등급·키워드와 같은 무게로 두지 않는다.
+										 */}
 										{g.keyword ? (
 											<IconTag src={g.keywordId ? keywordIcon(g.keywordId) : null}>
 												{g.keyword.name}
