@@ -624,10 +624,54 @@ model PackText {
 model PackBossEncounter {
   packId      String
   encounterId String
-  pack        Pack   @relation(fields: [packId], references: [id], onDelete: Cascade)
+  pack        Pack      @relation(fields: [packId], references: [id], onDelete: Cascade)
+  encounter   Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
 
   @@id([packId, encounterId])
+  @@index([encounterId])
   @@map("pack_boss_encounter")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 인카운터
+// ─────────────────────────────────────────────────────────────
+
+/// 거울 던전의 보스 조우. **팩당 정확히 하나이며 이름이 팩 이름과 같다**(실측 75/75).
+/// 따라서 이름은 담지 않는다. 담을 값은 등장하는 적이다.
+model Encounter {
+  id String @id
+
+  targets EncounterTarget[]
+  packs   PackBossEncounter[]
+
+  @@map("encounter")
+}
+
+/// 조우에 등장하는 적. **등장 수가 원본에 없는 경우가 있다.**
+model EncounterTarget {
+  encounterId String
+  index       Int
+  count       Int?
+
+  encounter Encounter             @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  texts     EncounterTargetText[]
+
+  @@id([encounterId, index])
+  @@map("encounter_target")
+}
+
+/// 적 이름. 정본이 영문만 담으므로 한국어는 로케일 파일에서 영문명을 열쇠로 이어 붙인다.
+/// **한국어를 찾지 못하면 행을 만들지 않는다** — 소비 측이 폴백을 판정할 수 있어야 한다(ADR-03 5절).
+model EncounterTargetText {
+  encounterId String
+  index       Int
+  locale      Locale
+  name        String
+
+  target EncounterTarget @relation(fields: [encounterId, index], references: [encounterId, index], onDelete: Cascade)
+
+  @@id([encounterId, index, locale])
+  @@map("encounter_target_text")
 }
 
 /// 난이도·층 구간별 등장 팩. "이번 층에 어떤 팩이 나오는가"의 판단 근거다.
@@ -723,8 +767,23 @@ model MirrorDungeon {
   baseFloors  Int
 
   graces GraceOption[]
+  texts  MirrorDungeonText[]
 
   @@map("mirror_dungeon")
+}
+
+/// 버전 명칭. 내부 키 `MD7` 은 화면에 노출하지 않는다(05-ui-foundation 10절).
+/// 원본은 `mirror-dungeon/loc-{ko,en}/MirrorDungeonName.json` 이며
+/// id 접미사가 버전 번호와 대응한다 — `MD7` ↔ `mirrordungeon_name_7`.
+model MirrorDungeonText {
+  version String
+  locale  Locale
+  name    String
+
+  dungeon MirrorDungeon @relation(fields: [version], references: [version], onDelete: Cascade)
+
+  @@id([version, locale])
+  @@map("mirror_dungeon_text")
 }
 
 /// 시작 시 선택하는 은총.

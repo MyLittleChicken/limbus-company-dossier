@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Locale } from '@prisma/client';
 import type { IdentityDetail } from '@/lib/queries/identities';
-import { Icon, Name, Nothing } from './ui';
+import { Name, Nothing } from './ui';
 
 /**
  * 인격 스킬.
@@ -43,8 +43,24 @@ export function UptieSkills({
 			return (
 				<li key={skill.id} className="skill">
 					<div className="row-head">
-						{/* 아이콘이 없는 스킬이 12종 있다. 원본 결손이며 대체 표시가 나간다. */}
-						<Icon src={skill.icon} alt="" size={28} />
+						{/*
+						 * 프레임이 죄악과 등급을 나타낸다. 아이콘이 없는 12종에서도 프레임은 뜨므로
+						 * 그것이 대체 표시가 된다 — 이전 프로토타입도 같은 구조였다.
+						 */}
+						<span className="skill-tile">
+							{skill.frame.background ? (
+								/* eslint-disable-next-line @next/next/no-img-element */
+								<img src={skill.frame.background} alt="" width={34} height={34} />
+							) : null}
+							{skill.icon ? (
+								/* eslint-disable-next-line @next/next/no-img-element */
+								<img className="skill-tile-ico" src={skill.icon} alt="" width={34} height={34} />
+							) : null}
+							{skill.frame.frame ? (
+								/* eslint-disable-next-line @next/next/no-img-element */
+								<img src={skill.frame.frame} alt="" width={34} height={34} />
+							) : null}
+						</span>
 						<strong>
 							{stage?.text ? (
 								<Name value={stage.text} notice={notice} />
@@ -60,6 +76,9 @@ export function UptieSkills({
 							<span className="tag absent">{ko ? '죄악 없음' : 'No sin'}</span>
 						)}
 						{skill.atkType ? <span className="tag">{skill.atkType}</span> : null}
+						<span className="tag">
+							{ko ? '등급' : 'Tier'} {skill.tier}
+						</span>
 						<span className="tag">
 							{ko ? '덱' : 'Deck'} {skill.deckCount}
 						</span>

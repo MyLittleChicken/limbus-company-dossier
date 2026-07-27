@@ -54,6 +54,7 @@ export async function listFloorPacks(locale: Locale) {
 export async function getDungeon(locale: Locale) {
 	const dungeon = await db.mirrorDungeon.findFirst({
 		include: {
+			texts: localeFilter(locale),
 			graces: { orderBy: { index: 'asc' }, include: { texts: localeFilter(locale) } },
 		},
 	});
@@ -61,6 +62,8 @@ export async function getDungeon(locale: Locale) {
 
 	return {
 		version: dungeon.version,
+		// 화면은 내부 키가 아니라 명칭을 쓴다(05-ui-foundation 10절).
+		text: nameOf(dungeon.texts, locale),
 		totalFloors: dungeon.totalFloors,
 		baseFloors: dungeon.baseFloors,
 		graces: dungeon.graces.map((g) => {

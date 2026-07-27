@@ -23,7 +23,12 @@ import { buildGifts } from './entities/gifts.js';
 import { buildPacks } from './entities/packs.js';
 import { buildIdentities } from './entities/identities.js';
 import { buildSkills } from './entities/skills.js';
-import { buildEgos, buildMirrorDungeon, buildDataset } from './entities/egos.js';
+import {
+	buildEgos,
+	buildMirrorDungeon,
+	buildEncounters,
+	buildDataset,
+} from './entities/egos.js';
 
 function main(): void {
 	const report = new Report();
@@ -104,8 +109,14 @@ function main(): void {
 
 	const md = buildMirrorDungeon(ctx);
 	writeTable('mirror_dungeon', md.dungeon);
+	writeTable('mirror_dungeon_text', md.dungeonText);
 	writeTable('grace_option', md.grace);
 	writeTable('grace_option_text', md.graceText);
+
+	const enc = buildEncounters(ctx);
+	writeTable('encounter', enc.rows);
+	writeTable('encounter_target', enc.targets);
+	writeTable('encounter_target_text', enc.targetText);
 
 	const version = md.dungeon[0]?.version ?? 'unknown';
 	writeTable('dataset', buildDataset(ctx, version));

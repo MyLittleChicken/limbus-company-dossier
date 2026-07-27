@@ -1,6 +1,6 @@
 import type { Locale, Prisma, Sin } from '@prisma/client';
 import { db } from '@/lib/db';
-import { identityImage, sinnerIcon, skillIcon } from '@/lib/assets';
+import { identityImage, sinnerIcon, skillFrame, skillIcon } from '@/lib/assets';
 import { localeFilter, multi, nameOf, one, textOf, type SearchParams } from './shared';
 
 /**
@@ -173,6 +173,9 @@ export async function getIdentity(id: number, locale: Locale) {
 			defType: s.defType,
 			tier: s.tier,
 			icon: skillIcon(s.id),
+			// tier 는 표시용 숫자이면서 프레임 애셋을 고르는 키다.
+			// 아이콘이 없는 12종에서도 프레임은 뜨므로 그것이 대체 표시가 된다.
+			frame: skillFrame(s.affinity, s.tier, s.defType),
 			stages: s.stages.map((st) => ({
 				uptie: st.uptie,
 				baseValue: st.baseValue,

@@ -141,17 +141,33 @@ export default async function PackDetailPage({
 						)}
 					</Panel>
 
-					<Panel title={ko ? '등장 보스' : 'Boss encounters'} hint={pack.bosses.length}>
+					{/*
+					 * 조우 이름은 팩 이름과 같아 담지 않았다(실측 75/75). 담긴 것은 등장하는 적이다.
+					 */}
+					<Panel
+						title={ko ? '보스전 등장 적' : 'Boss encounter'}
+						hint={pack.bosses.reduce((n, b) => n + b.targets.length, 0)}
+					>
 						{pack.bosses.length === 0 ? (
-							<Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>
+							<Nothing kind="absent">{ko ? '보스전 없음' : 'No boss encounter'}</Nothing>
 						) : (
-							<ul className="inline-list">
-								{pack.bosses.map((b) => (
-									<li key={b} className="tag">
-										{b}
-									</li>
-								))}
-							</ul>
+							pack.bosses.map((b) =>
+								b.targets.length === 0 ? (
+									<Nothing key={b.encounterId} kind="absent">
+										{ko ? '등장 적 정보 없음' : 'No target data'}
+									</Nothing>
+								) : (
+									<ul key={b.encounterId} className="inline-list">
+										{b.targets.map((tg) => (
+											<li key={tg.index} className="tag">
+												<Name value={tg.text} notice={t.fallbackNotice} />
+												{/* 등장 수가 원본에 없는 경우가 있다 */}
+												{tg.count !== null ? ` ×${tg.count}` : ''}
+											</li>
+										))}
+									</ul>
+								),
+							)
 						)}
 					</Panel>
 

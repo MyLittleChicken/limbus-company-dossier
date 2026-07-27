@@ -23,10 +23,11 @@ export default async function DungeonPage({ params }: { params: Promise<{ locale
 
 	return (
 		<>
+			{/* 명칭을 쓰고 내부 키는 표에만 둔다(05-ui-foundation 10절). */}
 			<SecLabel
-				title={t.nav.dungeon}
+				title={dungeon.text?.name ?? t.nav.dungeon}
 				sub={ko ? '층 구조와 은총' : 'Floor structure and graces'}
-				hint={dataset?.mdVersion ?? dungeon.version}
+				hint={dataset?.snapshotDate.toISOString().slice(0, 10) ?? undefined}
 			/>
 
 			<div className="grid2">
@@ -77,22 +78,18 @@ export default async function DungeonPage({ params }: { params: Promise<{ locale
 					<Panel title={ko ? '구성' : 'Structure'}>
 						<Facts
 							rows={[
-								[ko ? '버전' : 'Version', dungeon.version],
+								[
+									ko ? '명칭' : 'Name',
+									dungeon.text?.name ?? (
+										<Nothing kind="missing">{ko ? '없음' : 'None'}</Nothing>
+									),
+								],
+								[ko ? '내부 키' : 'Internal key', <code key="v" className="idcode">{dungeon.version}</code>],
 								[ko ? '전체 층' : 'Total floors', dungeon.totalFloors],
 								[ko ? '기본 층' : 'Base floors', dungeon.baseFloors],
 							]}
 						/>
 					</Panel>
-
-					{/*
-					 * 명칭 '이름과 거미의 거울' 은 원본에 있으나 스키마에 담을 자리가 없다
-					 * (05-ui-foundation 12절 미결). 여기서는 내부 키만 낸다.
-					 */}
-					<p className="absent">
-						{ko
-							? '버전 명칭은 아직 데이터베이스에 적재되지 않아 내부 키를 노출한다.'
-							: 'The version display name is not loaded yet; the internal key is shown.'}
-					</p>
 				</aside>
 			</div>
 		</>

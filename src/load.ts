@@ -28,6 +28,7 @@ const ORDER: Array<[table: string, delegate: string]> = [
 	['keyword', 'keyword'],
 	['pack', 'pack'],
 	['mirror_dungeon', 'mirrorDungeon'],
+	['encounter', 'encounter'],
 	['passive', 'passive'],
 	// 뿌리를 참조하는 엔티티
 	['gift', 'gift'],
@@ -39,6 +40,7 @@ const ORDER: Array<[table: string, delegate: string]> = [
 	['fusion_recipe', 'fusionRecipe'],
 	['fusion_slot', 'fusionSlot'],
 	['grace_option', 'graceOption'],
+	['encounter_target', 'encounterTarget'],
 	// 관계와 표시 문자열
 	['sinner_text', 'sinnerText'],
 	['affiliation_text', 'affiliationText'],
@@ -46,6 +48,8 @@ const ORDER: Array<[table: string, delegate: string]> = [
 	['sin_text', 'sinText'],
 	['keyword_text', 'keywordText'],
 	['pack_text', 'packText'],
+	['mirror_dungeon_text', 'mirrorDungeonText'],
+	['encounter_target_text', 'encounterTargetText'],
 	['pack_boss_encounter', 'packBossEncounter'],
 	['floor_pack', 'floorPack'],
 	['identity_text', 'identityText'],

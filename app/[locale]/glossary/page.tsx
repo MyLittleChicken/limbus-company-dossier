@@ -92,6 +92,8 @@ export default async function GlossaryPage({
 							{axes.sins.map((s) => (
 								<li key={s.id} className="tag">
 									<Name value={s.text} notice={t.fallbackNotice} />
+									{/* 게임이 죄악마다 부여한 색 이름. 디자인 단계의 색 축이 된다. */}
+									<em className="attr">{s.attribute}</em>
 								</li>
 							))}
 						</ul>

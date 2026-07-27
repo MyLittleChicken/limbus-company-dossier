@@ -57,10 +57,14 @@ export default async function IdentityDetailPage({
 											</span>
 										</div>
 										{p.text ? <p className="desc">{p.text.desc}</p> : null}
-										{p.requirements.length > 0 ? (
+										{/* 발동 조건의 종류. owned 339 · res 146 · 없음 105 */}
+										{p.condType || p.requirements.length > 0 ? (
 											<p className="req">
-												{ko ? '조건' : 'Requires'}:{' '}
-												{p.requirements.map((r) => `${r.type} ${r.value}`).join(' · ')}
+												{ko ? '조건' : 'Requires'}
+												{p.condType ? ` (${p.condType})` : ''}
+												{p.requirements.length > 0
+													? `: ${p.requirements.map((r) => `${r.type} ${r.value}`).join(' · ')}`
+													: ''}
 											</p>
 										) : null}
 									</li>

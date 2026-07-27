@@ -85,7 +85,19 @@ export async function getPack(id: string, locale: Locale) {
 		where: { id },
 		include: {
 			texts: localeFilter(locale),
-			bosses: true,
+			// 조우 이름은 담지 않았다 — 팩 이름과 같기 때문이다. 담긴 것은 등장하는 적이다.
+			bosses: {
+				include: {
+					encounter: {
+						include: {
+							targets: {
+								orderBy: { index: 'asc' },
+								include: { texts: localeFilter(locale) },
+							},
+						},
+					},
+				},
+			},
 			floors: true,
 			exclusiveGifts: {
 				include: {
@@ -142,7 +154,15 @@ export async function getPack(id: string, locale: Locale) {
 		floorLength: pack.floorLength,
 		icon: packIcon(pack.sprite),
 		text: nameOf(pack.texts, locale),
-		bosses: pack.bosses.map((b) => b.encounterId),
+		bosses: pack.bosses.map((b) => ({
+			encounterId: b.encounterId,
+			targets: b.encounter.targets.map((t) => ({
+				index: t.index,
+				// 등장 수가 원본에 없는 경우가 있다. 1로 지어내지 않는다.
+				count: t.count,
+				text: nameOf(t.texts, locale),
+			})),
+		})),
 		floors: pack.floors.map((f) => ({ difficulty: f.difficulty, range: f.floorRange })),
 		exclusiveGifts: pack.exclusiveGifts.map(shape),
 		gifts,

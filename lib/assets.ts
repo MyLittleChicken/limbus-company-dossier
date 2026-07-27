@@ -26,6 +26,7 @@ export type AssetCategory =
 	| 'identities'
 	| 'egos'
 	| 'skills'
+	| 'skill-frames'
 	| 'statuses'
 	| 'sinners'
 	| 'icons';
@@ -141,3 +142,29 @@ export function egoImage(id: number, kind: EgoImageKind = 'awaken'): string | nu
 
 /** 등급·죄악 등 공용 아이콘. 키는 파일명 그대로다. */
 export const uiIcon = (key: string): string | null => lookup('icons', key);
+
+/**
+ * 스킬 프레임.
+ *
+ * **`skill.tier` 는 표시용 숫자가 아니라 애셋을 고르는 키다.** 프레임 파일이
+ * `{죄악}-{1|2|3}.webp` 형태이고 방어 스킬은 `def.webp` 하나를 쓴다(실측 44개).
+ *
+ * 아이콘이 없는 스킬 12종에서도 프레임은 뜨므로, 프레임이 곧 대체 표시가 된다 —
+ * 죄악과 등급은 프레임만으로 읽힌다.
+ */
+export function skillFrame(
+	affinity: string | null,
+	tier: number,
+	defType: string,
+): { frame: string | null; background: string | null } {
+	// 방어 스킬과 죄악이 없는 스킬(131건)은 죄악별 프레임이 없다.
+	const key =
+		defType !== 'attack' || !affinity
+			? 'def'
+			: // tier 4 가 1건 있으나 프레임은 3까지다. 넘치면 가장 높은 것을 쓴다.
+				`${affinity}-${Math.min(Math.max(tier, 1), 3)}`;
+	return {
+		frame: lookup('skill-frames', key),
+		background: lookup('skill-frames', `${key}-bg`),
+	};
+}
