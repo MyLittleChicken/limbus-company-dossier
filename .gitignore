@@ -58,6 +58,10 @@ coverage/
 scratch/
 *.local
 
+# 태그 분류 시트 — 게임에서 추출한 이름을 담으므로 커밋하지 않는다
+# (docs/01-data-source.md 7절 · docs/backlog/01-identity-tags.md)
+/tags-classify.csv
+
 # 원본 데이터 스냅샷 — 재배포 성격을 띠는 커밋을 피한다 (docs/01-data-source.md 7절)
 # manifest.json / coverage.json / README.md는 출처·검증 기록이므로 추적한다
 data/*
