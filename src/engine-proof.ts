@@ -123,6 +123,56 @@ async function main(): Promise<void> {
 		check('보유가 상태 점수를 올림', after > before, `${before.toFixed(2)} → ${after.toFixed(2)}`);
 	}
 
+	// **이것이 이 슬라이스의 진짜 주장이다.** 개별 기프트 한 종이 아니라 축 단위로 봐야
+	// 엔진이 덱을 읽고 있는지 알 수 있다. 화진 덱이면 화상·진동이 위, 침잠이 아래여야 한다.
+	const avgByKeyword = new Map<string, { n: number; sum: number }>();
+	for (const g of gifts) {
+		const k = g.keyword ?? 'none';
+		const cur = avgByKeyword.get(k) ?? { n: 0, sum: 0 };
+		cur.n += 1;
+		cur.sum += marginalValue(state, g).delta;
+		avgByKeyword.set(k, cur);
+	}
+	const avg = (k: string) => {
+		const v = avgByKeyword.get(k);
+		return v ? v.sum / v.n : 0;
+	};
+	const ordered = [...avgByKeyword.entries()]
+		.map(([k, v]) => ({ k, a: v.sum / v.n }))
+		.sort((x, y) => y.a - x.a);
+	console.log(
+		`     축 순위: ${ordered.slice(0, 4).map((o) => `${o.k} ${o.a.toFixed(3)}`).join(' · ')} … 최하 ${ordered[ordered.length - 1]?.k} ${ordered[ordered.length - 1]?.a.toFixed(3)}`,
+	);
+	check('화상이 축 1위', ordered[0]?.k === 'burn', `${ordered[0]?.k} ${ordered[0]?.a.toFixed(3)}`);
+	check(
+		'진동 > 침잠',
+		avg('tremor') > avg('sinking'),
+		`tremor ${avg('tremor').toFixed(3)} vs sinking ${avg('sinking').toFixed(3)}`,
+	);
+	check(
+		'덱 축이 비축의 2배 이상',
+		avg('burn') > avg('sinking') * 2,
+		`burn ${avg('burn').toFixed(3)} vs sinking ${avg('sinking').toFixed(3)}`,
+	);
+
+	// 대조 덱에서는 화상이 1위가 아니어야 한다 — 축 판정이 덱에서 나온다는 증거다.
+	const offAvg = new Map<string, { n: number; sum: number }>();
+	for (const g of gifts) {
+		const k = g.keyword ?? 'none';
+		const cur = offAvg.get(k) ?? { n: 0, sum: 0 };
+		cur.n += 1;
+		cur.sum += marginalValue(offState, g).delta;
+		offAvg.set(k, cur);
+	}
+	const offOrdered = [...offAvg.entries()]
+		.map(([k, v]) => ({ k, a: v.sum / v.n }))
+		.sort((x, y) => y.a - x.a);
+	check(
+		'대조 덱은 축 순위가 다름',
+		offOrdered[0]?.k !== 'burn',
+		`대조 축 1위 ${offOrdered[0]?.k} ${offOrdered[0]?.a.toFixed(3)}`,
+	);
+
 	// ── 슬라이스 4 — 팩 순위가 덱에 반응하는가 ────────────────
 	console.log('\n[슬라이스 4] 팩 순위 — 화진 덱에 맞는 팩이 위로 오는가');
 	const ids = await packIdsForFloor('hard', 3);
