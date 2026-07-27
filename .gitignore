@@ -67,3 +67,7 @@ data/*
 
 # Prisma 생성 클라이언트 (node_modules 밖에 생성될 경우)
 /generated/
+
+# 이미지 애셋 — data/ 와 같은 이유로 커밋하지 않는다 (docs/adr/05-web-serving.md 5절)
+# `npm run fetch -- --assets` 로 받아 배치한다
+/public/assets/
