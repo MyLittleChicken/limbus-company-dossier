@@ -18,6 +18,7 @@
     "schema:ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/schema.sql",
     "generate": "prisma generate",
     "fetch": "tsx src/fetch.ts",
+    "assets": "tsx src/assets.ts",
     "convert": "tsx src/convert.ts",
     "load": "tsx src/load.ts",
     "db:up": "podman run -d --name limbus-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=limbus -p 5432:5432 -v limbus-pgdata:/var/lib/postgresql/data docker.io/library/postgres:17-alpine",

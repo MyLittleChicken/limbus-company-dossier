@@ -16,7 +16,7 @@
 | 변환기 (원본 → 정규화 JSON) | 완료 — 47/47 테이블 · 미분류 입력 0 |
 | 적재기 (JSON → PostgreSQL) | 완료 — 50,121행 적재 |
 | 검증 스크립트 | 완료 — 40건 전부 실행 · 40건 통과 |
-| 2단계 (웹페이지 구축) | 선행 문서와 스택 ADR 작성 — 구현 미착수 |
+| 2단계 (웹페이지 구축) | 조회·검색 화면 구현 — 라우트 15개, 로컬 실행 |
 
 값의 정확성은 원본과 전수 대조해 스칼라 필드 불일치 0을 확인했다.
 인격 184 · E.G.O 110 · 기프트 456 · 팩 117이 수집 시점 실측(`data/coverage.json`)과 일치하고,
@@ -114,6 +114,22 @@ npm run convert                # 원본 → build/data/*.json (47개)
 npm run load                   # JSON → PostgreSQL
 npm run verify                 # coverage.json 과 대조
 ```
+
+### 웹 애플리케이션
+
+데이터베이스가 채워진 뒤에 실행한다. 결정 근거는 [adr/05](docs/adr/05-web-serving.md)에 있다.
+
+```
+npm run fetch -- --assets      # 이미지 4,737개 포함 (204 MB) — 기본 fetch 에서 빠져 있다
+npm run assets                 # public/assets → data/assets 연결
+npm run generate               # Prisma Client 생성
+npm run dev                    # http://localhost:3000
+```
+
+`npm run assets`는 복사가 아니라 링크를 만든다. 204 MB를 두 벌 두지 않기 위해서이며,
+링크를 만들 수 없는 환경에서만 복사로 물러난다. `public/assets`는 커밋하지 않는다.
+
+**배포 환경은 정하지 않았다**([adr/05](docs/adr/05-web-serving.md) 3.5). 2단계는 로컬 실행까지다.
 
 컨테이너는 현재 **podman**으로 띄운다. `compose.yaml`은 Docker와도 호환되며 추후 전환한다.
 
