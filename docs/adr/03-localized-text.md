@@ -42,7 +42,7 @@
 구조는 다음 형태다. 컬럼 구성은 예시이며 확정은 구현 시점의 몫이다.
 
 ```
-gift(id, tier, keyword, affinity, …)                 언어 무관 — 엔티티
+gift(id, tier, keyword, attributeType, …)            언어 무관 — 엔티티
 gift_text(gift_id, locale, enhance_level,
           name, desc, desc_raw)                      언어별 — 표시 문자열
 ```
