@@ -43,6 +43,8 @@
 | E.G.O | 110 | `cost`(죄악 자원 소모) `rank` `sinnerId` `awakeningType` `resists` | 110/110 |
 | E.G.O 상세 | 110개 개별 파일 | `passiveList[].desc` `awakeningSkills` `corrosionSkills` | 없음(영문만) |
 | E.G.O 기프트 | 456 | `names[]`(강화 단계별) `search_desc` `keyword` `tier` `affinity` `exclusiveTo` `recipes` | 456/456 |
+
+`limbus-assets` 의 `affinity` 는 게임 원본이 아니라 **색을 죄악으로 되바꾼 값**이다. 원본 값은 `limbus-data-mj` 의 `gifts_detail.json` 이 `attributeType`(`CRIMSON` 등)으로 담는다. 우리는 후자를 쓴다([backlog/03](backlog/03-gift-affinity.md)).
 | 테마 팩 | 117 | `name` `category` `tags` `bossEncounters` `exclusive_gifts`(71개 팩) | 117/117 |
 | 층별 등장 팩 | — | hard 1,2,3,4,5,6–10,11–15 / normal 1–5 | — |
 
