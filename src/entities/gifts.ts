@@ -19,6 +19,8 @@ const ENHANCE_ID_STRIDE = 10_000;
 interface AssetGift {
 	tier: string | number;
 	affinity: string;
+	effects?: string[];
+	triggers?: string[];
 	keyword?: string;
 	names: string[];
 	descs?: string[];
@@ -68,6 +70,10 @@ export function buildGifts(ctx: Ctx) {
 		sprite: string;
 	}> = [];
 
+	// 효과·발동 토큰. 해석하지 않고 원본 문자열 그대로 담는다(06-recommendation-engine).
+	const token: Array<{ giftId: number; kind: string; index: number; token: string }> = [];
+	let noToken = 0;
+
 	const giftText: Array<{
 		giftId: number;
 		locale: Locale;
@@ -102,6 +108,10 @@ export function buildGifts(ctx: Ctx) {
 			mdCost: supplement?.cost ?? null,
 			sprite: g.srcPath,
 		});
+
+		(g.effects ?? []).forEach((t, index) => token.push({ giftId: id, kind: 'effect', index, token: t }));
+		(g.triggers ?? []).forEach((t, index) => token.push({ giftId: id, kind: 'trigger', index, token: t }));
+		if ((g.effects ?? []).length === 0 && (g.triggers ?? []).length === 0) noToken += 1;
 
 		// 강화 단계 수는 정본의 names 배열 길이로 정한다.
 		for (let level = 0; level < g.names.length; level += 1) {
@@ -174,7 +184,9 @@ export function buildGifts(ctx: Ctx) {
 	if (missingCost > 0) ctx.report.note('MD 코스트 결손(보강 출처에 없음)', `${missingCost}종`);
 	if (missingAttribute > 0)
 		ctx.report.note('색 속성 결손(보강 출처에 없음)', `${missingAttribute}종`);
+	ctx.report.rows('gift_token', token.length);
+	if (noToken > 0) ctx.report.note('효과·발동 토큰이 없는 기프트', `${noToken}종`);
 	if (missingPool > 0) ctx.report.note('팩 전체 풀 결손(보강 출처에 없음)', `${missingPool}종`);
 
-	return { gift, giftText, giftPack, exclusive, recipes, slots, options };
+	return { gift, giftText, token, giftPack, exclusive, recipes, slots, options };
 }

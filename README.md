@@ -16,7 +16,8 @@
 | 변환기 (원본 → 정규화 JSON) | 완료 — 51/51 테이블 · 미분류 입력 0 |
 | 적재기 (JSON → PostgreSQL) | 완료 — 50,577행 적재 |
 | 검증 스크립트 | 완료 — 40건 전부 실행 · 40건 통과 |
-| 2단계 (웹페이지 구축) | 조회·검색 화면 구현 — 화면 15종, 로컬 실행 |
+| 2단계 (웹페이지 구축) | 조회·검색 화면 구현 — 화면 16종, 로컬 실행 |
+| 3단계 (추천 엔진) | 기반 엔진과 슬라이스 5종 — 화상·진동 덱으로 증명 |
 
 값의 정확성은 원본과 전수 대조해 스칼라 필드 불일치 0을 확인했다.
 인격 184 · E.G.O 110 · 기프트 456 · 팩 117이 수집 시점 실측(`data/coverage.json`)과 일치하고,
@@ -75,7 +76,7 @@
 | [03-data-provenance.md](docs/03-data-provenance.md) | 데이터 출처 분석 — 추출 데이터와 저작 데이터의 구분, 계층별 신뢰도 | 1단계 착수 전 | 작성됨 |
 | [04-data-inventory.md](docs/04-data-inventory.md) | 데이터 수집 완전성 근거 — 출처 19종, 교차 대조 결과, 갭 규명 | 1단계 착수 전 | 작성됨 |
 | [05-ui-foundation.md](docs/05-ui-foundation.md) | 화면 구조와 디자인 기반 — 화면 목록, 필터 축, 로케일·결손 표기, 이미지 애셋 정책 | 2단계 착수 전 | 작성됨 |
-| `docs/06-recommendation-engine.md` | 추천 엔진 설계 — 엔티티 간 메카닉 정의와 점수화 규칙 | 3단계 착수 전 | 예정 |
+| [06-recommendation-engine.md](docs/06-recommendation-engine.md) | 추천 엔진 설계 — 어휘 사전, 조건 평가, 한계 효용, 팩 점수, 슬라이스 증명 | 3단계 착수 전 | 작성됨 |
 | `docs/07-recommendation-system.md` | 런 상태 입력 흐름과 추천·근거 제시 방식 설계 | 4단계 착수 전 | 예정 |
 
 ### 백로그
@@ -123,6 +124,7 @@ npm run db:ddl < prisma/schema.sql
 npm run convert                # 원본 → build/data/*.json (51개)
 npm run load                   # JSON → PostgreSQL
 npm run verify                 # coverage.json 과 대조
+npm run engine:proof           # 추천 엔진 슬라이스 5종 증명
 ```
 
 ### 웹 애플리케이션

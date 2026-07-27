@@ -23,7 +23,8 @@
     "load": "tsx src/load.ts",
     "db:up": "podman run -d --name limbus-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=limbus -p 5432:5432 -v limbus-pgdata:/var/lib/postgresql/data docker.io/library/postgres:17-alpine",
     "db:ddl": "podman exec -i limbus-postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1",
-    "verify": "tsx src/verify.ts"
+    "verify": "tsx src/verify.ts",
+    "engine:proof": "tsx src/engine-proof.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

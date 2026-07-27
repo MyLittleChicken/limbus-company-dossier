@@ -322,6 +322,16 @@ CREATE TABLE "gift_text" (
 );
 
 -- CreateTable
+CREATE TABLE "gift_token" (
+    "giftId" INTEGER NOT NULL,
+    "kind" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+
+    CONSTRAINT "gift_token_pkey" PRIMARY KEY ("giftId","kind","index")
+);
+
+-- CreateTable
 CREATE TABLE "gift_pack" (
     "giftId" INTEGER NOT NULL,
     "packId" TEXT NOT NULL,
@@ -551,6 +561,9 @@ CREATE INDEX "gift_keywordId_idx" ON "gift"("keywordId");
 CREATE INDEX "gift_attributeType_idx" ON "gift"("attributeType");
 
 -- CreateIndex
+CREATE INDEX "gift_token_token_idx" ON "gift_token"("token");
+
+-- CreateIndex
 CREATE INDEX "gift_pack_packId_idx" ON "gift_pack"("packId");
 
 -- CreateIndex
@@ -657,6 +670,9 @@ ALTER TABLE "gift" ADD CONSTRAINT "gift_keywordId_fkey" FOREIGN KEY ("keywordId"
 
 -- AddForeignKey
 ALTER TABLE "gift_text" ADD CONSTRAINT "gift_text_giftId_fkey" FOREIGN KEY ("giftId") REFERENCES "gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "gift_token" ADD CONSTRAINT "gift_token_giftId_fkey" FOREIGN KEY ("giftId") REFERENCES "gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "gift_pack" ADD CONSTRAINT "gift_pack_giftId_fkey" FOREIGN KEY ("giftId") REFERENCES "gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
