@@ -39,12 +39,19 @@ export function DeckCodeIo({
 
 	async function exportCode() {
 		if (!deck) return;
-		const r = await deckToCode(deck);
-		if (!r.ok) {
-			return setMessage(`${ko ? '덱 코드를 만들지 못했습니다' : 'Could not create a deck code'}: ${r.reason}`);
+		try {
+			// deckToCode 는 async 이지만 내부 writeBlock 이 필드 폭을 넘는 값에서 동기적으로
+			// throw 한다(lib/deck-code/bits.ts writeField) — UI 로는 도달하지 못하는 것으로
+			// 보이지만, 안 걸러 두면 onClick 의 void 호출에서 처리되지 않은 거부로 샌다.
+			const r = await deckToCode(deck);
+			if (!r.ok) {
+				return setMessage(`${ko ? '덱 코드를 만들지 못했습니다' : 'Could not create a deck code'}: ${r.reason}`);
+			}
+			setMessage(null);
+			setOutput(r.value);
+		} catch (cause) {
+			setMessage(`${ko ? '덱 코드를 만들지 못했습니다' : 'Could not create a deck code'}: ${(cause as Error).message}`);
 		}
-		setMessage(null);
-		setOutput(r.value);
 	}
 
 	return (

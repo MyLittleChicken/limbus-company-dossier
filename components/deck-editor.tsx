@@ -104,8 +104,8 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 				ko={ko}
 				onImport={(imported) => {
 					if (decks.length >= DECK_MAX) return setNotice(ko ? `덱은 ${DECK_MAX}개까지입니다` : `Max ${DECK_MAX} decks`);
-					persist([...decks, imported]);
-					setActiveId(imported.id);
+					// 저장이 실패하면 이전에 실제로 선택돼 있던 덱을 그대로 보여줘야 한다 — addDeck 과 같은 규칙.
+					if (persist([...decks, imported])) setActiveId(imported.id);
 				}}
 			/>
 
