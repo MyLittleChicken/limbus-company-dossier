@@ -28,7 +28,11 @@ export function DeckCodeIo({
 
 	async function importCode() {
 		const r = await deckFromCode(input.trim(), ko ? '가져온 덱' : 'Imported deck');
-		if (!r.ok) return setMessage(r.reason);
+		if (!r.ok) {
+			// lib/deck-code 의 사유 문자열은 한국어 고정이라 헤드라인만 로캘별로 두고
+			// 원문은 보조 정보로 붙인다(deck-editor.tsx persist 와 같은 규칙).
+			return setMessage(`${ko ? '덱 코드를 가져오지 못했습니다' : 'Could not import the deck code'}: ${r.reason}`);
+		}
 		setMessage(null);
 		onImport(r.value);
 	}
@@ -36,7 +40,9 @@ export function DeckCodeIo({
 	async function exportCode() {
 		if (!deck) return;
 		const r = await deckToCode(deck);
-		if (!r.ok) return setMessage(r.reason);
+		if (!r.ok) {
+			return setMessage(`${ko ? '덱 코드를 만들지 못했습니다' : 'Could not create a deck code'}: ${r.reason}`);
+		}
 		setMessage(null);
 		setOutput(r.value);
 	}
