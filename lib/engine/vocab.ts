@@ -336,20 +336,40 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
  * 실측 18건 중 15건이 범위 표지를 갖고, 인원수는 2·3·4인으로 갈린다 — 일괄 3인 가정은
  * 그중 4건에서 틀렸다.
  *
- * 표지가 없는 3건은 `unknown` 으로 두고 근사를 유지한다. 없는 근거를 지어내지 않는다.
+ * **설명문 전체에서 정규식을 돌리면 안 된다.** 기프트 설명문은 여러 효과 문단이 이어 붙은
+ * 것이고, 그중 소속 조건과 무관한 문단에도 "N인 이상"·"대기 인원 포함/제외" 가 나온다
+ * (예: `9216`·`9730`·`9740`·`9795` 는 "{상태} 스킬 보유 인격 N인 이상" 이라는 별개 게이트를
+ * 말하고 있었고, `9253` 은 인격별 전용 배율 문장이 "대기 인원 포함" 을 썼다 — 전부 소속
+ * 인원수와 무관하다). 전체 훑기는 이 무관한 문장을 소속 조건의 것으로 오인한다.
+ *
+ * 그래서 **소속의 한국어 이름이 실제로 나오는 줄로 범위를 좁힌다.** 실측(2026-07-28,
+ * `gift_description` 전수)으로 확인한 절 구분자는 문단 사이 빈 줄이 아니라 **줄바꿈
+ * 하나**다 — 인원수·판정 범위 표지는 소속 이름과 같은 줄에 함께 온다
+ * (`피쿼드호 소속 인격이 3인 이상일 때 발동 (대기 인원 포함)`). 소속 이름이 나오는 줄 중
+ * `N인 이상` 을 포함한 첫 줄을 취하고, 판정 범위 표지도 **그 줄에서만** 찾는다.
+ *
+ * 이름이 나오는 줄이 없거나, 나오는 줄 어디에도 인원수가 없으면 **기존 값을 그대로
+ * 유지한다**(`scope: 'unknown'`, 원래 `atLeast`). 없는 근거를 지어내지 않는다 — 무관한
+ * 줄의 표지를 빌려 오지 않는다.
  */
 export function refineAffiliation(
 	condition: Extract<Condition, { op: 'COUNT_AFFILIATION' }>,
 	desc: string,
+	koreanName: string | undefined,
 ): Extract<Condition, { op: 'COUNT_AFFILIATION' }> {
-	const scope: 'deck' | 'deployed' | 'unknown' =
-		/출격 인원을 기준|대기 인원 제외/.test(desc) ? 'deployed'
-		: /편성 인원을 기준|대기 인원 포함/.test(desc) ? 'deck'
-		: 'unknown';
+	if (!koreanName) return condition;
 
 	// `N인 이상` 에만 건다 — "공격 가중치가 1인 스킬" 처럼 무관한 숫자도 데이터에 있다.
-	const matched = /([0-9]+)인 이상/.exec(desc);
+	const line = desc.split('\n').find((l) => l.includes(koreanName) && /[0-9]+인 이상/.test(l));
+	if (!line) return condition;
+
+	const matched = /([0-9]+)인 이상/.exec(line);
 	const atLeast = matched ? Number(matched[1]) : condition.atLeast;
+
+	const scope: 'deck' | 'deployed' | 'unknown' =
+		/출격 인원을 기준|대기 인원 제외/.test(line) ? 'deployed'
+		: /편성 인원을 기준|대기 인원 포함/.test(line) ? 'deck'
+		: 'unknown';
 
 	return { ...condition, scope, atLeast };
 }

@@ -1,9 +1,9 @@
 import type { Locale } from '@prisma/client';
 import { db } from '@/lib/db';
-import { localeFilter, nameOf } from '@/lib/queries/shared';
+import { localeFilter, nameOf, textOf } from '@/lib/queries/shared';
 import type { Availability, PackCandidate } from './pack';
 import type { Gift, Identity } from './state';
-import { mapEffect, mapTrigger, type Condition, type StatusKey } from './vocab';
+import { mapEffect, mapTrigger, refineAffiliation, type Condition, type StatusKey } from './vocab';
 
 /**
  * 데이터베이스 → 엔진 입력.
@@ -63,15 +63,24 @@ export async function loadIdentities(locale: Locale, ids?: number[]): Promise<Id
 	});
 }
 
-/** 소속 어휘. 조건 토큰이 실제 소속을 가리키는지 판정하는 데 쓴다. */
-export async function loadAffiliations(): Promise<Set<string>> {
-	const rows = await db.affiliation.findMany({ select: { id: true } });
-	return new Set(rows.map((r) => r.id));
+/**
+ * 소속 어휘. id → 한국어 이름.
+ *
+ * 두 자리에서 쓴다 — (1) `mapTrigger` 가 조건 토큰의 소속 id 가 실제로 존재하는지 판정할 때는
+ * 키 집합만 있으면 되고, (2) `refineAffiliation` 이 설명문에서 그 소속을 언급하는 줄을 찾을
+ * 때는 한국어 이름이 있어야 한다. 같은 질의에서 이름까지 함께 가져온다 — 정밀화 때문에 새
+ * 질의를 만들지 않는다.
+ */
+export async function loadAffiliations(): Promise<Map<string, string>> {
+	const rows = await db.affiliation.findMany({
+		select: { id: true, texts: { where: { locale: 'ko' }, select: { name: true } } },
+	});
+	return new Map(rows.map((r) => [r.id, r.texts[0]?.name ?? r.id]));
 }
 
 export async function loadGifts(
 	locale: Locale,
-	affiliations: ReadonlySet<string>,
+	affiliations: ReadonlyMap<string, string>,
 	ids?: number[],
 ): Promise<{ gifts: Gift[]; unmapped: { effects: Set<string>; triggers: Set<string> } }> {
 	const rows = await db.gift.findMany({
@@ -84,10 +93,15 @@ export async function loadGifts(
 
 	const unmapped = { effects: new Set<string>(), triggers: new Set<string>() };
 	const gifts: Gift[] = [];
+	// `mapTrigger` 는 소속 id 집합만 본다 — 매 기프트마다 새로 만들지 않고 한 번만 뽑는다.
+	const affiliationIds = new Set(affiliations.keys());
 
 	for (const g of rows) {
 		const effectTokens = g.tokens.filter((t) => t.kind === 'effect');
 		const triggerTokens = g.tokens.filter((t) => t.kind === 'trigger');
+		// 소속 조건의 인원수·판정 범위는 원본 토큰이 아니라 설명문에만 있다(vocab.refineAffiliation).
+		// 이미 로드한 텍스트를 그대로 쓴다 — 새 질의를 만들지 않는다.
+		const desc = textOf(g.texts, locale)?.desc ?? '';
 
 		const units = effectTokens
 			.map((t) => {
@@ -99,9 +113,11 @@ export async function loadGifts(
 
 		const conditions = triggerTokens
 			.map((t) => {
-				const c = mapTrigger(t.token, affiliations);
+				const c = mapTrigger(t.token, affiliationIds);
 				if (!c) unmapped.triggers.add(t.token);
-				return c;
+				return c && c.op === 'COUNT_AFFILIATION'
+					? refineAffiliation(c, desc, affiliations.get(c.affiliation))
+					: c;
 			})
 			.filter((c): c is Condition => c !== null);
 
