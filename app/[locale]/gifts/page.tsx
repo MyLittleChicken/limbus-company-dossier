@@ -8,7 +8,6 @@ import {
 	NO_KEYWORD,
 	listGifts,
 	listKeywords,
-	listSins,
 	readGiftFilter,
 } from '@/lib/queries/gifts';
 import type { SearchParams } from '@/lib/queries/shared';
@@ -30,10 +29,11 @@ export default async function GiftsPage({
 	const t = UI[locale];
 	const filter = readGiftFilter(sp);
 
-	const [result, keywords, sins] = await Promise.all([
+	// 죄악 축은 화면에 내지 않는다. 게임에서 무엇을 하는지 확인되지 않았기 때문이며
+	// (docs/backlog/03-gift-affinity.md), 그래서 죄악 목록을 질의하지도 않는다.
+	const [result, keywords] = await Promise.all([
 		listGifts(locale, filter),
 		listKeywords(locale),
-		listSins(locale),
 	]);
 
 	return (

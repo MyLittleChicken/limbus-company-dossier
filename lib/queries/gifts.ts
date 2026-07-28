@@ -1,4 +1,4 @@
-import type { Locale, Prisma, Sin } from '@prisma/client';
+import type { Locale, Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { giftIcon } from '@/lib/assets';
 import { localeFilter, multi, nameOf, one, PAGE_SIZE, textOf, type SearchParams } from './shared';
@@ -12,7 +12,6 @@ import { localeFilter, multi, nameOf, one, PAGE_SIZE, textOf, type SearchParams 
  */
 
 export const GIFT_TIERS = ['1', '2', '3', '4', '5', 'EX'] as const;
-export const SINS: Sin[] = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
 
 /** 키워드 축의 "없음". 질의 문자열에 쓰는 예약어다. */
 export const NO_KEYWORD = 'none';
