@@ -36,3 +36,20 @@ test('쓰고 읽으면 같은 값', () => {
 test('구간을 넘는 값은 거부한다', () => {
 	assert.throws(() => writeField('0000', 1, 2, 4));
 });
+
+test('정수가 아닌 값은 거부한다', () => {
+	// (2.5).toString(2) === '10.1' — 폭 체크를 통과해 소수점이 그대로 splice 되는 걸 막는다
+	assert.throws(() => writeField('00000', 1, 3, 2.5));
+});
+
+test('음수 값은 거부한다', () => {
+	assert.throws(() => writeField('0000', 1, 2, -1));
+});
+
+test('정수가 아닌 구간 경계는 거부한다', () => {
+	assert.throws(() => readField('0101', 1.5, 4));
+});
+
+test('8의 배수가 아닌 길이는 거부한다', () => {
+	assert.throws(() => bitsToBytes('0000000'));
+});

@@ -21,6 +21,9 @@ export function bitsToBytes(bits: string): Uint8Array {
 }
 
 export function readField(bits: string, start1: number, end1: number): number {
+	if (!Number.isInteger(start1) || !Number.isInteger(end1)) {
+		throw new Error(`구간 경계는 정수여야 한다: ${start1}-${end1}`);
+	}
 	const slice = bits.slice(start1 - 1, end1);
 	if (slice.length !== end1 - start1 + 1) throw new Error(`구간이 범위를 벗어난다: ${start1}-${end1}`);
 	return Number.parseInt(slice, 2);
@@ -28,7 +31,7 @@ export function readField(bits: string, start1: number, end1: number): number {
 
 export function writeField(bits: string, start1: number, end1: number, value: number): string {
 	const width = end1 - start1 + 1;
-	if (value < 0 || value >= 2 ** width) {
+	if (!Number.isInteger(value) || value < 0 || value >= 2 ** width) {
 		throw new Error(`값 ${value} 는 ${width}비트에 담기지 않는다`);
 	}
 	const encoded = value.toString(2).padStart(width, '0');
