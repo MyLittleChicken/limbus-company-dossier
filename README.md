@@ -99,11 +99,14 @@ ADR이 내린 결정을 기록한다면 백로그는 미룬 일을 기록한다.
 
 ## 개발 환경 설정
 
-클론 후 한 번 실행한다.
+`npm install`이 `prepare` 스크립트로 훅 경로를 설정한다. 직접 실행해도 된다.
 
 ```
 git config core.hooksPath .githooks
 ```
+
+`core.hooksPath`는 저장소별 로컬 설정이라 **클론·복제·디렉토리 이동 때마다 다시 잡아야 한다.**
+`prepare`를 둔 이유가 그것이다 — 사람이 기억해야 하는 단계로 두면 빠진다.
 
 `.githooks/pre-commit`이 `data/` 아래 파일의 커밋을 막는다. 이 디렉토리는 Project Moon 저작물에서
 유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
