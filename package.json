@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.9"
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
@@ -21,12 +21,12 @@
     "fetch": "tsx src/fetch.ts",
     "assets": "tsx src/assets.ts",
     "convert": "tsx src/convert.ts",
-    "load": "tsx src/load.ts",
+    "load": "tsx --env-file-if-exists=.env src/load.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:ddl": "docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1",
-    "verify": "tsx src/verify.ts",
-    "engine:proof": "tsx src/engine-proof.ts"
+    "verify": "tsx --env-file-if-exists=.env src/verify.ts",
+    "engine:proof": "tsx --env-file-if-exists=.env src/engine-proof.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

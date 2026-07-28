@@ -99,6 +99,9 @@ ADR이 내린 결정을 기록한다면 백로그는 미룬 일을 기록한다.
 
 ## 개발 환경 설정
 
+**Node 22.9 이상**과 **Docker**가 필요하다. Node 20은 2026-04-30에 지원이 끝났고, 파이프라인이 `.env`를
+읽는 데 쓰는 `--env-file-if-exists`가 22.9에서 들어왔다.
+
 `npm install`이 `prepare` 스크립트로 훅 경로를 설정한다. 직접 실행해도 된다.
 
 ```
@@ -129,6 +132,10 @@ npm run load                   # JSON → PostgreSQL
 npm run verify                 # coverage.json 과 대조
 npm run engine:proof           # 추천 엔진 슬라이스 5종 증명
 ```
+
+데이터베이스에 붙는 세 스크립트(`load` · `verify` · `engine:proof`)는 `--env-file-if-exists=.env`로
+접속 정보를 읽는다. Prisma CLI와 Next.js는 `.env`를 스스로 읽지만 tsx 스크립트는 읽지 않는다.
+**이미 설정된 환경변수가 `.env`를 이긴다** — 배포나 CI에서는 `.env` 없이 환경변수만 주면 된다.
 
 ### 웹 애플리케이션
 
