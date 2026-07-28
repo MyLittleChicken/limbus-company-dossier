@@ -64,6 +64,10 @@ jobs:
             exit 1
           fi
 
+      # 어휘 사전의 설명문 파싱 단위 테스트. 데이터베이스를 쓰지 않는다.
+      - name: 단위 테스트
+        run: npm test
+
       # 파이프라인(src/)과 웹(app/ · lib/ · components/)은 tsconfig 가 다르다.
       # 이 스크립트가 둘 다 돌린다.
       - name: 타입 검사
