@@ -143,7 +143,16 @@ const EFFECT_TABLE: Record<string, Omit<EffectUnit, 'token'>> = {
 export type Condition =
 	| { op: 'ALWAYS' }
 	| { op: 'AND'; conditions: Condition[] }
-	| { op: 'COUNT_AFFILIATION'; affiliation: string; atLeast: number }
+	| {
+			op: 'COUNT_AFFILIATION';
+			affiliation: string;
+			atLeast: number;
+			/**
+			 * 판정 범위. 원본 토큰에는 없고 설명문에만 있다.
+			 * `unknown` 은 설명문에도 표지가 없는 경우이며 근사를 유지한다.
+			 */
+			scope: 'deck' | 'deployed' | 'unknown';
+	  }
 	| { op: 'RESONANCE'; sin: string; absolute: boolean }
 	| { op: 'ANY_RESONANCE'; absolute: boolean }
 	| { op: 'SKILL_SUPPLIES'; status: StatusKey }
@@ -207,9 +216,9 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
 	if (ident) {
 		const named = resolveAffiliation(ident[1] as string, affiliations);
 		if (named) {
-			// 원본 토큰에 인원수가 없다. 설명문에만 있으며 여기서는 3인을 기본으로 둔다
-			// (실측 조건 문구가 대부분 3인 이상이다). 정밀화는 후속이다.
-			return { op: 'COUNT_AFFILIATION', affiliation: named, atLeast: 3 };
+			// 원본 토큰에 인원수도 판정 범위도 없다. 설명문에만 있으며 여기서는 3인·unknown 을
+			// 기본으로 둔다(실측 조건 문구가 대부분 3인 이상이다). 정밀화는 `refineAffiliation`.
+			return { op: 'COUNT_AFFILIATION', affiliation: named, atLeast: 3, scope: 'unknown' };
 		}
 	}
 
@@ -318,6 +327,31 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
 	}
 
 	return null;
+}
+
+/**
+ * 설명문으로 소속 조건을 정밀화한다.
+ *
+ * 원본 토큰(`{소속} Identities`)에는 인원수도 판정 범위도 없다. 둘 다 설명문에만 있다.
+ * 실측 18건 중 15건이 범위 표지를 갖고, 인원수는 2·3·4인으로 갈린다 — 일괄 3인 가정은
+ * 그중 4건에서 틀렸다.
+ *
+ * 표지가 없는 3건은 `unknown` 으로 두고 근사를 유지한다. 없는 근거를 지어내지 않는다.
+ */
+export function refineAffiliation(
+	condition: Extract<Condition, { op: 'COUNT_AFFILIATION' }>,
+	desc: string,
+): Extract<Condition, { op: 'COUNT_AFFILIATION' }> {
+	const scope: 'deck' | 'deployed' | 'unknown' =
+		/출격 인원을 기준|대기 인원 제외/.test(desc) ? 'deployed'
+		: /편성 인원을 기준|대기 인원 포함/.test(desc) ? 'deck'
+		: 'unknown';
+
+	// `N인 이상` 에만 건다 — "공격 가중치가 1인 스킬" 처럼 무관한 숫자도 데이터에 있다.
+	const matched = /([0-9]+)인 이상/.exec(desc);
+	const atLeast = matched ? Number(matched[1]) : condition.atLeast;
+
+	return { ...condition, scope, atLeast };
 }
 
 /**
