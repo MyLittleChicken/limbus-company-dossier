@@ -56,6 +56,11 @@ const STATUS_OF: Record<string, StatusKey> = {
 	Poise: 'poise',
 	Charge: 'charge',
 	Bloodfeast: 'bloodfeast',
+	// 상태 기믹 — 인격은 이미 이 축을 공급한다(Task 2). 여기 이어야 조건이 그것을 참조한다
+	// (backlog/04-status-mechanics.md 7절). 원본 토큰 표기(Ammo·Shield)와 우리 축 이름
+	// (ammo·protection)이 다르다는 점만 다르고, 나머지 여덟과 같은 표다.
+	Ammo: 'ammo',
+	Shield: 'protection',
 };
 
 /**
@@ -254,6 +259,14 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
 		if (what === 'E.G.O' || isEgo) return { op: 'SITUATIONAL', rate: 0.3, token };
 	}
 
+	// `Allies have Ammo Skill` — `{X} Skill Used` 와 뜻은 같은데(탄환 스킬 공급) 표기가 다르다.
+	// 다른 축(화상·충전 등)도 `Allies have {X} Skill` 형태 토큰을 쓰지만 그건 이번 배선 대상이
+	// 아니다 — 여기서 일반화하면 탄환·보호 배선을 넘어 54건이 한꺼번에 움직인다.
+	// 실측(`Allies have Ammo Skill` 1건)에 맞춘 것만 좁게 잡는다.
+	if (token === 'Allies have Ammo Skill') {
+		return { op: 'SKILL_SUPPLIES', status: 'ammo' };
+	}
+
 	const enemyHas = /^Enemies have (\w+)$/.exec(token);
 	if (enemyHas && STATUS_OF[enemyHas[1] as string]) {
 		return { op: 'HAS_STATUS', status: STATUS_OF[enemyHas[1] as string] as StatusKey, side: 'enemy' };
@@ -273,7 +286,23 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
 		};
 	}
 
-	if (/^(Allies|Enemies) with (Shield|.+)$/.test(token) && !/ Condition$/.test(token)) {
+	// `Allies/Enemies with {상태}` — 아래 catch-all 보다 먼저 와야 한다. 안 그러면 `Shield` 도
+	// `STATUS_OF` 조회 없이 상황성으로 뭉개진다(예전에 실제로 그랬다). `enemyHas`/`allyHas` 와
+	// 같은 모양이지만 원본이 "have" 대신 "with" 를 쓰는 토큰이라 갈래를 나눴다.
+	const enemyWith = /^Enemies with (\w+)$/.exec(token);
+	if (enemyWith && STATUS_OF[enemyWith[1] as string]) {
+		return { op: 'HAS_STATUS', status: STATUS_OF[enemyWith[1] as string] as StatusKey, side: 'enemy' };
+	}
+	const allyWith = /^Allies with (\w+)$/.exec(token);
+	if (allyWith && STATUS_OF[allyWith[1] as string]) {
+		return { op: 'HAS_STATUS', status: STATUS_OF[allyWith[1] as string] as StatusKey, side: 'ally' };
+	}
+
+	// catch-all — 실측(2026-07-28, gift_token 전수)으로 `Allies/Enemies with ...` 형 발동
+	// 토큰은 `Shield`(위에서 이제 가로챈다) 와 `HP/SP/Speed Condition`(아래 `with .+ Condition`
+	// 갈래가 가져간다) 뿐이라, 지금은 이 catch-all 에 실제로 떨어지는 토큰이 없다. 그래도
+	// 지운 게 아니라 순서만 바꿨다 — 미래에 다른 `with X` 토큰이 추가되면 여전히 걸린다.
+	if (/^(Allies|Enemies) with .+$/.test(token) && !/ Condition$/.test(token)) {
 		return { op: 'SITUATIONAL', rate: 0.45, token };
 	}
 
@@ -301,7 +330,8 @@ const SKILL_SHAPE_RATE: Record<string, number> = {
 	'Single-Coin': 0.4,
 	'1 Atk Weight': 0.5,
 	'2+ Atk Weight': 0.4,
-	Ammo: 0.2,
+	// Ammo 는 여기 없다 — `STATUS_OF` 조회가 먼저라 `Ammo Skill Used` 는 이제 이 표에 도달하지
+	// 않는다(위 `{X} Skill Used` 분기). 남겨 두면 죽은 값이라 지웠다.
 	Guard: 0.35,
 	Evade: 0.3,
 	Counter: 0.3,
