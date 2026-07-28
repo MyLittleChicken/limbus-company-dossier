@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { DeckCodeIo } from '@/components/deck-code-io';
 import { readDecks, writeDecks } from '@/lib/storage/decks';
 import { DECK_MAX, DEPLOY_MAX, EGO_RANKS, emptyDeck, type StoredDeck } from '@/lib/storage/schema';
 import type { SquadSinner } from '@/lib/queries/squad';
@@ -97,6 +98,16 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 					</button>
 				)}
 			</div>
+
+			<DeckCodeIo
+				deck={active}
+				ko={ko}
+				onImport={(imported) => {
+					if (decks.length >= DECK_MAX) return setNotice(ko ? `덱은 ${DECK_MAX}개까지입니다` : `Max ${DECK_MAX} decks`);
+					persist([...decks, imported]);
+					setActiveId(imported.id);
+				}}
+			/>
 
 			{!active ? (
 				<p className="lede">{ko ? '덱을 만들어 편성을 시작합니다.' : 'Create a deck to begin.'}</p>

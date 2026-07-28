@@ -920,3 +920,6 @@ a {
 @media (max-width: 900px) {
 	.deck-slot { grid-template-columns: 1fr; }
 }
+.deck-code { display: flex; gap: .5rem; align-items: flex-start; flex-wrap: wrap; margin: .5rem 0; }
+.deck-code label { display: flex; flex-direction: column; gap: .25rem; flex: 1 1 20rem; }
+.deck-code textarea { width: 100%; font-family: monospace; font-size: .8rem; }
