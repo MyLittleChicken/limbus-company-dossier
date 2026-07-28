@@ -34,11 +34,28 @@ export function fromBase64(text: string): Uint8Array {
  * `BufferSource`(= `ArrayBuffer` 로 고정)가 요구하는 타입과 형식적으로 어긋난다.
  * 실행 시점에는 항상 평범한 `ArrayBuffer` 백킹이라 안전하다.
  */
+/**
+ * 스트림이 에러 상태가 되면 `write()`/`close()` 가 돌려주는 프로미스도 함께 reject
+ * 한다(`TransformStream` 은 writable/readable 이 에러 상태를 공유한다). 이 프로미스를
+ * `void` 로 버리면(원래 코드) 아무도 지켜보지 않은 채 reject 돼서 Node 가
+ * unhandledRejection 으로 프로세스를 죽인다 — 브라우저 탭은 콘솔 경고로 끝나지만, 이
+ * 코드가 Node 테스트(`npx tsx --test`)와 향후 CI 에서도 도는 이상 무시할 수 없다.
+ *
+ * 진짜 실패 원인은 readable 쪽 `arrayBuffer()` 도 항상 함께 reject 해 주므로,
+ * write/close 의 reject 는 여기서 흡수(catch)해 "누군가 지켜봤다"는 사실만 만들고,
+ * 호출자에게는 `arrayBuffer()` 의 reject 하나로만 전달한다. 정상 입력이면 셋 다
+ * resolve 라 동작은 그대로다.
+ */
 async function through(stream: CompressionStream | DecompressionStream, bytes: Uint8Array) {
 	const writer = stream.writable.getWriter();
-	void writer.write(bytes as BufferSource);
-	void writer.close();
-	return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+	const writeDone = writer.write(bytes as BufferSource).catch(() => {});
+	const closeDone = writer.close().catch(() => {});
+	const [buffer] = await Promise.all([
+		new Response(stream.readable).arrayBuffer(),
+		writeDone,
+		closeDone,
+	]);
+	return new Uint8Array(buffer);
 }
 
 export const gzip = (bytes: Uint8Array): Promise<Uint8Array> =>
