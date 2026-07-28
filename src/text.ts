@@ -4,7 +4,7 @@
  * ADR-02 원칙 4 — 정제 규칙을 한 곳에 모은다. 여러 파일에 흩어지면 패치 때 갱신 지점을 놓친다.
  * ADR-03 3.3 — 토큰 치환은 빌드 시점에 수행하고 원문도 함께 보관한다.
  */
-import { readJson, readJsonGlob, flattenDataList, type DataList } from './io.js';
+import { readJson, readJsonGlob, type DataList } from './io.js';
 import type { Report } from './report.js';
 
 /**

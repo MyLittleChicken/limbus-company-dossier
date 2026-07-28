@@ -139,7 +139,7 @@ export async function loadPackCandidates(
 	return rows.map((p) => ({
 		id: p.id,
 		name: nameOf(p.texts, locale)?.name ?? p.id,
-		availability: availabilityOf(p.id, p.category, p.extreme),
+		availability: availabilityOf(p.category, p.extreme),
 		gifts: p.gifts
 			.map((x) => giftById.get(x.giftId))
 			.filter((g): g is Gift => g !== undefined),
@@ -154,7 +154,7 @@ export async function loadPackCandidates(
  * 극히 낮은 확률로만 등장하므로 후보에서 항상 뺀다 — 두면 187종을 담은 덕에 언제나 1위가 된다.
  * 발푸르기스의 밤 4종은 기간 한정이라 이벤트 중에만 후보다.
  */
-export function availabilityOf(id: string, category: string, extreme: boolean): Availability {
+export function availabilityOf(category: string, extreme: boolean): Availability {
 	if (category === 'extreme' && !extreme) return 'hidden';
 	if (category === 'walpurgis') return 'limited';
 	return 'standard';
