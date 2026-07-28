@@ -21,17 +21,31 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 
 	useEffect(() => {
 		const r = readDecks(window.localStorage);
-		if (!r.ok) return setNotice(r.reason);
+		if (!r.ok) {
+			// 원인 문자열은 lib/storage 산출물이라 한국어 고정이다 — 헤드라인만 로캘별로 두고
+			// 원문은 보조 정보로 붙여 실패 사유를 숨기지 않는다.
+			return setNotice(`${ko ? '덱을 불러오지 못했습니다' : 'Could not load decks'}: ${r.reason}`);
+		}
 		setDecks(r.value);
 		setActiveId(r.value[0]?.id ?? null);
-	}, []);
+	}, [ko]);
 
 	const active = decks.find((d) => d.id === activeId) ?? null;
 
-	function persist(next: StoredDeck[]) {
-		setDecks(next);
+	/**
+	 * 저장이 성공했을 때만 화면 상태를 옮긴다 — 실패하면 이전에 실제로 저장된 덱을 그대로
+	 * 보여주고 배너로만 알린다. 반환값은 addDeck·removeDeck 이 activeId 를 따라 옮길지
+	 * 판단하는 데 쓴다(실패한 새 덱·삭제를 고른 상태처럼 보이게 두지 않기 위해).
+	 */
+	function persist(next: StoredDeck[]): boolean {
 		const r = writeDecks(window.localStorage, next);
-		setNotice(r.ok ? null : r.reason);
+		if (!r.ok) {
+			setNotice(`${ko ? '덱을 저장하지 못했습니다' : 'Could not save the deck'}: ${r.reason}`);
+			return false;
+		}
+		setNotice(null);
+		setDecks(next);
+		return true;
 	}
 
 	function update(fn: (d: StoredDeck) => void) {
@@ -49,14 +63,13 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 	function addDeck() {
 		if (decks.length >= DECK_MAX) return setNotice(ko ? `덱은 ${DECK_MAX}개까지입니다` : `Max ${DECK_MAX} decks`);
 		const d = emptyDeck(ko ? `덱 ${decks.length + 1}` : `Deck ${decks.length + 1}`);
-		persist([...decks, d]);
-		setActiveId(d.id);
+		// 저장이 실패하면 아직 없는 덱을 고른 것처럼 보이면 안 되므로 activeId 는 건드리지 않는다.
+		if (persist([...decks, d])) setActiveId(d.id);
 	}
 
 	function removeDeck(id: string) {
 		const next = decks.filter((d) => d.id !== id);
-		persist(next);
-		if (activeId === id) setActiveId(next[0]?.id ?? null);
+		if (persist(next) && activeId === id) setActiveId(next[0]?.id ?? null);
 	}
 
 	return (
@@ -157,13 +170,21 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 										<input
 											type="checkbox"
 											checked={deployed}
-											onChange={() =>
+											onChange={() => {
+												// 상한을 이미 채운 상태에서 새로 켜려는 시도는 조용히 버리지 않고 알린다
+												// (DECK_MAX 초과 시 addDeck 이 배너를 띄우는 것과 같은 규칙).
+												if (!deployed && active.deployed.length >= DEPLOY_MAX) {
+													setNotice(
+														ko ? `출전은 ${DEPLOY_MAX}명까지입니다` : `Max ${DEPLOY_MAX} deployed`,
+													);
+													return;
+												}
 												update((d) => {
 													const at = d.deployed.indexOf(slot.sinnerId);
 													if (at >= 0) d.deployed.splice(at, 1);
 													else if (d.deployed.length < DEPLOY_MAX) d.deployed.push(slot.sinnerId);
-												})
-											}
+												});
+											}}
 										/>
 										{ko ? '출전' : 'Deploy'}
 									</label>
