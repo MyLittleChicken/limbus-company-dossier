@@ -117,7 +117,7 @@ Next.js (App Router)
    │  Prisma Client
    ▼
 PostgreSQL
-     게임 데이터 51테이블 50,577행
+     게임 데이터 52테이블 52,781행
      (이후 런 기록이 같은 저장소에 추가된다 — 01-data-storage.md 4절)
 
 이미지 애셋 4,737개

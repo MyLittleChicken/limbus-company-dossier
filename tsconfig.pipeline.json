@@ -22,6 +22,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
+  "//exclude": "engine-proof 는 엔진(lib/)을 부르며 그쪽은 bundler 해석이다. 웹 tsconfig 가 검사한다.",
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/engine-proof.ts"]
 }

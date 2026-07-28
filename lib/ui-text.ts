@@ -16,6 +16,7 @@ export interface UiText {
 		packs: string;
 		identities: string;
 		squad: string;
+		recommend: string;
 		egos: string;
 		floors: string;
 		dungeon: string;
@@ -38,6 +39,7 @@ export const UI: Record<Locale, UiText> = {
 			packs: '테마 팩',
 			identities: '인격',
 			squad: '편성',
+			recommend: '추천',
 			egos: 'E.G.O',
 			floors: '층별 등장 팩',
 			dungeon: '거울 던전',
@@ -57,6 +59,7 @@ export const UI: Record<Locale, UiText> = {
 			packs: 'Theme Packs',
 			identities: 'Identities',
 			squad: 'Squad',
+			recommend: 'Recommend',
 			egos: 'E.G.O',
 			floors: 'Floor Packs',
 			dungeon: 'Mirror Dungeon',
@@ -72,4 +75,4 @@ export const UI: Record<Locale, UiText> = {
 
 /** 내비게이션 순서. 엔티티 4종을 앞에 두고 부속 화면을 뒤에 둔다. */
 export const NAV_PRIMARY = ['gifts', 'packs', 'identities', 'egos'] as const;
-export const NAV_SECONDARY = ['squad', 'floors', 'dungeon', 'glossary'] as const;
+export const NAV_SECONDARY = ['squad', 'recommend', 'floors', 'dungeon', 'glossary'] as const;

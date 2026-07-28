@@ -69,6 +69,7 @@ const ORDER: Array<[table: string, delegate: string]> = [
 	['ego_passive', 'egoPassive'],
 	['ego_passive_text', 'egoPassiveText'],
 	['gift_text', 'giftText'],
+	['gift_token', 'giftToken'],
 	['gift_pack', 'giftPack'],
 	['gift_exclusive_pack', 'giftExclusivePack'],
 	['fusion_slot_option', 'fusionSlotOption'],

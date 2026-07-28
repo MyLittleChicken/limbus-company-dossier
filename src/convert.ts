@@ -65,6 +65,7 @@ function main(): void {
 	const gifts = buildGifts(ctx);
 	writeTable('gift', gifts.gift);
 	writeTable('gift_text', gifts.giftText);
+	writeTable('gift_token', gifts.token);
 	writeTable('gift_pack', gifts.giftPack);
 	writeTable('gift_exclusive_pack', gifts.exclusive);
 	writeTable('fusion_recipe', gifts.recipes);
