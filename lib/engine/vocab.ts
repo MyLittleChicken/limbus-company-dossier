@@ -363,8 +363,10 @@ export function refineAffiliation(
 	const line = desc.split('\n').find((l) => l.includes(koreanName) && /[0-9]+인 이상/.test(l));
 	if (!line) return condition;
 
-	const matched = /([0-9]+)인 이상/.exec(line);
-	const atLeast = matched ? Number(matched[1]) : condition.atLeast;
+	// `find` 가 이미 같은 패턴으로 이 줄을 걸렀으니 여기서는 항상 매치한다 —
+	// `condition.atLeast` 로 빠지는 갈래는 죽은 코드라 없앴다.
+	const matched = /([0-9]+)인 이상/.exec(line)!;
+	const atLeast = Number(matched[1]);
 
 	const scope: 'deck' | 'deployed' | 'unknown' =
 		/출격 인원을 기준|대기 인원 제외/.test(line) ? 'deployed'
