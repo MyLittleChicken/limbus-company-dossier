@@ -3,12 +3,16 @@
 # 게임 데이터는 패치마다 전체 재생성하므로(ADR-01) 이 볼륨은 언제든 버려도 된다.
 # 런 기록이 들어오는 시점부터는 사정이 달라지며, 그때 별도로 다룬다.
 #
-#   podman compose up -d      기동
-#   podman compose down -v    정지하고 볼륨까지 제거
+# 이 파일이 개발용 데이터베이스의 유일한 정의다. npm script(`db:up` · `db:ddl`)도
+# 여기를 거친다 — 컨테이너 설정을 두 곳에 두면 로케일 같은 항목이 조용히 어긋난다.
+#
+#   npm run db:up             기동 (healthcheck 통과까지 대기)
+#   npm run db:down           정지
+#   docker compose down -v    정지하고 볼륨까지 제거
 
 services:
   postgres:
-    image: docker.io/library/postgres:17-alpine
+    image: postgres:17-alpine
     container_name: limbus-postgres
     environment:
       POSTGRES_USER: postgres

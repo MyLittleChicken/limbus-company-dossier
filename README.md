@@ -119,7 +119,7 @@ npm install
 cp .env.example .env
 
 npm run fetch                  # 원격 5곳 → data/entities/*.json (1,749개)
-npm run db:up                  # PostgreSQL 컨테이너 기동
+npm run db:up                  # PostgreSQL 컨테이너 기동 (준비될 때까지 대기)
 npm run db:ddl < prisma/schema.sql
 npm run convert                # 원본 → build/data/*.json (52개)
 npm run load                   # JSON → PostgreSQL
@@ -143,7 +143,9 @@ npm run dev                    # http://localhost:3000
 
 **배포 환경은 정하지 않았다**([adr/05](docs/adr/05-web-serving.md) 3.5). 2단계는 로컬 실행까지다.
 
-컨테이너는 현재 **podman**으로 띄운다. `compose.yaml`은 Docker와도 호환되며 추후 전환한다.
+컨테이너는 **Docker**로 띄운다. 컨테이너 설정은 `compose.yaml` 하나에만 있고 `db:up` · `db:ddl`도
+그것을 거친다 — 설정을 npm script와 compose 양쪽에 두면 로케일 같은 항목이 조용히 어긋난다.
+`npm run db:up`은 `--wait`로 healthcheck 통과까지 기다리므로 곧바로 `db:ddl`을 이어 실행해도 된다.
 
 `npm run fetch`는 `data/manifest.json`이 파일마다 기록한 출처·경로·체크섬대로 내려받고
 **1,749개 전부의 체크섬을 대조한다.** 하나라도 어긋나거나 받지 못하면 종료 코드 1이다.
