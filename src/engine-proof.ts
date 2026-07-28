@@ -6,6 +6,8 @@
  *
  *   실행: npm run engine:proof
  */
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import {
 	loadAffiliations,
@@ -197,6 +199,51 @@ async function main(): Promise<void> {
 		ranked[0]?.packId !== offRanked[0]?.packId || ranked[0]!.score !== offRanked[0]!.score,
 		`화진 1위 ${ranked[0]?.name}(${ranked[0]?.score.toFixed(2)}) vs 대조 ${offRanked[0]?.name}(${offRanked[0]?.score.toFixed(2)})`,
 	);
+
+	// ── 기준선 ────────────────────────────────────────────────
+	//
+	// **방향 검사만으로는 부족하다.** "화상이 축 1위"는 가중치를 몇 배로 흔들어도 참일 수 있다.
+	// 실제로 INFLICT_COUNT 를 1.1 에서 5.0 으로 바꿔도 25건이 전부 통과하면서 3위 팩이 바뀌었다.
+	//
+	// 그래서 순위와 점수를 파일로 고정한다. 의도적으로 바꿀 때는 `-- --update` 로 갱신하며
+	// 그 차이가 커밋 diff 에 드러나 리뷰 대상이 된다. 의도하지 않은 변화는 여기서 걸린다.
+	console.log('');
+	console.log('[기준선] 회귀 — 순위와 점수가 말없이 바뀌지 않는가');
+	const snapshot = {
+		deck: HWAJIN,
+		floor: 3,
+		difficulty: 'hard',
+		ranked: ranked.map((r) => ({ packId: r.packId, score: Number(r.score.toFixed(3)) })),
+		axis: ordered.slice(0, 3).map((o) => ({ key: o.k, avg: Number(o.a.toFixed(3)) })),
+	};
+	const baselinePath = fileURLToPath(new URL('./engine-golden.json', import.meta.url));
+
+	if (process.argv.includes('--update')) {
+		writeFileSync(baselinePath, JSON.stringify(snapshot, null, '\t') + '\n');
+		console.log('  기준선을 갱신했다. diff 를 확인하고 커밋한다.');
+	} else if (!existsSync(baselinePath)) {
+		check('기준선 파일', false, '없다. `npm run engine:proof -- --update` 로 만든다');
+	} else {
+		const base = JSON.parse(readFileSync(baselinePath, 'utf8')) as typeof snapshot;
+		if (JSON.stringify(base) === JSON.stringify(snapshot)) {
+			check('순위·점수 기준선', true, `팩 ${base.ranked.length}종 · 축 ${base.axis.length}종 일치`);
+		} else {
+			const diffs: string[] = [];
+			base.ranked.forEach((b, i) => {
+				const now = snapshot.ranked[i];
+				if (!now) diffs.push(`${i + 1}위 사라짐(${b.packId})`);
+				else if (b.packId !== now.packId) diffs.push(`${i + 1}위 ${b.packId}→${now.packId}`);
+				else if (b.score !== now.score) diffs.push(`${b.packId} ${b.score}→${now.score}`);
+			});
+			base.axis.forEach((b, i) => {
+				const now = snapshot.axis[i];
+				if (now && (b.key !== now.key || b.avg !== now.avg)) {
+					diffs.push(`축${i + 1} ${b.key} ${b.avg}→${now.key} ${now.avg}`);
+				}
+			});
+			check('순위·점수 기준선', false, diffs.slice(0, 4).join(' · ') || '구조가 달라졌다');
+		}
+	}
 
 	console.log(`\n${failures === 0 ? '전부 통과' : `실패 ${failures}건`}`);
 	await db.$disconnect();
