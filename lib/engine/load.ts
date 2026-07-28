@@ -14,6 +14,12 @@ import { mapEffect, mapTrigger, type Condition, type StatusKey } from './vocab';
 
 /** 상태 id 는 1,472종이라 키워드 축으로 접는다. 이름이 아니라 id 로 판정한다(02-data-model 3.10). */
 const STATUS_MATCH: Array<[StatusKey, RegExp]> = [
+	// 상태 기믹(특수). 키워드가 아니라 자원이며 별개 축이다(backlog/04 3·4절).
+	// **먼저 판정한다.** `BurstProtection`(파열 보호) 은 이름에 `Burst` 를 품어 뒤에 있는
+	// rupture 패턴(`/burst|rupture/i`)에도 걸린다 — 실측상 보호 자원이므로 여기서 먼저 잡아
+	// 그 축을 가로챈다(파생 범위는 backlog/04 3·4절 실측: 호표탄 계열은 탄환, 파열 보호는 보호).
+	['ammo', /^(Accel)?Bullet(Godok|Lament|Propellant(Special)?)?$/i],
+	['protection', /^(Burst)?Protection$/i],
 	['burn', /combustion|(^|[^a-z])burn/i],
 	['bleed', /laceration|bleed/i],
 	['tremor', /vibration|tremor/i],
@@ -24,7 +30,7 @@ const STATUS_MATCH: Array<[StatusKey, RegExp]> = [
 	['bloodfeast', /bloodfeast/i],
 ];
 
-function statusKeyOf(statusId: string): StatusKey | null {
+export function statusKeyOf(statusId: string): StatusKey | null {
 	for (const [key, re] of STATUS_MATCH) if (re.test(statusId)) return key;
 	return null;
 }

@@ -15,7 +15,14 @@ import { SITUATIONAL_RATE } from './tuning';
 
 // ── 효과 ──────────────────────────────────────────────────────
 
-/** 상태 키워드. 게임의 내부 식별자가 아니라 우리 축의 이름이다. */
+/**
+ * 상태 키워드. 게임의 내부 식별자가 아니라 우리 축의 이름이다.
+ *
+ * 마지막 둘은 **상태 기믹**이며 앞의 것들과 성격이 다르다. 키워드는 기프트를 나누는
+ * 분류이고 소속은 인격의 배경 태그인데, 탄환·보호는 인격이 공급하고 기프트가 조건으로
+ * 참조하는 자원이다. 축이 셋이라는 것은 backlog/04 가 전수 확인했다 — 기프트 발동 토큰
+ * 150종이 참조하는 기믹 중 분류 밖은 이 둘뿐이다.
+ */
 export type StatusKey =
 	| 'burn'
 	| 'bleed'
@@ -24,7 +31,10 @@ export type StatusKey =
 	| 'sinking'
 	| 'poise'
 	| 'charge'
-	| 'bloodfeast';
+	| 'bloodfeast'
+	// ── 상태 기믹 (특수) ──
+	| 'ammo'
+	| 'protection';
 
 export interface EffectUnit {
 	/** 가중치를 붙일 유형 */
