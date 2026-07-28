@@ -1,4 +1,4 @@
-# limbus-mirror-tracker
+# limbus-company-dossier
 
 림버스 컴퍼니 **거울 던전** 플레이어가 현재 자신의 런 상황(파티 구성, 보유 E.G.O 기프트)을 기준으로
 다음 층에서 어떤 팩을 고를지 판단할 수 있게 돕는 정보·추천 서비스.
