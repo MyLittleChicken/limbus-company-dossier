@@ -14,6 +14,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.pipeline.json && tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test \"lib/**/*.test.ts\"",
     "schema:validate": "prisma validate",
     "schema:format": "prisma format",
     "schema:ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/schema.sql",
