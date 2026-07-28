@@ -114,6 +114,8 @@ git config core.hooksPath .githooks
 `.githooks/pre-commit`이 `data/` 아래 파일의 커밋을 막는다. 이 디렉토리는 Project Moon 저작물에서
 유래한 로컬 스냅샷이라 재배포하지 않으며, 추적하는 파일은 `README.md` · `manifest.json` · `coverage.json` 셋뿐이다.
 `.gitignore`가 1차 방어이고 훅은 `git add -f`로 무시 규칙을 넘긴 경우를 잡는 2차 방어다.
+훅이 꺼져 있거나 `--no-verify`로 우회된 경우를 대비해 CI가 3차로 같은 규칙을 검사한다
+(`.github/workflows/ci.yml`).
 
 ### 데이터 파이프라인
 
