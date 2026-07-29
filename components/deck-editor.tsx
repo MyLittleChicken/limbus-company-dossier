@@ -162,11 +162,22 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 						/>
 					</label>
 
+					{/*
+					  덱 코드는 편성만 담고 출전을 담지 않는다(07 7.1). 가져온 직후 출전이 비어 있는
+					  것이 정상인데, 그 사실을 적지 않으면 "가져오기가 출전을 빠뜨렸다"로 읽힌다.
+					*/}
 					<p className="lede">
 						{ko
 							? `출전 ${active.deployed.length}/${DEPLOY_MAX} · E.G.O는 현재 추천 점수에 반영되지 않습니다.`
 							: `Deployed ${active.deployed.length}/${DEPLOY_MAX} · E.G.O does not affect scoring yet.`}
 					</p>
+					{active.order.length > 0 && active.deployed.length === 0 && (
+						<p className="lede">
+							{ko
+								? '덱 코드는 출전을 담지 않습니다. 편성과 인격만 불러왔으니 출전은 직접 고르세요.'
+								: 'Deck codes carry no on-field selection. The squad was imported; choose who deploys.'}
+						</p>
+					)}
 
 					<ul className="plain deck-slots">
 						{active.slots.map((slot) => {

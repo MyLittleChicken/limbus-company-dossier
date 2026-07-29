@@ -42,8 +42,20 @@ export function readDecks(kv: Kv): Result<StoredDeck[]> {
 	return ok(out);
 }
 
+/**
+ * 덱 목록 쓰기.
+ *
+ * **읽기와 같은 계약을 건다.** 예전에는 `readDecks` 만 `parseDeck` 을 돌리고 쓰기는 그냥
+ * 넣었다. 그 비대칭 때문에 상한을 넘는 덱이 저장소에 들어갔고, 다음 방문에서 `readDecks`
+ * 가 실패해 **그 저장소의 다른 멀쩡한 덱까지 통째로 못 읽게** 됐다(실물 덱 코드 가져오기로
+ * 재현). 못 읽을 것은 애초에 쓰지 않는다.
+ */
 export function writeDecks(kv: Kv, decks: readonly StoredDeck[]): Result<void> {
 	if (decks.length > DECK_MAX) return err(`덱은 ${DECK_MAX}개까지다`);
+	for (const d of decks) {
+		const checked = parseDeck(JSON.parse(JSON.stringify(d)));
+		if (!checked.ok) return err(`쓸 수 없는 덱이다: ${checked.reason}`);
+	}
 	try {
 		kv.setItem(KEY_SCHEMA, String(SCHEMA_VERSION));
 		kv.setItem(KEY_DECKS, JSON.stringify(decks));

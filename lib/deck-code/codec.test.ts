@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyBits, writeBlock, TOTAL_BITS } from './layout';
-import { decodeDeckCode, encodeDeckCode, deckFromCode, deckToCode, unverifiedIndexes } from './codec';
+import { decodeDeckCode, encodeDeckCode, deckFromCode, deckToCode } from './codec';
 import { toBase64, gzip } from './bytes';
 import { emptyDeck } from '@/lib/storage/schema';
 
@@ -36,7 +36,8 @@ test('덱 왕복이 일치한다', async () => {
 	d.slots[0]!.egos.ZAYIN = 20101;
 	d.slots[4]!.identityId = 10508;
 	d.slots[4]!.egos.TETH = 20503;
-	d.deployed = [1, 5];
+	d.order = [5, 1];
+	d.deployed = [1];
 
 	const code = await deckToCode(d);
 	assert.equal(code.ok, true);
@@ -49,7 +50,21 @@ test('덱 왕복이 일치한다', async () => {
 	assert.equal(back.value.slots[0]?.egos.ZAYIN, 20101);
 	assert.equal(back.value.slots[4]?.identityId, 10508);
 	assert.equal(back.value.slots[4]?.egos.TETH, 20503);
-	assert.deepEqual(back.value.deployed, [1, 5]);
+	assert.deepEqual(back.value.order, [5, 1], '편성 순서는 왕복한다');
+	assert.deepEqual(back.value.deployed, [], '출전은 코드에 없으므로 돌아오지 않는다');
+});
+
+test('편성 순서가 없으면 인격이 든 칸을 번호 순으로 매긴다', async () => {
+	// 순서를 정하는 화면이 아직 없다. 0(미편성)으로 두면 게임이 빈 편성으로 읽으므로
+	// 지어내되, 무엇을 지어냈는지 여기에 고정해 둔다.
+	const d = emptyDeck('순서 없음', 'id-5');
+	d.slots[4]!.identityId = 10508;
+	d.slots[0]!.identityId = 10101;
+	const code = await deckToCode(d);
+	if (!code.ok) return assert.fail(code.reason);
+	const back = await deckFromCode(code.value, 'x');
+	if (!back.ok) return assert.fail(back.reason);
+	assert.deepEqual(back.value.order, [1, 5]);
 });
 
 test('빈 칸은 null 로 돌아온다', async () => {
@@ -70,13 +85,6 @@ test('16번째 인격도 왕복한다', async () => {
 	const back = await deckFromCode(code.value, 'x');
 	if (!back.ok) return assert.fail(back.reason);
 	assert.equal(back.value.slots[11]?.identityId, 11216);
-});
-
-test('16 이상 인격을 미검증으로 보고한다', () => {
-	const d = emptyDeck('16번', 'id-4');
-	d.slots[11]!.identityId = 11216;
-	d.slots[0]!.identityId = 10101;
-	assert.deepEqual(unverifiedIndexes(d), [11216]);
 });
 
 test('쓰레기 코드를 어느 단계에서 실패했는지와 함께 알린다', async () => {
