@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { localeFilter, nameOf, textOf } from '@/lib/queries/shared';
 import type { Availability, PackCandidate } from './pack';
 import type { Gift, Identity } from './state';
-import { mapEffect, mapTrigger, refineAffiliation, type Condition, type StatusKey } from './vocab';
+import { mapEffect, mapTrigger, refineAffiliation, statusKeyOf, type Condition, type StatusKey } from './vocab';
 
 /**
  * 데이터베이스 → 엔진 입력.
@@ -11,29 +11,6 @@ import { mapEffect, mapTrigger, refineAffiliation, type Condition, type StatusKe
  * 엔진은 파일이 아니라 적재된 데이터를 읽는다. 원본을 다시 파싱하면 파이프라인이 보증한
  * 정합성 밖에서 값이 생기고, 그 값은 검증에 걸리지 않는다.
  */
-
-/** 상태 id 는 1,472종이라 키워드 축으로 접는다. 이름이 아니라 id 로 판정한다(02-data-model 3.10). */
-const STATUS_MATCH: Array<[StatusKey, RegExp]> = [
-	// 상태 기믹(특수). 키워드가 아니라 자원이며 별개 축이다(backlog/04 3·4절).
-	// **먼저 판정한다.** `BurstProtection`(파열 보호) 은 이름에 `Burst` 를 품어 뒤에 있는
-	// rupture 패턴(`/burst|rupture/i`)에도 걸린다 — 실측상 보호 자원이므로 여기서 먼저 잡아
-	// 그 축을 가로챈다(파생 범위는 backlog/04 3·4절 실측: 호표탄 계열은 탄환, 파열 보호는 보호).
-	['ammo', /^(Accel)?Bullet(Godok|Lament|Propellant(Special)?)?$/i],
-	['protection', /^(Burst)?Protection$/i],
-	['burn', /combustion|(^|[^a-z])burn/i],
-	['bleed', /laceration|bleed/i],
-	['tremor', /vibration|tremor/i],
-	['rupture', /burst|rupture/i],
-	['sinking', /sinking/i],
-	['poise', /breath|poise/i],
-	['charge', /charge/i],
-	['bloodfeast', /bloodfeast/i],
-];
-
-export function statusKeyOf(statusId: string): StatusKey | null {
-	for (const [key, re] of STATUS_MATCH) if (re.test(statusId)) return key;
-	return null;
-}
 
 export async function loadIdentities(locale: Locale, ids?: number[]): Promise<Identity[]> {
 	const rows = await db.identity.findMany({
@@ -111,14 +88,21 @@ export async function loadGifts(
 			})
 			.filter((u): u is NonNullable<typeof u> => u !== null);
 
-		const conditions = triggerTokens
-			.map((t) => {
-				const c = mapTrigger(t.token, affiliationIds);
-				if (!c) unmapped.triggers.add(t.token);
-				return c && c.op === 'COUNT_AFFILIATION'
-					? refineAffiliation(c, desc, affiliations.get(c.affiliation))
-					: c;
-			})
+		const mapped = triggerTokens.map((t) => {
+			const c = mapTrigger(t.token, affiliationIds);
+			if (!c) unmapped.triggers.add(t.token);
+			return c;
+		});
+		// 소속 조건이 둘 이상이면 설명문의 인원수가 합집합("검계 또는 흑운회가 4인")의 것이다.
+		// 엔진은 발동을 AND 로 묶으므로 그 수를 그대로 쓰면 근사보다 더 틀린다 — 세어서 넘긴다.
+		const affiliationTokens = mapped.filter((c) => c?.op === 'COUNT_AFFILIATION').length;
+
+		const conditions = mapped
+			.map((c) =>
+				c && c.op === 'COUNT_AFFILIATION'
+					? refineAffiliation(c, desc, affiliations.get(c.affiliation), affiliationTokens)
+					: c,
+			)
 			.filter((c): c is Condition => c !== null);
 
 		// 원본은 효과와 발동을 짝지어 주지 않는다. 배열 두 개가 따로 있을 뿐이다.

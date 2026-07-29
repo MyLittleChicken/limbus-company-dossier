@@ -19,11 +19,11 @@ const AFFILIATIONS = new Set(['Dawn Office', 'The Thumb']);
 test('소속 토큰이 조건이 된다', () => {
 	const c = mapTrigger('Dawn Office Identities', AFFILIATIONS);
 	assert.equal(c?.op, 'COUNT_AFFILIATION');
+	// `scope` 는 붙지 않는다 — 원본 토큰에 판정 범위가 없고, 없는 것이 곧 표지 없음이다.
 	assert.deepEqual(c, {
 		op: 'COUNT_AFFILIATION',
 		affiliation: 'Dawn Office',
 		atLeast: 3,
-		scope: 'unknown',
 	});
 });
 
@@ -74,7 +74,7 @@ test('Guard Skill Used 는 보호와 무관하게 남는다', () => {
 // 소속의 한국어 이름이 실제로 나오는 줄로 범위를 좁혔다(9216·9730·9740·9795·9253 실측).
 // 실측한 실제 문구를 그대로 쓴다(2026-07-28, gift_description 전수).
 
-const base = { op: 'COUNT_AFFILIATION', affiliation: 'x', atLeast: 3, scope: 'unknown' } as const;
+const base = { op: 'COUNT_AFFILIATION', affiliation: 'x', atLeast: 3 } as const;
 
 test('출격 인원 표지를 출전으로 읽는다', () => {
 	const c = refineAffiliation(base, '턴 시작시, 엄지 소속 인격이 3인 이상일 때 발동 (출격 인원을 기준으로 함)', '엄지');
@@ -112,9 +112,9 @@ test('인원수를 설명문에서 읽는다', () => {
 	);
 });
 
-test('표지가 없으면 unknown 을 유지한다', () => {
+test('표지가 없으면 범위를 붙이지 않는다', () => {
 	const c = refineAffiliation(base, '중지 소속 인격이 3인 이상이면, 대신 기본 위력 +1', '중지');
-	assert.equal(c.scope, 'unknown');
+	assert.equal(c.scope, undefined);
 	assert.equal(c.atLeast, 3);
 });
 
@@ -126,7 +126,7 @@ test('공격 가중치가 1인 스킬은 인원수로 안 읽는다', () => {
 	// "1인" 이 사람 헤아림이 아니라 계사(copula) 인 경우 — 같은 줄에 소속 이름이 있어도
 	// `N인 이상` 정규식 자체가 안 걸려야 한다.
 	const c = refineAffiliation(base, '중지 소속 인격이 사용하는 공격 가중치가 1인 스킬 사용 시', '중지');
-	assert.equal(c.scope, 'unknown');
+	assert.equal(c.scope, undefined);
 	assert.equal(c.atLeast, 3);
 });
 
@@ -140,7 +140,7 @@ test('이름이 나오는 줄로 범위를 좁힌다 — 다른 줄의 표지를
 		'리우 협회 소속 인격의 기본 공격 스킬의 더하기 코인 위력 +2',
 	].join('\n');
 	const c = refineAffiliation(base, desc, '리우 협회');
-	assert.equal(c.scope, 'unknown');
+	assert.equal(c.scope, undefined);
 	assert.equal(c.atLeast, 3);
 });
 
@@ -150,7 +150,7 @@ test('이름이 나오는 줄에 인원수가 없으면 그 줄의 판정 범위
 	// 유지해야 한다(범위만 취하고 atLeast 는 예전 값을 쓰는 절충을 허용하지 않는다).
 	const desc = '자신을 제외한 라만차랜드 소속 인격 1명당 최종 위력 +1 (최대 4, 120%, 대기 인원 포함)';
 	const c = refineAffiliation(base, desc, '라만차랜드');
-	assert.equal(c.scope, 'unknown');
+	assert.equal(c.scope, undefined);
 	assert.equal(c.atLeast, 3);
 });
 
@@ -163,12 +163,41 @@ test('9270 — 같은 줄의 중첩 임계값 중 첫 매치를 쓴다(무해함
 		'- 5인 이상이면, 대신 기본 위력 +2',
 	].join('\n');
 	const c = refineAffiliation(base, desc, '중지');
-	assert.equal(c.scope, 'unknown');
+	assert.equal(c.scope, undefined);
 	assert.equal(c.atLeast, 3);
+});
+
+// ── 정밀화하면 안 되는 것 ──
+
+test('소속 토큰이 둘인 기프트는 인원수를 건드리지 않는다', () => {
+	// 9712 실측 문구. "검계 또는 흑운회" 는 합집합인데 엔진은 발동을 AND 로 묶으므로,
+	// 4를 그대로 쓰면 "검계 4명 그리고 흑운회 4명"이 되어 일괄 3인보다 더 틀린다.
+	const desc =
+		'전투에 참여한 인격 중 검계 또는 흑운회 소속이 4인 이상일 경우 (출격 인원을 기준으로 함) 효과가 강화되어, 무작위가 아닌 제일 적게 보유한 E.G.O 자원을 획득.';
+	for (const name of ['검계', '흑운회']) {
+		const c = refineAffiliation(base, desc, name, 2);
+		assert.equal(c.atLeast, 3, `${name}: 인원수는 근사를 유지한다`);
+		assert.equal(c.scope, 'deployed', `${name}: 판정 범위는 합집합이든 아니든 같으므로 읽는다`);
+	}
+});
+
+test('소속 토큰이 하나면 같은 문구에서 인원수를 읽는다', () => {
+	// 위 테스트가 문구 때문이 아니라 토큰 수 때문에 물러선 것임을 고정한다.
+	const desc = '전투에 참여한 인격 중 검계 소속이 4인 이상일 경우 (출격 인원을 기준으로 함)';
+	assert.equal(refineAffiliation(base, desc, '검계', 1).atLeast, 4);
+});
+
+test('한 줄에 인원수가 여럿이면 인원수를 건드리지 않는다', () => {
+	// 실측에는 없다(9270 은 단계가 줄로 나뉜다). 앞으로 생길 단계별 강화를 막는 안전망 —
+	// 임계값 하나로 담기지 않으므로 첫 매치를 집어 오면 안 된다.
+	const desc = '중지 소속 인격이 3인 이상이면 기본 위력 +1, 5인 이상이면 대신 +2 (대기 인원 제외)';
+	const c = refineAffiliation(base, desc, '중지');
+	assert.equal(c.atLeast, 3, '기존 값을 유지한다');
+	assert.equal(c.scope, 'deployed', '어느 인원을 세는가는 단계가 갈려도 하나다');
 });
 
 test('한국어 이름이 없으면(undefined) 기존 값을 유지한다', () => {
 	const c = refineAffiliation(base, '중지 소속 인격이 3인 이상일 때 발동 (출격 인원을 기준으로 함)', undefined);
-	assert.equal(c.scope, 'unknown');
+	assert.equal(c.scope, undefined);
 	assert.equal(c.atLeast, 3);
 });

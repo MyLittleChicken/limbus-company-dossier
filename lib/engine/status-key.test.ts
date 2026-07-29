@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusKeyOf } from './load';
+import { statusKeyOf } from './vocab';
 
 test('기존 축은 그대로 잡힌다', () => {
 	assert.equal(statusKeyOf('Combustion'), 'burn');

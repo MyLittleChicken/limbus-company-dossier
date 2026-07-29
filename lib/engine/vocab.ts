@@ -64,6 +64,34 @@ const STATUS_OF: Record<string, StatusKey> = {
 };
 
 /**
+ * 상태 id 는 1,472종이라 키워드 축으로 접는다. 이름이 아니라 id 로 판정한다(02-data-model 3.10).
+ *
+ * **어휘 사전에 둔다.** 적재 계층(`load.ts`)에 있으면 이 표의 단위 테스트가 `@/lib/db` 를 거쳐
+ * `PrismaClient` 를 끌고 와, 데이터베이스와 무관한 문자열 판정에 생성된 클라이언트가 필요해진다.
+ */
+const STATUS_MATCH: Array<[StatusKey, RegExp]> = [
+	// 상태 기믹(특수). 키워드가 아니라 자원이며 별개 축이다(backlog/04 3·4절).
+	// **먼저 판정한다.** `BurstProtection`(파열 보호) 은 이름에 `Burst` 를 품어 뒤에 있는
+	// rupture 패턴(`/burst|rupture/i`)에도 걸린다 — 실측상 보호 자원이므로 여기서 먼저 잡아
+	// 그 축을 가로챈다(파생 범위는 backlog/04 3·4절 실측: 호표탄 계열은 탄환, 파열 보호는 보호).
+	['ammo', /^(Accel)?Bullet(Godok|Lament|Propellant(Special)?)?$/i],
+	['protection', /^(Burst)?Protection$/i],
+	['burn', /combustion|(^|[^a-z])burn/i],
+	['bleed', /laceration|bleed/i],
+	['tremor', /vibration|tremor/i],
+	['rupture', /burst|rupture/i],
+	['sinking', /sinking/i],
+	['poise', /breath|poise/i],
+	['charge', /charge/i],
+	['bloodfeast', /bloodfeast/i],
+];
+
+export function statusKeyOf(statusId: string): StatusKey | null {
+	for (const [key, re] of STATUS_MATCH) if (re.test(statusId)) return key;
+	return null;
+}
+
+/**
  * 효과 토큰 → 효과 단위.
  *
  * `Inflict {상태} Potency|Count` 와 `Gain {상태} Potency|Count` 는 규칙으로 잡고,
@@ -149,9 +177,12 @@ export type Condition =
 			atLeast: number;
 			/**
 			 * 판정 범위. 원본 토큰에는 없고 설명문에만 있다.
-			 * `unknown` 은 설명문에도 표지가 없는 경우이며 근사를 유지한다.
+			 *
+			 * **선택 필드다.** 필수로 두면 `Condition` 이 좁아져 `evaluate` 의 인자 타입이
+			 * 함께 좁아지고, 이 계획이 스스로 정한 "공개 시그니처를 바꾸지 않는다" 를 깬다.
+			 * 없으면 설명문에도 표지가 없었다는 뜻이며 예전 근사(둘 중 큰 쪽)를 쓴다.
 			 */
-			scope: 'deck' | 'deployed' | 'unknown';
+			scope?: 'deck' | 'deployed';
 	  }
 	| { op: 'RESONANCE'; sin: string; absolute: boolean }
 	| { op: 'ANY_RESONANCE'; absolute: boolean }
@@ -216,9 +247,10 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
 	if (ident) {
 		const named = resolveAffiliation(ident[1] as string, affiliations);
 		if (named) {
-			// 원본 토큰에 인원수도 판정 범위도 없다. 설명문에만 있으며 여기서는 3인·unknown 을
-			// 기본으로 둔다(실측 조건 문구가 대부분 3인 이상이다). 정밀화는 `refineAffiliation`.
-			return { op: 'COUNT_AFFILIATION', affiliation: named, atLeast: 3, scope: 'unknown' };
+			// 원본 토큰에 인원수도 판정 범위도 없다. 설명문에만 있으며 여기서는 3인을 기본으로
+			// 둔다(실측 조건 문구가 대부분 3인 이상이다). `scope` 는 선택 필드라 넣지 않는다 —
+			// 없는 것이 곧 "표지가 없었다"는 뜻이다. 정밀화는 `refineAffiliation`.
+			return { op: 'COUNT_AFFILIATION', affiliation: named, atLeast: 3 };
 		}
 	}
 
@@ -349,13 +381,27 @@ export function mapTrigger(token: string, affiliations: ReadonlySet<string>): Co
  * `N인 이상` 을 포함한 첫 줄을 취하고, 판정 범위 표지도 **그 줄에서만** 찾는다.
  *
  * 이름이 나오는 줄이 없거나, 나오는 줄 어디에도 인원수가 없으면 **기존 값을 그대로
- * 유지한다**(`scope: 'unknown'`, 원래 `atLeast`). 없는 근거를 지어내지 않는다 — 무관한
+ * 유지한다**(`scope` 없음, 원래 `atLeast`). 없는 근거를 지어내지 않는다 — 무관한
  * 줄의 표지를 빌려 오지 않는다.
+ *
+ * **인원수는 두 경우에 읽지 않는다.** 판정 범위는 두 경우에도 읽는다 — 합집합이든
+ * 단계별이든 *어느 인원을 세는가* 는 하나다.
+ *
+ *   소속 토큰이 둘 이상인 기프트. 설명문이 "검계 **또는** 흑운회 소속이 4인 이상"처럼
+ *   합집합을 말하는데(9712) 엔진은 발동 조건을 AND 로 묶는다. 4를 그대로 넣으면 "검계
+ *   4명이면서 흑운회 4명"이 되어 일괄 3인보다 더 틀린다. 실측으로 소속 토큰이 둘인
+ *   기프트는 9246·9712·9713·9782 넷이고, 그중 인원수를 말하는 것은 9712 뿐이다.
+ *
+ *   한 줄에 인원수가 여럿인 기프트. 단계별 강화라 임계값 하나로 담기지 않는다. 실측에는
+ *   없다(9270 은 단계가 줄로 나뉘어 있어 줄 단위로 읽으면 걸리지 않는다) — 앞으로 생길
+ *   경우를 막는 안전망이다.
  */
 export function refineAffiliation(
 	condition: Extract<Condition, { op: 'COUNT_AFFILIATION' }>,
 	desc: string,
 	koreanName: string | undefined,
+	/** 이 기프트가 가진 소속 조건의 수. 둘 이상이면 설명문의 인원수가 합집합의 것이다. */
+	affiliationTokens = 1,
 ): Extract<Condition, { op: 'COUNT_AFFILIATION' }> {
 	if (!koreanName) return condition;
 
@@ -363,17 +409,20 @@ export function refineAffiliation(
 	const line = desc.split('\n').find((l) => l.includes(koreanName) && /[0-9]+인 이상/.test(l));
 	if (!line) return condition;
 
-	// `find` 가 이미 같은 패턴으로 이 줄을 걸렀으니 여기서는 항상 매치한다 —
-	// `condition.atLeast` 로 빠지는 갈래는 죽은 코드라 없앴다.
-	const matched = /([0-9]+)인 이상/.exec(line)!;
-	const atLeast = Number(matched[1]);
+	const counts = line.match(/[0-9]+인 이상/g) ?? [];
+	// 인원수를 못 읽는 경우에도 판정 범위는 읽는다. `scope` 만 붙이고 `atLeast` 는 그대로 둔다.
+	const atLeast =
+		affiliationTokens > 1 || counts.length > 1
+			? condition.atLeast
+			: Number(/([0-9]+)인 이상/.exec(line)![1]);
 
-	const scope: 'deck' | 'deployed' | 'unknown' =
+	const scope: 'deck' | 'deployed' | undefined =
 		/출격 인원을 기준|대기 인원 제외/.test(line) ? 'deployed'
 		: /편성 인원을 기준|대기 인원 포함/.test(line) ? 'deck'
-		: 'unknown';
+		: undefined;
 
-	return { ...condition, scope, atLeast };
+	// `scope: undefined` 를 실어 보내면 표지 없음과 구별되지 않으므로 있을 때만 붙인다.
+	return scope === undefined ? { ...condition, atLeast } : { ...condition, scope, atLeast };
 }
 
 /**
