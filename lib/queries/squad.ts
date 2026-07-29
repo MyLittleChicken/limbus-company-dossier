@@ -1,7 +1,17 @@
 import type { Locale } from '@prisma/client';
 import { db } from '@/lib/db';
-import { egoImage, identityImage, sinnerIcon } from '@/lib/assets';
+import {
+	egoImage,
+	egoRankIcon,
+	identityImage,
+	keywordIcon,
+	rarityIcon,
+	sinIcon,
+	sinnerIcon,
+	uiIcon,
+} from '@/lib/assets';
 import { statusKeyOf, type StatusKey } from '@/lib/engine/vocab';
+import { EGO_RANKS } from '@/lib/storage/schema';
 import { localeFilter, nameOf } from './shared';
 
 /**
@@ -120,16 +130,23 @@ export type SquadIdentity = SquadSinner['identities'][number];
 export type SquadEgo = SquadSinner['egos'][number];
 
 /**
- * 필터 축의 표시 이름.
+ * 필터 축의 표시 이름과 아이콘.
  *
- * **우리가 짓지 않는다**(00-product 3절 · ADR-03). 키워드 10종(상태 7 + 공격 타입 3)과 죄악
- * 7종은 게임이 표기를 갖고 있어 `keyword` · `sin_info` 로케일 행에서 온다.
+ * **이름을 우리가 짓지 않는다**(00-product 3절 · ADR-03). 키워드 10종(상태 7 + 공격 타입 3)과
+ * 죄악 7종은 게임이 표기를 갖고 있어 `keyword` · `sin_info` 로케일 행에서 온다.
  *
  * 상태 기믹 둘은 그 표에 없다 — 게임의 키워드 분류가 아니라 우리가 세운 축이기 때문이다
  * (`backlog/04-status-mechanics.md`). 대신 같은 이름의 상태 행이 실재하므로 거기서 가져온다
  * (`Bullet` 탄환 · `Protection` 보호). 어느 쪽에도 없으면 **축 id 를 그대로 노출한다.**
+ *
+ * **아이콘 경로도 여기서 푼다.** `lib/assets.ts` 는 파일 시스템 인덱스라 서버 전용이고,
+ * 편성 화면의 칸·모달·프로필은 클라이언트 컴포넌트다. 경로 해석을 한 모듈에 모은다는 제약
+ * (ADR-05 6절 제약 2)이 곧 "화면이 직접 부르지 않는다"는 뜻이 된다 — 푼 값을 실어 보낸다.
  */
 const MECHANIC_STATUS_ID: Record<string, StatusKey> = { Bullet: 'ammo', Protection: 'protection' };
+
+/** 인격 등급 1–3. 게임 표기 0 / 00 / 000 이 그대로 파일명이다. */
+const RARITIES = [1, 2, 3] as const;
 
 export async function listSquadAxes(locale: Locale) {
 	const [keywords, sins, mechanics] = await Promise.all([
@@ -142,22 +159,42 @@ export async function listSquadAxes(locale: Locale) {
 	]);
 
 	const labels: Record<string, string> = {};
+	const icons: Record<string, string | null> = {};
+
 	for (const k of keywords) {
 		const name = nameOf(k.texts, locale)?.name;
 		if (name) labels[k.id] = name;
+		// 키워드 표에 상태 7종과 공격 타입 3종이 함께 있고 아이콘 규칙도 같다.
+		icons[k.id] = keywordIcon(k.id);
 	}
 	for (const s of sins) {
 		const name = nameOf(s.texts, locale)?.name;
 		if (name) labels[s.sin] = name;
+		icons[s.sin] = sinIcon(s.sin);
 	}
 	for (const m of mechanics) {
 		const key = MECHANIC_STATUS_ID[m.id];
+		if (!key) continue;
 		const name = nameOf(m.texts, locale)?.name;
-		if (key && name) labels[key] = name;
+		if (name) labels[key] = name;
+		// 탄환·보호는 공용 아이콘 목록에 없다. 없는 것이 정상이라 화면이 글자로 낸다.
+		icons[key] = uiIcon(m.id);
 	}
 
-	// 죄악은 표시 순서가 게임에 정해져 있다(`sin_info.order`). 프로필의 행 순서가 그것을 따른다.
-	return { labels, sinOrder: sins.map((s) => s.sin) };
+	return {
+		labels,
+		icons,
+		// 죄악은 표시 순서가 게임에 정해져 있다(`sin_info.order`). 프로필의 행 순서가 그것을 따른다.
+		sinOrder: sins.map((s) => s.sin),
+		rarityIcons: Object.fromEntries(RARITIES.map((r) => [r, rarityIcon(r)])) as Record<
+			string,
+			string | null
+		>,
+		rankIcons: Object.fromEntries(EGO_RANKS.map((r) => [r, egoRankIcon(r)])) as Record<
+			string,
+			string | null
+		>,
+	};
 }
 
 export type SquadAxes = Awaited<ReturnType<typeof listSquadAxes>>;

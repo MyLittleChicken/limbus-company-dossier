@@ -1024,24 +1024,30 @@ a {
 	width: min(260px, 60vw);
 }
 
+/*
+	4열 × 3행이다. v1 은 6열 × 2행이었는데 그쪽은 프로필이 좁고 셸이 넓었다.
+	우리 셸은 1360px 상한이고(`--shell-max`) 레일 168 + 프로필 330 을 빼면 6열에서 칸이
+	121px 이 된다 — E.G.O 다섯 자리가 들어가지 않는다. 12는 4·3·2 로 모두 나누어떨어져
+	어느 단계에서도 마지막 행이 비지 않는다.
+*/
 .sgrid {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 	display: grid;
-	grid-template-columns: repeat(6, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 10px;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 700px) {
 	.sgrid {
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 580px) {
+@media (max-width: 430px) {
 	.sgrid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
@@ -1174,16 +1180,22 @@ a {
 	color: var(--text-dim);
 }
 
+/* 칸이 좁아져도 다섯 자리가 잘리지 않게 줄어든다 — 자리가 보이는 것이 이 줄의 목적이다. */
 .sslot-ego-cells {
 	display: flex;
 	gap: 4px;
+	flex: 1;
+	min-width: 0;
+	justify-content: flex-end;
 }
 
 /* 빈 등급은 공백이 아니라 자리로 보인다 — 결손이 아니라 부재다(05-ui-foundation 6.1). */
 .ecell {
 	width: 20px;
 	height: 20px;
-	flex: none;
+	min-width: 12px;
+	flex: 0 1 20px;
+	aspect-ratio: 1;
 	border-radius: 50%;
 	border: 1px dashed var(--border);
 	background: var(--bg-raised);
@@ -1423,7 +1435,11 @@ a {
 	background: var(--bg-raised);
 }
 
-.pickcard-port > img {
+/*
+	초상만 채운다. 희귀도 아이콘도 이 상자의 직계 자식이라 `> img` 로 잡으면 그것까지
+	100% 로 늘어나 초상을 덮는다 — 실제로 그렇게 났다. 클래스로 갈라 둔다.
+*/
+.pickcard-img {
 	position: absolute;
 	left: 50%;
 	top: 0;

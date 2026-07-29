@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { atkTypeIcon, egoRankIcon, keywordIcon, rarityIcon, sinIcon } from '@/lib/assets';
 import { EGO_RANKS, type EgoRank } from '@/lib/storage/schema';
 import type { SquadAxes, SquadEgo, SquadIdentity, SquadSinner } from '@/lib/queries/squad';
 
@@ -108,7 +107,8 @@ export function FormationPicker({
 	}, [onClose]);
 
 	const label = (v: string) => axes.labels[v] ?? v;
-	const name = axes.labels;
+	// 애셋 경로는 서버가 이미 풀어 실어 보냈다(`lib/queries/squad.ts` — 파일 시스템 인덱스라 서버 전용).
+	const icon = (v: string) => axes.icons[v] ?? null;
 
 	const identityAxes = useMemo((): Axis[] => {
 		const pool = sinner.identities;
@@ -116,23 +116,23 @@ export function FormationPicker({
 			{
 				key: 'kw',
 				label: ko ? '키워드' : 'Keyword',
-				options: axisOptions(pool, (i) => i.keywords, label, keywordIcon),
+				options: axisOptions(pool, (i) => i.keywords, label, icon),
 			},
 			{
 				key: 'sin',
 				label: ko ? '죄악' : 'Sin',
-				options: axisOptions(pool, (i) => i.skillSins, label, sinIcon, axes.sinOrder),
+				options: axisOptions(pool, (i) => i.skillSins, label, icon, axes.sinOrder),
 			},
 			{
 				key: 'atk',
 				label: ko ? '공격' : 'Attack',
-				options: axisOptions(pool, (i) => i.atkTypes, label, atkTypeIcon),
+				options: axisOptions(pool, (i) => i.atkTypes, label, icon),
 			},
 			// 키워드·소속과 나란한 독립 축이다. 섞지 않는다(05-ui-foundation 4.3).
 			{
 				key: 'mech',
 				label: ko ? '특수' : 'Special',
-				options: axisOptions(pool, (i) => i.mechanics, label, () => null),
+				options: axisOptions(pool, (i) => i.mechanics, label, icon),
 			},
 		].filter((a) => a.options.length > 0);
 	}, [sinner, axes, ko]);
@@ -156,22 +156,28 @@ export function FormationPicker({
 			{
 				key: 'rank',
 				label: ko ? '등급' : 'Rank',
-				options: axisOptions(pool, (e) => [e.rank], (v) => v, egoRankIcon, EGO_RANKS),
+				options: axisOptions(
+					pool,
+					(e) => [e.rank],
+					(v) => v,
+					(v) => axes.rankIcons[v] ?? null,
+					EGO_RANKS,
+				),
 			},
 			{
 				key: 'kw',
 				label: ko ? '키워드' : 'Keyword',
-				options: axisOptions(pool, (e) => e.keywords, label, keywordIcon),
+				options: axisOptions(pool, (e) => e.keywords, label, icon),
 			},
 			{
 				key: 'cost',
 				label: ko ? '비용' : 'Cost',
-				options: axisOptions(pool, (e) => e.costs.map((c) => c.sin), label, sinIcon, axes.sinOrder),
+				options: axisOptions(pool, (e) => e.costs.map((c) => c.sin), label, icon, axes.sinOrder),
 			},
 			{
 				key: 'atk',
 				label: ko ? '공격' : 'Attack',
-				options: axisOptions(pool, (e) => [e.awakenAtkType], label, atkTypeIcon),
+				options: axisOptions(pool, (e) => [e.awakenAtkType], label, icon),
 			},
 		].filter((a) => a.options.length > 0);
 	}, [sinner, axes, ko]);
@@ -327,6 +333,8 @@ export function FormationPicker({
 										identity={i}
 										on={identityId === i.id}
 										label={label}
+										icon={icon}
+										rarityIcon={axes.rarityIcons[String(i.rarity)] ?? null}
 										onPick={() => onIdentity(identityId === i.id ? null : i.id)}
 									/>
 								</li>
@@ -342,6 +350,8 @@ export function FormationPicker({
 										taken={egos[e.rank] !== undefined && egos[e.rank] !== e.id}
 										supply={supply}
 										label={label}
+										icon={icon}
+										rankIcon={axes.rankIcons[e.rank] ?? null}
 										ko={ko}
 										onPick={() => onEgo(e.rank, egos[e.rank] === e.id ? null : e.id)}
 									/>
@@ -376,20 +386,23 @@ function IdentityCard({
 	identity,
 	on,
 	label,
+	icon,
+	rarityIcon: rarity,
 	onPick,
 }: {
 	identity: SquadIdentity;
 	on: boolean;
 	label: (v: string) => string;
+	icon: (v: string) => string | null;
+	rarityIcon: string | null;
 	onPick: () => void;
 }) {
-	const rarity = rarityIcon(identity.rarity);
 	return (
 		<button type="button" className="pickcard" aria-pressed={on} onClick={onPick}>
 			<span className="pickcard-port">
 				{identity.image ? (
 					/* eslint-disable-next-line @next/next/no-img-element */
-					<img src={identity.image} alt="" loading="lazy" />
+					<img className="pickcard-img" src={identity.image} alt="" loading="lazy" />
 				) : (
 					<span className="pickcard-port-none" aria-hidden="true" />
 				)}
@@ -404,18 +417,18 @@ function IdentityCard({
 				<strong>{identity.text?.name ?? `#${identity.id}`}</strong>
 				<span className="card-meta">
 					{identity.keywords.map((k) => (
-						<AxisTag key={k} value={k} label={label} icon={keywordIcon(k)} />
+						<AxisTag key={k} value={k} label={label} icon={icon(k)} />
 					))}
 					{identity.mechanics.map((k) => (
-						<AxisTag key={k} value={k} label={label} icon={null} />
+						<AxisTag key={k} value={k} label={label} icon={icon(k)} />
 					))}
 				</span>
 				<span className="card-meta">
 					{[...new Set(identity.skillSins)].map((s) => (
-						<AxisTag key={s} value={s} label={label} icon={sinIcon(s)} />
+						<AxisTag key={s} value={s} label={label} icon={icon(s)} />
 					))}
 					{identity.atkTypes.map((t) => (
-						<AxisTag key={t} value={t} label={label} icon={atkTypeIcon(t)} />
+						<AxisTag key={t} value={t} label={label} icon={icon(t)} />
 					))}
 				</span>
 			</span>
@@ -429,6 +442,8 @@ function EgoCard({
 	taken,
 	supply,
 	label,
+	icon,
+	rankIcon: rank,
 	ko,
 	onPick,
 }: {
@@ -437,10 +452,11 @@ function EgoCard({
 	taken: boolean;
 	supply: Record<string, number>;
 	label: (v: string) => string;
+	icon: (v: string) => string | null;
+	rankIcon: string | null;
 	ko: boolean;
 	onPick: () => void;
 }) {
-	const rank = egoRankIcon(ego.rank);
 	return (
 		<button
 			type="button"
@@ -452,7 +468,7 @@ function EgoCard({
 			<span className="pickcard-port">
 				{ego.image ? (
 					/* eslint-disable-next-line @next/next/no-img-element */
-					<img src={ego.image} alt="" loading="lazy" />
+					<img className="pickcard-img" src={ego.image} alt="" loading="lazy" />
 				) : (
 					<span className="pickcard-port-none" aria-hidden="true" />
 				)}
@@ -469,23 +485,23 @@ function EgoCard({
 					) : (
 						<span className="tag">{ego.rank}</span>
 					)}
-					<AxisTag value={ego.awakenAffinity} label={label} icon={sinIcon(ego.awakenAffinity)} />
-					<AxisTag value={ego.awakenAtkType} label={label} icon={atkTypeIcon(ego.awakenAtkType)} />
+					<AxisTag value={ego.awakenAffinity} label={label} icon={icon(ego.awakenAffinity)} />
+					<AxisTag value={ego.awakenAtkType} label={label} icon={icon(ego.awakenAtkType)} />
 				</span>
 				{/* 팀의 죄악 공급보다 요구량이 많으면 표기한다. 색만으로 구분하지 않는다(05-ui 8절). */}
 				<span className="card-meta">
 					{ego.costs.map((c) => {
 						const short = (supply[c.sin] ?? 0) < c.amount;
-						const icon = sinIcon(c.sin);
+						const src = icon(c.sin);
 						return (
 							<span
 								key={c.sin}
 								className={short ? 'tag tag-icon cost-short' : 'tag tag-icon'}
 								title={`${label(c.sin)} ${c.amount} ${ko ? '필요' : 'needed'} · ${ko ? '공급' : 'supply'} ${supply[c.sin] ?? 0}`}
 							>
-								{icon ? (
+								{src ? (
 									/* eslint-disable-next-line @next/next/no-img-element */
-									<img src={icon} alt="" width={16} height={16} />
+									<img src={src} alt="" width={16} height={16} />
 								) : (
 									`${label(c.sin)} `
 								)}

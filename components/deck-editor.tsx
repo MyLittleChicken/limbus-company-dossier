@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { DeckCodeIo } from '@/components/deck-code-io';
 import { FormationPicker, type PickMode } from '@/components/formation-picker';
 import { FormationProfile, type ProfileInput } from '@/components/formation-profile';
-import { egoRankIcon, keywordIcon, rarityIcon } from '@/lib/assets';
 import { readDecks, writeDecks } from '@/lib/storage/decks';
 import { DECK_MAX, DEPLOY_MAX, EGO_RANKS, emptyDeck, type EgoRank, type StoredDeck } from '@/lib/storage/schema';
 import type { SquadAxes, SquadSinner } from '@/lib/queries/squad';
@@ -310,10 +309,10 @@ export function DeckEditor({
 													{identity && (
 														<>
 															<span className="sslot-rarity">
-																{rarityIcon(identity.rarity) ? (
+																{axes.rarityIcons[String(identity.rarity)] ? (
 																	/* eslint-disable-next-line @next/next/no-img-element */
 																	<img
-																		src={rarityIcon(identity.rarity) as string}
+																		src={axes.rarityIcons[String(identity.rarity)] as string}
 																		alt={'0'.repeat(identity.rarity)}
 																		width={18}
 																		height={12}
@@ -324,11 +323,11 @@ export function DeckEditor({
 															</span>
 															<span className="sslot-kw">
 																{identity.keywords.map((k) =>
-																	keywordIcon(k) ? (
+																	axes.icons[k] ? (
 																		/* eslint-disable-next-line @next/next/no-img-element */
 																		<img
 																			key={k}
-																			src={keywordIcon(k) as string}
+																			src={axes.icons[k] as string}
 																			alt={axes.labels[k] ?? k}
 																			title={axes.labels[k] ?? k}
 																			width={16}
@@ -373,7 +372,7 @@ export function DeckEditor({
 													{EGO_RANKS.map((rank) => {
 														const egoId = slot.egos[rank];
 														const ego = sinner?.egos.find((e) => e.id === egoId);
-														const rankSrc = egoRankIcon(rank);
+														const rankSrc = axes.rankIcons[rank] ?? null;
 														return (
 															<span
 																key={rank}

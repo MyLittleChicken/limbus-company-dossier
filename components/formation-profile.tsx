@@ -1,6 +1,5 @@
 'use client';
 
-import { atkTypeIcon, keywordIcon, sinIcon } from '@/lib/assets';
 import { Panel } from '@/components/ui';
 import type { SquadAxes } from '@/lib/queries/squad';
 
@@ -48,6 +47,8 @@ export function FormationProfile({
 	ko: boolean;
 }) {
 	const label = (v: string) => axes.labels[v] ?? v;
+	// 애셋 경로는 서버가 이미 풀어 실어 보냈다(`lib/queries/squad.ts` — 파일 시스템 인덱스라 서버 전용).
+	const icon = (v: string) => axes.icons[v] ?? null;
 	const keywords = sorted(profile.keywords);
 	const mechanics = sorted(profile.mechanics);
 	const atkTypes = sorted(profile.atkTypes);
@@ -81,14 +82,14 @@ export function FormationProfile({
 				{keywords.length === 0 ? (
 					<span className="absent">{ko ? '없음' : 'None'}</span>
 				) : (
-					<Bars rows={keywords} max={kwMax} label={label} icon={keywordIcon} />
+					<Bars rows={keywords} max={kwMax} label={label} icon={icon} />
 				)}
 
 				{/* 키워드와 섞지 않는다 — 인격이 공급하는 자원이고 축이 다르다. */}
 				{mechanics.length > 0 && (
 					<>
 						<h4>{ko ? '특수 · 인격 수' : 'Special'}</h4>
-						<Bars rows={mechanics} max={kwMax} label={label} icon={() => null} />
+						<Bars rows={mechanics} max={kwMax} label={label} icon={icon} />
 					</>
 				)}
 
@@ -96,7 +97,7 @@ export function FormationProfile({
 				{atkTypes.length === 0 ? (
 					<span className="absent">{ko ? '없음' : 'None'}</span>
 				) : (
-					<Bars rows={atkTypes} max={atkMax} label={label} icon={atkTypeIcon} />
+					<Bars rows={atkTypes} max={atkMax} label={label} icon={icon} />
 				)}
 
 				<h4>{ko ? '죄악 자원 · 공급(스킬) / 수요(E.G.O)' : 'Sin — supply / demand'}</h4>
@@ -107,13 +108,13 @@ export function FormationProfile({
 						{sins.map((s) => {
 							const sup = profile.sinSupply[s] ?? 0;
 							const dem = profile.sinDemand[s] ?? 0;
-							const icon = sinIcon(s);
+							const src = icon(s);
 							return (
 								<li key={s} className={dem > sup ? 'res-short' : undefined}>
 									<span className="dist-key">
-										{icon ? (
+										{src ? (
 											/* eslint-disable-next-line @next/next/no-img-element */
-											<img src={icon} alt="" width={14} height={14} />
+											<img src={src} alt="" width={14} height={14} />
 										) : null}
 										{label(s)}
 									</span>
