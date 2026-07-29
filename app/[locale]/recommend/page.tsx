@@ -30,13 +30,18 @@ export default async function RecommendPage({
 
 	const floor = Number(one(sp['floor']) ?? '3');
 	const difficulty = (one(sp['difficulty']) === 'normal' ? 'normal' : 'hard') as Difficulty;
-	const ownedIds = (one(sp['owned']) ?? '')
-		.split(',')
-		.map(Number)
-		.filter((n) => Number.isInteger(n) && n > 0);
+	const idList = (key: string): number[] =>
+		(one(sp[key]) ?? '')
+			.split(',')
+			.map(Number)
+			.filter((n) => Number.isInteger(n) && n > 0);
+	const ownedIds = idList('owned');
+	// 편성과 출전이 갈리는지 여기서 열어 둔다. 비우면 편성 전체가 출전이라 지금과 동작이 같다.
+	const deployedIds = idList('deployed');
 
 	const rec = await recommendForDeck(locale, {
 		identityIds: HWAJIN_DECK,
+		deployedIds,
 		floor: Number.isFinite(floor) && floor >= 1 && floor <= 15 ? floor : 3,
 		difficulty,
 		ownedIds,
@@ -46,6 +51,10 @@ export default async function RecommendPage({
 	const supply = Object.entries(rec.feature.statusSupply).sort((a, b) => b[1] - a[1]);
 	const sins = Object.entries(rec.feature.sinSupply).sort((a, b) => b[1] - a[1]);
 	const affil = Object.entries(rec.feature.affiliation.deployed).sort((a, b) => b[1] - a[1]);
+	// 질의가 준 id 중 실제로 덱에 있는 것만 센다 — 없는 id 는 recommendForDeck 이 이미 버린다.
+	const deployedCount = deployedIds.length === 0
+		? rec.deck.length
+		: rec.deck.filter((i) => deployedIds.includes(i.id)).length;
 
 	const floors = [1, 2, 3, 4, 5, 7, 12];
 
@@ -187,7 +196,19 @@ export default async function RecommendPage({
 						</ul>
 					</Panel>
 
-					<Panel title={ko ? '소속 (조건 판정)' : 'Affiliations'}>
+					{/* 조건 판정은 편성이 아니라 출전을 본다 — 어느 범위로 셌는지 밝힌다. */}
+					<Panel
+						title={ko ? '소속 (조건 판정)' : 'Affiliations'}
+						hint={
+							deployedCount === rec.deck.length
+								? ko
+									? `출전 ${deployedCount} (편성 전체)`
+									: `${deployedCount} deployed (all)`
+								: ko
+									? `출전 ${deployedCount}/${rec.deck.length}`
+									: `${deployedCount}/${rec.deck.length} deployed`
+						}
+					>
 						<ul className="inline-list">
 							{affil.map(([k, v]) => (
 								<li key={k} className="tag">

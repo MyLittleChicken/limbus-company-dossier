@@ -35,6 +35,8 @@ export async function recommendForDeck(
 	locale: Locale,
 	options: {
 		identityIds?: number[];
+		/** 출전 인격 id. 비우면 편성 전체를 출전으로 본다(`RunState.deployed` 규약) */
+		deployedIds?: number[];
 		floor?: number;
 		difficulty?: Difficulty;
 		ownedIds?: number[];
@@ -55,7 +57,12 @@ export async function recommendForDeck(
 		.map((id) => giftById.get(id))
 		.filter((g): g is NonNullable<typeof g> => g !== undefined);
 
-	const state: RunState = { deck, deployed: deck, owned, floor };
+	// 편성 12 와 출전 7 은 다르다(06 2절 4항). 지금까지 호출부가 둘을 같게 두어
+	// 소속 조건의 판정 범위 구분이 죽어 있었다 — 인격을 다시 질의하지 않고 이미 받아 온
+	// deck 에서 고른다.
+	const deployedIds = new Set(options.deployedIds ?? []);
+	const deployed = deployedIds.size > 0 ? deck.filter((i) => deployedIds.has(i.id)) : deck;
+	const state: RunState = { deck, deployed, owned, floor };
 	const packIds = await packIdsForFloor(difficulty, floor);
 	const candidates = await loadPackCandidates(locale, giftById, packIds);
 

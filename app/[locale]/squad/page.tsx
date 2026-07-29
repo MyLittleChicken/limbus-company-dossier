@@ -4,6 +4,7 @@ import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { listSquad } from '@/lib/queries/squad';
 import { Icon, IconOnly, IconTag, Name, Nothing, SecLabel } from '@/components/ui';
+import { DeckEditor } from '@/components/deck-editor';
 import { egoRankIcon, rarityIcon, sinIcon } from '@/lib/assets';
 
 /**
@@ -38,6 +39,8 @@ export default async function SquadPage({ params }: { params: Promise<{ locale: 
 					? 'E.G.O는 인격이 아니라 수감자에 붙는다. 그래서 인격 상세에 싣지 않고 이 화면에서 함께 본다.'
 					: 'E.G.O belong to a Sinner, not to an Identity. They are shown together here rather than on the identity page.'}
 			</p>
+
+			<DeckEditor squad={sinners} ko={ko} />
 
 			{sinners.map((s) => (
 				<section key={s.id} className="squad-row">
