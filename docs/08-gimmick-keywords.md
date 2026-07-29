@@ -91,29 +91,56 @@
 **mj `keywords` 에 있는데 상태 매핑으로는 안 잡히던 인격이 3건에서 0건이 된다.** 셋 다 출혈이며,
 근거 상태가 홍행화·못 계열이라 이름만으로는 출혈인 줄 알 수 없는 것들이다.
 
-## 4. 인격의 축 — 세 출처가 다른 말을 한다
+## 4. 원본은 축을 3층으로 나눠 놓았다
 
-| 출처 | 필드 | 담는 것 |
+**세 출처가 다른 말을 하는 것이 아니라, 서로 다른 층을 담는다.** 이것을 혼동하면
+"어느 쪽이 맞나"라는 잘못된 질문에 빠진다.
+
+| 층 | 필드 | 담는 것 |
 | --- | --- | --- |
-| `limbus-data-mj/identities.json` | `keywords` | **S1–S3 스킬이 직접 부여하는 기믹만.** 값 7종 고정 |
-| `limbus-assets/identities.json` | `skillKeywordList` | mj `keywords` 와 같은 개념. 표기만 대문자 |
-| `limbus-assets/identities.json` | `statuses` | **인격이 다루는 상태 전부.** 기믹 + 버프/디버프 + 고유 상태 |
+| **① 기본** | mj `keywords` · assets `skillKeywordList` | S1–S3 스킬이 **직접 부여**하는 기믹. 값 7종 고정 |
+| **② 조건부** | mj `egoKeywords` · `altKeywords` · assets `identity_keyword_modifiers.json` | E.G.O·기프트·변신 등 **조합으로 붙는** 기믹 |
+| **③ 접점** | assets `statuses` | 이 인격이 **다루는 상태 전부**. 기믹 + 버프/디버프 + 고유 상태. 조건부 경유분도 섞여 있다 |
 
-`keywords` ↔ `skillKeywordList` 는 대소문자만 다르다(`burn` vs `Burn`). 실제로 다른 것은
-`statuses` 이며, 이것이 우리 `identity_status` 의 원천이다.
-
-### 어긋나는 지점 (184건 전수)
+인격 `10110` 으로 세 층을 한 번에 보면 이렇다.
 
 ```
-완전 일치                      142건
-statuses 쪽이 넓음              40건
-mj 에만 있는 축이 남는 인격        3건   → categoryKeywordList 병합으로 0건
+① mj.keywords              ["sinking"]                    침잠
+① assets.skillKeywordList  ["Sinking"]                    〃  (표기만 대문자)
+② mj.egoKeywords           {"20109": ["tremor"]}          진동 ← E.G.O 20109
+③ assets.statuses          ["Agility","Bullet","BulletLament","ReloadLament",
+                            "Sinking","SinkingWhite","Vibration"]
+                                                          침잠 · 진동 · 탄환 · 기타
+```
+
+**①과 ②는 나뉘어 있고 ③만 뭉쳐 있다.** `Vibration` 은 ③에만 있으며, 그것이 조건부라는
+사실은 ②에서만 알 수 있다.
+
+### 우리 파이프라인은 ③만 적재한다
+
+```
+척추   ① keywords · ② egoKeywords · altKeywords · assets modifiers
+변환   src/entities/identities.ts 가 ①②를 전부 버린다
+적재   identity_status ← assets.statuses (③) 하나뿐
+```
+
+그 결과 엔진이 축을 계산하면 기본과 조건부가 한 덩어리로 나온다. **이 문서의 목표는
+①②③을 각각 적재해 되찾는 것이다.**
+
+### ①과 ③의 차이 (184건 전수)
+
+같은 층이 아니므로 "어긋난다"가 아니라 "③이 더 넓다"가 정확한 서술이다.
+
+```
+①과 ③이 같음                   142건
+③이 더 넓음                     40건
+①에만 있는 축이 남던 인격         3건   → categoryKeywordList 병합으로 0건
 ```
 
 세 번째 줄은 두 번째와 겹친다 — `10504` 는 `protection` 을 얻으면서 동시에 `bleed` 를 놓쳐
-양방향으로 어긋난다.
+양방향으로 어긋났다.
 
-넓어지는 40건의 내역은 자원 축 30건(`protection` 17 · `ammo` 13)과 7종 기믹 16건이다.
+③이 넓어지는 40건의 내역은 자원 축 30건(`protection` 17 · `ammo` 13)과 7종 기믹 16건이다.
 
 7종 기믹이 늘어나는 16건:
 
@@ -136,8 +163,9 @@ mj 에만 있는 축이 남는 인격        3건   → categoryKeywordList 병�
 | `10715` 중지 작은 형님 (히스클리프) | `burn` `bleed` | `tremor` | Vibration · VibrationExplosion |
 | `10916` 거미집 엄지 아비 (로쟈) | `burn` `tremor` | `poise` | Breath |
 
-이 16건이 전부 조건부인 것은 아니다. `Breath` 하나만으로 `poise` 가 붙는 사례(6건)는
-호흡을 **소량 다루는** 것에 가깝다. 조건부로 확인된 것은 아래 5절의 4건뿐이다.
+**이 16건이 전부 조건부인 것은 아니다.** ③은 조건부 경유분과 부수 접점을 함께 담는다.
+`Breath` 하나만으로 `poise` 가 붙는 사례(6건)는 호흡을 소량 다루는 것에 가깝다.
+조건부로 확인된 것은 5절의 4건뿐이며, 그 판정은 ③이 아니라 ②에서만 나온다.
 
 ## 5. 조합 축 — 인격 + E.G.O · 인격 + 기프트
 
@@ -154,10 +182,9 @@ mj 에만 있는 축이 남는 인격        3건   → categoryKeywordList 병�
                           "VibrationExplosion","WideAreaRampage"]
 ```
 
-`Laceration` → `bleed`, `Vibration` → `tremor`. **조합으로 생기는 축이 E.G.O 쪽 데이터에서
-그대로 나온다.**
+`Laceration` → `bleed`, `Vibration` → `tremor`. 조합으로 생기는 축이 E.G.O 쪽에도 나타난다.
 
-이 데이터는 **이미 우리 DB에 있다**.
+이 데이터는 이미 우리 DB에 있다.
 
 ```
 스키마   model EgoStatus { egoId, statusId }     prisma/schema.prisma:432
@@ -165,7 +192,44 @@ mj 에만 있는 축이 남는 인격        3건   → categoryKeywordList 병�
 엔진     lib/engine/load.ts:20 — 인격 statuses 만 읽는다. ego_status 미사용
 ```
 
-즉 인격+E.G.O 조합 축은 **새 데이터 없이 조인 한 번**으로 얻는다.
+**다만 이것으로 조건부 조합을 재현할 수는 없다.** 초안에서 "조인 한 번이면 나온다"고 적었으나
+실측이 반증했다.
+
+```
+10110 엄숙한 애도 이상
+  인격 접점 축   {ammo, sinking, tremor}    ← 진동이 이미 들어 있다
+  20109 축       {ammo, sinking, tremor}
+  차집합          {}                         ← 조건부가 사라진다
+
+10508 검계 우두머리 뫼르소
+  인격 접점 축   {poise, bleed}             ← 출혈이 이미 들어 있다
+  20509 축       {poise, bleed}
+  차집합          {}
+```
+
+조건부 상태가 **인격의 `statuses` 에 이미 섞여 있어** 차집합이 빈다. 반대로 무관한 조합은
+대량으로 잡힌다.
+
+```
+인격 × 같은 수감자 E.G.O      1,687쌍
+축이 느는 조합                1,293쌍 (76.6%)
+
+10508 에 축을 더하는 E.G.O    20503 집행 +보호·진동 · 20504 카포테 +화상·진동 ·
+                              20505 후회 +진동 · 20506 전기울음 +파열·충전 …
+```
+
+착영휘도는 안 나오고 엉뚱한 7개가 나온다. **신호 대 잡음이 뒤집힌다.**
+
+두 개념을 갈라야 한다.
+
+| 개념 | 뜻 | 계산 |
+| --- | --- | --- |
+| **정체성 축** | 이 인격은 무슨 인격인가 | 기본 축 + 조건부 축. 조건부는 **큐레이션에서만** 온다 |
+| **공급 축** | 이 편성이 실제로 무슨 기믹을 뿌리나 | 접점 축 ∪ 장착 E.G.O 축. 조인으로 계산 |
+
+`20504 카포테`를 낀 검계 우두머리는 **공급 축**에 화상·진동이 드는 것이 맞다 — E.G.O 스킬이
+실제로 그 상태를 준다. 그러나 그 인격이 화상 인격이 되지는 않는다. 정체성을 바꾸는 것은
+착영휘도뿐이며, 그 사실은 큐레이션 파일에만 있다(5.2).
 
 ### 5.2 조건의 큐레이션은 두 파일에만 있다
 
@@ -296,7 +360,19 @@ enum Gimmick {
   ammo  protection  bloodfeast
 }
 
-/// 상태가 어느 축에 속하는가.
+/// ① 기본 축. 원본 keywords 를 그대로 담는다. 7종 기믹만 표현된다.
+model IdentityKeyword {
+  identityId Int
+  gimmick    Gimmick
+  /// 그 기믹을 보유한 스킬 슬롯. 원본 keywordSkills. 예: [1,2,3]
+  skillSlots Int[]
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, gimmick])
+  @@map("identity_keyword")
+}
+
+/// ③ 접점 축의 재료. 상태가 어느 축에 속하는가.
 /// 원본 categoryKeywordList 와 이름 규칙에서 만들고, 근거를 남긴다.
 model StatusGimmick {
   statusId String
@@ -309,7 +385,7 @@ model StatusGimmick {
   @@map("status_gimmick")
 }
 
-/// 인격의 축이 특정 조합에서만 생기는 경우.
+/// ② 조건부 축. 인격의 축이 특정 조합에서만 생기는 경우.
 model IdentityComboGimmick {
   identityId    Int
   gimmick       Gimmick
@@ -329,39 +405,62 @@ model IdentityComboGimmick {
 ### 축을 얻는 방법 — 저장하지 않고 조인한다
 
 ```
-인격 기본 축   = (identity_status ⋈ status_gimmick) − identity_combo_gimmick.gimmick
-인격 조건부 축 = identity_combo_gimmick
-E.G.O 축      = ego_status ⋈ status_gimmick
-편성 실축      = 기본 축 ∪ 장착 E.G.O 축 ∪ 조건 충족한 조건부 축
+① 기본 축     = identity_keyword                        (원본 keywords 를 적재)
+② 조건부 축   = identity_combo_gimmick                  (큐레이션 합집합 + 대체 스킬)
+③ 접점 축     = identity_status ⋈ status_gimmick        (지금 유일하게 있는 것)
+
+정체성 축     = ① + ②                                   화면·필터·"무슨 인격인가"
+공급 축       = ③ ∪ (장착 E.G.O 의 ego_status ⋈ status_gimmick)
+                                                        편성이 실제로 뿌리는 기믹
 ```
 
-검증:
+**③에서 ①②를 빼려 하지 않는다.** 조건부가 ③에 이미 섞여 있어 되찾을 수 없다(5.1).
+①과 ②를 원본에서 각각 적재하는 것이 유일한 길이다.
+
+검증 — 원본 ①②를 그대로 읽었을 때:
 
 ```
 10508 검계 우두머리
-  identity_status → {poise, bleed}      combo → bleed ← ego 20509
-  기본 {poise}   조건부 {bleed ← 착영휘도}
+  ① keywords ["poise"]                 ② bleed ← ego 20509 착영휘도
+  정체성 = 호흡 + 출혈(착영휘도 장착 시)          ③ {poise, bleed}
 
 10110 엄숙한 애도 이상
-  identity_status → {ammo, sinking, tremor}   combo → tremor ← ego 20109
-  기본 {ammo, sinking}   조건부 {tremor ← 엄숙한 애도}
+  ① keywords ["sinking"]               ② tremor ← ego 20109 엄숙한 애도
+  정체성 = 침잠 + 진동(엄숙한 애도 장착 시)       ③ {ammo, sinking, tremor}
 
 11009 새벽 사무소 해결사
-  identity_status → {burn}   combo → tremor ← gift 9282 (allowInSolver=false)
-  기본 {burn}   조건부 {tremor ← 날개 모양 양초}
+  ① keywords ["burn"]                  ② tremor ← gift 9282 날개 모양 양초
+  정체성 = 화상 + 진동(양초 획득 시)              ③ {burn}
+
+10312 사랑과 증오의 이름으로
+  ① keywords ["rupture","sinking","charge"]   ② sinking ← 대체 스킬(변신)
+  정체성 = 파열·충전, 변신 시 파열 대신 침잠       ③ {rupture, charge, sinking}
 ```
+
+**①이 표현하지 못하는 것이 하나 있다** — 자원 축이다. mj `keywords` 는 7종 기믹만 담아
+`ammo`(탄환) · `protection`(보호) · `bloodfeast`(혈석)를 구조적으로 모른다.
+`10110` 이 탄환을 소모하는 인격이라는 사실은 ③에만 있다.
+
+```
+정체성 축 = ① ∪ ② ∪ (③ 중 자원 축)
+```
+
+자원 축은 ③에서만 오므로 조건부 여부를 가릴 수 없다. 현재 실측에서 자원 축이 조건부인
+사례는 없다(5절 4건은 전부 7종 기믹).
 
 ### 바뀌는 것
 
 | | 지금 | 바뀐 뒤 |
 | --- | --- | --- |
+| 적재하는 층 | ③ 접점만 | ① 기본 · ② 조건부 · ③ 접점 |
 | 상태 → 축 | 코드 정규식 10줄, 커버 4.7% | 데이터 테이블, `categoryKeywordList` 병합 |
-| 인격 축 | 조건부가 기본에 섞임 | 기본 / 조건부 분리 |
-| E.G.O 축 | 적재돼 있으나 미사용 | 조인으로 사용 |
+| 인격 축 | 조건부가 기본에 섞여 되찾을 수 없음 | 원본에서 각각 읽어 분리 |
+| E.G.O 축 | 적재돼 있으나 미사용 | **공급 축** 계산에 사용 (정체성 판정에는 안 씀) |
 | 조건 근거 | 없음 | "착영휘도 장착 시"를 화면에 표시 가능 |
 
 기존 테이블은 삭제하지 않는다. `identity_status` · `ego_status` 는 사실 데이터라 그대로 둔다.
-추가되는 것은 테이블 2개와 엔진의 조인 변경이다.
+추가되는 것은 테이블 3개(`identity_keyword` · `status_gimmick` · `identity_combo_gimmick`)와
+엔진의 조인 변경이다.
 
 ## 8. 미해결
 
