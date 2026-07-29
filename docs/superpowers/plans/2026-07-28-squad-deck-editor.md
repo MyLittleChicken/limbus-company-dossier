@@ -34,6 +34,7 @@
 | `components/deck-editor.tsx` | `'use client'` 편성 편집기 |
 | `components/deck-code-io.tsx` | `'use client'` 덱 코드 입출력 |
 | `app/[locale]/squad/page.tsx` | 기존 조회 유지 + 편집기 마운트 |
+| `lib/queries/recommend.ts` | 편성과 출전을 나눠 받는다 (Task 9) |
 | `package.json` | `test` 스크립트 추가 |
 | `.github/workflows/ci.yml` | 테스트 단계 추가 |
 
@@ -137,13 +138,17 @@ Expected: PASS — tests 4 / pass 4
 
 - [ ] **Step 5: npm script 와 CI 를 잇는다**
 
+**엔진 브랜치(`feat/engine-deck-feature`)도 같은 배선을 한다.** `package.json` 의 같은 자리와 `ci.yml` 의 같은 단계라 그대로 두면 충돌한다. 먼저 올라가는 쪽이 배선을 가져가고 나중 쪽은 리베이스해 이 Task 를 건너뛴다 — 어느 쪽이 먼저인지는 착수 시점에 확인한다.
+
 `package.json` scripts 에 추가 (`typecheck` 바로 아래):
 
 ```json
-"test": "tsx --test \"lib/**/*.test.ts\"",
+"test": "tsx --env-file-if-exists=.env --test \"lib/**/*.test.ts\"",
 ```
 
-`.github/workflows/ci.yml` 의 `타입 검사` 단계 **앞**에 삽입:
+`--env-file-if-exists` 를 붙이는 이유는 다른 `tsx` 스크립트와 같다(커밋 16776cd). 이 계획의 테스트는 데이터베이스를 쓰지 않지만 글롭이 `lib/**` 전체라, 엔진 브랜치가 합류하면 `lib/db` 를 물고 오는 테스트가 들어오고 그때 `PrismaClient` 생성자가 `DATABASE_URL` 을 요구한다.
+
+`.github/workflows/ci.yml` 의 `타입 검사` 단계 **앞**에 삽입한다. `Prisma Client 생성` 뒤여야 한다 — 생성된 타입 없이는 `lib/**` 임포트가 풀리지 않는다.
 
 ```yaml
       # 순수 함수 계층(저장·덱 코드)의 단위 테스트. 데이터베이스도 브라우저도 쓰지 않는다.
@@ -276,7 +281,22 @@ export interface StoredRun {
 	startedAt: string;
 }
 
-export function emptyDeck(name: string, id = crypto.randomUUID()): StoredDeck {
+/**
+ * 덱 id.
+ *
+ * `crypto.randomUUID` 는 브라우저에서 **보안 컨텍스트**(HTTPS · localhost)에서만 있다.
+ * 배포 환경이 아직 미결이라(adr/05 3.5) 평문 HTTP 로 서비스될 가능성을 배제할 수 없고,
+ * 그때 `emptyDeck` 이 던지면 편성 화면이 통째로 죽는다. 없으면 물러선다 — id 는 우리
+ * 저장소 안에서만 유일하면 되고 암호학적 성질이 필요하지 않다.
+ */
+function newId(): string {
+	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+		return crypto.randomUUID();
+	}
+	return `deck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function emptyDeck(name: string, id = newId()): StoredDeck {
 	return {
 		id,
 		name,
@@ -535,6 +555,12 @@ test('쓰고 읽으면 같은 값', () => {
 test('구간을 넘는 값은 거부한다', () => {
 	assert.throws(() => writeField('0000', 1, 2, 4));
 });
+
+test('문자열 밖을 쓰려 하면 거부한다', () => {
+	// 조용히 짧아지면 뒤 블록이 통째로 밀린다
+	assert.throws(() => writeField('0000', 3, 6, 0));
+	assert.throws(() => writeField('0000', 0, 2, 0));
+});
 ```
 
 - [ ] **Step 2: 실패를 확인한다**
@@ -576,6 +602,11 @@ export function readField(bits: string, start1: number, end1: number): number {
 }
 
 export function writeField(bits: string, start1: number, end1: number, value: number): string {
+	// 범위를 넘겨도 slice 는 던지지 않고 짧은 문자열을 만든다. 길이가 조용히 바뀌면
+	// 그 뒤 블록이 통째로 밀리고 왕복 테스트만 통과하는 코드가 된다. 여기서 막는다.
+	if (start1 < 1 || end1 > bits.length || start1 > end1) {
+		throw new Error(`구간이 범위를 벗어난다: ${start1}-${end1} (길이 ${bits.length})`);
+	}
 	const width = end1 - start1 + 1;
 	if (value < 0 || value >= 2 ** width) {
 		throw new Error(`값 ${value} 는 ${width}비트에 담기지 않는다`);
@@ -628,10 +659,16 @@ test('560 = 46 × 12 + 8', () => {
 	assert.equal(BLOCK_BITS * 12 + 8, TOTAL_BITS);
 });
 
-test('필드 폭의 합이 블록 크기와 맞는다', () => {
-	const spans = Object.values(FIELD).map(([s, e]) => e - s + 1);
-	// 1비트는 미사용으로 남긴다
-	assert.equal(spans.reduce((a, b) => a + b, 0) + 1, BLOCK_BITS);
+test('필드가 겹치지 않고 블록 안에 들어간다', () => {
+	// 폭의 합(45)에 미사용 1비트를 더해 46이다. 합 자체가 배치의 근거는 아니며,
+	// **겹치지 않는 것**이 근거다 — 겹치면 한 필드를 쓸 때 다른 필드가 망가진다.
+	const spans = [...Object.values(FIELD)].sort((a, b) => a[0] - b[0]);
+	assert.equal(spans[0]![0] >= 1, true);
+	assert.equal(spans.at(-1)![1] <= BLOCK_BITS, true);
+	for (let i = 1; i < spans.length; i += 1) {
+		assert.equal(spans[i]![0] > spans[i - 1]![1], true, `${i}번째 필드가 앞 필드와 겹친다`);
+	}
+	assert.equal(spans.reduce((a, [s, e]) => a + e - s + 1, 0), 45);
 });
 
 test('id 에서 수감자와 순번을 뽑는다', () => {
@@ -702,11 +739,17 @@ import { EGO_RANKS, type EgoRank } from '@/lib/storage/schema';
  * 앞의 빈 비트로 넘어갈 것이라고 추정만 해뒀다.
  *
  * 그래서 앞의 빈 자리를 포함한 **넓은 필드**로 읽고 쓴다. 값 1–15 는 좁게 볼 때와 결과가
- * 같으므로 기존 코드를 해석하는 데 문제가 없고, 16 이상도 담긴다. 폭의 합이 정확히 46이
- * 되는 것이 이 배치의 근거다(테스트가 그 항등식을 잡는다).
+ * 같으므로 기존 코드를 해석하는 데 문제가 없고, 16 이상도 담긴다.
  *
- * **쓰기가 인게임에서 동작하는지는 확인하지 못했다**(07-recommendation-system 7.3).
- * 실물 덱 코드가 확보되면 검증한다.
+ * **다만 이 배치는 가이드의 빈 자리를 앞 필드에 붙인 것일 뿐 확인된 것이 아니다.**
+ * 폭의 합은 45이고 1비트가 남는다. 남는 자리를 `identity` 에 붙여 `[1, 8]` 로 잡으면
+ * 합이 46이 되지만 그쪽이 더 옳다는 근거도 없다 — 어느 쪽이든 값이 15 이하인 동안은
+ * 결과가 같고, 16 이상에서만 갈린다. 실물 코드로만 정해진다.
+ *
+ * **읽기가 이 해석에 기대는 전제가 하나 있다.** 넓게 읽어도 값이 같으려면 가이드가
+ * 비워둔 자리(1 · 13–15 · 20–22 · 27–29 · 34–36)가 실제 코드에서도 0이어야 한다.
+ * 거기에 다른 것이 들어 있으면 인격·E.G.O 인덱스를 잘못 읽는다. 이것도 실물 코드로만
+ * 확인된다(07-recommendation-system 7.4).
  */
 export const BLOCK_BITS = 46;
 export const TOTAL_BITS = 560;
@@ -862,10 +905,20 @@ export function fromBase64(text: string): Uint8Array {
 	return Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 }
 
+/**
+ * 스트림 하나를 통과시킨다.
+ *
+ * **쓰기 쪽 프로미스를 버리면 안 된다.** 잘못된 gzip 을 넣으면 스트림이 에러 나고
+ * `write()`·`close()` 가 거부되는데, 핸들러가 없으면 unhandled rejection 이 되어
+ * **읽기 쪽에서 정상적으로 잡은 뒤에 프로세스가 죽는다.** 실측으로 확인했다 —
+ * `void writer.write(...)` 로 두면 `Result` 는 제대로 돌아오고 그 다음 틱에 종료 코드 1.
+ * 읽기 쪽이 같은 에러를 던져 주므로 쓰기 쪽 거부는 삼켜도 정보가 사라지지 않는다.
+ */
 async function through(stream: TransformStream<Uint8Array, Uint8Array>, bytes: Uint8Array) {
 	const writer = stream.writable.getWriter();
-	void writer.write(bytes);
-	void writer.close();
+	const swallow = () => {};
+	writer.write(bytes).catch(swallow);
+	writer.close().catch(swallow);
 	return new Uint8Array(await new Response(stream.readable).arrayBuffer());
 }
 
@@ -985,9 +1038,21 @@ test('16 이상 인격을 미검증으로 보고한다', () => {
 	assert.deepEqual(unverifiedIndexes(d), [11216]);
 });
 
-test('쓰레기 코드를 실패로 알린다', async () => {
-	assert.equal((await decodeDeckCode('!!!not base64!!!')).ok, false);
-	assert.equal((await decodeDeckCode('aGVsbG8=')).ok, false); // base64 는 되지만 gzip 이 아니다
+test('쓰레기 코드를 어느 단계에서 실패했는지와 함께 알린다', async () => {
+	const notB64 = await decodeDeckCode('!!!not base64!!!');
+	assert.equal(notB64.ok, false);
+	if (!notB64.ok) assert.match(notB64.reason, /base64/);
+
+	const notGzip = await decodeDeckCode('aGVsbG8='); // base64 는 되지만 gzip 이 아니다
+	assert.equal(notGzip.ok, false);
+	if (!notGzip.ok) assert.match(notGzip.reason, /gzip/);
+});
+
+test('디코드가 실패해도 프로세스가 죽지 않는다', async () => {
+	// 스트림 쓰기 쪽 거부를 버리면 여기서 Result 는 정상인데 다음 틱에 프로세스가 죽는다.
+	// 이 테스트는 assert 로 잡히지 않고 **러너가 종료 코드 1 로 죽는 것**으로 드러난다.
+	await decodeDeckCode('aGVsbG8=');
+	await new Promise((r) => setTimeout(r, 50));
 });
 ```
 
@@ -1027,14 +1092,35 @@ export const HEADER = 'H4sIAAAAAAAACh';
 const utf8 = new TextEncoder();
 const decodeUtf8 = new TextDecoder();
 
+/**
+ * 단계마다 따로 잡는다.
+ *
+ * `07-recommendation-system.md` 8절이 **어느 단계에서 실패했는지** 표기하라고 정했다.
+ * 하나의 try 로 묶으면 셋이 같은 문구가 되고, 게다가 `atob` 과 `DecompressionStream` 의
+ * 에러는 `message` 가 비어 있어 사용자에게 아무 정보도 남지 않는다.
+ */
 export async function decodeDeckCode(code: string): Promise<Result<string>> {
+	let outer: Uint8Array;
+	try {
+		outer = fromBase64(code.trim());
+	} catch {
+		return err('덱 코드가 base64 가 아니다');
+	}
+
+	let inflated: Uint8Array;
+	try {
+		inflated = await gunzip(outer);
+	} catch {
+		return err('덱 코드가 gzip 으로 풀리지 않는다');
+	}
+
 	let bits: string;
 	try {
-		const inflated = await gunzip(fromBase64(code));
 		bits = bytesToBits(fromBase64(decodeUtf8.decode(inflated)));
-	} catch (cause) {
-		return err(`덱 코드를 풀지 못했다: ${(cause as Error).message}`);
+	} catch {
+		return err('압축을 푼 내용이 base64 가 아니다');
 	}
+
 	if (bits.length !== TOTAL_BITS) {
 		return err(`비트 길이가 ${TOTAL_BITS} 이 아니다: ${bits.length}`);
 	}
@@ -1179,14 +1265,44 @@ import type { SquadSinner } from '@/lib/queries/squad';
  * E.G.O 는 등급당 하나이며 **지금은 추천 점수에 반영되지 않는다.** 화면에 그 사실을 적는다.
  * 적지 않으면 입력해 두고 왜 안 바뀌냐는 오해가 남는다(07-recommendation-system 5.1).
  */
+/**
+ * 이 칸이 가리키는 것 중 우리 데이터에 없는 id.
+ *
+ * 저장분과 덱 코드는 우리 데이터베이스를 거치지 않고 들어온다. 패치 전에 만든 덱 코드나
+ * 아직 적재되지 않은 인격을 가리킬 수 있고, 그때 화면이 조용히 빈칸으로 보이면 안 된다.
+ */
+function missingRefs(slot: StoredDeck['slots'][number], sinner: SquadSinner | undefined): string[] {
+	const out: string[] = [];
+	if (slot.identityId !== null && !sinner?.identities.some((i) => i.id === slot.identityId)) {
+		out.push(`인격 ${slot.identityId}`);
+	}
+	for (const rank of EGO_RANKS) {
+		const id = slot.egos[rank];
+		if (id !== undefined && !sinner?.egos.some((e) => e.id === id)) out.push(`${rank} ${id}`);
+	}
+	return out;
+}
+
 export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean }) {
 	const [decks, setDecks] = useState<StoredDeck[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
+	/**
+	 * 읽기가 실패했는가.
+	 *
+	 * **이 상태에서는 쓰지 않는다.** 읽기에 실패하면 `decks` 는 빈 배열인데, 그 상태로
+	 * 「새 덱」을 누르면 `writeDecks` 가 `limbus:decks` 를 통째로 덮어 **읽지 못한 저장분이
+	 * 그 순간 사라진다.** 저장소 계층이 "읽기가 실패해도 지우지 않는다"를 지켜도 화면이
+	 * 덮으면 소용이 없다(07-recommendation-system 4.2).
+	 */
+	const [locked, setLocked] = useState(false);
 
 	useEffect(() => {
 		const r = readDecks(window.localStorage);
-		if (!r.ok) return setNotice(r.reason);
+		if (!r.ok) {
+			setLocked(true);
+			return setNotice(r.reason);
+		}
 		setDecks(r.value);
 		setActiveId(r.value[0]?.id ?? null);
 	}, []);
@@ -1194,6 +1310,13 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 	const active = decks.find((d) => d.id === activeId) ?? null;
 
 	function persist(next: StoredDeck[]) {
+		if (locked) {
+			return setNotice(
+				ko
+					? '저장분을 읽지 못해 편집을 잠갔습니다. 덮어쓰면 읽지 못한 덱이 사라집니다.'
+					: 'Editing is locked because the saved data could not be read; writing would destroy it.',
+			);
+		}
 		setDecks(next);
 		const r = writeDecks(window.localStorage, next);
 		setNotice(r.ok ? null : r.reason);
@@ -1240,11 +1363,11 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 						{d.name}
 					</button>
 				))}
-				<button type="button" className="chip" onClick={addDeck}>
+				<button type="button" className="chip" onClick={addDeck} disabled={locked}>
 					{ko ? '새 덱' : 'New'}
 				</button>
 				{active && (
-					<button type="button" className="chip" onClick={() => removeDeck(active.id)}>
+					<button type="button" className="chip" onClick={() => removeDeck(active.id)} disabled={locked}>
 						{ko ? '삭제' : 'Delete'}
 					</button>
 				)}
@@ -1272,9 +1395,23 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 						{active.slots.map((slot) => {
 							const sinner = squad.find((s) => s.id === slot.sinnerId);
 							const deployed = active.deployed.includes(slot.sinnerId);
+							const missing = missingRefs(slot, sinner);
 							return (
 								<li key={slot.sinnerId} className="deck-slot">
 									<strong>{sinner?.text?.name ?? `#${slot.sinnerId}`}</strong>
+
+									{/*
+									  저장분이나 덱 코드가 우리 데이터에 없는 id 를 가리킬 수 있다 — 패치 전에 만든
+									  코드이거나 아직 적재되지 않은 인격이다. `select` 는 매칭되는 `option` 이 없으면
+									  그냥 빈칸으로 보이는데, 그러면 "고르지 않음"과 구별되지 않아 결손을 지어내는
+									  쪽이 된다(02-data-model 6절 · 07-recommendation-system 8절).
+									  칸에만 표기하고 런은 막지 않는다. 인격과 E.G.O 둘 다 본다.
+									*/}
+									{missing.length > 0 && (
+										<em className="missing">
+											{ko ? `데이터에 없음: ${missing.join(', ')}` : `Not in data: ${missing.join(', ')}`}
+										</em>
+									)}
 
 									<select
 										value={slot.identityId ?? ''}
@@ -1379,6 +1516,8 @@ import { DeckEditor } from '@/components/deck-editor';
 .ego-slots select { max-width: 9rem; }
 .deploy { display: flex; gap: .25rem; align-items: center; white-space: nowrap; }
 .notice { padding: .5rem .75rem; border: 1px solid currentColor; border-radius: 4px; }
+/* 참조가 데이터에 없을 때. 빈칸으로 두면 "고르지 않음"과 구별되지 않는다 */
+.missing { font-size: .8rem; opacity: .75; }
 @media (max-width: 900px) {
 	.deck-slot { grid-template-columns: 1fr; }
 }
@@ -1403,6 +1542,22 @@ npm run db:up && npm run dev
 - ALEPH 칸은 비활성이고 선택지가 없다
 - 출전을 8명째 체크하면 더 안 켜진다
 - 새로고침해도 덱이 남아 있다
+
+**읽기 실패가 저장분을 지우지 않는지 확인한다.** 이 경로를 실제로 밟아 봐야 한다.
+
+```js
+// 개발자 콘솔에서 — 저장분은 그대로 두고 버전만 어긋나게 만든다
+localStorage.setItem('limbus:schema', '99');
+location.reload();
+```
+
+- 스키마 버전이 다르다는 표기가 뜬다
+- 「새 덱」·「삭제」가 **비활성**이다
+- `localStorage.getItem('limbus:decks')` 가 **그대로 남아 있다**
+
+```js
+localStorage.setItem('limbus:schema', '1');   // 되돌린다
+```
 
 - [ ] **Step 6: 커밋**
 
@@ -1438,7 +1593,7 @@ import type { StoredDeck } from '@/lib/storage/schema';
  * 인게임 덱 코드 입출력.
  *
  * 내보내기에 경고가 붙는 경우가 있다 — 순번 16 이상 인격이 든 덱이다. 가이드가 그 구간의
- * 인코딩을 추정만 해뒀고 인게임에서 확인된 적이 없다(07-recommendation-system 7.3).
+ * 인코딩을 추정만 해뒀고 인게임에서 확인된 적이 없다(07-recommendation-system 7.4).
  * 되는 척하지 않고 미검증임을 밝힌다.
  */
 export function DeckCodeIo({
@@ -1554,7 +1709,80 @@ git commit -m "feat(web): 덱 코드 입출력"
 
 ---
 
-### Task 9: 문서에 실측을 적고 마무리
+### Task 9: 추천 질의가 편성과 출전을 나눠 받는다
+
+**Files:**
+- Modify: `lib/queries/recommend.ts`
+
+**Interfaces:**
+- Consumes: 기존 `recommendForDeck`
+- Produces: `options.deployedIds` 추가. `RunState.deployed` 가 더 이상 `deck` 과 같지 않다
+
+**엔진 브랜치의 작업이 이 한 줄에 달려 있다.** `feat/engine-deck-feature` 가 소속 조건의
+판정 범위를 편성/출전으로 갈라 놓아도, 호출부가 `deployed: deck` 으로 두는 한 둘이 같은 값이라
+**점수가 움직이지 않고 그쪽 작업이 관측되지 않는다.** 파일은 웹 소유이므로 여기서 가져간다
+(`docs/07-recommendation-system.md` 9절).
+
+`RunState` 는 이미 둘을 구분한다. **엔진 변경이 아니라 호출부 정정이다.**
+
+- [ ] **Step 1: 옵션을 넓힌다**
+
+```ts
+export async function recommendForDeck(
+	locale: Locale,
+	options: {
+		identityIds?: number[];
+		/** 출전 인격 id. 비우면 편성 전체를 출전으로 본다(`RunState.deployed` 규약) */
+		deployedIds?: number[];
+		floor?: number;
+		difficulty?: Difficulty;
+		ownedIds?: number[];
+	} = {},
+): Promise<Recommendation> {
+```
+
+`state` 를 만드는 자리를 바꾼다. 인격을 다시 질의하지 않는다 — 이미 받아 온 `deck` 에서 고른다.
+
+```ts
+	// 편성 12 와 출전 7 은 다르다(06 2절 4항). 지금까지 호출부가 둘을 같게 두어
+	// 소속 조건의 판정 범위 구분이 죽어 있었다.
+	const deployedIds = new Set(options.deployedIds ?? []);
+	const deployed = deployedIds.size > 0 ? deck.filter((i) => deployedIds.has(i.id)) : deck;
+	const state: RunState = { deck, deployed, owned, floor };
+```
+
+- [ ] **Step 2: 화면이 전달하는지 확인한다**
+
+`app/[locale]/recommend/page.tsx` 는 이 단계에서 여전히 슬라이스다(계획 B 가 새로 쓴다).
+**질의 문자열로 출전을 받을 수 있게만 열어 둔다** — 없으면 지금과 동작이 같다.
+
+- [ ] **Step 3: 구분이 실제로 갈리는지 확인한다**
+
+```bash
+npm run db:up && npm run dev
+```
+
+- `/ko/recommend` — 지금과 같은 결과 (출전 미지정이므로 편성 전체가 출전)
+- `/ko/recommend?deployed=10216,11009,11216,10512` — 출전 4명. **덱 특성의 `affiliation.deployed`
+  가 `affiliation.deck` 과 달라진다**
+
+엔진 브랜치가 병합된 뒤라면 소속 조건의 근거 문자열에 `편성` 과 `출전` 이 갈려 나온다.
+병합 전이라면 숫자만 갈리고 점수는 같다 — 그것이 정상이다.
+
+- [ ] **Step 4: 확인하고 커밋**
+
+Run: `npm run typecheck && npm run build && npm run engine:proof`
+Expected: 전부 통과. **`engine:proof` 는 자기 상태를 직접 만들므로 이 변경과 무관하게 통과한다** —
+실패하면 `deployed` 기본값이 예전과 달라진 것이니 되돌린다.
+
+```bash
+git add lib/queries/recommend.ts
+git commit -m "fix(web): 추천 질의가 편성과 출전을 나눠 받는다"
+```
+
+---
+
+### Task 10: 문서에 실측을 적고 마무리
 
 **Files:**
 - Modify: `docs/07-recommendation-system.md`
@@ -1571,7 +1799,9 @@ Expected: 두 job 모두 `Job succeeded`. `단위 테스트` 단계가 목록에
 
 - [ ] **Step 2: 문서를 실측으로 갱신한다**
 
-`docs/07-recommendation-system.md` 7.3 에 검증 결과를 반영한다. 실물 코드를 아직 못 구했다면 미검증 표기를 유지하고, 구했다면 결과를 적는다. 10절 검증표의 `덱 코드` 행에 왕복 일치 결과를 기록한다.
+`docs/07-recommendation-system.md` 7.4 의 미검증 다섯에 결과를 반영한다. 실물 코드를 아직 못 구했다면 표기를 그대로 두고, 구했다면 항목마다 갈린 결과를 적는다. 10절 검증표의 `덱 코드` 행에 왕복 일치 결과를 기록한다.
+
+**7.0 의 출처 표도 함께 채운다.** 가이드 발췌를 `docs/reference/` 에 남기고 파일명과 확인 날짜를 적는다. 남기지 못했다면 그 사실을 12절 미결에 유지한다.
 
 - [ ] **Step 3: 커밋하고 PR 을 연다**
 
@@ -1594,15 +1824,18 @@ PR 제목: `feat(web): 편성 편집과 덱 코드 입출력`
 | 4절 저장 모델 (`StoredDeck` · 스키마 버전) | Task 2·3 |
 | 4.1 슬롯이 수감자 12 고정 · `deployed` 는 수감자 id | Task 2 (`emptyDeck`) · Task 7 |
 | 4.1 `egos` 등급 키 레코드 · ALEPH 부재 | Task 2 · Task 7 (비활성 칸) |
-| 4.2 버전 불일치 시 버리지 않음 | Task 3 (`readDecks` 테스트) |
+| 4.2 버전 불일치 시 버리지 않음 | Task 3 (`readDecks` 테스트) · **Task 7 (`locked` — 화면이 덮지 않게)** |
 | 5.1 편성 화면 · E.G.O 미반영 표기 | Task 7 |
+| 6절 데이터 흐름 — `recommendForDeck` 이 편성·출전을 나눠 받음 | **Task 9** |
 | 7.1 형식 · 7.2 id 인덱스 산출 | Task 5 · 6a · 6b |
 | 7.3 16 이상 미검증 표기 | Task 5 (넓은 필드) · Task 6b (`unverifiedIndexes`) · Task 8 (경고) |
-| 8절 오류 처리 — 저장 실패 · 스키마 불일치 · 디코드 실패 | Task 1·3·6b·8 |
-| 10절 검증 — 타입·빌드·덱코드 왕복 | Task 6b·8·9 |
+| 8절 오류 처리 — 저장 실패 · 스키마 불일치 · 디코드 실패(단계별) · 참조 결손 | Task 1·3·6b·7·8 |
+| 10절 검증 — 타입·빌드·덱코드 왕복 | Task 6b·8·10 |
 
-**이 계획이 덮지 않는 것** — `docs/07` 5.2 런 추적 · 6절 데이터 흐름 · 9절 엔진 경계. 계획 B 와 엔진 브랜치의 몫이다.
+**이 계획이 덮지 않는 것** — `docs/07` 5.2 런 추적 · 6절의 Server Action 과 Route Handler · 9절 엔진 경계. 계획 B 와 엔진 브랜치의 몫이다. 6절 중 `recommendForDeck` 확장만 Task 9 로 가져오는데, 그것이 없으면 엔진 브랜치의 판정 범위 작업이 관측되지 않기 때문이다(`docs/07` 9절).
 
 **타입 일관성** — `Result<T>`·`Kv`(Task 1)를 3·6이 그대로 쓴다. `StoredDeck`·`EGO_RANKS`·`emptyDeck`(Task 2)을 3·6·7·8이 쓴다. `readField`/`writeField`(Task 4)를 5가, `readBlock`/`writeBlock`/`emptyBits`(Task 5)와 `toBase64`/`gzip`(Task 6a)을 6b 가 쓴다. `indexOf`가 인격·E.G.O 양쪽에 쓰이는데 id 규칙이 같아 하나로 충분하다.
 
-**미해결로 남기는 것** — 편성 순서(`FIELD.order`)를 `deployed` 배열 순서로 매핑하는 것은 왕복은 성립하지만 인게임 의미와 일치하는지 확인되지 않았다. 실물 코드 확보 시 Task 9 에서 검증한다.
+**미해결로 남기는 것** — `docs/07` 7.4 의 미검증 다섯이 전부 남는다. **왕복 테스트는 우리 인코더와 우리 디코더를 맞춰 볼 뿐이라 그중 어느 것도 잡지 못한다.** 특히 E.G.O 필드의 인덱스가 수감자 내 전체 순번인지(7.4 #4)와 가이드가 비워둔 자리가 실제로 0인지(7.4 #3)는 가져오기의 정확성에 직접 걸리는데, 지금 구조로는 통과하는 테스트만 쓸 수 있다. 실물 코드 확보 시 Task 10 에서 검증한다.
+
+**가이드 자체가 저장소에 없다**(`docs/07` 7.0). 발췌를 `docs/reference/` 에 남기기 전까지 Task 5 의 「가이드 예시 블록」 테스트는 대조할 원본이 없는 오라클이다.
