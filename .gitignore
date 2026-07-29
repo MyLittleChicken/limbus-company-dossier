@@ -74,4 +74,9 @@ data/*
 
 # 이미지 애셋 — data/ 와 같은 이유로 커밋하지 않는다 (docs/adr/05-web-serving.md 5절)
 # `npm run fetch -- --assets` 로 받아 배치한다
-/public/assets/
+#
+# **후행 슬래시를 붙이지 않는다.** `npm run assets` 가 만드는 것은 디렉터리가 아니라
+# data/assets 로 가는 심볼릭 링크이고(204 MB 를 두 벌 두지 않기 위해서다), `/public/assets/`
+# 는 디렉터리만 매치해 그 링크를 놓친다 — 실제로 `?? public/` 로 새어 나왔다.
+# 링크로 물러선 환경에서는 디렉터리가 되므로 슬래시 없는 형태가 양쪽을 다 덮는다.
+/public/assets
