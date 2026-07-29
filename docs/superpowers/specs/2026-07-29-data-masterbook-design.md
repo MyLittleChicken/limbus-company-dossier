@@ -37,8 +37,8 @@ docs/data/
   README.md                      저장소 전체 데이터 지도 · 마스터북 읽는 법 · 진행 현황
   identity/
     00-overview.md               인격 계열 지도 (파일 16종 → DB 모델 10개 → 화면 3곳)
-    01-mj-identities.md          회차별 파일 문서
-    02-mj-identities-detail.md
+    01-limbus-data-mj-identities.md         회차별 파일 문서
+    02-limbus-data-mj-identities-detail.md
     ...
   ego/ · gift/ · pack/ · mirror-dungeon/    (인격 편 완료 후 착수)
 ```

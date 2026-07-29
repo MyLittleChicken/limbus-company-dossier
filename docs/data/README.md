@@ -18,7 +18,21 @@
 
 중복 서술 대신 링크한다.
 
-## 2. 읽는 법
+## 2. 파일 이름 규칙
+
+```
+<엔티티>/<회차 2자리>-<출처 id>-<원본 파일명>.md
+
+identity/01-limbus-data-mj-identities.md          ← limbus-data-mj/identities.json
+identity/02-limbus-data-mj-identities-detail.md   ← limbus-data-mj/identities_detail.json
+identity/06-limbus-assets-identities.md           ← limbus-assets/identities.json
+```
+
+**출처 id를 줄이지 않는다.** `mj` 같은 축약은 처음 읽는 사람이 해독할 수 없다.
+출처 id는 `data/` 디렉토리 규약(`<성격>/<분류>/<출처>/<파일>`)과 `04-data-inventory.md` 의
+표기를 그대로 쓴다. 원본 파일명의 `_` 는 `-` 로 바꾼다.
+
+## 3. 읽는 법
 
 필드마다 표 하나가 붙는다. 칸의 뜻은 다음과 같다.
 
@@ -42,7 +56,7 @@
 화면   app/[locale]/**/page.tsx
 ```
 
-## 3. 방법
+## 4. 방법
 
 - **실측**: 회차마다 일회용 프로브를 돌려 집계한다. 프로브는 커밋하지 않고 숫자만 남긴다.
 - **게임 지식**: 정본 위키는 [Limbus Company Wiki](https://limbuscompany.fandom.com) 다.
@@ -50,13 +64,13 @@
 - **미해결**: 위키로 풀리면 그 자리에서 각주를 단다. 어디에도 없으면 `❓ 미확인` 으로 남기고
   `docs/backlog/` 에 항목을 만든다.
 
-## 4. 진행 현황
+## 5. 진행 현황
 
 ### 인격 (Identity) — 14회차
 
 | # | 대상 | 상태 |
 | --- | --- | --- |
-| 1 | [`limbus-data-mj/identities.json`](identity/01-mj-identities.md) | **완료** 2026-07-29 · 키 23종 |
+| 1 | [`limbus-data-mj/identities.json`](identity/01-limbus-data-mj-identities.md) | **완료** 2026-07-29 · 키 23종 |
 | 2 | `limbus-data-mj/identities_detail.json` | 미착수 |
 | 3 | `limbus-data-mj/skills.json` | 미착수 |
 | 4 | `limbus-data-mj/passives.json` | 미착수 |
@@ -75,7 +89,7 @@
 
 E.G.O · 기프트 · 테마 팩 · 거울 던전 · 상태 — **인격 편을 마친 뒤 착수한다.**
 
-## 5. 회차에서 갈라져 나온 문서
+## 6. 회차에서 갈라져 나온 문서
 
 인터뷰 중 발견이 커져 별도 문서가 된 것들이다.
 
