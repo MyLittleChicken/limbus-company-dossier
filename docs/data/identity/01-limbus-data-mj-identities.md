@@ -13,6 +13,27 @@
 
 **23개 키 중 실제로 적재되는 것은 8개.** 나머지 15개가 왜 안 쓰이는지가 이 회차의 절반이다.
 
+### 대조한 출처
+
+파일명은 **척추**를 가리킨다. 필드의 뜻과 정본을 가리려면 다른 출처를 끌어와야 하며,
+이 회차에서 실제로 본 것은 다음과 같다.
+
+| 출처 | 무엇을 대조했나 |
+| --- | --- |
+| `limbus-data-mj/identities_detail.json` | `hp` · `resists` · `stagger` · `speed` — 전부 요약본임을 확인 |
+| `limbus-data-mj/skills.json` | 대체 스킬(`num=0`)의 코인 효과 — `altSins` · `altKeywords` 판정 |
+| `limbus-assets/identities.json` | `date` · `rank` · `season` · `tags` · `statuses` · `skillTypes` |
+| `limbus-assets/identities_mini.json` | `season` 3중 대조 |
+| `limbus-assets/identity_tag_list.json` | 태그 95항목 · 마크업 5종 |
+| `limbus-assets/identity_keyword_modifiers.json` | 조건부 기믹 3건 |
+| `limbus-assets/egos.json` · `limbus-data-mj/egos.json` | E.G.O 날짜 오류 · `statuses` · `resists` |
+| `limbus-assets/gifts.json` · `loc-ko` | 기프트 `9282` 날개 모양 양초 |
+| `mechanics/limbus-assets/statuses.json` | 상태 1,472종 · `categoryKeywordList` |
+| [Limbus Company Wiki](https://limbuscompany.fandom.com) | 발푸르기스의 밤 · 저항 메커니즘 |
+
+종합 분석의 **결론**은 이 문서가 아니라 주제 문서로 나간다(`../README.md` 6절).
+여기에는 필드별 사실과 함정만 남긴다.
+
 | 적재됨 | `id` · `sinnerId` · `star` · `season` · `updatedDate` · `name` · `nameKo` · `title` · `titleKo` |
 | --- | --- |
 | **미적재** | `slotId` · `teamCodeEligible` · `keywords` · `keywordSkills` · `associations` · `atkTypes` · `atkSins` · `altSins` · `egoKeywords` · `altKeywords` · `hp` · `resists` · `stagger` · `speed` |
@@ -188,6 +209,20 @@ Kurokumo Clan Wakashu    4건    W Corp. L3 Cleanup Agent  3건
 ```
 
 `08-06` 갱신 하루 전이 `08-05` 다. 스냅샷 시점에 픽업이 진행 중이던 유일한 인격이다.
+
+**결정 2026-07-29 — 미래 날짜는 보강 출처로 채운다**
+
+```
+updatedDate 를 ISO 로 바꾼 값이 dataset.snapshot_date 보다 미래이면
+  → limbus-assets 의 date 를 쓰고 ctx.report.note 를 남긴다
+```
+
+`season` 결손 보강과 같은 패턴이다(ADR-04 2.3). 정본이 **줄 수 없는 값**만 보강 출처에서
+받으므로 원칙 6(정본 값을 다른 출처로 덮지 않는다)을 지킨다. 현재 해당하는 것은 `10116` 1건이며,
+스냅샷 날짜는 `dataset` 테이블에 이미 있어 가드 기준이 확보돼 있다.
+
+"두 출처가 다르면 항상 assets 우선" 이나 "출시일은 항상 assets" 로 넓히지 않는다. 전자는 정본
+뒤집기에 가깝고 후자는 원칙 6 위반이다.
 
 E.G.O 쪽에는 성격이 다른 오류가 하나 있다 — `20306` 전기울음(돈키호테)이
 mj `2023-04-11` · assets `2024-04-11` 로 **연도 오타**다. 시즌 4는 2024년이고
@@ -444,10 +479,25 @@ detail 의 두 배열은 동기화 단계별 범위다.
 
 ## 미해결
 
-- ❓ `teamCodeEligible` 이 무엇을 걸러내려는 플래그인가. 스냅샷에 `false` 가 0건이라 판단 불가
-- ❓ `keywordSkills` 값이 항상 슬롯 번호인지 — 회차 3에서 스킬과 대조
-- ❓ `associations` 64종과 assets `tags` 93종의 관계 — 회차 5·9
-- ❓ `10116` 의 `release_date` 를 assets 값으로 보강할지, 원본대로 둘지
+### 남은 것
+
+- ❓ `teamCodeEligible` 이 무엇을 걸러내려는 플래그인가. 스냅샷 전체에 `false` 가 0건이라
+  데이터로는 판단할 수 없다. `false` 가 나타나면 그때 다시 본다
+
+### 다음 회차로 넘긴 것
+
+- → **회차 3** `keywordSkills` 가 가리키는 슬롯과 `skills.json` 의 코인 효과가 실제로 맞는지
+  대조한다. 265엔트리 × 스킬. 필드의 **의미는 확정됐고** 남은 것은 정합성 검증이다
+- → **회차 5** `associations.json` 자체의 구조 — 키(`LIMBUS_COMPANY`) · `name` · `nameKo` 3필드
+- → **회차 9** `identity_tag_list.json` — 95항목 · 마크업 5종 · 마크업 제거 후 중복 2종
+
+### 해소된 것
+
+- ✔ **`associations` 64종과 assets `tags` 93종의 관계** — `tags` 는 게임의 「특성 키워드」이며
+  `10916` 에서 7종이 1:1 일치함을 확인했다. 정본은 assets 유지, 축 분리는 불필요.
+  `affiliation` → `trait` 개명으로 좁혔다 → `../../backlog/01-identity-tags.md`
+- ✔ **`10116` 의 출시일** — 미래 날짜일 때 assets `date` 로 보강하기로 결정(위 `updatedDate` 절)
+- ✔ **`keywordSkills` 값의 의미** — 1·2·3은 1번·2번·3번 스킬. 그 키워드를 보유한 스킬을 가리킨다
 
 ## 근거 재현
 
