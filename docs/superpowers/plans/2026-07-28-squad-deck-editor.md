@@ -1093,32 +1093,36 @@ const utf8 = new TextEncoder();
 const decodeUtf8 = new TextDecoder();
 
 /**
- * 단계마다 따로 잡는다.
+ * 어느 단계에서 실패했는지 밝힌다(`07-recommendation-system.md` 8절).
  *
- * `07-recommendation-system.md` 8절이 **어느 단계에서 실패했는지** 표기하라고 정했다.
- * 하나의 try 로 묶으면 셋이 같은 문구가 되고, 게다가 `atob` 과 `DecompressionStream` 의
- * 에러는 `message` 가 비어 있어 사용자에게 아무 정보도 남지 않는다.
+ * **단계 이름은 우리가 붙인다.** 「`atob` 과 `DecompressionStream` 의 에러는 `message` 가
+ * 비어 있다」를 근거로 적었으나 **실측하니 성립하지 않는다** — `atob` 은 `Invalid character`
+ * 를 던진다. 그래도 쪼개는 이유는 그 문구가 사용자에게 base64 얘기인지 알려주지 않아서다.
+ *
+ * gzip 은 `try` 가 아니라 매직(`1f 8b`) 선검사로 가로챈다. 표기 때문만이 아니라 Task 6a 의
+ * 미관측 프라미스가 처리되지 않은 거부로 새는 것을 막기 위해서다 — `DecompressionStream` 에
+ * 잘못된 입력을 넣는 일 자체를 만들지 않는다.
  */
 export async function decodeDeckCode(code: string): Promise<Result<string>> {
-	let outer: Uint8Array;
+	let compressed: Uint8Array;
 	try {
-		outer = fromBase64(code.trim());
+		compressed = fromBase64(code.trim());
 	} catch {
-		return err('덱 코드가 base64 가 아니다');
+		return err('덱 코드를 풀지 못했다: base64 가 아니다');
 	}
 
-	let inflated: Uint8Array;
-	try {
-		inflated = await gunzip(outer);
-	} catch {
-		return err('덱 코드가 gzip 으로 풀리지 않는다');
+	if (compressed.length < 2 || compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
+		return err('덱 코드를 풀지 못했다: gzip 매직이 아니다');
 	}
 
 	let bits: string;
 	try {
+		const inflated = await gunzip(compressed);
+		// 「푼 내용이 base64 가 아님」은 gunzip 실패와 문구를 공유한다. 유효한 gzip 안에
+		// 비-base64 가 들어 있어야 도달하므로 실제 덱 코드로는 나오지 않는다.
 		bits = bytesToBits(fromBase64(decodeUtf8.decode(inflated)));
-	} catch {
-		return err('압축을 푼 내용이 base64 가 아니다');
+	} catch (cause) {
+		return err(`덱 코드를 풀지 못했다: ${(cause as Error).message || 'gzip 으로 풀리지 않는다'}`);
 	}
 
 	if (bits.length !== TOTAL_BITS) {
@@ -1839,3 +1843,27 @@ PR 제목: `feat(web): 편성 편집과 덱 코드 입출력`
 **미해결로 남기는 것** — `docs/07` 7.4 의 미검증 다섯이 전부 남는다. **왕복 테스트는 우리 인코더와 우리 디코더를 맞춰 볼 뿐이라 그중 어느 것도 잡지 못한다.** 특히 E.G.O 필드의 인덱스가 수감자 내 전체 순번인지(7.4 #4)와 가이드가 비워둔 자리가 실제로 0인지(7.4 #3)는 가져오기의 정확성에 직접 걸리는데, 지금 구조로는 통과하는 테스트만 쓸 수 있다. 실물 코드 확보 시 Task 10 에서 검증한다.
 
 **가이드 자체가 저장소에 없다**(`docs/07` 7.0). 발췌를 `docs/reference/` 에 남기기 전까지 Task 5 의 「가이드 예시 블록」 테스트는 대조할 원본이 없는 오라클이다.
+
+## 구현 뒤 실측
+
+**Task 1 배선은 이 브랜치가 가져갔다.** `package.json` 의 `test` 와 `ci.yml` 의 「단위 테스트」
+단계가 여기 있다. 엔진 브랜치(`feat/engine-deck-feature`)는 리베이스해 Task 1 을 건너뛴다.
+
+**저장분 소실을 재현하고 막았다**(Task 3·7). 버전 0 저장분 위에서 `readDecks` 실패 → 화면
+`decks` 가 빈 배열 → 「새 덱」 → `writeDecks` 가 통째로 덮는 경로를 실행해 확인했다. `locked`
+로 쓰기를 막고, 소실 경로 자체는 `lib/storage/decks.test.ts` 가 회귀로 잠근다.
+**화면의 잠금에는 단위 테스트가 없다** — 이 저장소에 DOM 테스트 배선이 없다.
+
+**`crypto.randomUUID` 부재를 재현했다**(Task 2). 전역 `crypto` 를 지우면 `emptyDeck` 이
+`crypto is not defined` 로 던져 편성 화면이 통째로 죽는다. `newId()` 폴백으로 물러서고,
+`lib/storage/schema.test.ts` 가 이를 잠근다. 실제 도달 조건은 평문 HTTP 배포이며 현재
+개발 환경(localhost)은 보안 컨텍스트라 도달하지 않는다.
+
+**디코드 단계 구분의 근거 하나가 틀렸다**(Task 6b). 위 주석에 적은 대로 `atob` 의 `message`
+는 비어 있지 않다. 단계 이름을 우리가 붙이는 것으로 근거를 바꿔 유지했다.
+
+**참조 결손 표기는 실측 재현을 하지 않았다**(Task 7). `missingRefs` 가 인격·E.G.O 를 모두
+보지만, 데이터에 없는 id 는 덱 코드 가져오기로만 들어온다.
+
+**Task 9 는 숫자만 갈린다.** `?deployed=` 로 소속 패널의 인원이 편성과 갈리는 것까지가 지금
+관측 가능한 전부다. 점수가 갈리는 것은 엔진 브랜치 병합 뒤이며, 그 전까지는 같은 것이 정상이다.

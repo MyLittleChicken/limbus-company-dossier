@@ -39,7 +39,22 @@ export interface StoredRun {
 	startedAt: string;
 }
 
-export function emptyDeck(name: string, id = crypto.randomUUID()): StoredDeck {
+/**
+ * 덱 id.
+ *
+ * `crypto.randomUUID` 는 브라우저에서 **보안 컨텍스트**(HTTPS · localhost)에서만 있다.
+ * 배포 환경이 아직 미결이라(adr/05 3.5) 평문 HTTP 로 서비스될 가능성을 배제할 수 없고,
+ * 그때 `emptyDeck` 이 던지면 편성 화면이 통째로 죽는다. 없으면 물러선다 — id 는 우리
+ * 저장소 안에서만 유일하면 되고 암호학적 성질이 필요하지 않다.
+ */
+function newId(): string {
+	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+		return crypto.randomUUID();
+	}
+	return `deck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function emptyDeck(name: string, id = newId()): StoredDeck {
 	return {
 		id,
 		name,

@@ -14,6 +14,22 @@ test('빈 덱은 수감자 12칸을 갖는다', () => {
 	assert.deepEqual(d.deployed, []);
 });
 
+test('crypto.randomUUID 가 없어도 덱을 만든다', () => {
+	// 비보안 컨텍스트(평문 HTTP)에서는 crypto.randomUUID 가 없다. 던지면 편성 화면이
+	// 통째로 죽으므로 물러서는지 확인한다.
+	const saved = Reflect.getOwnPropertyDescriptor(globalThis, 'crypto');
+	Reflect.deleteProperty(globalThis, 'crypto');
+	try {
+		const a = emptyDeck('a');
+		const b = emptyDeck('b');
+		assert.equal(typeof a.id, 'string');
+		assert.notEqual(a.id, '');
+		assert.notEqual(a.id, b.id);
+	} finally {
+		if (saved) Reflect.defineProperty(globalThis, 'crypto', saved);
+	}
+});
+
 test('정상 덱을 통과시킨다', () => {
 	const d = emptyDeck('a');
 	d.slots[0]!.identityId = 10101;

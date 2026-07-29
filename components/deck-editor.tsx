@@ -7,6 +7,29 @@ import { DECK_MAX, DEPLOY_MAX, EGO_RANKS, emptyDeck, type StoredDeck } from '@/l
 import type { SquadSinner } from '@/lib/queries/squad';
 
 /**
+ * 이 칸이 가리키는데 우리 데이터에는 없는 id 들.
+ *
+ * 저장분이나 덱 코드가 아직 적재되지 않은(또는 패치로 사라진) 인격·E.G.O 를 가리킬 수 있다.
+ * `select` 는 매칭되는 `option` 이 없으면 그냥 빈칸으로 보이는데, 그러면 "고르지 않음"과
+ * 구별되지 않아 **결손을 지어내는 쪽이 된다**(02-data-model 6절 · 07-recommendation-system 8절).
+ */
+function missingRefs(
+	slot: StoredDeck['slots'][number],
+	sinner: SquadSinner | undefined,
+	ko: boolean,
+): string[] {
+	const out: string[] = [];
+	if (slot.identityId !== null && !sinner?.identities.some((i) => i.id === slot.identityId)) {
+		out.push(`${ko ? '인격' : 'Identity'} ${slot.identityId}`);
+	}
+	for (const rank of EGO_RANKS) {
+		const id = slot.egos[rank];
+		if (id !== undefined && !sinner?.egos.some((e) => e.id === id)) out.push(`${rank} ${id}`);
+	}
+	return out;
+}
+
+/**
  * 편성 편집.
  *
  * 수감자 12칸은 고정 축이다. 배열 인덱스가 곧 수감자라 한 수감자에 인격 둘이 들어가는
@@ -19,10 +42,20 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 	const [decks, setDecks] = useState<StoredDeck[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
+	/**
+	 * 읽기가 실패했는가.
+	 *
+	 * **이 상태에서는 쓰지 않는다.** 읽기에 실패하면 `decks` 는 빈 배열인데, 그 상태로
+	 * 「새 덱」을 누르면 `writeDecks` 가 `limbus:decks` 를 통째로 덮어 **읽지 못한 저장분이
+	 * 그 순간 사라진다.** 저장소 계층이 "읽기가 실패해도 지우지 않는다"를 지켜도 화면이
+	 * 덮으면 소용이 없다(07-recommendation-system 4.2).
+	 */
+	const [locked, setLocked] = useState(false);
 
 	useEffect(() => {
 		const r = readDecks(window.localStorage);
 		if (!r.ok) {
+			setLocked(true);
 			// 원인 문자열은 lib/storage 산출물이라 한국어 고정이다 — 헤드라인만 로캘별로 두고
 			// 원문은 보조 정보로 붙여 실패 사유를 숨기지 않는다.
 			return setNotice(`${ko ? '덱을 불러오지 못했습니다' : 'Could not load decks'}: ${r.reason}`);
@@ -39,6 +72,14 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 	 * 판단하는 데 쓴다(실패한 새 덱·삭제를 고른 상태처럼 보이게 두지 않기 위해).
 	 */
 	function persist(next: StoredDeck[]): boolean {
+		if (locked) {
+			setNotice(
+				ko
+					? '저장분을 읽지 못해 편집을 잠갔습니다. 덮어쓰면 읽지 못한 덱이 사라집니다.'
+					: 'Editing is locked because the saved data could not be read; writing would destroy it.',
+			);
+			return false;
+		}
 		const r = writeDecks(window.localStorage, next);
 		if (!r.ok) {
 			setNotice(`${ko ? '덱을 저장하지 못했습니다' : 'Could not save the deck'}: ${r.reason}`);
@@ -89,11 +130,11 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 						{d.name}
 					</button>
 				))}
-				<button type="button" className="chip" onClick={addDeck}>
+				<button type="button" className="chip" onClick={addDeck} disabled={locked}>
 					{ko ? '새 덱' : 'New'}
 				</button>
 				{active && (
-					<button type="button" className="chip" onClick={() => removeDeck(active.id)}>
+					<button type="button" className="chip" onClick={() => removeDeck(active.id)} disabled={locked}>
 						{ko ? '삭제' : 'Delete'}
 					</button>
 				)}
@@ -131,9 +172,17 @@ export function DeckEditor({ squad, ko }: { squad: SquadSinner[]; ko: boolean })
 						{active.slots.map((slot) => {
 							const sinner = squad.find((s) => s.id === slot.sinnerId);
 							const deployed = active.deployed.includes(slot.sinnerId);
+							const missing = missingRefs(slot, sinner, ko);
 							return (
 								<li key={slot.sinnerId} className="deck-slot">
 									<strong>{sinner?.text?.name ?? `#${slot.sinnerId}`}</strong>
+
+									{/* 칸에만 표기하고 편집은 막지 않는다 — 지우고 다시 고를 수 있어야 한다. */}
+									{missing.length > 0 && (
+										<em className="missing">
+											{ko ? `데이터에 없음: ${missing.join(', ')}` : `Not in data: ${missing.join(', ')}`}
+										</em>
+									)}
 
 									<select
 										value={slot.identityId ?? ''}

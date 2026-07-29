@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyBits, writeBlock, TOTAL_BITS } from './layout';
 import { decodeDeckCode, encodeDeckCode, deckFromCode, deckToCode, unverifiedIndexes } from './codec';
+import { toBase64, gzip } from './bytes';
 import { emptyDeck } from '@/lib/storage/schema';
 
 function sampleBits(): string {
@@ -78,7 +79,26 @@ test('16 이상 인격을 미검증으로 보고한다', () => {
 	assert.deepEqual(unverifiedIndexes(d), [11216]);
 });
 
-test('쓰레기 코드를 실패로 알린다', async () => {
-	assert.equal((await decodeDeckCode('!!!not base64!!!')).ok, false);
-	assert.equal((await decodeDeckCode('aGVsbG8=')).ok, false); // base64 는 되지만 gzip 이 아니다
+test('쓰레기 코드를 어느 단계에서 실패했는지와 함께 알린다', async () => {
+	const notB64 = await decodeDeckCode('!!!not base64!!!');
+	assert.equal(notB64.ok, false);
+	// atob 의 "Invalid character" 를 그대로 흘리면 사용자에게 단계가 보이지 않는다.
+	if (!notB64.ok) assert.match(notB64.reason, /base64/);
+
+	const notGzip = await decodeDeckCode('aGVsbG8='); // base64 는 되지만 gzip 이 아니다
+	assert.equal(notGzip.ok, false);
+	if (!notGzip.ok) assert.match(notGzip.reason, /gzip/);
+});
+
+test('길이가 맞지 않으면 단계를 구분해 알린다', async () => {
+	// 유효한 gzip 안에 유효한 base64 가 있으나 560비트가 아닌 경우 — 앞의 둘과 문구가 갈린다.
+	const short = await encodeDeckCode('0'.repeat(TOTAL_BITS));
+	assert.equal(short.ok, true);
+	if (!short.ok) return;
+	const r = await decodeDeckCode(short.value);
+	assert.equal(r.ok, true); // 정상 길이는 통과한다
+
+	const bad = await decodeDeckCode(toBase64(await gzip(new TextEncoder().encode(toBase64(new Uint8Array([1, 2]))))));
+	assert.equal(bad.ok, false);
+	if (!bad.ok) assert.match(bad.reason, /비트 길이/);
 });

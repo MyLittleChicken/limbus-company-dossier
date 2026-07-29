@@ -41,6 +41,20 @@ test('깨진 JSON 을 실패로 알린다', () => {
 	assert.equal(readDecks(kv).ok, false);
 });
 
+test('읽기가 실패해도 저장분을 건드리지 않는다', () => {
+	// 이 계층은 지운 적이 없다. 저장분이 사라지는 경로는 **화면이 빈 목록 위에 덮어쓰는 것**
+	// 뿐이며(07-recommendation-system 4.2), 그래서 DeckEditor 가 읽기 실패 시 쓰기를 잠근다.
+	const kv = memoryKv();
+	kv.setItem(KEY_SCHEMA, '0');
+	kv.setItem(KEY_DECKS, '[{"id":"a"},{"id":"b"}]');
+	assert.equal(readDecks(kv).ok, false);
+	assert.equal(kv.getItem(KEY_DECKS), '[{"id":"a"},{"id":"b"}]');
+
+	// 잠그지 않으면 이렇게 사라진다 — 잠금이 지키는 것이 무엇인지 고정해 둔다.
+	writeDecks(kv, [emptyDeck('새 덱', 'new')]);
+	assert.equal(kv.getItem(KEY_DECKS)?.includes('"a"'), false);
+});
+
 test('10개를 넘으면 쓰지 않는다', () => {
 	const kv = memoryKv();
 	const many = Array.from({ length: 11 }, (_, i) => emptyDeck(`d${i}`, `id-${i}`));

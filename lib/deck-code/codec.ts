@@ -24,22 +24,38 @@ export const HEADER = 'H4sIAAAAAAAACh';
 const utf8 = new TextEncoder();
 const decodeUtf8 = new TextDecoder();
 
+/**
+ * 어느 단계에서 실패했는지 밝힌다(07-recommendation-system 8절).
+ *
+ * `atob` 이 던지는 `Invalid character` 를 그대로 실으면 사용자에게는 base64 얘기인지
+ * 알 길이 없다 — 단계 이름을 우리가 붙인다.
+ */
 export async function decodeDeckCode(code: string): Promise<Result<string>> {
+	let compressed: Uint8Array;
+	try {
+		compressed = fromBase64(code.trim());
+	} catch {
+		return err('덱 코드를 풀지 못했다: base64 가 아니다');
+	}
+
+	// gzip 매직(1f 8b)이 아니면 gunzip 을 아예 호출하지 않는다.
+	// bytes.ts 의 through() 는 writer.write/close 를 await 하지 않고 흘려보내는데,
+	// DecompressionStream 이 잘못된 입력에서 에러를 내면 그 미관측 프라미스가
+	// 나중에 거부되며 처리되지 않은 거부(unhandledRejection)로 관측된다 — 여기서
+	// 미리 걸러서 gunzip 내부의 그 경합을 아예 만들지 않는다.
+	if (compressed.length < 2 || compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
+		return err('덱 코드를 풀지 못했다: gzip 매직이 아니다');
+	}
+
 	let bits: string;
 	try {
-		const compressed = fromBase64(code);
-		// gzip 매직(1f 8b)이 아니면 gunzip 을 아예 호출하지 않는다.
-		// bytes.ts 의 through() 는 writer.write/close 를 await 하지 않고 흘려보내는데,
-		// DecompressionStream 이 잘못된 입력에서 에러를 내면 그 미관측 프라미스가
-		// 나중에 거부되며 처리되지 않은 거부(unhandledRejection)로 관측된다 — 여기서
-		// 미리 걸러서 gunzip 내부의 그 경합을 아예 만들지 않는다.
-		if (compressed.length < 2 || compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
-			return err('덱 코드를 풀지 못했다: gzip 매직이 아니다');
-		}
 		const inflated = await gunzip(compressed);
 		bits = bytesToBits(fromBase64(decodeUtf8.decode(inflated)));
 	} catch (cause) {
-		return err(`덱 코드를 풀지 못했다: ${(cause as Error).message}`);
+		// gunzip 실패와 「푼 내용이 base64 가 아님」이 같은 문구를 쓴다. 후자는 유효한 gzip 안에
+		// 비-base64 가 들어 있어야 도달하므로 실제 덱 코드로는 나오지 않는다 — 갈릴 일이 생기면
+		// 그때 쪼갠다.
+		return err(`덱 코드를 풀지 못했다: ${(cause as Error).message || 'gzip 으로 풀리지 않는다'}`);
 	}
 	if (bits.length !== TOTAL_BITS) {
 		return err(`비트 길이가 ${TOTAL_BITS} 이 아니다: ${bits.length}`);

@@ -12,10 +12,23 @@ test('560 = 46 × 12 + 8', () => {
 	assert.equal(BLOCK_BITS * 12 + 8, TOTAL_BITS);
 });
 
-test('필드 폭의 합이 블록 크기와 맞는다', () => {
+test('필드가 서로 겹치지 않고 블록을 덮는다', () => {
+	// 합이 46이라는 것만으로는 겹침을 배제하지 못한다. 비트마다 몇 번 덮이는지 직접 센다.
+	const cover = new Array<number>(BLOCK_BITS + 1).fill(0);
+	for (const [s, e] of Object.values(FIELD)) {
+		assert.ok(s >= 1 && e <= BLOCK_BITS && s <= e, `구간이 블록을 벗어난다: ${s}-${e}`);
+		for (let i = s; i <= e; i++) cover[i]!++;
+	}
+	const overlapped = cover.flatMap((n, i) => (i >= 1 && n > 1 ? [i] : []));
+	assert.deepEqual(overlapped, [], '겹치는 비트가 있다');
+
+	const unused = cover.flatMap((n, i) => (i >= 1 && n === 0 ? [i] : []));
+	// 비트 1만 미사용이다 — 인격 필드가 2부터 시작한다.
+	assert.deepEqual(unused, [1]);
+
 	const spans = Object.values(FIELD).map(([s, e]) => e - s + 1);
-	// 1비트는 미사용으로 남긴다
-	assert.equal(spans.reduce((a, b) => a + b, 0) + 1, BLOCK_BITS);
+	assert.equal(spans.reduce((a, b) => a + b, 0), 45);
+	assert.equal(spans.reduce((a, b) => a + b, 0) + unused.length, BLOCK_BITS);
 });
 
 test('id 에서 수감자와 순번을 뽑는다', () => {
