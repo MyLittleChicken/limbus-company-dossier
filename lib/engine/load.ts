@@ -1,9 +1,9 @@
 import type { Locale } from '@prisma/client';
 import { db } from '@/lib/db';
-import { localeFilter, nameOf } from '@/lib/queries/shared';
+import { localeFilter, nameOf, textOf } from '@/lib/queries/shared';
 import type { Availability, PackCandidate } from './pack';
 import type { Gift, Identity } from './state';
-import { mapEffect, mapTrigger, type Condition, type StatusKey } from './vocab';
+import { mapEffect, mapTrigger, refineAffiliation, statusKeyOf, type Condition, type StatusKey } from './vocab';
 
 /**
  * 데이터베이스 → 엔진 입력.
@@ -11,23 +11,6 @@ import { mapEffect, mapTrigger, type Condition, type StatusKey } from './vocab';
  * 엔진은 파일이 아니라 적재된 데이터를 읽는다. 원본을 다시 파싱하면 파이프라인이 보증한
  * 정합성 밖에서 값이 생기고, 그 값은 검증에 걸리지 않는다.
  */
-
-/** 상태 id 는 1,472종이라 키워드 축으로 접는다. 이름이 아니라 id 로 판정한다(02-data-model 3.10). */
-const STATUS_MATCH: Array<[StatusKey, RegExp]> = [
-	['burn', /combustion|(^|[^a-z])burn/i],
-	['bleed', /laceration|bleed/i],
-	['tremor', /vibration|tremor/i],
-	['rupture', /burst|rupture/i],
-	['sinking', /sinking/i],
-	['poise', /breath|poise/i],
-	['charge', /charge/i],
-	['bloodfeast', /bloodfeast/i],
-];
-
-function statusKeyOf(statusId: string): StatusKey | null {
-	for (const [key, re] of STATUS_MATCH) if (re.test(statusId)) return key;
-	return null;
-}
 
 export async function loadIdentities(locale: Locale, ids?: number[]): Promise<Identity[]> {
 	const rows = await db.identity.findMany({
@@ -57,15 +40,24 @@ export async function loadIdentities(locale: Locale, ids?: number[]): Promise<Id
 	});
 }
 
-/** 소속 어휘. 조건 토큰이 실제 소속을 가리키는지 판정하는 데 쓴다. */
-export async function loadAffiliations(): Promise<Set<string>> {
-	const rows = await db.affiliation.findMany({ select: { id: true } });
-	return new Set(rows.map((r) => r.id));
+/**
+ * 소속 어휘. id → 한국어 이름.
+ *
+ * 두 자리에서 쓴다 — (1) `mapTrigger` 가 조건 토큰의 소속 id 가 실제로 존재하는지 판정할 때는
+ * 키 집합만 있으면 되고, (2) `refineAffiliation` 이 설명문에서 그 소속을 언급하는 줄을 찾을
+ * 때는 한국어 이름이 있어야 한다. 같은 질의에서 이름까지 함께 가져온다 — 정밀화 때문에 새
+ * 질의를 만들지 않는다.
+ */
+export async function loadAffiliations(): Promise<Map<string, string>> {
+	const rows = await db.affiliation.findMany({
+		select: { id: true, texts: { where: { locale: 'ko' }, select: { name: true } } },
+	});
+	return new Map(rows.map((r) => [r.id, r.texts[0]?.name ?? r.id]));
 }
 
 export async function loadGifts(
 	locale: Locale,
-	affiliations: ReadonlySet<string>,
+	affiliations: ReadonlyMap<string, string>,
 	ids?: number[],
 ): Promise<{ gifts: Gift[]; unmapped: { effects: Set<string>; triggers: Set<string> } }> {
 	const rows = await db.gift.findMany({
@@ -78,10 +70,15 @@ export async function loadGifts(
 
 	const unmapped = { effects: new Set<string>(), triggers: new Set<string>() };
 	const gifts: Gift[] = [];
+	// `mapTrigger` 는 소속 id 집합만 본다 — 매 기프트마다 새로 만들지 않고 한 번만 뽑는다.
+	const affiliationIds = new Set(affiliations.keys());
 
 	for (const g of rows) {
 		const effectTokens = g.tokens.filter((t) => t.kind === 'effect');
 		const triggerTokens = g.tokens.filter((t) => t.kind === 'trigger');
+		// 소속 조건의 인원수·판정 범위는 원본 토큰이 아니라 설명문에만 있다(vocab.refineAffiliation).
+		// 이미 로드한 텍스트를 그대로 쓴다 — 새 질의를 만들지 않는다.
+		const desc = textOf(g.texts, locale)?.desc ?? '';
 
 		const units = effectTokens
 			.map((t) => {
@@ -91,12 +88,21 @@ export async function loadGifts(
 			})
 			.filter((u): u is NonNullable<typeof u> => u !== null);
 
-		const conditions = triggerTokens
-			.map((t) => {
-				const c = mapTrigger(t.token, affiliations);
-				if (!c) unmapped.triggers.add(t.token);
-				return c;
-			})
+		const mapped = triggerTokens.map((t) => {
+			const c = mapTrigger(t.token, affiliationIds);
+			if (!c) unmapped.triggers.add(t.token);
+			return c;
+		});
+		// 소속 조건이 둘 이상이면 설명문의 인원수가 합집합("검계 또는 흑운회가 4인")의 것이다.
+		// 엔진은 발동을 AND 로 묶으므로 그 수를 그대로 쓰면 근사보다 더 틀린다 — 세어서 넘긴다.
+		const affiliationTokens = mapped.filter((c) => c?.op === 'COUNT_AFFILIATION').length;
+
+		const conditions = mapped
+			.map((c) =>
+				c && c.op === 'COUNT_AFFILIATION'
+					? refineAffiliation(c, desc, affiliations.get(c.affiliation), affiliationTokens)
+					: c,
+			)
 			.filter((c): c is Condition => c !== null);
 
 		// 원본은 효과와 발동을 짝지어 주지 않는다. 배열 두 개가 따로 있을 뿐이다.

@@ -37,17 +37,26 @@ export function evaluate(condition: Condition, ctx: EvalContext): Evaluation {
 		}
 
 		case 'COUNT_AFFILIATION': {
-			// 소속 조건의 판정 범위가 기프트마다 다르다(편성 기준 · 출격 기준). 원본 토큰에
-			// 그 구분이 없으므로 **둘 중 큰 쪽**을 쓴다. 정밀화는 설명문 파싱이 필요하다.
+			// 판정 범위는 설명문이 말한다(vocab.refineAffiliation). 표지가 없는 경우에만
+			// 예전 근사를 유지한다 — 둘 중 큰 쪽. 실측 18건 중 3건이 여기 해당한다.
 			const inDeck = ctx.affiliation.deck[condition.affiliation] ?? 0;
 			const inField = ctx.affiliation.deployed[condition.affiliation] ?? 0;
-			const have = Math.max(inDeck, inField);
+			const have =
+				condition.scope === 'deck' ? inDeck
+				: condition.scope === 'deployed' ? inField
+				: Math.max(inDeck, inField);
+			const label =
+				condition.scope === 'deck' ? '편성'
+				: condition.scope === 'deployed' ? '출전'
+				: '편성·출전 중 많은 쪽';
 			const ratio = clamp(have / condition.atLeast);
 			return {
 				ratio,
 				rate: 1,
 				evidence:
-					have > 0 ? [`${condition.affiliation} ${have}명 (필요 ${condition.atLeast})`] : [],
+					have > 0
+						? [`${condition.affiliation} ${label} ${have}명 (필요 ${condition.atLeast})`]
+						: [],
 			};
 		}
 

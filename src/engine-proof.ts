@@ -34,6 +34,9 @@ const check = (label: string, ok: boolean, detail: string): void => {
 
 async function main(): Promise<void> {
 	const affiliations = await loadAffiliations();
+	// checkCoverage 는 소속 id 존재 여부만 본다(내부적으로 mapTrigger 를 그대로 씀) —
+	// load.ts:97 과 같은 이유로 여기서도 이름 맵에서 id 집합만 뽑아 건넨다.
+	const affiliationIds = new Set(affiliations.keys());
 
 	// ── 슬라이스 0 — 어휘 사전이 원본을 덮는가 ────────────────
 	console.log('\n[슬라이스 0] 어휘 — 원본 토큰을 빠짐없이 옮기는가');
@@ -41,7 +44,7 @@ async function main(): Promise<void> {
 	const cov = checkCoverage(
 		tokens.filter((t) => t.kind === 'effect').map((t) => t.token),
 		tokens.filter((t) => t.kind === 'trigger').map((t) => t.token),
-		affiliations,
+		affiliationIds,
 	);
 	check(
 		'효과 토큰 커버리지',

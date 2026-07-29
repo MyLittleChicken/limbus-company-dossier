@@ -45,9 +45,19 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
+  "//exclude": "exclude 는 include 의 리터럴 경로도 걸러낸다 — 예전엔 'src' 하나로 뭉뚱그려서 include 에 적힌 src/engine-proof.ts 도 같이 잘려나가 타입체크를 한 번도 안 받았다. tsconfig 는 음성 글롭을 지원하지 않아, engine-proof.ts 만 빼고 나머지 파이프라인 파일을 하나씩 적는다.",
   "exclude": [
     "node_modules",
     "dist",
-    "src"
+    "src/entities",
+    "src/assets.ts",
+    "src/convert.ts",
+    "src/fetch.ts",
+    "src/io.ts",
+    "src/load.ts",
+    "src/manifest-lf.ts",
+    "src/report.ts",
+    "src/text.ts",
+    "src/verify.ts"
   ]
 }
