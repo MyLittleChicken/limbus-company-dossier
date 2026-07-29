@@ -1,10 +1,10 @@
-# 소속과 인격 태그의 분리
+# 인격 태그 — 이름이 틀렸다 (분리는 불필요)
 
-> 상태: 미착수 / 조사 완료 2026-07-27
-> `affiliation` 93종에 조직이 아닌 것이 섞여 있다. 축을 둘로 나눠야 한다.
+> 상태: **결론 변경 2026-07-29** / 최초 조사 2026-07-27
+> 축을 둘로 나누기로 했으나, 실측 결과 **나눌 필요가 없다.** 남는 문제는 이름 하나다.
 > 조사용 분류 시트가 저장소 루트 `tags-classify.csv` 에 있다(추적하지 않는다).
 
-## 1. 무엇이 문제인가
+## 1. 무엇이 문제였나
 
 인격에 붙는 태그를 **소속(Affiliation)** 이라는 이름으로 93종 적재했다.
 그런데 이 목록은 성격이 다른 값을 한 축에 담고 있다.
@@ -21,62 +21,93 @@
 | --- | --- |
 | `The House of Spiders` · `Le Sette Famiglie` | 조직 |
 | `The Fingers` → `The Thumb` | 상위 조직과 그 하위 분파 |
-| `Sottocapo` | 그 조직 안에서의 계급 |
-| `Smoke War` | 참전한 사건 |
-| `War Hero` | 칭호 |
+| `Sottocapo` | 그 조직 안에서의 계급 (언더보스) |
+| `Smoke War` | 참전한 사건 (연기전쟁) |
+| `War Hero` | 칭호 (전쟁영웅) |
 
 조직·분파·계급·사건·칭호가 평탄화되어 하나의 배열에 들어 있다.
 
-## 2. 원본은 이것을 소속이라 부르지 않는다
+## 2. 게임은 이것을 "특성 키워드" 라 부른다
 
-| 확인 | 결과 |
-| --- | --- |
-| 인격 데이터의 필드명 | **`tags`** — `affiliations` 가 아니다 |
-| `identity_tag_list.json` | 타입 정보 없는 **문자열 배열 95개** |
-| 태그 종류를 구분하는 필드 | **없다** |
+2026-07-29 확인. 게임 화면의 인격 정보에 **「특성 키워드」** 항목이 있고, 값이 원본 `tags` 와
+정확히 일치한다.
 
-`src/entities/basics.ts` 의 `buildAffiliations` 가 이 `tags` 를 소속으로 명명했다.
-원본에 분류 정보가 없으므로 분류는 우리가 저작해야 한다.
+```
+게임 화면 (10916 거미집 엄지 아비 · 로쟈)
+  엄지 · 거미집 · 7대 패밀리 · 언더보스 · 손가락 · 연기전쟁 · 전쟁영웅
 
-## 3. 기능적으로 소속인 것은 28종이다
+assets.tags
+  The Thumb · The House of Spiders · Le Sette Famiglie · Sottocapo ·
+  The Fingers · Smoke War · War Hero
+```
 
-기프트 설명문의 조건 문구는 `<태그> 소속 인격이 N인 이상` 형태다.
-이 형태로 등장하는 태그를 전수 세면 **93종 중 28종**이다.
+**7종 1:1 완전 일치.** 원본 필드명도 `affiliations` 가 아니라 **`tags`** 다.
+`src/entities/basics.ts` 의 `buildAffiliations` 가 이것을 "소속" 으로 명명한 것이 오역이다.
 
-| 조건 기프트 수 | 태그 |
+`Smoke War`(연기전쟁) · `War Hero`(전쟁영웅) · `Dihui Star`(지혜성)를 소속이라 부를 수 없다.
+
+## 3. 기능적으로 조건이 되는 것은 28종이다
+
+기프트의 `triggers` 토큰이 `{태그} Identities` 형태로 소속 조건을 담는다.
+**설명문 파싱이 아니라 구조화된 토큰이다.**
+
+전수 집계 결과 **93종 중 28종**이 등장한다.
+
+| 참조 횟수 | 태그 |
 | ---: | --- |
-| 8 | 흑운회 · 중지 |
-| 7 | 검계 · 약지 |
-| 4 | 가주 후보 |
-| 3 | 흑수-묘 · 림버스 컴퍼니 · 멀티크랙 사무소 · N사 광신도 · 피쿼드호 · W사 |
-| 2 | 섕크 협회 · 라만차랜드 · 기술해방연합 · 검지 · 유로지비 |
-| 1 | 새벽 사무소 · 디에치 협회 · LCE · 리우 협회 · S사 · 신체파 · 야수파 · 세븐 협회 · 시 협회 · 거미집 · 엄지 · 츠바이 협회 |
+| 10 | Blade Lineage(검계) |
+| 8 | Kurokumo Clan(흑운회) · The Middle(중지) |
+| 7 | The Ring(약지) |
+| 5 | Bloodfiend(혈귀) |
+| 3 | The Pequod · Limbus Company · N Corp. Fanatic · Heishou Pack - Mao Branch · W Corp. · MultiCrack Office |
+| 2 | Cinq Assoc. · Technology Liberation Alliance · The Index · La Manchaland · Yurodivy |
+| 1 | Shi/Seven/Zwei/Dieci/Liu Assoc. · Lobotomy Corp. · LCE · Dawn Office · The Thumb · T Corp. · Heishou Pack - You/Wu Branch |
 
-나머지 65종은 조건 문구에 한 번도 등장하지 않는다. `Sottocapo` · `Capo IIII` ·
-`Soldato II` · `Maestro` · `Student` · `Base Identity` · `Butler` · `Pequod Captain` ·
-`Great Sister` 가 여기 속한다.
+나머지 65종은 조건으로 한 번도 등장하지 않는다.
 
-**의미론이 아니라 게임이 조건으로 쓰는지가 기준이다.** `가주 후보`는 직함으로 보이지만
-보유 인격이 1명인데도 조건 기프트를 4개 갖는다.
+## 4. 그런데 분리할 필요가 없다 — 실측 두 가지
 
-## 4. 다른 출처가 더 깨끗하다
+### 4.1 계층이 이미 펼쳐져 있다
 
-`limbus-data-mj` 의 `associations.json` 은 64종이다. 93종과 대조한 결과다.
+하위 태그를 가진 인격은 **상위 태그도 이미 갖고 있다.** 전수 확인.
 
-| 대조 | 개수 |
-| --- | ---: |
-| 양쪽에 있음 | 63 |
-| `limbus-assets` 에만 있음 | 30 |
-| `limbus-data-mj` 에만 있음 | 1 (`Lobotomy Corp.` — assets 는 본사/지부로 쪼갠다) |
+| 하위 → 상위 | 일치 | | 하위 → 상위 | 일치 |
+| --- | ---: | --- | --- | ---: |
+| The Thumb → The Fingers | 4/4 | | Heishou Pack - Mao → Heishou Pack | 3/3 |
+| The Index → The Fingers | 3/3 | | Heishou Pack - Wu → Heishou Pack | 1/1 |
+| The Middle → The Fingers | 6/6 | | Heishou Pack - You → Heishou Pack | 2/2 |
+| The Ring → The Fingers | 6/6 | | Heishou Pack - Wei → Heishou Pack | 1/1 |
+| The Pinky → The Fingers | 1/1 | | Heishou Pack - Si → Heishou Pack | 2/2 |
+| Lobotomy Corp. HQ → L Corp. | 9/9 | | Lobotomy Corp. Branch → L Corp. | 1/1 |
 
-**assets 에만 있는 30종이 거의 정확히 "소속이 아닌 것들"이다** — 메타 라벨(`Base Identity` ·
-`E.G.O Gear`), 직함(`Butler` · `Capo IIII` · `Docent` · `Great Sister` · `Maestro` ·
-`Pequod Captain` · `Soldato II` · `Sottocapo` · `Student` · `War Hero` · `Heishou Pack Adept` ·
-`The Oracle's Proxy`), 종족(`Bloodfiend` · `Mechanical Amalgam` · `Second Kindred` ·
-`Third Kindred`), 상위 총칭(`Fixer` · `Syndicate` · `The Backstreets` · `The Fingers`),
-사건(`Smoke War`).
+**12/12 전부 일치.** "손가락 소속 3인 이상" 조건은 `The Fingers` 태그를 세면 그만이다.
+`parent` 컬럼이 필요 없다.
 
-그리고 **기능적 소속 28종 중 27종이 mj 64에 들어 있다.** 빠진 것은 `가주 후보` 하나다.
+### 4.2 조인이 태그 종류를 가리지 않는다
+
+기프트 참조 28종을 실제 인격 태그와 대조한 결과 **조인 실패 0건**이다.
+
+```
+Bloodfiend(종족)      → 인격 5    조인 성공
+The Middle(분파)      → 인격 6    조인 성공
+Dawn Office(사무소)   → 인격 3    조인 성공
+Limbus Company(회사)  → 인격 22   조인 성공
+```
+
+종족이든 분파든 사무소든 **똑같이 태그 id 하나로 조인된다.** 분류 컬럼이 판정에 관여하지 않는다.
+
+### 4.3 따라서
+
+| 하려던 것 | 판정 |
+| --- | --- |
+| `kind` 컬럼 (organization / rank / species / meta) | **불필요.** 조인은 태그 id로 되고 분류는 사람이 읽을 때만 쓴다 |
+| `parent` 컬럼 | **불필요.** 상위 태그가 이미 인격마다 붙어 있다 |
+| 30종 수작업 분류 | **불필요** |
+
+어떤 태그가 미래의 기프트·패시브 조건이 될지 알 수 없다. 지금 분류를 굳히면 그때마다
+분류를 고쳐야 한다. **평평한 태그 + 조인**이 변화에 강하다.
+
+현재 구조(`affiliation` 평평한 태그 + `identity_affiliation` N:M)가 이미 맞다.
 
 ## 5. ADR-04 2.2 의 근거가 성립하지 않는다
 
@@ -88,7 +119,9 @@ ADR-04 2.2 는 소속의 정본을 `limbus-assets` 로 두면서 이렇게 적�
 **`LIMBUS_COMPANY_LCB` 는 `associations.json` 의 내부 키이고, 같은 파일의 `name` 필드는
 `Limbus Company` 형태다.** 63종이 문자열까지 일치한다. 키만 보고 어휘가 다르다고 판단한 것으로 보인다.
 
-정본을 다시 정할 때 이 ADR을 함께 정정해야 한다.
+다만 **정본은 그대로 `limbus-assets` 가 맞다.** mj의 64종은 좁다 — 10916 의 경우 mj는
+`엄지 · 거미집` 2종만 주고 조직인 `7대 패밀리` 조차 빠진다. ADR 의 결론은 유지하되 근거 문장을
+정정한다.
 
 ## 6. 옆 프로젝트와의 교차 검증
 
@@ -100,52 +133,64 @@ ADR-04 2.2 는 소속의 정본을 `limbus-assets` 로 두면서 이렇게 적�
 | 기프트 조건의 표현 | 빌드 시점 AST 정규화. **원본 `triggers` 토큰 기반이며 설명문 파싱이 아니다** |
 | 복합 조건 | 구조상은 단일 토큰이고 복합은 설명문에만 있다 |
 | 스포일러 마크업 | 그쪽에는 없다 |
-| 93 vs 64 정본 | 미평가 |
 
-**실측이 서로 일치한다** — 기프트가 요구하는 소속 28종, 인격의 distinct 태그 93종을
-독립적으로 같은 수로 얻었다.
-
-그쪽의 "노이즈로 두고 조인으로 우회한다"는 추천 엔진에서는 성립하지만 우리에게는 통하지 않는다.
-우리는 인격 목록에 소속 필터를 노출하므로 `Base Identity` · `솔다토 II` 가 필터 칩으로 뜬다.
+**그쪽 판단이 옳았다.** 2026-07-29 실측이 같은 결론에 도달했다(4절).
+당시 "우리는 필터를 노출하므로 통하지 않는다"고 적었으나, 그것은 **화면 문제**이지
+스키마 문제가 아니다 — 필터에 무엇을 노출할지는 조회 조건으로 정한다.
 
 그쪽이 남긴 미결도 함께 받았다 — **소속 조건의 판정 범위가 기프트마다 다르다.**
 기프트 9282 는 `(편성 인원을 기준으로 함)`, 9263 은 `(출격 인원을 기준으로 함)` 이다.
-3단계 추천 엔진의 입력이 될 사실이다.
+`lib/engine/vocab.ts` 의 `refineAffiliation` 이 이를 다룬다.
 
-## 7. 지금 미루는 이유
+## 7. 남은 일 둘
 
-**구조가 재분류를 감당한다.** ADR-02 5절 원칙 2가 전체 재생성을 정했으므로 어떤 재분류도
-마이그레이션이 없다. 변환기를 고치고 다시 돌리면 끝난다.
+### 7.1 이름을 `trait` 으로 바꾼다 — 결정 2026-07-29
 
-| 이미 갖춘 것 | 효과 |
-| --- | --- |
-| `id` 가 원본 영문 문자열 | 분류가 바뀌어도 조인 키가 바뀌지 않는다 |
-| 관계가 독립 테이블(`identity_affiliation` 434행) | 축을 쪼개도 행을 나누기만 하면 된다 |
-| 표시 문자열이 엔티티에서 분리 | 분류와 텍스트가 묶여 있지 않다 |
-| 산출물을 커밋하지 않음 | 재적재가 정상 경로다 |
+게임이 「특성 키워드」라 부르므로 `affiliation`(소속)은 오역이다.
 
-**분류를 담을 컬럼을 미리 두지 않는 이유** — 나중에 분류할 때 변환기를 고쳐야 하고,
-그때 컬럼 추가는 DDL 재생성 한 줄이다. 지금 넣으면 값이 전부 비어 있는 컬럼만 생긴다.
+| 층 | 지금 | 바꾼 뒤 |
+| --- | --- | --- |
+| 스키마 | `Affiliation` · `AffiliationText` · `IdentityAffiliation` | `Trait` · `TraitText` · `IdentityTrait` |
+| 테이블 | `affiliation` · `affiliation_text` · `identity_affiliation` | `trait` · `trait_text` · `identity_trait` |
+| 변환 | `buildAffiliations` (`src/entities/basics.ts`) | `buildTraits` |
+| 엔진 | `COUNT_AFFILIATION` · `refineAffiliation` · `AFFILIATION_ALIAS` | `COUNT_TRAIT` · `refineTrait` · `TRAIT_ALIAS` |
+| 질의 | `listAffiliations` (`lib/queries/identities.ts`) | `listTraits` |
+| 화면 | 패널 "소속" · 필터 "소속" · `?affiliation=` | "특성 키워드" · `?trait=` |
 
-## 8. 시간이 갈수록 비싸지는 것
+**마이그레이션은 없다.** ADR-02 5절 원칙 2가 전체 재생성을 정했으므로 DDL 재생성 후
+재적재하면 끝난다. 비용은 코드 편집량이며 UI 가 늘수록 커진다.
 
-**이름 하나다.** `affiliation` 이라는 명칭을 12개 파일 68곳이 쓰고 있고 화면에도
-"소속" 필터로 나간다(2026-07-27 기준). 데이터가 아니라 코드 편집량이라 UI 가 늘수록 커진다.
-마이그레이션은 아니므로 급하지 않으나, 재분류 시점에 함께 처리하는 것이 싸다.
+`?affiliation=` URL 이 바뀌므로 **인격 편 마스터북 작업이 끝난 뒤 한 번에 처리한다.**
 
-## 9. 착수할 때 할 일
+### 7.2 별칭 표의 미해결 참조를 검사한다 — 결정 2026-07-29
 
-1. `tags-classify.csv` 를 채워 분류를 확정한다. 판단 근거 컬럼(기프트 조건 수 · mj64 포함 여부 ·
-   스포일러 마크업 · 보유 인격)이 들어 있다.
-2. **`triggers` 토큰을 먼저 조사한다.** 옆 프로젝트가 설명문이 아니라 이 토큰에서 소속 조건을
-   뽑고 있다. 우리 원본에도 있다면 문구 매칭이 불필요해진다. 도출 경로가 정해져야 구현이 결정된다.
-3. 정본을 다시 정하고 ADR-04 2.2 를 정정한다.
-4. 스키마를 두 축으로 나눈다. 이름도 함께 바로잡는다.
-5. 스포일러 마크업 여부를 플래그로 남긴다(5종). 지금은 `stripMarkup` 이 지우고 기록하지 않는다.
-6. 인격 목록의 필터는 소속만 쓰고, 인격 태그는 상세에만 표시한다.
+기프트 토큰과 태그 목록의 표기가 달라 `lib/engine/vocab.ts:216` 이 별칭 표를 둔다.
 
-## 10. 확인하지 못한 것
+```
+Cinq Assoc.   → Cinq Association        Yurodivy        → Yurodiviye
+Dieci Assoc.  → Dieci Association       Lobotomy Corp.  → Lobotomy Corp. Headquarters
+Liu/Seven/Shi/Zwei/Öufi/Devyat' Assoc.  → ... Association
+```
 
-- 게임 UI 가 이 축을 실제로 무엇이라 부르는지. 공식 위키 직접 확인은 하지 못했다.
-- `Dihui Star`(지혜성)가 조직인지 칭호인지.
+지금은 **28/28 전부 해소**되지만, 새 기프트가 새 줄임말을 쓰면 조건이 조용히 사라진다
+(`resolveAffiliation` 이 `null` 을 반환하고 그 조건은 없던 것이 된다).
+
+**`src/verify.ts` 에 "미해결 태그 참조 0건" 검사를 추가한다.** 별칭 표 자체는 코드에 둔다 —
+데이터 파일로 빼면 로드 경로만 늘고 얻는 것이 없다.
+
+## 8. 이 문서에서 취소된 계획
+
+2026-07-27 판에 있던 다음 항목은 **하지 않는다.**
+
+- ~~스키마를 두 축으로 나눈다~~ → 4절
+- ~~`tags-classify.csv` 를 채워 분류를 확정한다~~ → 4절
+- ~~인격 목록의 필터는 소속만 쓰고 인격 태그는 상세에만 표시한다~~ → 화면 조회 조건으로 정할 일이며 스키마와 무관
+- ~~정본을 다시 정한다~~ → 5절. 정본은 `limbus-assets` 유지, ADR 근거 문장만 정정
+
+## 9. 확인하지 못한 것
+
+- 스포일러 마크업 5종(`Great Sister` · `Jia Family` · `Le Sette Famiglie` · `Maestro` ·
+  `Sottocapo`)을 플래그로 남길지. 지금은 `stripMarkup` 이 지우고 기록하지 않는다.
+  그중 2종은 닫는 태그가 `</s>` 가 아니라 `<s>` 로 깨져 있다.
 - 기업 태그 중 `L Corp.` 만 한국어가 없는 이유. `H사` · `N사` · `W사` 등은 모두 있다.
+- 패시브도 태그를 조건으로 쓰는지. 기프트만 확인했다.
