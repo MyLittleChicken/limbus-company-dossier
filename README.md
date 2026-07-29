@@ -77,7 +77,7 @@
 | [04-data-inventory.md](docs/04-data-inventory.md) | 데이터 수집 완전성 근거 — 출처 19종, 교차 대조 결과, 갭 규명 | 1단계 착수 전 | 작성됨 |
 | [05-ui-foundation.md](docs/05-ui-foundation.md) | 화면 구조와 디자인 기반 — 화면 목록, 필터 축, 로케일·결손 표기, 이미지 애셋 정책 | 2단계 착수 전 | 작성됨 |
 | [06-recommendation-engine.md](docs/06-recommendation-engine.md) | 추천 엔진 설계 — 어휘 사전, 조건 평가, 한계 효용, 팩 점수, 슬라이스 증명 | 3단계 착수 전 | 작성됨 |
-| `docs/07-recommendation-system.md` | 런 상태 입력 흐름과 추천·근거 제시 방식 설계 | 4단계 착수 전 | 예정 |
+| [07-recommendation-system.md](docs/07-recommendation-system.md) | 추천 시스템 — 편성 편집, 런 추적, 후보 팩 제시와 근거, 덱 코드 | 4단계 착수 전 | 작성됨 |
 
 ### 백로그
 
