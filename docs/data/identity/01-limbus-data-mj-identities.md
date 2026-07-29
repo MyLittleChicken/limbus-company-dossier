@@ -285,17 +285,38 @@ mj `2023-04-11` · assets `2024-04-11` 로 **연도 오타**다. 시즌 4는 202
 | 화면 | 미표시 |
 | 함정 | 아래 둘 |
 
-**함정 1 — mj가 좁다**
+**함정 1 — 이 필드만 보면 좁아 보이지만, 같은 출처의 다른 필드에 나머지가 있다**
+
+> **정정 2026-07-29 (회차 2).** 초안은 "`limbus-data-mj` 가 7대 패밀리조차 빠뜨린다"고 적었다.
+> 빠뜨린 것이 아니라 **다른 파일의 다른 필드**에 있었다.
 
 ```
 10916 거미집 엄지 아비
-  mj      ["THUMB_FINGER", "SPIDER_HOUSE"]                     엄지 · 거미집
-  assets  ["The Thumb","The House of Spiders","Le Sette Famiglie",
-           "Sottocapo","The Fingers","Smoke War","War Hero"]
+
+  limbus-data-mj/identities.json        associations
+    ["THUMB_FINGER", "SPIDER_HOUSE"]                              조직만
+
+  limbus-data-mj/identities_detail.json unitKeywords              ← 회차 2
+    ["SMALL","UNDERBOSS_FIRED","FINGER","SMOKE_WAR","WAR_HERO",
+     "SPIDER_HOUSE_FATHER","THUMB_LEVEL_MIDDLE_CAPO_UNDERBOSS"]   계급·이력·플래그
+
+  limbus-assets/identities.json         tags
+    ["Le Sette Famiglie","Sottocapo","Smoke War","The Fingers",
+     "The House of Spiders","The Thumb","War Hero"]               한 배열에 전부
 ```
 
-assets 7종이 게임 화면의 「특성 키워드」와 **1:1 일치**한다. mj는 조직인 `7대 패밀리` 조차
-빠뜨린다. 인격별 개수 비교에서 **assets가 더 많음 148건 · 같음 36건 · mj가 더 많음 0건**이다.
+**`limbus-data-mj` 는 특성 키워드를 두 필드로 쪼개 담는다** — 조직은 `associations`,
+그 외(계급·이력·내부 플래그)는 `identities_detail.json` 의 `unitKeywords` 다.
+`loc-ko/UnitKeyword*.json` 12개 파일이 표시명 133종을 갖고 있으며, 인격이 쓰는 36종 중
+25종이 여기 걸린다(`FINGER` 손가락 · `SMOKE_WAR` 연기전쟁 · `WAR_HERO` 전쟁영웅 …).
+
+두 필드를 합쳐도 **`Le Sette Famiglie`(7대 패밀리)는 양쪽 어디에도 없다.**
+`limbus-assets` 를 표시용 정본으로 두는 결론은 유지된다.
+
+이 필드만 놓고 본 개수 비교는 **assets가 더 많음 148건 · 같음 36건 · mj가 더 많음 0건**이지만,
+`unitKeywords` 를 합치면 **mj가 더 많음 181건 · 같음 3건 · assets가 더 많음 0건**으로 뒤집힌다.
+개수가 아니라 **무엇을 담느냐**가 다르다 — `unitKeywords` 에는 표시되지 않는 내부 플래그가
+11종 섞여 있다(`SMALL` 182건 · `CAN_NOT_USING_INDEX_UNLOCK_PERSONALITY` 등).
 
 **함정 2 — 정본 근거 문장이 틀렸다**
 
