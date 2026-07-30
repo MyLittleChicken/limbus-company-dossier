@@ -92,7 +92,8 @@
 | corrosionType | 침식 시 속성 |
 | resists / statuses | 저항과 보유 상태 |
 | passives | 상시 효과 목록 |
-| extractable / maxThreadspin | 추출·실뽑기 관련 |
+| extractable | **게임 필드가 아니다.** `limbus-assets` 추출 시뮬레이터의 풀 플래그 |
+| maxThreadspin | 「환상 해석」 최대 단계. 기본 4이고 값이 있는 3건은 전부 5 |
 
 **주의 사항**
 

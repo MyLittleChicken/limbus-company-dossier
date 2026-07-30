@@ -1,6 +1,6 @@
 # E.G.O 계열 지도 (E.G.O Overview)
 
-> 상태: **회차 1–2 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 상태: **회차 1–3 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
 > 인격 편(회차 1–14)이 닫힌 뒤 시작했다. E.G.O 편은 9회차 예정이다.
 
 ## 1. E.G.O id 체계
@@ -35,7 +35,7 @@
 | --- | --- | --- |
 | `limbus-data-mj/egos.json` | 1 | 본체 110건. **한국어명 외에는 assets 와 중복** |
 | `limbus-data-mj/egos_detail.json` | 2 | **스킬·패시브로 가는 다리.** 208 + 113 을 여기서 연다 |
-| `limbus-assets/egos.json` | 3 | **정본** · 저항·상태·추출·침식 |
+| `limbus-assets/egos.json` | 3 | **정본** · 척추. 고유 개념은 `statuses` 하나 |
 | `limbus-assets/egos_mini.json` · `ego_voicelines.json` · `ego_header_offsets.json` | 4 | 요약판·부속 (+`shared-library` 대조) |
 | `ego-details/limbus-assets/{id}.json` 110개 | 5 | E.G.O 패시브가 여기에만 있다 |
 | `loc-*/Egos.json` | 6 | 표시명·설명 |
@@ -66,21 +66,33 @@ Ego ─┬─ EgoText
 | --- | --- | --- | --- | --- | --- |
 | 등급 | `egos.rarity`(소문자) | `egos.rank`(대문자) | **assets** | 110/110 동일. 표기만 다르다 | 1 |
 | 각성 속성 | `egos.sin` · `egos.attackType` | `egos.awakeningType` | **assets** | 110/110 동일. mj 는 침식을 못 담는다 | 1 |
-| 침식 속성 | — | `egos.corrosionType` | **assets** | mj 에 없다. 12종은 침식 자체가 없다 | 1 |
+| 침식 속성 | `egos_detail.corrosionSkill` → `skills.json` | `egos.corrosionType` | **assets** | mj 도 조인으로 110/110 재구성. 죄악은 각성과 항상 같고 공격 타입만 8건 다르다 | 1·3 |
 | 죄악 자원 비용 | `egos.resourceCost` | `egos.cost` | **assets** | 110/110 동일 | 1 |
 | 시즌 | `egos.season` | `egos.season` | 동일 | 110/110. `8000`=콜라보 대역 | 1 |
 | 출시일 | `egos.updatedDate`(정수) | `egos.date`(`YYYY-MM-DD`) | **assets** | 109/110 동일. 어긋난 1건이 mj 오타 | 1 |
 | 한국어 E.G.O 명 | `egos.nameKo`(108/110) | — | **mj + loc-ko** | assets 는 영문뿐. 결손 2건은 loc-ko 가 덮는다 | 1 |
 | 팀코드 적격 | `egos.teamCodeEligible`(전부 `true`) | — | **없음** | 정보량 0. 인격 편과 같은 판정 | 1 |
 | 죄악 저항 | — | `egos.resists`(sin × 7) | **assets** | mj 에 없다 | 1 |
-| E.G.O 가 다루는 상태 | — | `egos.statuses` | **assets** | mj 에 없다 | 1 |
-| 추출 가능 여부 | — | `egos.extractable` | **assets** | mj 에 없다 | 1 |
+| E.G.O 가 다루는 상태 | — | `egos.statuses`(137종) | **assets** | **mj 가 못 갖는 유일한 개념.** 64종은 인격 축에도 없다 | 1·3 |
+| 추출 시뮬레이터 풀 | — | `egos.extractable`(28건) | **도구 필드** | 게임 사실이 아니다. `updates__55.json` 이 밝힌다 | 3 |
+| 환상 해석 최대 단계 | `skills.json` 의 `level: 5` | `egos.maxThreadspin`(3건) | 동일 | 기본 4. 4번째 성냥불 3종만 5 | 3 |
 | 죄악 저항(값) | `egos_detail.attributeResists`(9축) | `egos.resists`(7축) | 동일 | 죄악 7축 110/110 일치. `white`/`black` 은 상수 | 2 |
 | 침식 확률 곡선 | `egos_detail.corrosion` | — | **mj** | 110건 전부 같은 상수. 수치 출처는 여기뿐 | 2 |
 | E.G.O 스킬 연결 | `egos_detail.awakeningSkill`·`corrosionSkill`(208) | `ego-details/` | 미정 | 회차 5에서 판정 | 2 |
 | E.G.O 패시브 연결 | `egos_detail.awakeningPassives`(113) | `ego-details.passiveList` | **assets** | 우리는 assets 를 쓴다 | 2 |
 | 죄악 자원 비용(색 표기) | `egos_detail.requirements` | — | 중복 | `resourceCost` 와 110/110 동일 | 2 |
 | 색 토큰 ↔ 죄악 치환표 | `mechanics/sins.json` | `skill_tags.json` 의 색 표기 | **mj** | 7종 완전 사전 | 2 |
+
+### 5.2 강화 축은 인격과 이름이 다르다
+
+```
+인격    Uptie       동기화        1–5 · 3단계가 각성(gacksung)
+E.G.O   Threadspin  환상 해석     1–4 · 3종만 5
+```
+
+`mirror-dungeon/loc-ko/TutorialMirrorDungeon.json` 이 두 이름을 한 문장에 쓴다 —
+"인격의 **동기화 단계**와 E.G.O의 **환상 해석 단계**". 영문판은
+`Uptie and Threadspin Tiers` 다. **섞어 쓰면 안 된다.**
 
 ## 6. 인격 편에서 미리 본 것
 

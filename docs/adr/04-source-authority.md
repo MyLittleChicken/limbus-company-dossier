@@ -64,8 +64,18 @@
 `identities_detail.json`이 `limbus-assets`의 인격 필드를 모두 덮으면서 `mentalCondition` ·
 `panicSkill`을 추가로 갖는다.
 
-E.G.O는 반대다. mj에는 `awakeningType` · `corrosionType` · `resists` · `statuses` · `extractable` ·
-`maxThreadspin`이 없다.
+E.G.O는 반대다. 다만 근거는 **필드 유무가 아니라 조인 비용과 수치**다
+(마스터북 E.G.O 편 회차 3 실측으로 2026-07-30 정정).
+
+mj 에 이름이 없을 뿐 개념은 재구성된다 — `resists` 는 `egos_detail.attributeResists` 의
+죄악 7축(110/110), `awakeningType` · `corrosionType` 은 `egos_detail` 의 스킬 id 를 거쳐
+`skills.json` 에서(110/110), `maxThreadspin` 은 `skills.json` 의 `level: 5` 에서 나온다.
+
+**mj 가 못 갖는 개념은 `statuses` 하나뿐이다.** `extractable` 은 게임 필드가 아니라
+`limbus-assets` 추출 시뮬레이터의 풀 플래그다.
+
+정본을 `limbus-assets`로 두는 이유는 한 파일에 담겨 3파일 조인이 필요 없고, 아래 표대로
+수치를 갖기 때문이다.
 
 **스킬·패시브 정본 정정 (2026-07-26).** 처음에는 한국어가 인라인이라는 이유로 `limbus-data-mj`를
 정본으로 두었으나, 구현 중 대조하니 **mj에는 수치가 없다.**
