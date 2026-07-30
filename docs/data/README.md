@@ -83,7 +83,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 
 ## 5. 진행 현황
 
-### 인격 (Identity) — 14회차
+### 인격 (Identity) — 14회차 · **완료 2026-07-30**
 
 | # | 대상 | 상태 |
 | --- | --- | --- |
@@ -100,11 +100,25 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 11 | [`loc-*/Personalities*.json` + `Personality_Get_Condition.json`](identity/11-loc-personalities.md) | **완료** 2026-07-30 · 4파일 × 3로케일 |
 | 12 | [`loc-*/Skills_personality-NN.json` + `Skills.json`](identity/12-loc-skills.md) | **완료** 2026-07-30 · 16파일 × 3로케일 |
 | 13 | [`loc-*/Passives*.json` + `UnitKeyword*.json` + `AssociationName.json`](identity/13-loc-passives-keywords.md) | **완료** 2026-07-30 · 16파일 × 3로케일 |
-| 14 | `data/assets/` 인격 이미지 712개 | 미착수 |
+| 14 | [`data/assets/` 인격 이미지 712개](identity/14-assets-identity-images.md) | **완료** 2026-07-30 · 712개 |
+
+**인격 편 결산** — 14회차 전부 미해결 없이 닫혔다. 정본 판정과 원본 오타 목록은
+`identity/00-overview.md` 5.3–5.5 에 있다.
 
 ### 그 밖의 엔티티
 
-E.G.O · 기프트 · 테마 팩 · 거울 던전 · 상태 — **인격 편을 마친 뒤 착수한다.**
+파일 규모로 잡은 예상 회차다. 인격 편에서 공통 어휘(죄악 7 · 공격 타입 3 · 기믹 축 10 ·
+토큰 치환표 4,497종)와 구조 패턴(델타 · 접미 규칙 · 번호 공간 충돌 · id 대역)이 이미
+잡혔으므로 뒤로 갈수록 가벼워진다.
+
+| 편 | 파일 | 예상 회차 | 비고 |
+| --- | ---: | ---: | --- |
+| E.G.O | 72 + 215 | ~8 | 회차 3·4·8 에서 절반 노출됨 — 스킬 208 · 패시브 113 · 동기화 5 |
+| 기프트 | 98 | ~7 | 회차 1 에서 `9282` 날개 모양 양초 확인 |
+| 팩 | 7 | ~3 | 가장 작다 |
+| 거울 던전 | 163 | ~6 | |
+| 상태(메카닉) | 260 | ~6 | 08 문서의 `status_gimmick` 근거 |
+| 인카운터 | 380 | ~8 | `assets` 251개가 동형이면 묶인다 |
 
 ## 6. 회차 문서와 주제 문서
 
