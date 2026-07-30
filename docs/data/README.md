@@ -118,7 +118,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 5 | [`ego-details/limbus-assets/{id}.json` 110개](ego/05-limbus-assets-ego-details.md) | **완료** 2026-07-30 · 최상위 5종 |
 | 6 | [`loc-*/Egos.json`](ego/06-loc-egos.md) | **완료** 2026-07-30 · 3로케일 × 2파일 |
 | 7 | [`loc-*/Skills_Ego*.json` 최대 16파일 × 3로케일](ego/07-loc-skills-ego.md) | **완료** 2026-07-30 · 210건 |
-| 8 | `loc-*/Passive_Ego.json` | 미착수 |
+| 8 | [`loc-*/Passive_Ego.json`](ego/08-loc-passive-ego.md) | **완료** 2026-07-30 · 113건 |
 | 9 | `data/assets/egos/` 318개 | 미착수 |
 
 **척추가 뒤집혔다** — 인격 편은 `limbus-data-mj` 가 정본이었으나 E.G.O 는
