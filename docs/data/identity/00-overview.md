@@ -158,6 +158,9 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 인격 외 유닛 | — | — | **loc** | 베르길리우스 `9999` · 스킨 `40501` · 이벤트 유닛 `4xxxxx` 12종 | 11 |
 | 코인 효과(한국어) | 영문뿐 | 영문뿐 | **loc** | `Skills_personality-NN` 의 `coinlist` 만 갖는다 · 회차 3 의 마지막 조각 | 12 |
 | 스킬 이름·설명(원문) | `skills.json` 의 `levels` | `identity-details` 의 `data` | **loc** | 세 곳 다 델타 구조. 한국어는 loc 만 | 12 |
+| 특성 키워드 표시명 | — | — | **loc** | `UnitKeyword*` 12파일 133종. 인격이 쓰는 36종 중 25종만 | 13 |
+| 조직명 표시 | `associations.json` 의 `nameKo`(64) | — | **loc** | `AssociationName` 은 3항목뿐. `UnitKeyword` 로 옮겨갔다 | 13 |
+| 패시브 요약·플레이버 | — | — | **loc** | `summary` 218 · `flavor` 23. 우리가 쓰지 않는다 | 13 |
 
 **미기입** — 회차 7 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
