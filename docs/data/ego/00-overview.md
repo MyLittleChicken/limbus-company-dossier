@@ -1,6 +1,6 @@
 # E.G.O 계열 지도 (E.G.O Overview)
 
-> 상태: **회차 1 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 상태: **회차 1–2 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
 > 인격 편(회차 1–14)이 닫힌 뒤 시작했다. E.G.O 편은 9회차 예정이다.
 
 ## 1. E.G.O id 체계
@@ -34,7 +34,7 @@
 | 파일 | 회차 | 성격 |
 | --- | --- | --- |
 | `limbus-data-mj/egos.json` | 1 | 본체 110건. **한국어명 외에는 assets 와 중복** |
-| `limbus-data-mj/egos_detail.json` | 2 | 미착수 |
+| `limbus-data-mj/egos_detail.json` | 2 | **스킬·패시브로 가는 다리.** 208 + 113 을 여기서 연다 |
 | `limbus-assets/egos.json` | 3 | **정본** · 저항·상태·추출·침식 |
 | `limbus-assets/egos_mini.json` · `ego_voicelines.json` · `ego_header_offsets.json` | 4 | 요약판·부속 (+`shared-library` 대조) |
 | `ego-details/limbus-assets/{id}.json` 110개 | 5 | E.G.O 패시브가 여기에만 있다 |
@@ -75,6 +75,12 @@ Ego ─┬─ EgoText
 | 죄악 저항 | — | `egos.resists`(sin × 7) | **assets** | mj 에 없다 | 1 |
 | E.G.O 가 다루는 상태 | — | `egos.statuses` | **assets** | mj 에 없다 | 1 |
 | 추출 가능 여부 | — | `egos.extractable` | **assets** | mj 에 없다 | 1 |
+| 죄악 저항(값) | `egos_detail.attributeResists`(9축) | `egos.resists`(7축) | 동일 | 죄악 7축 110/110 일치. `white`/`black` 은 상수 | 2 |
+| 침식 확률 곡선 | `egos_detail.corrosion` | — | **mj** | 110건 전부 같은 상수. 수치 출처는 여기뿐 | 2 |
+| E.G.O 스킬 연결 | `egos_detail.awakeningSkill`·`corrosionSkill`(208) | `ego-details/` | 미정 | 회차 5에서 판정 | 2 |
+| E.G.O 패시브 연결 | `egos_detail.awakeningPassives`(113) | `ego-details.passiveList` | **assets** | 우리는 assets 를 쓴다 | 2 |
+| 죄악 자원 비용(색 표기) | `egos_detail.requirements` | — | 중복 | `resourceCost` 와 110/110 동일 | 2 |
+| 색 토큰 ↔ 죄악 치환표 | `mechanics/sins.json` | `skill_tags.json` 의 색 표기 | **mj** | 7종 완전 사전 | 2 |
 
 ## 6. 인격 편에서 미리 본 것
 
@@ -82,8 +88,8 @@ E.G.O 는 인격 편 회차 3·4·8에서 절반이 노출됐다. 그 관측을 
 
 | 인격 편 관측 | 회차 | E.G.O 편에서 닫을 곳 |
 | --- | --- | --- |
-| `skills.json` 의 `2xxxxxx` 대역 208건 · 접미 `11`(각성)/`21`(침식) | 3 | 회차 7 |
-| `passives.json` 의 `2xxxxxx` 113건 — mj 로는 조회되지 않음 | 4 | 회차 5·8 |
+| `skills.json` 의 `2xxxxxx` 대역 208건 · 접미 `11`(각성)/`21`(침식) | 3 | **회차 2에서 닫음** — `awakeningSkill`+`corrosionSkill`. 적재처는 회차 5 |
+| `passives.json` 의 `2xxxxxx` 113건 — mj 로는 조회되지 않음 | 4 | **회차 2에서 닫음** — `awakeningPassives`. 다리가 `egos_detail.json` 이었다 |
 | 각성/침식 구분의 정본이 어디인가 | 3 | **회차 1에서 닫음** — assets `awakeningType`/`corrosionType` |
 | E.G.O 저항은 죄악 7종 축 (인격은 공격 타입 3종) | `docs/09-resistance.md` | 회차 3 |
 | 조건부 기믹 — E.G.O 착용이 인격의 기믹 축을 바꾼다 | 1 | `docs/08-gimmick-keywords.md` |
