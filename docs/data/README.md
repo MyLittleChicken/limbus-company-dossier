@@ -105,6 +105,25 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 **인격 편 결산** — 14회차 전부 미해결 없이 닫혔다. 정본 판정과 원본 오타 목록은
 `identity/00-overview.md` 5.3–5.5 에 있다.
 
+### E.G.O — 9회차 · 진행 중
+
+계열 지도는 [`ego/00-overview.md`](ego/00-overview.md).
+
+| # | 대상 | 상태 |
+| --- | --- | --- |
+| 1 | [`limbus-data-mj/egos.json`](ego/01-limbus-data-mj-egos.md) | **완료** 2026-07-30 · 키 12종 |
+| 2 | `limbus-data-mj/egos_detail.json` | 미착수 |
+| 3 | `limbus-assets/egos.json` | 미착수 |
+| 4 | `limbus-assets/egos_mini.json` + 부속 2종 + `shared-library` 대조 | 미착수 |
+| 5 | `ego-details/limbus-assets/{id}.json` 110개 | 미착수 |
+| 6 | `loc-*/Egos.json` | 미착수 |
+| 7 | `loc-*/Skills_Ego*.json` 13파일 × 3로케일 | 미착수 |
+| 8 | `loc-*/Passive_Ego.json` | 미착수 |
+| 9 | `data/assets/egos/` 318개 | 미착수 |
+
+**척추가 뒤집혔다** — 인격 편은 `limbus-data-mj` 가 정본이었으나 E.G.O 는
+`limbus-assets` 다(`src/entities/egos.ts:47`). mj 의 고유 기여는 한국어 E.G.O 명뿐이다.
+
 ### 그 밖의 엔티티
 
 파일 규모로 잡은 예상 회차다. 인격 편에서 공통 어휘(죄악 7 · 공격 타입 3 · 기믹 축 10 ·
