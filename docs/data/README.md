@@ -91,7 +91,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 2 | [`limbus-data-mj/identities_detail.json`](identity/02-limbus-data-mj-identities-detail.md) | **완료** 2026-07-29 · 키 16종 |
 | 3 | [`limbus-data-mj/skills.json`](identity/03-limbus-data-mj-skills.md) | **완료** 2026-07-30 · 키 7종 + 서브키 6종 |
 | 4 | [`limbus-data-mj/passives.json`](identity/04-limbus-data-mj-passives.md) | **완료** 2026-07-30 · 키 6종 |
-| 5 | `limbus-data-mj/associations.json` | 미착수 |
+| 5 | [`limbus-data-mj/associations.json`](identity/05-limbus-data-mj-associations.md) | **완료** 2026-07-30 · 키 2종 |
 | 6 | `limbus-assets/identities.json` | 미착수 |
 | 7 | `limbus-assets/identities_mini.json` + `shared-library` 동형 2종 | 미착수 |
 | 8 | `limbus-assets/passives.json` + `skill_tags.json` | 미착수 |

@@ -132,6 +132,9 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 패시브 해금 조건 | `passives.json` 의 `cost`(5종 토큰) | `passives.json` 의 `uptie` · `identity-details` 의 `combatPassives[].uptie` | **assets** | 우리는 detail 의 `level` 을 쓴다 | 4 |
 | 패시브 목록 구성 | `identities_detail.json` 의 `battlePassives` | `identity-details` 의 `combatPassives` | **assets** | mj 는 스킬 6건을 패시브로 잘못 올린다 | 4 |
 | E.G.O 패시브 | `passives.json` 의 `2xxxxxx` 113건 | `ego-details` 의 `passiveList` + `loc-*` | **assets+loc** | mj 는 조회되지 않는다 | 4 |
+| 조직 코드 사전 | `associations.json`(64종 · UPPER_SNAKE) | `identity_tag_list.json`(93종 · 영문 표기) | **assets** | `affiliation.id` 가 영문 표기다 | 5 |
+| 조직 계층 | 접두사 문자열에만 (`BLACK_BEAST_*`) | 인격마다 상위·하위 태그를 **둘 다** 붙임 | **assets** | 구조로 담은 출처가 없다 | 1·5 |
+| 스포일러 마크업 | 없음 | `identity_tag_list.json` 5건 | **assets** | mj 는 해당 태그 자체가 없다 | 5 |
 
 **미기입** — 회차 3 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
