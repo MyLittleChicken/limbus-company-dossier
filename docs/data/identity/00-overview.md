@@ -119,6 +119,10 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 시즌 | `identities.season`(182/184) | `identities.season` · `identities_mini.season` | **mj + 보강** | 결손 2건을 assets 로 채운다 | 1 |
 | 표시 문자열(ko) | `identities.nameKo`/`titleKo` · `skills`·`passives` 의 `*Ko` | — | **mj** | assets 는 영문만 | 1 |
 | 외형 애셋명 | `identities_detail.appearance` | `identity_header_offsets.json` | 다른 것 | 전자는 내부명, 후자는 표시 오프셋 | 2 |
+| 스킬 분류 | `skills.json` 의 `sin`·`attackType`·`defType`·`skillTier` | `identities.skillTypes[].type` | **mj** | assets 가 12개 누락 | 3 |
+| 죄악 해금 단계 | `skills.json` 의 `sinFrom`(131건) | `skillTypes[].type.affinityUptie`(131건) | 동일 | 131/131 값·집합 완전 일치 | 3 |
+| **합 가능 여부** | — | `defenseSkillTypes[].type.clashable`(52건) | **assets** | mj 에 없다. 우리 `Skill` 모델에도 없다 | 3 |
+| E.G.O 스킬 | `skills.json` 의 `2xxxxxx` 대역 208건 | `ego-details/` | **미적재** | `Skill` 이 `identityId` 필수라 담을 자리가 없다 | 3 |
 
 **미기입** — 회차 3 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 

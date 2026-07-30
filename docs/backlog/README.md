@@ -18,6 +18,7 @@
 | [04-status-mechanics.md](04-status-mechanics.md) | 상태 기믹(탄환·보호)이 별개의 축인데 어디에도 없다 — 키워드·소속과 갈라 담아야 한다 | 엔진 배선 해소 · 화면 구획 미착수 |
 | [05-season-label.md](05-season-label.md) | 시즌 값이 화면에 원본 정수 그대로 나간다 — 발푸르기스 인격이 `S9104` 로 뜬다 | 미착수 |
 | [06-atktypes-naming.md](06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 스킬 수·타입 종류·인격 수를 각각 가리킨다 | 미착수 · 개명 작업에 얹는다 |
+| [07-report-artifact.md](07-report-artifact.md) | 변환 리포트가 콘솔로만 나가 원본 결손·오타를 추적할 수 없다 | 설계 확정 · 구현 미착수 |
 
 ## 규칙
 
