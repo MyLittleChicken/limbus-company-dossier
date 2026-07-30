@@ -145,6 +145,8 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 토큰 표시명(en) | — | `skill_tags.json` 의 `text`(72종) | **assets** | 대괄호를 품는다 | 8 |
 | 토큰 표시명(ko) | `mechanics/terms.json` 의 `nameKo` | — | **mj** | 치환표는 양쪽이 있어야 완성된다 | 8 |
 | 토큰 색 | — | `skill_tags.json` 의 `color`(47종) | **assets** | 우리가 쓰지 않는다 | 8 |
+| 별칭 | — | `alt_names.json`(인격 121 + E.G.O 110) | **assets** | 커뮤니티 별칭. 우리 검색이 쓰지 않는다 | 9 |
+| 초상 오프셋 | — | `identity_header_offsets.json`(105건) | **assets** | 우리가 쓰지 않는다 · `10701` 에 문자열 `"null"` | 9 |
 
 **미기입** — 회차 7 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 

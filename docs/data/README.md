@@ -95,7 +95,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 6 | [`limbus-assets/identities.json`](identity/06-limbus-assets-identities.md) | **완료** 2026-07-30 · 키 17종 |
 | 7 | [`limbus-assets/identities_mini.json` + `shared-library` 동형 2종](identity/07-limbus-assets-identities-mini.md) | **완료** 2026-07-30 · 키 10+15+8종 |
 | 8 | [`limbus-assets/passives.json` + `skill_tags.json`](identity/08-limbus-assets-passives.md) | **완료** 2026-07-30 · 최상위 2종 + 토큰 72종 |
-| 9 | assets 부속 4종 | 미착수 |
+| 9 | [assets 부속 4종](identity/09-limbus-assets-aux.md) | **완료** 2026-07-30 · 4파일 |
 | 10 | `identity-details/limbus-assets/{id}.json` 184개 | 미착수 |
 | 11 | `loc-*/Personalities*.json` + `Personality_Get_Condition.json` | 미착수 |
 | 12 | `loc-*/Skills_personality-NN.json` + `Skills.json` | 미착수 |
