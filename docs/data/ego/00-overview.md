@@ -1,6 +1,6 @@
 # E.G.O 계열 지도 (E.G.O Overview)
 
-> 상태: **회차 1–4 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 상태: **회차 1–5 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
 > 인격 편(회차 1–14)이 닫힌 뒤 시작했다. E.G.O 편은 9회차 예정이다.
 
 ## 1. E.G.O id 체계
@@ -79,8 +79,10 @@ Ego ─┬─ EgoText
 | 환상 해석 최대 단계 | `skills.json` 의 `level: 5` | `egos.maxThreadspin`(3건) | 동일 | 기본 4. 4번째 성냥불 3종만 5 | 3 |
 | 죄악 저항(값) | `egos_detail.attributeResists`(9축) | `egos.resists`(7축) | 동일 | 죄악 7축 110/110 일치. `white`/`black` 은 상수 | 2 |
 | 침식 확률 곡선 | `egos_detail.corrosion` | — | **mj** | 110건 전부 같은 상수. 수치 출처는 여기뿐 | 2 |
-| E.G.O 스킬 연결 | `egos_detail.awakeningSkill`·`corrosionSkill`(208) | `ego-details/` | 미정 | 회차 5에서 판정 | 2 |
-| E.G.O 패시브 연결 | `egos_detail.awakeningPassives`(113) | `ego-details.passiveList` | **assets** | 우리는 assets 를 쓴다 | 2 |
+| E.G.O 스킬 | `egos_detail` 의 id 208 + `skills.json` 의 수치 없음 | `ego-details` 의 스킬 **210** + 수치 전량 | **assets** | assets 가 상위집합. `2060812`·`2120912` 는 mj 에 없다 | 2·5 |
+| E.G.O 패시브 | `egos_detail.awakeningPassives`(113) | `ego-details.passiveList`(113) | **assets** | 개수 일치. mj 는 id 만, assets 는 원문 | 2·5 |
+| 환상 해석 보너스 | — | `ego-details` 의 `bonuses` | **assets** | mj 에 없다 | 5 |
+| 조건부 기믹 원문 | — | `ego-details.passiveList[].desc` | **assets** | "counts as an Identity that…" 2건 | 5 |
 | 죄악 자원 비용(색 표기) | `egos_detail.requirements` | — | 중복 | `resourceCost` 와 110/110 동일 | 2 |
 | 색 토큰 ↔ 죄악 치환표 | `mechanics/sins.json` | `skill_tags.json` 의 색 표기 | **mj** | 7종 완전 사전 | 2 |
 

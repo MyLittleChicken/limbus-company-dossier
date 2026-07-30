@@ -286,10 +286,29 @@
   → 장착만으로 검계 우두머리가 "호흡 인격" 에서 "호흡·출혈 인격" 이 된다.
 ```
 
-**둘의 차이는 E.G.O 데이터에 없다.** 어느 E.G.O가 인격의 키워드 자체를 바꾸는지는
-`identity_keyword_modifiers.json` 과 mj `egoKeywords` 에만 적혀 있다(5.2).
+**둘의 차이는 E.G.O 의 구조 데이터에 없다.** `statuses` 만으로는 갈리지 않는다.
 
 따라서 인격의 축을 계산할 때 `ego_status` 를 끌어오지 않는다. E.G.O의 상태는 E.G.O의 것이다.
+
+#### 다만 텍스트에는 명시돼 있다 (2026-07-30 보강)
+
+마스터북 E.G.O 편 회차 5에서 `ego-details/limbus-assets/{id}.json` 의
+`passiveList[].desc` 가 조건부 기믹을 **자연어로 선언**하고 있음을 확인했다.
+
+```
+20109 엄숙한 애도 (이상)
+  "This Identity counts as an \"Identity that inflicts [Vibration] and [Sinking]\""
+
+20509 착영휘도 (뫼르소)
+  "This Identity counts as an \"Identity that applies [Laceration] and [Breath]\""
+```
+
+`counts as` 문구를 가진 E.G.O 는 이 **2건뿐**이며, 아래 5.2 표의 E.G.O 조건 2건과
+정확히 대응한다. 세 번째(`11009` + 기프트 `9282`)는 E.G.O 가 아니라 여기 없다.
+
+**조인 대신 텍스트 파싱이면 E.G.O 조건은 자동 수집이 가능하다.** 다만 문구가
+`inflicts`/`applies` 로 흔들리고 표본이 2건뿐이라, 지금은 큐레이션(5.2)을 정본으로 두고
+이 문장을 **검증용 대조**로만 쓴다.
 
 ### 5.2 조건의 큐레이션은 두 파일에만 있다
 
