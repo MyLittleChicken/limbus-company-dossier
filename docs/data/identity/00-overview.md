@@ -141,6 +141,10 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 죄악 전체 집합 | `atkSins`+`altSins`(공격만) | `identities_mini.affinities`(공격+방어) | **assets** | mj 는 방어 스킬 죄악을 뺀다 · 169/184 | 7 |
 | 스킬 타입 전체 집합 | `atkTypes`(공격만·개수 맵) | `identities_mini.types`(공격+방어·목록) | **assets** | 축이 다르다 | 7 |
 | 구버전 시간축 | — | `shared-library` 163건 | **shared** | 스탯 10키 불일치 0 · 변경 5키가 패치 이력 | 7 |
+| 서포트 패시브 조건 | — | `passives.json` 의 `support[].condition` | **assets** | `owned`=보유 · `res`=공명 · 스크린샷 6/6 일치 | 8 |
+| 토큰 표시명(en) | — | `skill_tags.json` 의 `text`(72종) | **assets** | 대괄호를 품는다 | 8 |
+| 토큰 표시명(ko) | `mechanics/terms.json` 의 `nameKo` | — | **mj** | 치환표는 양쪽이 있어야 완성된다 | 8 |
+| 토큰 색 | — | `skill_tags.json` 의 `color`(47종) | **assets** | 우리가 쓰지 않는다 | 8 |
 
 **미기입** — 회차 7 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
