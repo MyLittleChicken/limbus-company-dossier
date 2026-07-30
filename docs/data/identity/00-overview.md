@@ -135,8 +135,11 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 조직 코드 사전 | `associations.json`(64종 · UPPER_SNAKE) | `identity_tag_list.json`(93종 · 영문 표기) | **assets** | `affiliation.id` 가 영문 표기다 | 5 |
 | 조직 계층 | 접두사 문자열에만 (`BLACK_BEAST_*`) | 인격마다 상위·하위 태그를 **둘 다** 붙임 | **assets** | 구조로 담은 출처가 없다 | 1·5 |
 | 스포일러 마크업 | 없음 | `identity_tag_list.json` 5건 | **assets** | mj 는 해당 태그 자체가 없다 | 5 |
+| 기프트 조건 기믹 축 | `keywords`(1건 다름) | `skillKeywordList` | **assets** | `10104` 가 게임 판정 기준을 드러냈다 · 08 문서 4.1 | 6 |
+| 이벤트 출신 | — | `event`(31) · `eventReward`(13) | **assets** | mj 에 없다. 역사 정보라 대체 불가 | 6 |
+| 합 가능·죄악 해금 세부 | — | `defenseSkillTypes[].type` 의 `atkType`·`affinityUptie`·`clashable` | **assets** | `atkType` 과 `affinityUptie` 는 상호 배타적 | 6 |
 
-**미기입** — 회차 3 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
+**미기입** — 회차 7 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
 ## 6. 화면
 

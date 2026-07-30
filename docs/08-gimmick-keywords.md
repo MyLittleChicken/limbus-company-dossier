@@ -94,7 +94,7 @@
 
 | 층 | 필드 | 담는 것 |
 | --- | --- | --- |
-| **① 기본** | mj `keywords` · assets `skillKeywordList` | S1–S3 스킬이 **직접 부여**하는 기믹. 값 7종 고정 |
+| **① 기본** | mj `keywords` · assets `skillKeywordList` | S1–S3 스킬이 **직접 부여**하는 기믹. 값 7종 고정. **기프트 조건 카운트의 판정 기준**(4.1) |
 | **② 조건부** | mj `egoKeywords` · assets `identity_keyword_modifiers.json` | E.G.O·기프트 **조합으로 붙는** 기믹. `altKeywords` 는 조건이 아니라 주석이다(5.5) |
 | **③ 접점** | assets `statuses` | 이 인격이 **다루는 상태 전부**. 기믹 + 버프/디버프 + 고유 상태. 조건부 경유분도 섞여 있다 |
 
@@ -162,6 +162,64 @@
 **이 16건이 전부 조건부인 것은 아니다.** ③은 조건부 경유분과 부수 접점을 함께 담는다.
 `Breath` 하나만으로 `poise` 가 붙는 사례(6건)는 호흡을 소량 다루는 것에 가깝다.
 조건부로 확인된 것은 5절의 3건뿐이며, 그 판정은 ③이 아니라 ②에서만 나온다.
+
+### 4.1 ①이 기프트 조건 카운트의 판정 기준이다
+
+**회차 6에서 ①의 두 출처가 갈리는 1건을 찾았고, 그것이 게임의 판정 기준을 드러냈다.**
+
+```
+10104 개화 E.G.O:: 동백 (이상)
+
+  mj  keywords            ["tremor", "sinking"]
+      keywordSkills       { tremor: [1,2,3], sinking: [1,2,3] }
+  assets skillKeywordList ["Sinking"]                         ← 침잠만
+         statuses         ["Sinking", "SinkingSurge", "Vibration"]
+
+  keyword_modifiers 없음 · egoKeywords/altKeywords 없음 → 조건부가 아니다
+```
+
+게임에서 이 인격은 **침잠 인격이며, 진동 조건 카운트에서 명시적으로 제외**된다.
+
+> 진동 위력·횟수를 부여하는 공격 스킬을 보유한 인격 5인 이상 출격 — **이 인격은 포함되지
+> 않는다.** 다만 다른 인격들로 조건이 충족되면 그 기프트 효과는 받는다.
+
+따라서 두 필드는 어긋난 것이 아니라 **다른 것을 재고 있다.**
+
+| 필드 | 재는 것 | 10104 |
+| --- | --- | --- |
+| mj `keywords` | 스킬이 **실제로 부여**하는 기믹 | 진동 · 침잠 |
+| assets `skillKeywordList` | **기프트 조건 카운트**에 들어가는 기믹 | 침잠 |
+
+**기프트 판정의 정본은 `assets skillKeywordList` 다.**
+
+### 4.2 그래서 우리 엔진이 과대 계상한다
+
+```
+우리 엔진 (③ statuses 기반)
+  10104 statuses → 엔진 축 ["sinking", "tremor"]     ← 진동으로 센다
+게임 판정 (① skillKeywordList 기반)
+                → ["Sinking"]                       ← 진동으로 세지 않는다
+```
+
+기프트 조건에 **기믹 카운트가 41종** 있다.
+
+```
+22  Bleed Skill Used        18  Burn Skill Used        18  Rupture Skill Used
+16  Sinking Skill Used      15  Tremor Skill Used      15  Charge Skill Used
+10  Allies have Tremor Skill     9  Allies have Rupture Skill
+ 6  Allies have Burn Skill       6  Allies have Sinking Skill  …
+```
+
+`lib/engine/dsl.ts:88` 의 `SKILL_SUPPLIES` 가 `ctx.statusSupply` 를 세고, 그 값은
+`identity_status`(= ③ `statuses`)에서 온다.
+
+**따라서 `Tremor Skill Used` · `Allies have Tremor Skill` 계열 기프트 25건에서 `10104` 를
+진동 공급자로 잘못 센다.**
+
+`①`을 적재해야 하는 이유가 둘이 됐다.
+
+1. ③에 조건부가 섞여 되찾을 수 없다(5.1)
+2. **기프트 조건 카운트가 ①을 기준으로 판정한다** — ③으로 세면 틀린다
 
 ## 5. 조합 축 — 인격 + E.G.O · 인격 + 기프트
 
@@ -368,6 +426,8 @@ enum Gimmick {
 }
 
 /// ① 기본 축. 원본 keywords 를 그대로 담는다. 7종 기믹만 표현된다.
+/// **기프트 조건 카운트는 이 축으로 판정한다**(4.1·4.2). ③으로 세면 10104 를 과대 계상한다.
+/// 두 출처가 갈리는 1건에서는 assets skillKeywordList 가 정본이다.
 model IdentityKeyword {
   identityId Int
   gimmick    Gimmick
@@ -464,6 +524,7 @@ model IdentityComboGimmick {
 | 인격 축 | 조건부가 기본에 섞여 되찾을 수 없음 | 원본에서 각각 읽어 분리 |
 | `ego_status` | 적재돼 있으나 미사용 | 그대로 미사용 — E.G.O 스킬의 효과이지 인격의 키워드가 아니다 |
 | 조건 근거 | 없음 | "착영휘도 장착 시"를 화면에 표시 가능 |
+| 기프트 기믹 카운트 | ③ `statuses` 로 세어 `10104` 를 과대 계상 | ①로 세어 게임 판정과 일치 |
 
 기존 테이블은 삭제하지 않는다. `identity_status` · `ego_status` 는 사실 데이터라 그대로 둔다.
 추가되는 것은 테이블 3개(`identity_keyword` · `status_gimmick` · `identity_combo_gimmick`)와
