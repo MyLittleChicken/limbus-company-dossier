@@ -1,0 +1,386 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>상태 카탈로그 — MIRROR TRACKER</title>
+<link rel="stylesheet" href="../css/tokens.css" />
+<link rel="stylesheet" href="../css/globals.css" />
+<link rel="stylesheet" href="../css/proto-doc.css" />
+
+<header class="site-header">
+	<div class="hbar">
+		<div class="htitle">
+			<a href="../index.html">MIRROR TRACKER</a>
+			<span class="sub">디자인 시스템 프로토타입</span>
+		</div>
+		<div class="locale-switch">
+			<span aria-current="true">한국어</span>
+			<a href="#">English</a>
+		</div>
+	</div>
+	<nav class="site-nav">
+		<a href="../index.html">토큰</a>
+		<a href="states.html" aria-current="page">상태</a>
+		<span class="nav-sep" aria-hidden="true"></span>
+		<a href="home.html">홈</a>
+		<a href="gifts.html">기프트</a>
+		<a href="packs.html">테마 팩</a>
+		<a href="identities.html">인격</a>
+		<a href="egos.html">E.G.O</a>
+		<a href="squad.html">편성</a>
+	</nav>
+</header>
+
+<main class="site-main">
+	<div class="seclabel">
+		<h2>상태 카탈로그</h2>
+		<span class="kr">평범한 화면에 나오지 않는 것</span>
+		<span class="rule"></span>
+		<span class="hint">8 클래스</span>
+	</div>
+
+	<p class="lede">
+		결손·부재·폴백·부족은 특정 데이터에서만 렌더되므로 화면을 떠 오는 것으로는 덮이지 않는다.
+		여기 모아 둔다. 클래스명과 구조는 실제 컴포넌트와 같다.
+	</p>
+
+	<!-- ── 결손 · 부재 · 폴백 ────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>결손과 부재</h2>
+		<span class="kr">성격이 다른 셋</span>
+		<span class="rule"></span>
+	</div>
+
+	<p class="lede">
+		없는 값을 0 이나 빈 문자열로 지어내지 않는다. 그리고 <strong>세 부류를 같은 기호로 표시하지 않는다</strong> —
+		같은 기호를 쓰면 사용자가 데이터의 신뢰도를 잘못 판단한다.
+	</p>
+
+	<dl class="doc-cases">
+		<div class="doc-case">
+			<dt>
+				<code>.missing</code>
+				<p>
+					<strong>결손.</strong> 데이터에 있어야 하는데 없다. 명시적으로 표기한다.
+					스킬 이름이 어느 출처에도 없는 것 3 종, 스킬 수치가 없는 것 6 종, 상태 이름 원본 결손 7 종이 여기 걸린다.
+					색을 못 보는 경우에도 읽히도록 점선 밑줄을 함께 둔다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<div class="row-head">
+						<span class="skill-tile skill-tile-ico"><img src="../assets/icons/limbus-assets/wrath.webp" alt="" width="34" height="34" /></span>
+						<strong><span class="missing">이름 없음</span></strong>
+						<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Counter.webp" alt="" width="16" height="16" />counter</span>
+					</div>
+					<p class="skill-nums">위력 <span class="missing">값 없음</span> · 코인 위력 <span class="missing">값 없음</span></p>
+				</div>
+			</dd>
+		</div>
+
+		<div class="doc-case">
+			<dt>
+				<code>.absent</code>
+				<p>
+					<strong>부재.</strong> 없는 것이 정상이다. 결손으로 보이게 하지 않는다.
+					범용 기프트 226 종의 전용 팩 없음, 키워드 없는 기프트 120 종, 침식 없는 E.G.O 12 종,
+					층 배정 없는 팩 21 종, 아이콘 없는 상태 254 종이 여기 걸린다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<dl class="facts">
+						<div><dt>전용 팩</dt><dd><span class="absent">없음</span></dd></div>
+						<div><dt>연관 키워드</dt><dd><span class="absent">없음</span></dd></div>
+						<div><dt>등장 층</dt><dd><span class="absent">일반 층 순환에 등장하지 않음</span></dd></div>
+					</dl>
+				</div>
+			</dd>
+		</div>
+
+		<div class="doc-case">
+			<dt>
+				<code>.fellback</code>
+				<p>
+					<strong>폴백.</strong> 표시할 문자열은 있고 언어만 다르다. 위 둘과 또 다르다 —
+					한국어 행이 없어 영문이 노출된 것이며 설계 의도가 아니라 결손의 결과다.
+					소속 7/93, 스킬 이름 3 종, 코인 설명 3 종이 여기 걸린다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<div class="row-head">
+						<strong>Blade Lineage<abbr class="fellback" title="한국어 표기가 없어 영문을 노출합니다">EN</abbr></strong>
+						<span class="tag">소속</span>
+					</div>
+					<ul class="inline-list">
+						<li><span class="tag">검계</span></li>
+						<li><span class="tag">Kurokumo Clan<abbr class="fellback" title="한국어 표기가 없어 영문을 노출합니다">EN</abbr></span></li>
+					</ul>
+				</div>
+			</dd>
+		</div>
+
+		<div class="doc-case">
+			<dt>
+				<code>.notice</code>
+				<p>
+					데이터의 한계를 알리는 자리다. <strong>경보가 아니다</strong> — 브릭레드를 쓰지 않고
+					결손 색으로 왼쪽 괘선만 세운다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<p class="notice">
+						기프트 등장 확률은 표시하지 않습니다. 팩별 기프트 목록은 확보했으나 확률은 어느 출처에도 없습니다.
+					</p>
+				</div>
+			</dd>
+		</div>
+	</dl>
+
+	<!-- ── 편성 칸 ──────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>편성 칸</h2>
+		<span class="kr">빈 자리와 결손</span>
+		<span class="rule"></span>
+	</div>
+
+	<dl class="doc-cases">
+		<div class="doc-case">
+			<dt>
+				<code>.sslot-missing</code>
+				<p>
+					칸 안의 결손 표기. 인격은 골랐는데 그 인격의 데이터가 비어 있는 경우다.
+					<code>.sslot-id-none</code>(고르지 않음)과 구분된다 — 그쪽은 부재다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage doc-stage-narrow">
+					<ul class="sgrid" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+						<li class="sslot">
+							<span class="sslot-main">
+								<span class="sslot-port">
+									<span class="sslot-port-none"></span>
+									<span class="sslot-rarity"><img src="../assets/icons/limbus-assets/000.webp" alt="000" width="20" height="20" /></span>
+								</span>
+								<span class="sslot-name">
+									<span class="sslot-sinner">이상</span>
+									<span class="sslot-id">검계 살수</span>
+								</span>
+							</span>
+							<span class="sslot-missing">스킬 수치가 어느 출처에도 없음</span>
+							<label class="sslot-deploy"><input type="checkbox" /> 출전</label>
+						</li>
+						<li class="sslot">
+							<span class="sslot-main">
+								<span class="sslot-port">
+									<span class="sslot-port-none"></span>
+								</span>
+								<span class="sslot-name">
+									<span class="sslot-sinner">그레고르</span>
+									<span class="sslot-id sslot-id-none">고르지 않음</span>
+								</span>
+							</span>
+							<span class="sslot-ego">
+								<span class="sslot-ego-label">E.G.O</span>
+								<span class="sslot-ego-cells">
+									<span class="ecell"><span class="ecell-rank-text">Z</span></span>
+									<span class="ecell"><span class="ecell-rank-text">T</span></span>
+									<span class="ecell"><span class="ecell-rank-text">H</span></span>
+									<span class="ecell"><span class="ecell-rank-text">W</span></span>
+									<span class="ecell"><span class="ecell-rank-text">A</span></span>
+								</span>
+							</span>
+							<label class="sslot-deploy"><input type="checkbox" /> 출전</label>
+						</li>
+					</ul>
+				</div>
+			</dd>
+		</div>
+
+		<div class="doc-case">
+			<dt>
+				<code>.ecell-rank-text</code>
+				<p>
+					E.G.O 등급 자리의 글자 대체. 등급 아이콘이 없을 때 쓴다.
+					<strong>ALEPH 은 실측 0 종이지만 자리를 빼지 않는다</strong> — 출시 시점에 화면이 깨진다.
+					빈 등급은 공백이 아니라 점선 자리로 보인다. 결손이 아니라 부재다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<span class="sslot-ego" style="display: inline-flex">
+						<span class="sslot-ego-label">E.G.O</span>
+						<span class="sslot-ego-cells" style="justify-content: flex-start">
+							<span class="ecell ecell-on"><img src="../assets/egos/limbus-assets/20101_awaken_profile.webp" alt="" /></span>
+							<span class="ecell ecell-on"><img src="../assets/egos/limbus-assets/20102_awaken_profile.webp" alt="" /></span>
+							<span class="ecell"><span class="ecell-rank-text">H</span></span>
+							<span class="ecell"><span class="ecell-rank-text">W</span></span>
+							<span class="ecell"><span class="ecell-rank-text">A</span></span>
+						</span>
+					</span>
+				</div>
+			</dd>
+		</div>
+	</dl>
+
+	<!-- ── 자원 부족 ────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>자원 부족</h2>
+		<span class="kr">공급이 수요에 못 미친다</span>
+		<span class="rule"></span>
+	</div>
+
+	<dl class="doc-cases">
+		<div class="doc-case">
+			<dt>
+				<code>.res-short</code> · <code>.cost-short</code>
+				<p>
+					장착 E.G.O 의 죄악 비용이 편성의 공급을 넘는 경우다. 색과 함께 수치가 함께 있고
+					세로선이 수요 지점을 표시하므로 색 단독으로 판별되지 않는다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<div class="dist-group">
+						<h4>죄악 자원 · 공급(스킬) / 수요(E.G.O)</h4>
+						<ul class="dist">
+							<li>
+								<span class="dist-key"><img class="icon-inline" src="../assets/icons/limbus-assets/gluttony.webp" alt="" width="20" height="20" /> 탐식</span>
+								<span class="res-track"><span class="dist-bar" style="width: 46%"></span><span class="res-demand" style="left: 40%"></span></span>
+								<span class="dist-n">6 / 43</span>
+							</li>
+							<li class="res-short">
+								<span class="dist-key"><img class="icon-inline" src="../assets/icons/limbus-assets/wrath.webp" alt="" width="20" height="20" /> 분노</span>
+								<span class="res-track"><span class="dist-bar" style="width: 12%"></span><span class="res-demand" style="left: 62%"></span></span>
+								<span class="dist-n">4 / 38</span>
+							</li>
+						</ul>
+					</div>
+					<p class="card-meta" style="margin-top: 12px">
+						<span class="tag tag-icon cost-short"><img src="../assets/icons/limbus-assets/wrath.webp" alt="" width="16" height="16" />3</span>
+						<span class="tag tag-icon cost-short"><img src="../assets/icons/limbus-assets/pride.webp" alt="" width="16" height="16" />2</span>
+						<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/gluttony.webp" alt="" width="16" height="16" />1</span>
+					</p>
+					<p class="notice-inline">부족한 비용만 표기한다. 막지 않는다 — 편성은 사용자의 판단이다.</p>
+				</div>
+			</dd>
+		</div>
+	</dl>
+
+	<!-- ── 선택 모달 ────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>선택 모달</h2>
+		<span class="kr">고를 수 있음 · 이미 있음 · 초상 없음</span>
+		<span class="rule"></span>
+	</div>
+
+	<dl class="doc-cases">
+		<div class="doc-case">
+			<dt>
+				<code>.pickcard-taken</code> · <code>.pickcard-port-none</code>
+				<p>
+					같은 등급에 이미 다른 것이 있으면 점선 테두리로 표기한다. <strong>막지 않는다</strong> —
+					누르면 교체다. 초상이 없는 것은 부재이므로 사선 줄무늬로 자리를 남긴다.
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<ul class="pickgrid">
+						<li>
+							<button type="button" class="pickcard" aria-pressed="true">
+								<span class="pickcard-port">
+									<img class="pickcard-img" src="../assets/identities/limbus-assets/10103_gacksung_profile.webp" alt="" />
+									<span class="pickcard-rarity"><img src="../assets/icons/limbus-assets/000.webp" alt="000" width="18" height="18" /></span>
+								</span>
+								<span class="pickcard-body">
+									<strong>검계 살수</strong>
+									<span class="card-meta">
+										<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/pride.webp" alt="" width="16" height="16" />오만</span>
+										<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Slash.webp" alt="" width="16" height="16" />참격</span>
+									</span>
+								</span>
+							</button>
+						</li>
+						<li>
+							<button type="button" class="pickcard pickcard-taken">
+								<span class="pickcard-port">
+									<span class="pickcard-port-none"></span>
+									<span class="pickcard-rarity"><img src="../assets/icons/limbus-assets/00.webp" alt="00" width="18" height="18" /></span>
+								</span>
+								<span class="pickcard-body">
+									<strong>W사 3등급 정리 요원</strong>
+									<span class="card-meta">
+										<span class="tag">이 등급에 이미 있음</span>
+										<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Burn.webp" alt="" width="16" height="16" />화상</span>
+									</span>
+								</span>
+							</button>
+						</li>
+						<li>
+							<button type="button" class="pickcard pickcard-none">고르지 않음</button>
+						</li>
+					</ul>
+				</div>
+			</dd>
+		</div>
+	</dl>
+
+	<!-- ── 빈 결과 ──────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>빈 결과와 초기화</h2>
+		<span class="kr">조건이 걸려 있을 때만</span>
+		<span class="rule"></span>
+	</div>
+
+	<dl class="doc-cases">
+		<div class="doc-case">
+			<dt>
+				<code>.emptied</code> · <code>.chip-clear</code>
+				<p>
+					결과가 없는 것은 결손도 부재도 아니다 — 조건의 결과다. 초기화는 조건이 걸려 있을 때만 나오며
+					브릭레드를 쓰는 두 자리 중 하나다(나머지 하나는 패널 머리의 인덱스탭).
+				</p>
+			</dt>
+			<dd>
+				<div class="doc-stage">
+					<div class="filter-axes">
+						<div class="filter-axis">
+							<span class="filter-axis-label">등급</span>
+							<button type="button" class="chip" aria-pressed="true">1</button>
+							<button type="button" class="chip" aria-pressed="false">2</button>
+							<button type="button" class="chip" aria-pressed="false">3</button>
+						</div>
+						<div class="filter-axis">
+							<span class="filter-axis-label">키워드</span>
+							<button type="button" class="chip" aria-pressed="true"><img src="../assets/icons/limbus-assets/Burn.webp" alt="" width="16" height="16" />화상</button>
+							<button type="button" class="chip" aria-pressed="false"><img src="../assets/icons/limbus-assets/Bleed.webp" alt="" width="16" height="16" />출혈</button>
+							<button type="button" class="chip chip-clear">조건 초기화</button>
+						</div>
+					</div>
+					<p class="emptied">조건에 맞는 것이 없습니다</p>
+				</div>
+			</dd>
+		</div>
+	</dl>
+
+	<p class="doc-note">
+		<strong>이 페이지의 마크업은 손으로 썼다.</strong> 나머지 21 화면은 실행 중인 앱의 DOM 을 그대로
+		떠 온 것이지만, 여기 있는 여덟 클래스는 특정 데이터에서만 렌더되어 덤프로 잡히지 않았다.
+		구조와 클래스명은 실제 컴포넌트에 맞췄으나 <strong>제품과 대조해 확인해야 하는 유일한 페이지</strong>다.
+	</p>
+
+	<p class="stamp">MD7 · 2026-07-25 스냅샷 기준</p>
+</main>
+
+<footer class="site-footer">
+	<p>비공식 팬 프로젝트이며 Project Moon과 제휴·승인 관계가 없습니다</p>
+	<a href="about.html">고지</a>
+</footer>
+
+<script src="../js/pack-names.js" defer></script>
+<script src="../js/proto.js" defer></script>
