@@ -148,7 +148,7 @@ if (report.hasUnmapped) process.exitCode = 1;                   // 기존 유지
 | 사례 | 성격 | 회차 |
 | --- | --- | --- |
 | `1121102` lv4 `[[FirePunchFuel]` | 한국어 원문 대괄호 오타. 영문은 정상 | 3 |
-| `20306` 전기울음 날짜 `2023-04-11` | `limbus-data-mj` 연도 오타. assets 는 `2024-04-11` | 1 |
+| `20306` 전기울음 날짜 `2023-04-11` | **원본 오타.** mj·구버전 assets 가 `2023`, 현행 assets 만 `2024-04-11` | 1 |
 | `10116` 차원찢개 `updatedDate` | 픽업 종료일이 출시일 자리에 들어옴 | 1 |
 | `1041206` `skillTier` | mj `3` vs assets `4`. 슬롯 규칙상 mj 가 맞다 | 3 |
 | 스킬 12개 누락 | `limbus-assets/identities.json` 이 공격 6 · 방어 6 을 빠뜨림 | 2 |

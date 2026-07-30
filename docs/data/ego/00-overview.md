@@ -1,6 +1,6 @@
 # E.G.O 계열 지도 (E.G.O Overview)
 
-> 상태: **회차 1–3 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 상태: **회차 1–4 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
 > 인격 편(회차 1–14)이 닫힌 뒤 시작했다. E.G.O 편은 9회차 예정이다.
 
 ## 1. E.G.O id 체계
@@ -36,7 +36,8 @@
 | `limbus-data-mj/egos.json` | 1 | 본체 110건. **한국어명 외에는 assets 와 중복** |
 | `limbus-data-mj/egos_detail.json` | 2 | **스킬·패시브로 가는 다리.** 208 + 113 을 여기서 연다 |
 | `limbus-assets/egos.json` | 3 | **정본** · 척추. 고유 개념은 `statuses` 하나 |
-| `limbus-assets/egos_mini.json` · `ego_voicelines.json` · `ego_header_offsets.json` | 4 | 요약판·부속 (+`shared-library` 대조) |
+| `limbus-assets/egos_mini.json` · `ego_voicelines.json` · `ego_header_offsets.json` | 4 | 요약판·부속. 전량 중복이거나 미적재 |
+| `shared-library/egos.json` · `egos_mini.json` | 4 | 구버전 대조. **2026-03-05 직전 스냅샷** |
 | `ego-details/limbus-assets/{id}.json` 110개 | 5 | E.G.O 패시브가 여기에만 있다 |
 | `loc-*/Egos.json` | 6 | 표시명·설명 |
 | `loc-*/Skills_Ego*.json` 13파일 × 3 | 7 | E.G.O 스킬 문자열 |
