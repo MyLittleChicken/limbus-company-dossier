@@ -1,0 +1,182 @@
+/*
+	카탈로그 페이지 전용 가구.
+
+	**이 파일은 제품으로 옮기지 않는다.** `index.html` 과 `states.html` 이 토큰과 상태를
+	늘어놓기 위해 쓰는 것뿐이며, `globals.css` 를 깨끗하게 유지하려고 갈라 두었다.
+	클래스 앞에 `doc-` 를 붙여 원본 클래스 148 종과 절대 섞이지 않게 한다.
+*/
+
+.doc-swatches {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+	gap: var(--sp-4);
+}
+
+.doc-swatch {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-5);
+	padding: var(--sp-4);
+	border: 1px solid var(--line);
+	background: var(--surface-1);
+}
+
+.doc-chip {
+	flex: none;
+	width: 34px;
+	height: 34px;
+	border: 1px solid var(--line-strong);
+}
+
+.doc-swatch code {
+	display: block;
+	font-family: var(--font-mono);
+	font-size: var(--fs-tiny);
+	color: var(--ink-muted);
+}
+
+.doc-swatch strong {
+	display: block;
+	font-size: var(--fs-xs);
+	color: var(--ink);
+	font-weight: var(--fw-medium);
+}
+
+.doc-scale {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.doc-scale li {
+	display: flex;
+	align-items: baseline;
+	gap: var(--sp-6);
+	padding: var(--sp-3) 0;
+	border-bottom: 1px solid var(--line-faint);
+}
+
+.doc-scale li:last-child {
+	border-bottom: 0;
+}
+
+.doc-scale code {
+	flex: none;
+	min-width: 110px;
+	font-family: var(--font-mono);
+	font-size: var(--fs-tiny);
+	color: var(--ink-muted);
+}
+
+.doc-scale .doc-val {
+	flex: none;
+	min-width: 54px;
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	color: var(--ink-dim);
+	letter-spacing: var(--ls-wide);
+}
+
+.doc-bar {
+	height: 10px;
+	background: var(--accent-soft);
+}
+
+/* 상태 카탈로그 — 한 줄에 이름 · 설명 · 실물. */
+.doc-cases {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-8);
+}
+
+.doc-case {
+	display: grid;
+	grid-template-columns: 190px 1fr;
+	gap: var(--sp-8);
+	align-items: start;
+	padding-bottom: var(--sp-8);
+	border-bottom: 1px solid var(--line-faint);
+}
+
+@media (max-width: 760px) {
+	.doc-case {
+		grid-template-columns: 1fr;
+		gap: var(--sp-4);
+	}
+}
+
+.doc-case > dt code {
+	display: block;
+	font-family: var(--font-mono);
+	font-size: var(--fs-tiny);
+	color: var(--ink-gold);
+	margin-bottom: var(--sp-2);
+}
+
+.doc-case > dt p {
+	margin: 0;
+	font-size: var(--fs-xs);
+	color: var(--ink-muted);
+	line-height: var(--lh-base);
+}
+
+.doc-case > dd {
+	margin: 0;
+	min-width: 0;
+}
+
+/* 실물을 얹는 무대. 카드가 배경과 붙어 보이지 않게 한 단 파 둔다. */
+.doc-stage {
+	padding: var(--sp-8);
+	background: var(--surface-inset);
+	border: 1px dashed var(--line);
+}
+
+.doc-stage-narrow {
+	max-width: 280px;
+}
+
+.doc-note {
+	margin: var(--sp-8) 0 0;
+	padding: var(--sp-6);
+	border: 1px solid var(--line-strong);
+	border-left: 3px solid var(--alert);
+	background: var(--surface-1);
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+	line-height: var(--lh-base);
+}
+
+.doc-note strong {
+	color: var(--ink-cream);
+}
+
+.doc-note code {
+	font-family: var(--font-mono);
+	font-size: var(--fs-xs);
+	color: var(--ink-gold);
+}
+
+.doc-todo {
+	margin: 0;
+	padding-left: var(--sp-9);
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+	line-height: var(--lh-base);
+}
+
+.doc-todo li + li {
+	margin-top: var(--sp-4);
+}
+
+.doc-todo code {
+	font-family: var(--font-mono);
+	font-size: var(--fs-xs);
+	color: var(--ink-gold);
+}
