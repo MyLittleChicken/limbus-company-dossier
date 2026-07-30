@@ -97,7 +97,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 8 | [`limbus-assets/passives.json` + `skill_tags.json`](identity/08-limbus-assets-passives.md) | **완료** 2026-07-30 · 최상위 2종 + 토큰 72종 |
 | 9 | [assets 부속 4종](identity/09-limbus-assets-aux.md) | **완료** 2026-07-30 · 4파일 |
 | 10 | [`identity-details/{id}.json` 184 + 163개](identity/10-limbus-assets-identity-details.md) | **완료** 2026-07-30 · 최상위 7종 |
-| 11 | `loc-*/Personalities*.json` + `Personality_Get_Condition.json` | 미착수 |
+| 11 | [`loc-*/Personalities*.json` + `Personality_Get_Condition.json`](identity/11-loc-personalities.md) | **완료** 2026-07-30 · 4파일 × 3로케일 |
 | 12 | `loc-*/Skills_personality-NN.json` + `Skills.json` | 미착수 |
 | 13 | `loc-*/Passives*.json` + `UnitKeyword*.json` + `AssociationName.json` | 미착수 |
 | 14 | `data/assets/` 인격 이미지 712개 | 미착수 |
