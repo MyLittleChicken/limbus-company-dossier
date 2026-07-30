@@ -64,6 +64,23 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 - **미해결**: 위키로 풀리면 그 자리에서 각주를 단다. 어디에도 없으면 `❓ 미확인` 으로 남기고
   `docs/backlog/` 에 항목을 만든다.
 
+### 출처 간 불일치는 회차 중에 단정하지 않는다
+
+두 출처는 **각자 자기 도구에 맞는 구조**를 갖는다(`identity/00-overview.md` 5.1).
+한쪽에만 있는 값을 보고 "결손"·"유령 데이터"로 판정하면 틀릴 수 있다.
+
+| 하는 것 | 하지 않는 것 |
+| --- | --- |
+| 양쪽 값과 개수를 실측해 적는다 | 어느 쪽이 틀렸다고 단정한다 |
+| 게임 화면·위키로 확인한 범위를 명시한다 | 확인 범위를 넘어 일반화한다 |
+| 「관측」으로 기록하고 회차를 계속한다 | 판정을 근거로 스키마·변환을 바꾼다 |
+
+**판정은 인격 편(회차 1–14)을 모두 마친 뒤 일괄로 한다.** 그때 `00-overview.md` 5.2 장부가
+차 있고, 같은 개념을 여러 각도에서 본 결과가 모여 있다.
+
+게임 화면 확인도 범위가 있다. 인격 상세 화면에 없다는 것은 **그 화면에 없다**는 뜻이며,
+게임 데이터에 없다는 뜻이 아니다. 적으로 등장할 때나 내부 처리용일 수 있다.
+
 ## 5. 진행 현황
 
 ### 인격 (Identity) — 14회차
@@ -73,7 +90,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 1 | [`limbus-data-mj/identities.json`](identity/01-limbus-data-mj-identities.md) | **완료** 2026-07-29 · 키 23종 |
 | 2 | [`limbus-data-mj/identities_detail.json`](identity/02-limbus-data-mj-identities-detail.md) | **완료** 2026-07-29 · 키 16종 |
 | 3 | [`limbus-data-mj/skills.json`](identity/03-limbus-data-mj-skills.md) | **완료** 2026-07-30 · 키 7종 + 서브키 6종 |
-| 4 | `limbus-data-mj/passives.json` | 미착수 |
+| 4 | [`limbus-data-mj/passives.json`](identity/04-limbus-data-mj-passives.md) | **완료** 2026-07-30 · 키 6종 |
 | 5 | `limbus-data-mj/associations.json` | 미착수 |
 | 6 | `limbus-assets/identities.json` | 미착수 |
 | 7 | `limbus-assets/identities_mini.json` + `shared-library` 동형 2종 | 미착수 |

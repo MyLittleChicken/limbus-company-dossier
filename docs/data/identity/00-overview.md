@@ -128,6 +128,10 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 코인 효과(영문) | `skills.json` 의 `levels[].coins` | `identity-details` 의 `coins[].descs` | **assets** | 우리는 assets 를 쓴다 | 3 |
 | 코인 효과(한국어) | — | — | **loc-ko** | 양쪽 다 영문뿐. `Skills_personality-NN.json` 만 갖는다 | 3 |
 | 각성/침식 구분 | `skills.json` id 접미 `11`/`21` | `egos.json` 의 `awakeningType`·`corrosionType` | 미정 | E.G.O 편에서 판정 | 3 |
+| 패시브 이름·설명(ko) | `passives.json` 의 `nameKo`·`descKo` | — | **mj** | assets 는 영문만 | 4 |
+| 패시브 해금 조건 | `passives.json` 의 `cost`(5종 토큰) | `passives.json` 의 `uptie` · `identity-details` 의 `combatPassives[].uptie` | **assets** | 우리는 detail 의 `level` 을 쓴다 | 4 |
+| 패시브 목록 구성 | `identities_detail.json` 의 `battlePassives` | `identity-details` 의 `combatPassives` | **assets** | mj 는 스킬 6건을 패시브로 잘못 올린다 | 4 |
+| E.G.O 패시브 | `passives.json` 의 `2xxxxxx` 113건 | `ego-details` 의 `passiveList` + `loc-*` | **assets+loc** | mj 는 조회되지 않는다 | 4 |
 
 **미기입** — 회차 3 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
