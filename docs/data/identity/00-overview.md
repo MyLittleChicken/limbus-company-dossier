@@ -123,6 +123,11 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 죄악 해금 단계 | `skills.json` 의 `sinFrom`(131건) | `skillTypes[].type.affinityUptie`(131건) | 동일 | 131/131 값·집합 완전 일치 | 3 |
 | **합 가능 여부** | — | `defenseSkillTypes[].type.clashable`(52건) | **assets** | mj 에 없다. 우리 `Skill` 모델에도 없다 | 3 |
 | E.G.O 스킬 | `skills.json` 의 `2xxxxxx` 대역 208건 | `ego-details/` | **미적재** | `Skill` 이 `identityId` 필수라 담을 자리가 없다 | 3 |
+| 스킬 이름·설명(ko) | `skills.json` 의 `levels[].nameKo`·`descKo` | — | **mj** | assets 는 영문만 | 3 |
+| 코인 개수·순서·종류 | — | `identity-details/{id}.json` | **assets** | mj 는 효과 문자열만 | 3 |
+| 코인 효과(영문) | `skills.json` 의 `levels[].coins` | `identity-details` 의 `coins[].descs` | **assets** | 우리는 assets 를 쓴다 | 3 |
+| 코인 효과(한국어) | — | — | **loc-ko** | 양쪽 다 영문뿐. `Skills_personality-NN.json` 만 갖는다 | 3 |
+| 각성/침식 구분 | `skills.json` id 접미 `11`/`21` | `egos.json` 의 `awakeningType`·`corrosionType` | 미정 | E.G.O 편에서 판정 | 3 |
 
 **미기입** — 회차 3 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
