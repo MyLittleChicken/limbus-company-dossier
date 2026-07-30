@@ -1,6 +1,6 @@
 # E.G.O 계열 지도 (E.G.O Overview)
 
-> 상태: **회차 1–5 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 상태: **회차 1–6 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
 > 인격 편(회차 1–14)이 닫힌 뒤 시작했다. E.G.O 편은 9회차 예정이다.
 
 ## 1. E.G.O id 체계
@@ -71,7 +71,8 @@ Ego ─┬─ EgoText
 | 죄악 자원 비용 | `egos.resourceCost` | `egos.cost` | **assets** | 110/110 동일 | 1 |
 | 시즌 | `egos.season` | `egos.season` | 동일 | 110/110. `8000`=콜라보 대역 | 1 |
 | 출시일 | `egos.updatedDate`(정수) | `egos.date`(`YYYY-MM-DD`) | **assets** | 109/110 동일. 어긋난 1건이 mj 오타 | 1 |
-| 한국어 E.G.O 명 | `egos.nameKo`(108/110) | — | **mj + loc-ko** | assets 는 영문뿐. 결손 2건은 loc-ko 가 덮는다 | 1 |
+| 한국어 E.G.O 명 | `egos.nameKo`(108/110) | — | **mj + loc-ko** | assets 는 영문뿐. loc-ko 가 108/108 일치하고 결손 2건도 덮는다 | 1·6 |
+| 연출 전용 E.G.O | — | — | **loc-\*** | `Egos-a1c9p3.json` 5건. **id 가 6자리** | 6 |
 | 팀코드 적격 | `egos.teamCodeEligible`(전부 `true`) | — | **없음** | 정보량 0. 인격 편과 같은 판정 | 1 |
 | 죄악 저항 | — | `egos.resists`(sin × 7) | **assets** | mj 에 없다 | 1 |
 | E.G.O 가 다루는 상태 | — | `egos.statuses`(137종) | **assets** | **mj 가 못 갖는 유일한 개념.** 64종은 인격 축에도 없다 | 1·3 |
