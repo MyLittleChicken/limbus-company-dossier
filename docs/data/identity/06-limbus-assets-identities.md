@@ -256,6 +256,9 @@ guard · evade  공격 타입이 없고, 죄악이 4단계에 붙는다      atk
 회차 3의 실측과 정확히 맞물린다. `clashable` 은 52건(counter 32 + guard 20)이며 두 계열에
 걸쳐 나타난다.
 
+> **덧붙임 2026-07-30 (회차 7).** `clashable` 은 **신규 필드**다. `shared-library` 구버전의
+> `defenseSkillTypes` 에는 이 키가 없다. 합 가능 여부가 나중에 데이터에 들어왔다.
+
 **`type` 3필드가 mj `skills.json` 과 823/824 일치.** 불일치는 기지의 `1041206`
 (assets tier 4 vs mj tier 3) 1건이다.
 

@@ -138,6 +138,9 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 기프트 조건 기믹 축 | `keywords`(1건 다름) | `skillKeywordList` | **assets** | `10104` 가 게임 판정 기준을 드러냈다 · 08 문서 4.1 | 6 |
 | 이벤트 출신 | — | `event`(31) · `eventReward`(13) | **assets** | mj 에 없다. 역사 정보라 대체 불가 | 6 |
 | 합 가능·죄악 해금 세부 | — | `defenseSkillTypes[].type` 의 `atkType`·`affinityUptie`·`clashable` | **assets** | `atkType` 과 `affinityUptie` 는 상호 배타적 | 6 |
+| 죄악 전체 집합 | `atkSins`+`altSins`(공격만) | `identities_mini.affinities`(공격+방어) | **assets** | mj 는 방어 스킬 죄악을 뺀다 · 169/184 | 7 |
+| 스킬 타입 전체 집합 | `atkTypes`(공격만·개수 맵) | `identities_mini.types`(공격+방어·목록) | **assets** | 축이 다르다 | 7 |
+| 구버전 시간축 | — | `shared-library` 163건 | **shared** | 스탯 10키 불일치 0 · 변경 5키가 패치 이력 | 7 |
 
 **미기입** — 회차 7 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
