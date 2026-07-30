@@ -147,6 +147,12 @@ limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
 | 토큰 색 | — | `skill_tags.json` 의 `color`(47종) | **assets** | 우리가 쓰지 않는다 | 8 |
 | 별칭 | — | `alt_names.json`(인격 121 + E.G.O 110) | **assets** | 커뮤니티 별칭. 우리 검색이 쓰지 않는다 | 9 |
 | 초상 오프셋 | — | `identity_header_offsets.json`(105건) | **assets** | 우리가 쓰지 않는다 · `10701` 에 문자열 `"null"` | 9 |
+| 스킬 수치·코인 | `skills.json` 의 `levels`(이름·설명 이월용) | `identity-details` 의 `skills`(824건) | **assets** | 델타 구조. `atkWeight` 등이 1단계에만 | 10 |
+| 죄악 해금 표현 | `sinFrom`(바뀌는 단계) | `affinity: "none"`(바뀌기 전 값) | 동일 | 131종 두 집합 완전 동일 | 10 |
+| 전투 패시브 정의 | `passives.json`(596, 유령 6 포함) | `identity-details` 의 `passiveData`(590) | **assets** | 전투 패시브의 유일한 출처 | 10 |
+| 삭제된 스킬 회수 | 12건 전부 보유 | 현행 없음 | **shared** | 6건 회수 · 6건은 어디에도 없다 | 10 |
+| 운용 해설 | — | `identity-details` 의 `notes`(698항목) | **assets(저작)** | 게임 데이터가 아니다 | 10 |
+| 딜 계산 보너스 | — | `passiveBonuses`(242) · 스킬·코인 `bonuses` | **assets(저작)** | 게임 데이터가 아니다 | 10 |
 
 **미기입** — 회차 7 이후에 채운다. 스킬 상세 · 코인 · 패시브 본문 · 로컬라이즈 · 애셋.
 
