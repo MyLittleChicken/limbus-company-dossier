@@ -105,7 +105,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 **인격 편 결산** — 14회차 전부 미해결 없이 닫혔다. 정본 판정과 원본 오타 목록은
 `identity/00-overview.md` 5.3–5.5 에 있다.
 
-### E.G.O — 9회차 · 진행 중
+### E.G.O — 9회차 · **완료 2026-07-30**
 
 계열 지도는 [`ego/00-overview.md`](ego/00-overview.md).
 
@@ -119,10 +119,14 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 6 | [`loc-*/Egos.json`](ego/06-loc-egos.md) | **완료** 2026-07-30 · 3로케일 × 2파일 |
 | 7 | [`loc-*/Skills_Ego*.json` 최대 16파일 × 3로케일](ego/07-loc-skills-ego.md) | **완료** 2026-07-30 · 210건 |
 | 8 | [`loc-*/Passive_Ego.json`](ego/08-loc-passive-ego.md) | **완료** 2026-07-30 · 113건 |
-| 9 | `data/assets/egos/` 318개 | 미착수 |
+| 9 | [`data/assets/egos/` 318개](ego/09-assets-ego-images.md) | **완료** 2026-07-30 · 318개 |
 
-**척추가 뒤집혔다** — 인격 편은 `limbus-data-mj` 가 정본이었으나 E.G.O 는
-`limbus-assets` 다(`src/entities/egos.ts:47`). mj 의 고유 기여는 한국어 E.G.O 명뿐이다.
+**E.G.O 편 결산** — 9회차 전부 미해결 없이 닫혔다. 정본 판정과 원본 결함 목록은
+`ego/00-overview.md` 5.2–5.4 에 있다.
+
+척추가 인격 편과 뒤집힌다 — `limbus-assets` 가 정본이다(`src/entities/egos.ts:47`).
+단독 보유 개념은 **mj 1 · assets 6 · loc 4** 이며, 그중 `abName`(유래 환상체)은
+**로케일 파일에만 있다.**
 
 ### 그 밖의 엔티티
 
@@ -132,7 +136,6 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 
 | 편 | 파일 | 예상 회차 | 비고 |
 | --- | ---: | ---: | --- |
-| E.G.O | 72 + 215 | ~8 | 회차 3·4·8 에서 절반 노출됨 — 스킬 208 · 패시브 113 · 동기화 5 |
 | 기프트 | 98 | ~7 | 회차 1 에서 `9282` 날개 모양 양초 확인 |
 | 팩 | 7 | ~3 | 가장 작다 |
 | 거울 던전 | 163 | ~6 | |
