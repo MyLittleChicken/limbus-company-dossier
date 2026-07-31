@@ -45,7 +45,8 @@ export interface MirrorTables {
 	achievement: Array<{ id: string; season: number; category: string; points: number[]; hardOnly: boolean[] }>;
 	achievementText: Array<{ id: string; category: string; season: number; locale: Loc; text: string }>;
 	reward: Array<{ season: number; level: number; item: string; count: number }>;
-	adversity: Array<{ floorRange: string; index: number; name: string; desc: string; value: number }>;
+	adversity: Array<{ floorRange: string; index: number; value: number }>;
+	adversityText: Array<{ floorRange: string; index: number; locale: Loc; name: string; desc: string }>;
 	grace: Array<{ id: string; index: number; cost: number }>;
 	graceText: Array<{ graceId: string; locale: Loc; name: string; descs: unknown }>;
 	startGift: Array<{ keywordId: string; giftId: string }>;
@@ -56,7 +57,7 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 		choiceEvent: [], choiceEventText: [], choiceEventGift: [],
 		choiceOption: [], choiceOptionText: [],
 		achievement: [], achievementText: [], reward: [],
-		adversity: [], grace: [], graceText: [], startGift: [],
+		adversity: [], adversityText: [], grace: [], graceText: [], startGift: [],
 	};
 	const eventLoc: Record<Loc, RawIndex> = {
 		ko: input.eventLocKo, en: input.eventLocEn, ja: input.eventLocJa,
@@ -199,8 +200,9 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 			const desc = str(a, 'desc');
 			const value = num(a, 'value');
 			if (name === null || desc === null || value === null) return;
-			t.adversity.push({ floorRange, index, name, desc, value });
-			// 역경도 영문만 있다. 이름·설명이 컬럼에 직접 들어가 로케일이 못 붙는다
+			t.adversity.push({ floorRange, index, value });
+			t.adversityText.push({ floorRange, index, locale: 'en', name, desc });
+			// 역경도 영문만 있다
 			for (const locale of ['ko', 'ja'] as const) {
 				meta.gap(
 					'adversity', `${floorRange}#${index}`, 'name',

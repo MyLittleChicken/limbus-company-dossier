@@ -1443,15 +1443,33 @@ model Reward {
 }
 
 /// 역경. 층 구간별 적용 효과다.
+///
+/// 원본 `md__details.adversity` 는 {name, desc, value} 한 덩어리지만 **표시
+/// 문자열을 떼어낸다**(ADR-03). 로케일이 셋이고 결손을 「행이 없다」로 표현하는
+/// 규약을 다른 계열과 맞춘다 — Grace 와 짝도 맞는다.
 model Adversity {
   floorRange String @map("floor_range")
   index      Int
-  name       String
-  desc       String
   value      Int
+
+  texts AdversityText[]
 
   @@id([floorRange, index])
   @@map("adversity")
+  @@schema("canonical")
+}
+
+model AdversityText {
+  floorRange String @map("floor_range")
+  index      Int
+  locale     Locale
+  name       String
+  desc       String
+
+  adversity Adversity @relation(fields: [floorRange, index], references: [floorRange, index], onDelete: Cascade)
+
+  @@id([floorRange, index, locale])
+  @@map("adversity_text")
   @@schema("canonical")
 }
 

@@ -806,11 +806,20 @@ CREATE TABLE "canonical"."reward" (
 CREATE TABLE "canonical"."adversity" (
     "floor_range" TEXT NOT NULL,
     "index" INTEGER NOT NULL,
-    "name" TEXT NOT NULL,
-    "desc" TEXT NOT NULL,
     "value" INTEGER NOT NULL,
 
     CONSTRAINT "adversity_pkey" PRIMARY KEY ("floor_range","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."adversity_text" (
+    "floor_range" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT NOT NULL,
+
+    CONSTRAINT "adversity_text_pkey" PRIMARY KEY ("floor_range","index","locale")
 );
 
 -- CreateTable
@@ -1231,6 +1240,9 @@ ALTER TABLE "canonical"."choice_option_text" ADD CONSTRAINT "choice_option_text_
 
 -- AddForeignKey
 ALTER TABLE "canonical"."achievement_text" ADD CONSTRAINT "achievement_text_id_category_season_fkey" FOREIGN KEY ("id", "category", "season") REFERENCES "canonical"."achievement"("id", "category", "season") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."adversity_text" ADD CONSTRAINT "adversity_text_floor_range_index_fkey" FOREIGN KEY ("floor_range", "index") REFERENCES "canonical"."adversity"("floor_range", "index") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."grace_text" ADD CONSTRAINT "grace_text_grace_id_fkey" FOREIGN KEY ("grace_id") REFERENCES "canonical"."grace"("id") ON DELETE CASCADE ON UPDATE CASCADE;

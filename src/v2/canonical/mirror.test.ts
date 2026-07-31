@@ -103,8 +103,9 @@ test('보상이 시즌별로 나온다', () => {
 test('은총·역경·시작 기프트가 나온다', () => {
 	const t = buildMirror(input(), new Meta());
 	assert.deepEqual(t.grace, [{ id: 'star', index: 1, cost: 10 }]);
-	assert.deepEqual(t.adversity, [
-		{ floorRange: '11', index: 0, name: 'Level Boost', desc: 'All +3', value: 1 },
+	assert.deepEqual(t.adversity, [{ floorRange: '11', index: 0, value: 1 }]);
+	assert.deepEqual(t.adversityText, [
+		{ floorRange: '11', index: 0, locale: 'en', name: 'Level Boost', desc: 'All +3' },
 	]);
 	assert.deepEqual(t.startGift, [
 		{ keywordId: 'Combustion', giftId: '9001' },

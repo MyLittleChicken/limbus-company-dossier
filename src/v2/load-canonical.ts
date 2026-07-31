@@ -433,6 +433,7 @@ async function main(): Promise<void> {
 		counts.push(['achievement_text', await chunked(mirror.achievementText, (d) => prisma.achievementText.createMany({ data: d as never }))]);
 		counts.push(['reward', await chunked(mirror.reward, (d) => prisma.reward.createMany({ data: d }))]);
 		counts.push(['adversity', await chunked(mirror.adversity, (d) => prisma.adversity.createMany({ data: d }))]);
+		counts.push(['adversity_text', await chunked(mirror.adversityText, (d) => prisma.adversityText.createMany({ data: d as never }))]);
 		counts.push(['grace', await chunked(mirror.grace, (d) => prisma.grace.createMany({ data: d }))]);
 		counts.push(['grace_text', await chunked(mirror.graceText, (d) => prisma.graceText.createMany({ data: d as never }))]);
 		counts.push(['start_gift', await chunked(mirror.startGift, (d) => prisma.startGift.createMany({ data: d }))]);

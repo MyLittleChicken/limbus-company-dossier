@@ -507,6 +507,8 @@ async function main(): Promise<void> {
 		eq('achievement (마스터북 183)', await prisma.achievement.count(), 183);
 		eq('reward', await prisma.reward.count(), 200);
 		eq('adversity', await prisma.adversity.count(), 30);
+		// 표시 문자열을 떼어냈다(ADR-03). 영문만 있고 ko·ja 는 결손으로 남는다
+		eq('adversity_text', await prisma.adversityText.count(), 30);
 		eq('grace', await prisma.grace.count(), 10);
 		eq('start_gift', await prisma.startGift.count(), 30);
 
