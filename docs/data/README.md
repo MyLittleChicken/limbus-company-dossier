@@ -137,7 +137,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 1 | [`limbus-data-mj/gifts.json`](gift/01-limbus-data-mj-gifts.md) | **완료** 2026-07-31 · 키 15종 |
 | 2 | [`limbus-data-mj/gifts_detail.json`](gift/02-limbus-data-mj-gifts-detail.md) | **완료** 2026-07-31 · 키 4종 |
 | 3 | [`limbus-assets/gifts.json` + `shared-library` 대조](gift/03-limbus-assets-gifts.md) | **완료** 2026-07-31 · 키 22종 |
-| 4 | `mj/start_gifts.json` + `assets/md__universal_gifts.json` | 미착수 |
+| 4 | [`mj/start_gifts.json` + `assets/md__universal_gifts.json`](gift/04-gifts-aux.md) | **완료** 2026-07-31 · 2파일 |
 | 5 | `loc-*/EGOgift_MirrorDungeon*.json` 9파일 × 3로케일 | 미착수 |
 | 6 | `loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열 | 미착수 |
 | 7 | `loc-*/EGOgift.json` + `EgoGiftCategory` + `LockedDesc` | 미착수 |

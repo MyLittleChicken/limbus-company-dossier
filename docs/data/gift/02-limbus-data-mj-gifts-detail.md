@@ -33,8 +33,9 @@ SCARLET 77 · AZURE 65 · INDIGO 64 · VIOLET 62 · SHAMROCK 60 · AMBER 57 · C
 
 E.G.O 편 회차 2의 `requirements` 색 토큰과 같은 어휘이며, 같은 치환표를 쓴다.
 
-**적재** — `Gift.attributeType`. 다만 변환기는 이 파일이 아니라 **assets 의 `affinity`**
-에서 읽는다. 우리는 색 어휘를 죄악으로 되바꾸지 않는다(`02-data-model.md` 원칙 3).
+**적재** — `Gift.attributeType`. **변환기가 바로 이 필드를 읽는다**(`src/entities/gifts.ts:49`).
+assets 의 `affinity` 는 죄악으로 되바뀐 값이라 쓰지 않는다 — 우리는 색 어휘를 그대로
+둔다(`02-data-model.md` 원칙 3).
 
 ## 2. `keyword` — `gifts.keyword` 와 어휘가 다르다
 

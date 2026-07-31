@@ -1,6 +1,6 @@
 # E.G.O 기프트 계열 지도 (Gift Overview)
 
-> 상태: **회차 1–3 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
+> 상태: **회차 1–4 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
 > 인격 편(14회차)·E.G.O 편(9회차)이 닫힌 뒤 시작했다. 기프트 편은 8회차 예정이다.
 
 ## 1. 기프트 id 체계
@@ -27,7 +27,7 @@
 | `limbus-data-mj/gifts.json` | 1 | 441건 · 키 15종. **`requires` 구조가 여기만 있다** |
 | `limbus-data-mj/gifts_detail.json` | 2 | 441건 · **한국어 강화 텍스트가 여기만 있다** |
 | `limbus-assets/gifts.json` | 3 | **정본** · 456건 완전집합 (+`shared-library` 대조) |
-| `limbus-data-mj/start_gifts.json` · `limbus-assets/md__universal_gifts.json` | 4 | 부속 소파일 |
+| `limbus-data-mj/start_gifts.json` · `limbus-assets/md__universal_gifts.json` | 4 | 시작 기프트 30(게임 규칙) · 추천 묶음(도구 해설) |
 | `loc-*/EGOgift_MirrorDungeon*.json` 9파일 × 3 | 5 | 거울 던전 계열 |
 | `loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열 | 6 | |
 | `loc-*/EGOgift.json` · `EgoGiftCategory.json` · `MirrorDungeonEgoGiftLockedDesc.json` | 7 | **`loc-ko` 에 `EGOgift.json` 이 없다** |
@@ -68,6 +68,8 @@ mj 는 `cost`·`packs` 만 보강한다(`src/entities/gifts.ts:1`).
 | 강화 단계 | `gifts_detail.upgrades`(0–2) | `gifts.enhanceable` | **mj** | 110 = 3단계 107 + 2단계 3. 완전 일치 | 2 |
 | 한국어 강화 텍스트 | `gifts_detail.upgrades[].effectKo` | — | **mj** | **미적재.** loc 대조는 회차 5–7 | 2 |
 | 한국어 이름·설명 | `gifts.nameKo`·`descKo` | — | **mj + loc** | 441 전부 유일 | 1 |
+| 시작 기프트 | `start_gifts.json`(10축 × 3) | — | **mj** | 전부 tier 2 · keyword 30/30 일치. **미적재** | 4 |
+| 추천 묶음 | — | `md__universal_gifts.json` | **도구 해설** | `individual` 6그룹이 비어 있다 | 4 |
 
 ## 5. 다른 편에서 미리 본 것
 
