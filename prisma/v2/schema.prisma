@@ -114,3 +114,95 @@ model RawFile {
   @@map("raw_file")
   @@schema("raw")
 }
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 공통
+// ─────────────────────────────────────────────────────────────
+
+/// 표시 문자열 로케일. 현행 public 스키마는 ko·en 만 담지만 신규는 ja 를 더한다.
+enum Locale {
+  ko
+  en
+  ja
+
+  @@schema("canonical")
+}
+
+/// 거울 던전 난이도
+enum Difficulty {
+  normal
+  hard
+
+  @@schema("canonical")
+}
+
+/// 테마 팩 분류. mj packs.category 8종이며 id 대역과 1:1 대응한다.
+enum PackCategory {
+  canto
+  event
+  walpurgis
+  railway
+  attack_type
+  sin
+  keyword
+  extreme
+
+  @@schema("canonical")
+}
+
+/// 본편 장 팩의 난이도 변형. canto 27건만 값이 있다.
+enum PackVariant {
+  normal
+  mid
+  hard
+
+  @@schema("canonical")
+}
+
+/// 세 출처 어디에도 없는 것. 값은 NULL 로 두고 사유를 여기 남긴다.
+/// 적재 후 build/gap-report.md 로 뽑아 수동 보정 지시서가 된다.
+model FieldGap {
+  entity   String
+  entityId String @map("entity_id")
+  field    String
+  /// 한국어만 없는 경우 등. 로케일 무관이면 빈 문자열
+  locale   String @default("")
+  reason   String
+  /// 근거 문서 경로
+  evidence String
+
+  @@id([entity, entityId, field, locale])
+  @@index([entity, field])
+  @@map("field_gap")
+  @@schema("canonical")
+}
+
+/// 이 값이 어느 출처에서 어떤 규칙으로 왔나. 「왜 이렇지?」를 DB 안에서 답한다.
+model FieldSource {
+  entity   String
+  entityId String   @map("entity_id")
+  field    String
+  /// mj-only · assets-only · loc-only · union · agreed · disagreed · game-verified · manual
+  rule     String
+  sources  String[]
+
+  @@id([entity, entityId, field])
+  @@index([entity, rule])
+  @@map("field_source")
+  @@schema("canonical")
+}
+
+/// limbus-assets 가 자기 도구를 위해 붙인 필드. 게임 사실이 아니다.
+/// 게임 데이터 테이블을 열었을 때 게임 사실만 보이게 하려고 따로 둔다.
+model ToolAnnotation {
+  source   String
+  entity   String
+  entityId String @map("entity_id")
+  field    String
+  value    Json
+
+  @@id([source, entity, entityId, field])
+  @@index([entity, entityId])
+  @@map("tool_annotation")
+  @@schema("canonical")
+}
