@@ -147,3 +147,48 @@ test('알려진 개체가 제자리에 있다 — 기프트 9427', () => {
 	assert.ok(assets, 'assets 9427 이 있어야 한다');
 	assert.equal((assets.payload as Record<string, unknown>)['hardonly'], undefined);
 });
+
+test('scanAll 은 파일 1,664개를 전부 files 에 남긴다', () => {
+	const r = scanAll();
+	assert.equal(r.files.length, 1664);
+	assert.equal(new Set(r.files.map((f) => `${f.source} ${f.srcPath}`)).size, 1664);
+});
+
+test('files 의 objectCount 합이 rows 수와 같다', () => {
+	const r = scanAll();
+	const sum = r.files.reduce((a, f) => a + f.objectCount, 0);
+	assert.equal(sum, r.rows.length);
+});
+
+test('빈 파일 16개가 objectCount 0 으로 남는다', () => {
+	const r = scanAll();
+	const empty = r.files.filter((f) => f.objectCount === 0).map((f) => f.srcPath).sort();
+	assert.deepEqual(empty, [
+		'egos/loc-en/Passive_Ego-a1c9p3.json',
+		'egos/loc-ja/Passive_Ego-a1c9p2.json',
+		'egos/loc-ja/Passive_Ego-a1c9p3.json',
+		'egos/loc-ja/Skills_Ego_Personality-a1c9p2.json',
+		'egos/loc-ko/Passive_Ego-a1c9p2.json',
+		'egos/loc-ko/Passive_Ego-a1c9p3.json',
+		'egos/loc-ko/Skills_Ego_Personality-a1c9p2.json',
+		'gifts/loc-en/EGOgift_MirrorDungeon-x1p1c1.json',
+		'gifts/loc-ja/EGOgift_MirrorDungeon-x1p1c1.json',
+		'gifts/loc-ko/EGOgift_MirrorDungeon-x1p1c1.json',
+		'identities/loc-ja/Personalities-a1c9p2.json',
+		'identities/loc-ja/Skills_personality-a1c9p1.json',
+		'identities/loc-ja/Skills_personality-a1c9p2.json',
+		'identities/loc-ko/Personalities-a1c9p2.json',
+		'identities/loc-ko/Skills_personality-a1c9p1.json',
+		'identities/loc-ko/Skills_personality-a1c9p2.json',
+	]);
+});
+
+test('loc-en 은 5건에 대해 파일 자체가 없다 — 빈 파일과 다르다', () => {
+	const r = scanAll();
+	const has = (p: string): boolean => r.files.some((f) => f.srcPath === p);
+	// loc-ko 에는 빈 껍데기가 있고 loc-en 에는 파일이 없다
+	assert.ok(has('identities/loc-ko/Personalities-a1c9p2.json'));
+	assert.ok(!has('identities/loc-en/Personalities-a1c9p2.json'));
+	assert.ok(has('egos/loc-ko/Passive_Ego-a1c9p2.json'));
+	assert.ok(!has('egos/loc-en/Passive_Ego-a1c9p2.json'));
+});

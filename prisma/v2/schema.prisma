@@ -37,6 +37,7 @@ model Snapshot {
 
   sources SnapshotSource[]
   objects RawObject[]
+  files   RawFile[]
 
   @@map("snapshot")
   @@schema("raw")
@@ -82,5 +83,32 @@ model RawObject {
   @@index([entity, id])
   @@index([snapshotId, source])
   @@map("raw_object")
+  @@schema("raw")
+}
+
+/// 스캔한 파일 전량. **개체가 0개인 파일도 여기 남는다.**
+///
+/// raw_object 만으로는 두 사실이 사라진다 — 파일이 존재했다는 것, 그리고
+/// loc-en 은 파일조차 안 만든다는 것. 실측 16파일이 개체 0개이며 전부
+/// a1c9(9장) · x1p1c1(이벤트) 패치 델타 껍데기다. loc-en 은 그중 5건에 대해
+/// 파일을 아예 만들지 않는다 — 같은 「없음」의 두 표현이다.
+///
+/// 파일 목록 자체가 스냅샷 간 비교 대상이다. 파일이 비어 있다가 채워지는 것은
+/// 콘텐츠 추가의 가장 강한 신호다.
+model RawFile {
+  snapshotId  String @map("snapshot_id")
+  source      String
+  srcPath     String @map("src_path")
+  entity      String
+  /// dataList · map · list · single
+  shape       String
+  /// 0 이면 빈 파일
+  objectCount Int    @map("object_count")
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, source, srcPath])
+  @@index([snapshotId, objectCount])
+  @@map("raw_file")
   @@schema("raw")
 }

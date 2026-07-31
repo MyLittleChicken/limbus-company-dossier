@@ -37,6 +37,18 @@ CREATE TABLE "raw"."raw_object" (
     CONSTRAINT "raw_object_pkey" PRIMARY KEY ("snapshot_id","source","src_path","id")
 );
 
+-- CreateTable
+CREATE TABLE "raw"."raw_file" (
+    "snapshot_id" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "src_path" TEXT NOT NULL,
+    "entity" TEXT NOT NULL,
+    "shape" TEXT NOT NULL,
+    "object_count" INTEGER NOT NULL,
+
+    CONSTRAINT "raw_file_pkey" PRIMARY KEY ("snapshot_id","source","src_path")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -46,9 +58,15 @@ CREATE INDEX "raw_object_entity_id_idx" ON "raw"."raw_object"("entity", "id");
 -- CreateIndex
 CREATE INDEX "raw_object_snapshot_id_source_idx" ON "raw"."raw_object"("snapshot_id", "source");
 
+-- CreateIndex
+CREATE INDEX "raw_file_snapshot_id_object_count_idx" ON "raw"."raw_file"("snapshot_id", "object_count");
+
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "raw"."raw_object" ADD CONSTRAINT "raw_object_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "raw"."raw_file" ADD CONSTRAINT "raw_file_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

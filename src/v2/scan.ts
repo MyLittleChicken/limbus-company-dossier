@@ -93,8 +93,25 @@ export interface RawRow {
 	payload: unknown;
 }
 
+/**
+ * 스캔한 파일 하나. **개체가 0개여도 남는다.**
+ *
+ * 빈 파일 16개는 `rows` 에 흔적을 못 남긴다. 그러면 두 사실이 사라진다 —
+ * 파일이 존재했다는 것, 그리고 `loc-en` 은 파일조차 안 만든다는 것.
+ * 후자가 「빈 파일」과 「파일 없음」을 가르는 유일한 근거다(스펙 2.2).
+ */
+export interface RawFileRow {
+	source: string;
+	srcPath: string;
+	entity: string;
+	shape: Shape;
+	/** 0 이면 빈 파일 */
+	objectCount: number;
+}
+
 export interface ScanResult {
 	rows: RawRow[];
+	files: RawFileRow[];
 	shapeCounts: Record<Shape, number>;
 	fileCount: number;
 }
@@ -107,11 +124,12 @@ export interface ScanResult {
  * 수집이 깨졌다는 뜻이다.
  */
 export function scanAll(): ScanResult {
-	const files = listEntityFiles();
+	const paths = listEntityFiles();
 	const rows: RawRow[] = [];
+	const files: RawFileRow[] = [];
 	const shapeCounts: Record<Shape, number> = { dataList: 0, map: 0, list: 0, single: 0 };
 
-	for (const abs of files) {
+	for (const abs of paths) {
 		const { entity, source, srcPath, stem } = parseEntityPath(abs);
 		let parsed: unknown;
 		try {
@@ -121,10 +139,17 @@ export function scanAll(): ScanResult {
 		}
 		const scanned = extractObjects(parsed, stem);
 		shapeCounts[scanned.shape] += 1;
+		files.push({
+			source,
+			srcPath,
+			entity,
+			shape: scanned.shape,
+			objectCount: scanned.objects.length,
+		});
 		for (const obj of scanned.objects) {
 			rows.push({ source, srcPath, id: obj.id, entity, payload: obj.payload });
 		}
 	}
 
-	return { rows, shapeCounts, fileCount: files.length };
+	return { rows, files, shapeCounts, fileCount: paths.length };
 }

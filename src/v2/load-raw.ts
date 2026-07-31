@@ -68,6 +68,19 @@ async function main(): Promise<void> {
 		if (inserted !== scan.rows.length) {
 			throw new Error(`적재 수 불일치 — 스캔 ${scan.rows.length} · 적재 ${inserted}`);
 		}
+
+		// 개체가 0개인 파일도 여기 남는다. raw_object 만으로는 흔적이 없다.
+		const fileResult = await prisma.rawFile.createMany({
+			data: scan.files.map((f) => ({ snapshotId, ...f })),
+		});
+		const emptyFiles = scan.files.filter((f) => f.objectCount === 0).length;
+		console.log(
+			`raw_file 적재 ${fileResult.count.toLocaleString()}행 (그중 빈 파일 ${emptyFiles})`,
+		);
+
+		if (fileResult.count !== scan.files.length) {
+			throw new Error(`파일 적재 수 불일치 — 스캔 ${scan.files.length} · 적재 ${fileResult.count}`);
+		}
 	} finally {
 		await prisma.$disconnect();
 	}
