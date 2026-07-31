@@ -149,6 +149,23 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 **세 출처가 처음으로 균등해졌다** — mj 5 · assets 6 · loc 6. 인격 편(9·15·6)과
 E.G.O 편(1·6·4)은 한쪽으로 쏠렸으나 기프트는 어느 하나를 골라도 3분의 1을 잃는다.
 
+### 거울 던전 테마 팩 — 4회차 · **완료 2026-07-31**
+
+계열 지도는 [`pack/00-overview.md`](pack/00-overview.md).
+
+| # | 대상 | 상태 |
+| --- | --- | --- |
+| 1 | [`limbus-data-mj/packs.json`](pack/01-limbus-data-mj-packs.md) | **완료** 2026-07-31 · 키 16종 |
+| 2 | [`limbus-data-mj/packs_detail.json`](pack/02-limbus-data-mj-packs-detail.md) | **완료** 2026-07-31 · 키 5종 |
+| 3 | [`limbus-assets/md_theme_packs.json` + `shared-library` 대조](pack/03-limbus-assets-md-theme-packs.md) | **완료** 2026-07-31 · 키 8종 |
+| 4 | [`loc-*/MirrorDungeonTheme-1.json` + 애셋 155개](pack/04-loc-and-assets.md) | **완료** 2026-07-31 |
+
+**팩 편 결산** — 4회차 전부 미해결 없이 닫혔다. **mj 로 쏠린 첫 사례**다
+(mj 6 · assets 2 · loc 1). 기프트 목록도 맵 생성 규칙도 `limbus-data-mj` 에만 있어
+ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 → `backlog/09`.
+
+**팩은 DB 모델이 없다.** `GiftPack.packId` 가 정수로만 남아 이름조차 조회되지 않는다.
+
 ### 그 밖의 엔티티
 
 파일 규모로 잡은 예상 회차다. 인격 편에서 공통 어휘(죄악 7 · 공격 타입 3 · 기믹 축 10 ·
@@ -157,7 +174,6 @@ E.G.O 편(1·6·4)은 한쪽으로 쏠렸으나 기프트는 어느 하나를 �
 
 | 편 | 파일 | 예상 회차 | 비고 |
 | --- | ---: | ---: | --- |
-| 팩 | 7 | ~3 | 가장 작다 |
 | 거울 던전 | 163 | ~6 | |
 | 상태(메카닉) | 260 | ~6 | 08 문서의 `status_gimmick` 근거 |
 | 인카운터 | 380 | ~8 | `assets` 251개가 동형이면 묶인다 |
@@ -193,3 +209,4 @@ E.G.O 편(1·6·4)은 한쪽으로 쏠렸으나 기프트는 어느 하나를 �
 | [`../backlog/05-season-label.md`](../backlog/05-season-label.md) | 시즌 값이 원본 정수 그대로 화면에 나간다 | 1 |
 | [`../backlog/06-atktypes-naming.md`](../backlog/06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 다른 단위를 가리킨다 | 1 |
 | [`../backlog/08-gift-hardonly.md`](../backlog/08-gift-hardonly.md) | 하드 전용 기프트를 한 출처만 보고 적재한다 | 기프트 1 |
+| [`../backlog/09-pack-model.md`](../backlog/09-pack-model.md) | 테마 팩이 모델 없이 정수 id 로만 남아 있다 | 팩 1–4 |
