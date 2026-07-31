@@ -576,3 +576,313 @@ model GiftLockedDesc {
   @@map("gift_locked_desc")
   @@schema("canonical")
 }
+// canonical — 수감자 · 소속
+// ─────────────────────────────────────────────────────────────
+
+/// 수감자 12명. star=1 인 LCB 기본 인격에서 이름을 얻는다.
+model Sinner {
+  id Int @id
+
+  texts      SinnerText[]
+  identities Identity[]
+
+  @@map("sinner")
+  @@schema("canonical")
+}
+
+model SinnerText {
+  sinnerId Int    @map("sinner_id")
+  locale   Locale
+  name     String
+
+  sinner Sinner @relation(fields: [sinnerId], references: [id], onDelete: Cascade)
+
+  @@id([sinnerId, locale])
+  @@map("sinner_text")
+  @@schema("canonical")
+}
+
+/// 소속. mj associations.json 64종이 유일 출처다.
+/// id 는 영문 코드(LIMBUS_COMPANY)이며 표시명이 따로 온다.
+model Association {
+  id String @id
+
+  texts      AssociationText[]
+  identities IdentityAssociation[]
+
+  @@map("association")
+  @@schema("canonical")
+}
+
+model AssociationText {
+  associationId String @map("association_id")
+  locale        Locale
+  name          String
+
+  association Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@id([associationId, locale])
+  @@map("association_text")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 스킬
+// ─────────────────────────────────────────────────────────────
+
+/// 공격 타입 3종
+enum AtkType {
+  slash
+  pierce
+  blunt
+
+  @@schema("canonical")
+}
+
+/// 방어 스킬 종류
+enum DefType {
+  guard
+  evade
+  counter
+
+  @@schema("canonical")
+}
+
+/// 스킬 1,045종. mj skills.json 이 유일 출처다.
+model Skill {
+  id         String   @id
+  sin        Sin?
+  attackType AtkType? @map("attack_type")
+  defType    DefType? @map("def_type")
+  skillTier  Int?     @map("skill_tier")
+
+  stages     SkillStage[]
+  identities IdentitySkill[]
+
+  @@map("skill")
+  @@schema("canonical")
+}
+
+/// 동기화 단계 1–5. **전량 전개**한다 — 값이 안 바뀐 단계도 앞 단계를 복사해 채운다.
+/// changedHere 가 원본 델타 정보를 보존하므로 충실성을 잃지 않는다(스펙 3.3).
+model SkillStage {
+  skillId     String  @map("skill_id")
+  uptie       Int
+  /// 원본 델타가 이 단계에 있었나. false 면 앞 단계 복사본이다
+  changedHere Boolean @map("changed_here")
+
+  skill Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  texts SkillStageText[]
+  coins SkillCoin[]
+
+  @@id([skillId, uptie])
+  @@map("skill_stage")
+  @@schema("canonical")
+}
+
+model SkillStageText {
+  skillId String  @map("skill_id")
+  uptie   Int
+  locale  Locale
+  name    String
+  desc    String?
+
+  stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, locale])
+  @@map("skill_stage_text")
+  @@schema("canonical")
+}
+
+/// 코인. 효과 문자열은 원문 그대로 담는다.
+/// 대괄호 토큰(215종) 분해는 계획 6에서 상태 어휘와 함께 한다.
+model SkillCoin {
+  skillId String @map("skill_id")
+  uptie   Int
+  index   Int
+  /// 코인 효과 문자열. 여러 줄일 수 있어 배열로 담는다
+  effects String[]
+
+  stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, index])
+  @@map("skill_coin")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 패시브
+// ─────────────────────────────────────────────────────────────
+
+/// 패시브 709종. 이름이 전부 null 인 6건은 마스터북의 「유령」이며
+/// 어느 층에서도 패시브가 아니다(회차 4·10·13 세 번 확인).
+model Passive {
+  id   String @id
+  cost Int?
+
+  texts      PassiveText[]
+  identities IdentityPassive[]
+
+  @@map("passive")
+  @@schema("canonical")
+}
+
+model PassiveText {
+  passiveId String  @map("passive_id")
+  locale    Locale
+  name      String
+  desc      String?
+
+  passive Passive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, locale])
+  @@map("passive_text")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 인격
+// ─────────────────────────────────────────────────────────────
+
+model Identity {
+  id               String  @id
+  sinnerId         Int     @map("sinner_id")
+  /// 등급 1–3
+  star             Int
+  /// 편성 코드에 넣을 수 있나
+  teamCodeEligible Boolean @default(true) @map("team_code_eligible")
+  /// 원본 시즌 정수. 8000 은 명일방주 콜라보다(backlog/11)
+  season           Int?
+  hp               Int?
+  stagger          Int?
+  defCorrection    Int?    @map("def_correction")
+  /// 출시일. assets date
+  releaseDate      String? @map("release_date")
+
+  sinner       Sinner                @relation(fields: [sinnerId], references: [id])
+  texts        IdentityText[]
+  resists      IdentityResist[]
+  speed        IdentitySpeed?
+  skills       IdentitySkill[]
+  passives     IdentityPassive[]
+  associations IdentityAssociation[]
+  keywords     IdentityKeyword[]
+  unitKeywords IdentityUnitKeyword[]
+
+  @@index([sinnerId])
+  @@index([star])
+  @@map("identity")
+  @@schema("canonical")
+}
+
+model IdentityText {
+  identityId String  @map("identity_id")
+  locale     Locale
+  /// 인격명. "죄와 벌"
+  name       String
+  /// 수감자 칭호. "LCB 수감자"
+  title      String?
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, locale])
+  @@map("identity_text")
+  @@schema("canonical")
+}
+
+/// 물리 저항 3축. E.G.O 는 죄악 7축, 적은 10축이라 축이 다르다.
+model IdentityResist {
+  identityId String  @map("identity_id")
+  atkType    AtkType @map("atk_type")
+  value      Float
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, atkType])
+  @@map("identity_resist")
+  @@schema("canonical")
+}
+
+model IdentitySpeed {
+  identityId String @map("identity_id")
+  min        Int
+  max        Int
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId])
+  @@map("identity_speed")
+  @@schema("canonical")
+}
+
+/// 인격이 쓰는 스킬. slot 이 자리를 가른다.
+model IdentitySkill {
+  identityId String @map("identity_id")
+  skillId    String @map("skill_id")
+  /// attack · defense · panic
+  role       String
+  /// 같은 역할 안에서의 순서
+  ordinal    Int
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, skillId, role])
+  @@index([skillId])
+  @@map("identity_skill")
+  @@schema("canonical")
+}
+
+model IdentityPassive {
+  identityId String @map("identity_id")
+  passiveId  String @map("passive_id")
+  /// battle · supporter
+  role       String
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  passive  Passive  @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, passiveId, role])
+  @@index([passiveId])
+  @@map("identity_passive")
+  @@schema("canonical")
+}
+
+model IdentityAssociation {
+  identityId    String @map("identity_id")
+  associationId String @map("association_id")
+
+  identity    Identity    @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  association Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, associationId])
+  @@index([associationId])
+  @@map("identity_association")
+  @@schema("canonical")
+}
+
+/// 기믹 축. mj keywords 이며 기프트 keyword 와 같은 어휘를 쓴다.
+model IdentityKeyword {
+  identityId String @map("identity_id")
+  keywordId  String @map("keyword_id")
+  /// 이 기믹을 쓰는 스킬 번호들
+  skillSlots Int[]  @map("skill_slots")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, keywordId])
+  @@map("identity_keyword")
+  @@schema("canonical")
+}
+
+/// 특성 키워드. detail unitKeywords 이며 소속과 다른 축이다(backlog/01).
+model IdentityUnitKeyword {
+  identityId String @map("identity_id")
+  keyword    String
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, keyword])
+  @@map("identity_unit_keyword")
+  @@schema("canonical")
+}

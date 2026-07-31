@@ -22,6 +22,12 @@ CREATE TYPE "canonical"."Sin" AS ENUM ('wrath', 'lust', 'sloth', 'gluttony', 'gl
 -- CreateEnum
 CREATE TYPE "canonical"."GiftDomain" AS ENUM ('mirror_dungeon', 'story_dungeon');
 
+-- CreateEnum
+CREATE TYPE "canonical"."AtkType" AS ENUM ('slash', 'pierce', 'blunt');
+
+-- CreateEnum
+CREATE TYPE "canonical"."DefType" AS ENUM ('guard', 'evade', 'counter');
+
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
     "id" TEXT NOT NULL,
@@ -300,6 +306,184 @@ CREATE TABLE "canonical"."gift_locked_desc" (
     CONSTRAINT "gift_locked_desc_pkey" PRIMARY KEY ("gift_id","locale")
 );
 
+-- CreateTable
+CREATE TABLE "canonical"."sinner" (
+    "id" INTEGER NOT NULL,
+
+    CONSTRAINT "sinner_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."sinner_text" (
+    "sinner_id" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "sinner_text_pkey" PRIMARY KEY ("sinner_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."association" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "association_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."association_text" (
+    "association_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "association_text_pkey" PRIMARY KEY ("association_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."skill" (
+    "id" TEXT NOT NULL,
+    "sin" "canonical"."Sin",
+    "attack_type" "canonical"."AtkType",
+    "def_type" "canonical"."DefType",
+    "skill_tier" INTEGER,
+
+    CONSTRAINT "skill_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."skill_stage" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+    "changed_here" BOOLEAN NOT NULL,
+
+    CONSTRAINT "skill_stage_pkey" PRIMARY KEY ("skill_id","uptie")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."skill_stage_text" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+
+    CONSTRAINT "skill_stage_text_pkey" PRIMARY KEY ("skill_id","uptie","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."skill_coin" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+    "index" INTEGER NOT NULL,
+    "effects" TEXT[],
+
+    CONSTRAINT "skill_coin_pkey" PRIMARY KEY ("skill_id","uptie","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."passive" (
+    "id" TEXT NOT NULL,
+    "cost" INTEGER,
+
+    CONSTRAINT "passive_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."passive_text" (
+    "passive_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+
+    CONSTRAINT "passive_text_pkey" PRIMARY KEY ("passive_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity" (
+    "id" TEXT NOT NULL,
+    "sinner_id" INTEGER NOT NULL,
+    "star" INTEGER NOT NULL,
+    "team_code_eligible" BOOLEAN NOT NULL DEFAULT true,
+    "season" INTEGER,
+    "hp" INTEGER,
+    "stagger" INTEGER,
+    "def_correction" INTEGER,
+    "release_date" TEXT,
+
+    CONSTRAINT "identity_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_text" (
+    "identity_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "title" TEXT,
+
+    CONSTRAINT "identity_text_pkey" PRIMARY KEY ("identity_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_resist" (
+    "identity_id" TEXT NOT NULL,
+    "atk_type" "canonical"."AtkType" NOT NULL,
+    "value" DOUBLE PRECISION NOT NULL,
+
+    CONSTRAINT "identity_resist_pkey" PRIMARY KEY ("identity_id","atk_type")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_speed" (
+    "identity_id" TEXT NOT NULL,
+    "min" INTEGER NOT NULL,
+    "max" INTEGER NOT NULL,
+
+    CONSTRAINT "identity_speed_pkey" PRIMARY KEY ("identity_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_skill" (
+    "identity_id" TEXT NOT NULL,
+    "skill_id" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "ordinal" INTEGER NOT NULL,
+
+    CONSTRAINT "identity_skill_pkey" PRIMARY KEY ("identity_id","skill_id","role")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_passive" (
+    "identity_id" TEXT NOT NULL,
+    "passive_id" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+
+    CONSTRAINT "identity_passive_pkey" PRIMARY KEY ("identity_id","passive_id","role")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_association" (
+    "identity_id" TEXT NOT NULL,
+    "association_id" TEXT NOT NULL,
+
+    CONSTRAINT "identity_association_pkey" PRIMARY KEY ("identity_id","association_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_keyword" (
+    "identity_id" TEXT NOT NULL,
+    "keyword_id" TEXT NOT NULL,
+    "skill_slots" INTEGER[],
+
+    CONSTRAINT "identity_keyword_pkey" PRIMARY KEY ("identity_id","keyword_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_unit_keyword" (
+    "identity_id" TEXT NOT NULL,
+    "keyword" TEXT NOT NULL,
+
+    CONSTRAINT "identity_unit_keyword_pkey" PRIMARY KEY ("identity_id","keyword")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -350,6 +534,21 @@ CREATE INDEX "gift_pack_pack_id_idx" ON "canonical"."gift_pack"("pack_id");
 
 -- CreateIndex
 CREATE INDEX "gift_exclusive_pack_pack_id_idx" ON "canonical"."gift_exclusive_pack"("pack_id");
+
+-- CreateIndex
+CREATE INDEX "identity_sinner_id_idx" ON "canonical"."identity"("sinner_id");
+
+-- CreateIndex
+CREATE INDEX "identity_star_idx" ON "canonical"."identity"("star");
+
+-- CreateIndex
+CREATE INDEX "identity_skill_skill_id_idx" ON "canonical"."identity_skill"("skill_id");
+
+-- CreateIndex
+CREATE INDEX "identity_passive_passive_id_idx" ON "canonical"."identity_passive"("passive_id");
+
+-- CreateIndex
+CREATE INDEX "identity_association_association_id_idx" ON "canonical"."identity_association"("association_id");
 
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -422,4 +621,58 @@ ALTER TABLE "canonical"."fusion_slot_option" ADD CONSTRAINT "fusion_slot_option_
 
 -- AddForeignKey
 ALTER TABLE "canonical"."gift_locked_desc" ADD CONSTRAINT "gift_locked_desc_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."sinner_text" ADD CONSTRAINT "sinner_text_sinner_id_fkey" FOREIGN KEY ("sinner_id") REFERENCES "canonical"."sinner"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."association_text" ADD CONSTRAINT "association_text_association_id_fkey" FOREIGN KEY ("association_id") REFERENCES "canonical"."association"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."skill_stage" ADD CONSTRAINT "skill_stage_skill_id_fkey" FOREIGN KEY ("skill_id") REFERENCES "canonical"."skill"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."skill_stage_text" ADD CONSTRAINT "skill_stage_text_skill_id_uptie_fkey" FOREIGN KEY ("skill_id", "uptie") REFERENCES "canonical"."skill_stage"("skill_id", "uptie") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."skill_coin" ADD CONSTRAINT "skill_coin_skill_id_uptie_fkey" FOREIGN KEY ("skill_id", "uptie") REFERENCES "canonical"."skill_stage"("skill_id", "uptie") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."passive_text" ADD CONSTRAINT "passive_text_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity" ADD CONSTRAINT "identity_sinner_id_fkey" FOREIGN KEY ("sinner_id") REFERENCES "canonical"."sinner"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_text" ADD CONSTRAINT "identity_text_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_resist" ADD CONSTRAINT "identity_resist_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_speed" ADD CONSTRAINT "identity_speed_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_skill" ADD CONSTRAINT "identity_skill_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_skill" ADD CONSTRAINT "identity_skill_skill_id_fkey" FOREIGN KEY ("skill_id") REFERENCES "canonical"."skill"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_passive" ADD CONSTRAINT "identity_passive_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_passive" ADD CONSTRAINT "identity_passive_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_association" ADD CONSTRAINT "identity_association_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_association" ADD CONSTRAINT "identity_association_association_id_fkey" FOREIGN KEY ("association_id") REFERENCES "canonical"."association"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_keyword" ADD CONSTRAINT "identity_keyword_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_unit_keyword" ADD CONSTRAINT "identity_unit_keyword_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
