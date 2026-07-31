@@ -19,7 +19,7 @@
 | [05-pack-art-verification.md](05-pack-art-verification.md) | 팩 카드 렌더를 눈으로만 검증하고 있다 — 같은 자리를 세 번 틀렸고 세 번 모두 사람이 잡았다 | 미착수 |
 | [06-atktypes-naming.md](06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 스킬 수·타입 종류·인격 수를 각각 가리킨다 | 미착수 · 개명 작업에 얹는다 |
 | [07-report-artifact.md](07-report-artifact.md) | 변환 리포트가 콘솔로만 나가 원본 결손·오타를 추적할 수 없다 | 설계 확정 · 구현 미착수 |
-| [08-gift-hardonly.md](08-gift-hardonly.md) | 하드 전용 기프트를 `limbus-assets` 만 보고 적재해 6건이 빠진다 | 판정 완료 · 구현 미착수 |
+| [08-gift-hardonly.md](08-gift-hardonly.md) | 하드 전용 기프트를 `limbus-assets` 만 보고 적재해 6건이 빠진다 | **신규 DB 해소** · 현행 미착수 |
 | [09-pack-model.md](09-pack-model.md) | 테마 팩 모델에 보강 필드 6종이 없다 | 미착수 |
 | [10-encounter-linkage.md](10-encounter-linkage.md) | mj 전투 풀 2,525종의 정의가 리포에 없다 | 미착수 |
 | [11-season-label.md](11-season-label.md) | 시즌 값이 화면에 원본 정수 그대로 나간다 — 발푸르기스가 `S9104`, 콜라보가 `S8000` 로 뜬다 | 미착수 |

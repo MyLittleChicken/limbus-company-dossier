@@ -1166,13 +1166,50 @@ npm run db:ddl -- -c "SELECT count(*) FROM public.gift"
 
 ---
 
-## 완료 판정
+## 완료 판정 — **전부 통과 (2026-07-31)**
 
 ```
-1. canonical.gift 582종                      npm run v2:verify:canonical
-2. 강화 단계 한국어가 loc 에서 왔다             gift_stage_text ko 673+120
-3. hardOnly 합집합 122                        백로그 08 이 여기서 해소된다
-4. 어휘 차원 3종이 섰다                        keyword 12 · trigger 150 · effect 55
-5. 계획 1·2 가 안 깨졌다                      raw 13건 · pack 22건
-6. 현행이 그대로 돈다                          public.gift 456
+1. canonical.gift 582종                      ✔ 검사 50건 전부 통과
+2. 강화 단계 한국어가 loc 에서 왔다             ✔ gift_stage_text 2,391
+3. hardOnly 합집합 122                        ✔ 백로그 08 해소
+4. 어휘 차원 3종이 섰다                        ✔ keyword 12 · trigger 150 · effect 55
+5. 계획 1·2 가 안 깨졌다                      ✔ raw 13건 · 테스트 189건
+6. 현행이 그대로 돈다                          ✔ public.gift 456
+```
+
+### 실행 결과
+
+```
+npm test                    189건 통과
+npm run v2:canonical        gift 582 · gift_stage 799 · gift_stage_text 2,391
+                            gift_pack 10,115 · gift_exclusive_pack 321
+                            어휘 keyword 12 · trigger 150 · effect 55
+                            tool_annotation 942 · field_gap 69 · field_source 3,858
+npm run v2:verify:canonical 검사 50건 전부 통과
+```
+
+### 계획과 달라진 것
+
+**① 원본 결함을 하나 새로 찾았다.** `9429` 가 `effects` 에
+`"Gain Speed / Haste"` 를 두 번 담는다. 마스터북 원본 결함 31건에 없던
+것이다. 중복을 접어 `gift_effect` 가 1,123 → **1,122** 가 됐고
+`field_source.rule = 'assets-only-deduped'` 로 남겼다.
+
+**② 기대값 둘이 틀렸다.**
+
+```
+결손 합계        63 → 69   기프트 한국어 6건을 더하는 걸 빠뜨렸다
+keyword None    109 → 120  109 는 mj 기준이다. assets 단독 11건이 더 있다
+```
+
+**③ `Pack` 모델에 역관계 둘을 더했다.** `gifts` · `exclusiveGifts`.
+계획 2에서 미룬 연결이 여기서 섰다.
+
+### 마스터북 완전 일치 쌍 — 누적 4건이 회귀 검사가 됐다
+
+```
+계획 2   층 ↔ 팩 1–5구간 218/218
+계획 3   기프트 ↔ 팩 역참조 10,115 차집합 0
+        기프트 색 attributeType → sin 441건 불일치 0
+        assets affinity 오류 4건 (게임 확인과 일치)
 ```
