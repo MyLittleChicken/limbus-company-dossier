@@ -16,6 +16,12 @@ CREATE TYPE "canonical"."PackCategory" AS ENUM ('canto', 'event', 'walpurgis', '
 -- CreateEnum
 CREATE TYPE "canonical"."PackVariant" AS ENUM ('normal', 'mid', 'hard');
 
+-- CreateEnum
+CREATE TYPE "canonical"."Sin" AS ENUM ('wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy');
+
+-- CreateEnum
+CREATE TYPE "canonical"."GiftDomain" AS ENUM ('mirror_dungeon', 'story_dungeon');
+
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
     "id" TEXT NOT NULL,
@@ -151,6 +157,149 @@ CREATE TABLE "canonical"."floor_pack" (
     CONSTRAINT "floor_pack_pkey" PRIMARY KEY ("difficulty","floor_range","pack_id")
 );
 
+-- CreateTable
+CREATE TABLE "canonical"."keyword" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "keyword_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."keyword_text" (
+    "keyword_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "keyword_text_pkey" PRIMARY KEY ("keyword_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."trigger" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "trigger_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."effect" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "effect_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift" (
+    "id" TEXT NOT NULL,
+    "domain" "canonical"."GiftDomain" NOT NULL,
+    "sin" "canonical"."Sin",
+    "tier" INTEGER,
+    "tier_label" TEXT,
+    "cost" INTEGER,
+    "keyword_id" TEXT,
+    "hard_only" BOOLEAN NOT NULL DEFAULT false,
+    "enhanceable" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "gift_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_stage" (
+    "gift_id" TEXT NOT NULL,
+    "level" INTEGER NOT NULL,
+
+    CONSTRAINT "gift_stage_pkey" PRIMARY KEY ("gift_id","level")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_stage_text" (
+    "gift_id" TEXT NOT NULL,
+    "level" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+
+    CONSTRAINT "gift_stage_text_pkey" PRIMARY KEY ("gift_id","level","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_effect" (
+    "gift_id" TEXT NOT NULL,
+    "effect_id" TEXT NOT NULL,
+
+    CONSTRAINT "gift_effect_pkey" PRIMARY KEY ("gift_id","effect_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_trigger" (
+    "gift_id" TEXT NOT NULL,
+    "trigger_id" TEXT NOT NULL,
+
+    CONSTRAINT "gift_trigger_pkey" PRIMARY KEY ("gift_id","trigger_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_pack" (
+    "gift_id" TEXT NOT NULL,
+    "pack_id" TEXT NOT NULL,
+
+    CONSTRAINT "gift_pack_pkey" PRIMARY KEY ("gift_id","pack_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_exclusive_pack" (
+    "gift_id" TEXT NOT NULL,
+    "pack_id" TEXT NOT NULL,
+
+    CONSTRAINT "gift_exclusive_pack_pkey" PRIMARY KEY ("gift_id","pack_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_requirement" (
+    "gift_id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+
+    CONSTRAINT "gift_requirement_pkey" PRIMARY KEY ("gift_id","kind")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."fusion_recipe" (
+    "gift_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+
+    CONSTRAINT "fusion_recipe_pkey" PRIMARY KEY ("gift_id","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."fusion_slot" (
+    "gift_id" TEXT NOT NULL,
+    "recipe_idx" INTEGER NOT NULL,
+    "slot_idx" INTEGER NOT NULL,
+    "material_id" TEXT,
+    "count" INTEGER,
+
+    CONSTRAINT "fusion_slot_pkey" PRIMARY KEY ("gift_id","recipe_idx","slot_idx")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."fusion_slot_option" (
+    "gift_id" TEXT NOT NULL,
+    "recipe_idx" INTEGER NOT NULL,
+    "slot_idx" INTEGER NOT NULL,
+    "material_id" TEXT NOT NULL,
+
+    CONSTRAINT "fusion_slot_option_pkey" PRIMARY KEY ("gift_id","recipe_idx","slot_idx","material_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_locked_desc" (
+    "gift_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "text" TEXT NOT NULL,
+
+    CONSTRAINT "gift_locked_desc_pkey" PRIMARY KEY ("gift_id","locale")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -181,6 +330,27 @@ CREATE INDEX "pack_tag_tag_idx" ON "canonical"."pack_tag"("tag");
 -- CreateIndex
 CREATE INDEX "floor_pack_pack_id_idx" ON "canonical"."floor_pack"("pack_id");
 
+-- CreateIndex
+CREATE INDEX "gift_domain_idx" ON "canonical"."gift"("domain");
+
+-- CreateIndex
+CREATE INDEX "gift_sin_idx" ON "canonical"."gift"("sin");
+
+-- CreateIndex
+CREATE INDEX "gift_keyword_id_idx" ON "canonical"."gift"("keyword_id");
+
+-- CreateIndex
+CREATE INDEX "gift_effect_effect_id_idx" ON "canonical"."gift_effect"("effect_id");
+
+-- CreateIndex
+CREATE INDEX "gift_trigger_trigger_id_idx" ON "canonical"."gift_trigger"("trigger_id");
+
+-- CreateIndex
+CREATE INDEX "gift_pack_pack_id_idx" ON "canonical"."gift_pack"("pack_id");
+
+-- CreateIndex
+CREATE INDEX "gift_exclusive_pack_pack_id_idx" ON "canonical"."gift_exclusive_pack"("pack_id");
+
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -201,4 +371,55 @@ ALTER TABLE "canonical"."pack_category_path" ADD CONSTRAINT "pack_category_path_
 
 -- AddForeignKey
 ALTER TABLE "canonical"."floor_pack" ADD CONSTRAINT "floor_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."keyword_text" ADD CONSTRAINT "keyword_text_keyword_id_fkey" FOREIGN KEY ("keyword_id") REFERENCES "canonical"."keyword"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift" ADD CONSTRAINT "gift_keyword_id_fkey" FOREIGN KEY ("keyword_id") REFERENCES "canonical"."keyword"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_stage" ADD CONSTRAINT "gift_stage_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_stage_text" ADD CONSTRAINT "gift_stage_text_gift_id_level_fkey" FOREIGN KEY ("gift_id", "level") REFERENCES "canonical"."gift_stage"("gift_id", "level") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_effect" ADD CONSTRAINT "gift_effect_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_effect" ADD CONSTRAINT "gift_effect_effect_id_fkey" FOREIGN KEY ("effect_id") REFERENCES "canonical"."effect"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_trigger" ADD CONSTRAINT "gift_trigger_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_trigger" ADD CONSTRAINT "gift_trigger_trigger_id_fkey" FOREIGN KEY ("trigger_id") REFERENCES "canonical"."trigger"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_pack" ADD CONSTRAINT "gift_pack_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_pack" ADD CONSTRAINT "gift_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_exclusive_pack" ADD CONSTRAINT "gift_exclusive_pack_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_exclusive_pack" ADD CONSTRAINT "gift_exclusive_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_requirement" ADD CONSTRAINT "gift_requirement_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."fusion_recipe" ADD CONSTRAINT "fusion_recipe_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."fusion_slot" ADD CONSTRAINT "fusion_slot_gift_id_recipe_idx_fkey" FOREIGN KEY ("gift_id", "recipe_idx") REFERENCES "canonical"."fusion_recipe"("gift_id", "index") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."fusion_slot_option" ADD CONSTRAINT "fusion_slot_option_gift_id_recipe_idx_slot_idx_fkey" FOREIGN KEY ("gift_id", "recipe_idx", "slot_idx") REFERENCES "canonical"."fusion_slot"("gift_id", "recipe_idx", "slot_idx") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_locked_desc" ADD CONSTRAINT "gift_locked_desc_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
