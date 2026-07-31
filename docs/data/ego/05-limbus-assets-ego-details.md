@@ -154,11 +154,20 @@ mj 의 `awakeningPassives` 길이와도 일치한다.
 
 `20509` 착영휘도의 게임 화면에서 확인했다. **`AlwaysUseEGOPassive` 뒤에 패시브 id 가
 붙는다** — 인격 편 회차 8·10의 토큰 치환표는 전부 고정 키였고, **id 를 접미로 갖는
-동적 토큰은 이것이 처음**이다.
+토큰은 이것이 처음**이다.
 
-`[Token]` 을 표시명으로 바꿀 때 정확히 일치하는 키만 찾으면 이 토큰은 못 찾는다.
-`substituteTokens`(`src/text.ts:216`)는 표에 없으면 원문을 남기고 리포트에 올리므로
-깨지지는 않지만, **리포트에 계속 뜬다.**
+> **정정 (2026-07-31)** — 처음에는 "동적 토큰이라 고정 키 치환표로는 안 잡힌다"고
+> 썼다. **틀렸다.** 상태 편 회차 2에서 확인하니
+> `mechanics/limbus-data-mj/terms.json` 에 **개별 항목으로 등재돼 있다.**
+>
+> ```
+> AlwaysUseEGOPassive2010911   "[로보토미 E.G.O::엄숙한 애도 이상 전용 상시 효과]"
+> AlwaysUseEGOPassive2050911   "[검계 우두머리 뫼르소 전용 상시 효과]"
+> WhenUseEGOPassive            "[사용 효과]"
+> ```
+>
+> 이런 토큰은 2건뿐이고 둘 다 사전에 있다. `substituteTokens` 가 정상 치환하며
+> 리포트에 뜨지 않는다. 게임 화면의 한국어 헤더가 바로 이 `nameKo` 다.
 
 위키가 뜻을 확인해준다 — 착영휘도는 "the **first identity to gain passive effects from an
 EGO skill before that EGO skill is used**" 로, 장착만으로 발동하는 첫 사례다.
@@ -255,7 +264,7 @@ Vibration 346 · CantIdentify 296 · Charge 289 · Laceration 260 · Breath 218
 5. `bonusesEnabled` 는 210 그룹 전부 `true` — **사실상 상수**다. `false` 표본이 없어
    무엇을 끄는 플래그인지 알 수 없고, `teamCodeEligible` 과 같이 의미를 두지 않는다
 6. 조건부 기믹은 **구조가 아니라 텍스트에** 있다
-7. `[AlwaysUseEGOPassive{패시브 id}]` 는 **동적 토큰**이다. 고정 키 치환표로는 안 잡힌다
+7. `[AlwaysUseEGOPassive{패시브 id}]` 는 id 를 접미로 갖지만 **`terms.json` 에 개별 등재**돼 있다(2건)
 
 ## 미해결
 
