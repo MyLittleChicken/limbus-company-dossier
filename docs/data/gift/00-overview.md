@@ -1,7 +1,7 @@
 # E.G.O 기프트 계열 지도 (Gift Overview)
 
 > 상태: **기프트 편 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
-> 회차 1–8 을 모두 마쳤다. 미해결 1건(색 4건 불일치)만 남았다.
+> 회차 1–8 을 모두 마쳤다. **미해결 0** — 게임 확인으로 전부 닫혔다.
 
 ## 1. 기프트 id 체계
 
@@ -56,14 +56,14 @@ mj 는 `cost`·`packs` 만 보강한다(`src/entities/gifts.ts:1`).
 | 거울 던전 비용 | `gifts.cost` | — | **mj** | 게임 화면 코스트와 일치. 15종은 빈다 | 1 |
 | 팩 소속 | `gifts.packs`(117종) | — | **mj** | **정본에 없는 단일 출처** | 1 |
 | 테마 한정 | `gifts.uniquePacks`(171) | `gifts.exclusiveTo`(230) | **assets** | mj ⊂ assets · 겹치는 171건 값까지 동일 | 1 |
-| **하드 난이도 전용** | `gifts.hardOnly`(53) | `gifts.hardonly`(116) | **합집합 122** | **둘 다 결손이 있다** | 1 |
+| **하드 난이도 전용** | `gifts.hardOnly`(53) | `gifts.hardonly`(116) | **합집합 122** | 게임 5건 확인. **둘 다 결손이 있다** | 1 |
 | 발동 조건(구조) | `gifts.requires`(126) | — | **mj** | 5종 구조. **미적재** | 1 |
 | 발동 조건(문자열) | — | `gifts.triggers`(451) | **assets** | 엔진이 정규식으로 파싱 | 1 |
 | 융합 그래프 | `gifts.combinesFrom`(59)·`fusesInto`(132) | `gifts.recipes`(60)·`ingredientOf`(142) | **assets** | 겹치는 것은 값까지 동일. `9083` 대체 슬롯은 mj 가 표현 못 한다 | 1·3 |
 | 엔진 조건 어휘 | — | `gifts.effects`(55)·`triggers`(150) | **assets** | 구버전에 없다. `Other Uncommon` 이 뭉개져 있다 | 3 |
 | 저주/축복 쌍 | — | `cursedPair`·`blessedPair`(3+3) | **assets** | 서로 참조. **미적재** | 3 |
 | 애셋 스프라이트 키 | — | `gifts.srcPath` | **assets** | 381건이 이름. id 로 추정 불가 | 3 |
-| 죄악 / 색 | `gifts_detail.attributeType`(색 7종) | `gifts.affinity` | **assets** | mj `gifts.sin` 은 파생값. 441/441 일치 | 1·2 |
+| 죄악 / 색 | `gifts_detail.attributeType`(색 7종) | `gifts.affinity`(죄악) | **mj** | 게임 4건 확인 — **assets 의 되바꾸기가 4건 실패**했다 | 1·2·3 |
 | 상태명 키워드 | `gifts_detail.keyword`(상태명 12종) | — | 중복 | `gifts.keyword` 와 1:1 | 2 |
 | **키워드 공식 사전** | — | — | **loc-\*** | `EgoGiftCategory.json` 12종. `None`=「범용」·`Random` 추가 | 7 |
 | 획득 조건 문구 | — | — | **loc-\*** | `LockedDesc` 64건. 전부 `packs` 0개 | 7 |
@@ -101,7 +101,7 @@ E.G.O 편   mj  1 · assets  6 · loc 4
 | `hardOnly` 65건 불일치 | **mj·assets 양쪽 다 결손.** 게임 확인으로 판정 | 1 |
 | `9726` 낙수의 잔 `desc` 가 `"excep"` 로 잘림 | 단어 절단 | 2 |
 | `keyword` 에 `null` 과 문자열 `"None"` 혼재 | 64 + 45 | 2 |
-| `attributeType` ↔ `affinity` 4건 어긋남 | 색·죄악 대응 실패 | 3 |
+| `attributeType` ↔ `affinity` 4건 어긋남 | **assets 의 색→죄악 되바꾸기 실패.** 게임 확인 완료 | 3 |
 | `loc-ko` 에 `EGOgift.json` 없음 — **6건 한국어 결손** | 일본어는 갖는다 | 7 |
 
 ### 4.3 회차를 가로지른 기프트
@@ -113,6 +113,7 @@ E.G.O 편   mj  1 · assets  6 · loc 4
 | `9801`·`9804` ↔ `2066`·`2070` | `abilityIDs` 가 다른 번호 공간을 가리킨 2건 |
 | `9083` 달의 기억 | 유일한 **대체 슬롯 레시피**. mj 가 표현 못 한다 |
 | `9227`–`9232` 저주·축복 3쌍 | `cursedPair`/`blessedPair` · 「저주 해제」 획득 경로 |
+| `9427`·`9428`·`9431`·`9707` → `9212`·`9249` | **하드 전용 합성 계통 둘.** assets 가 통째로 놓쳤다 |
 
 ## 5. 다른 편에서 미리 본 것
 
