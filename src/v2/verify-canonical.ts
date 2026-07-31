@@ -70,7 +70,9 @@ async function main(): Promise<void> {
 
 		eq('결손 textColor', await prisma.fieldGap.count({ where: { field: 'textColor' } }), 61);
 		eq('결손 unlockCode', await prisma.fieldGap.count({ where: { field: 'unlockCode' } }), 2);
-		eq('결손 합계', await prisma.fieldGap.count(), 69);  // textColor 61 · unlockCode 2 · 한국어 이름 6
+		// pack.textColor 61 · skill.levels 9 · gift.name.ko 6 · passive.name 6
+		// · association.name.ja 2 · pack.unlockCode 2
+		eq('결손 합계', await prisma.fieldGap.count(), 86);
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
 		const p1309 = await prisma.packText.findUnique({
@@ -274,6 +276,99 @@ async function main(): Promise<void> {
 			name: 'assets affinity 오류 4건 (mj 가 정답)',
 			ok: af === 4,
 			detail: `${af} / 4`,
+		});
+
+		// ══ 인격 계열 ══════════════════════════════════════════════
+		eq('sinner', await prisma.sinner.count(), 12);
+		eq('sinner_text', await prisma.sinnerText.count(), 24);
+		eq('association', await prisma.association.count(), 64);
+		eq('association_text', await prisma.associationText.count(), 185);
+
+		eq('skill', await prisma.skill.count(), 1_045);
+		eq('skill_stage', await prisma.skillStage.count(), 5_180);
+		eq('skill_stage_text', await prisma.skillStageText.count(), 12_316);
+		eq('skill_coin', await prisma.skillCoin.count(), 10_419);
+
+		eq('passive', await prisma.passive.count(), 709);
+		eq('passive_text', await prisma.passiveText.count(), 1_701);
+
+		eq('identity', await prisma.identity.count(), 184);
+		eq('identity_text', await prisma.identityText.count(), 552);
+		eq('identity_resist', await prisma.identityResist.count(), 552);
+		eq('identity_speed', await prisma.identitySpeed.count(), 184);
+		eq('identity_skill', await prisma.identitySkill.count(), 1_020);
+		eq('identity_passive', await prisma.identityPassive.count(), 768);
+		eq('identity_association', await prisma.identityAssociation.count(), 241);
+		eq('identity_keyword', await prisma.identityKeyword.count(), 266);
+		eq('identity_unit_keyword', await prisma.identityUnitKeyword.count(), 391);
+
+		// 수감자 12명이 각각 14–16개 인격을 갖는다
+		const perSinner = await prisma.identity.groupBy({ by: ['sinnerId'], _count: { _all: true } });
+		checks.push({
+			name: '수감자별 인격 수 14–16',
+			ok:
+				perSinner.length === 12 &&
+				perSinner.every((r) => r._count._all >= 14 && r._count._all <= 16),
+			detail: perSinner.map((r) => r._count._all).join(' '),
+		});
+
+		eq('star=1 인격 (LCB 기본)', await prisma.identity.count({ where: { star: 1 } }), 12);
+
+		// 단계가 있는 스킬은 전부 5단계다 — 전량 전개의 정의
+		const badStage = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT skill_id FROM canonical.skill_stage GROUP BY skill_id HAVING count(*) <> 5
+			) x
+		`;
+		checks.push({
+			name: '5단계가 아닌 스킬 (0이어야 한다)',
+			ok: Number(badStage[0]?.n ?? 1n) === 0,
+			detail: `${Number(badStage[0]?.n ?? 0n)} / 0`,
+		});
+
+		// changedHere 가 원본 델타 수와 같아야 한다 — 실측 2,561
+		eq(
+			'changedHere true (원본 델타 2,561)',
+			await prisma.skillStage.count({ where: { changedHere: true } }),
+			2_561,
+		);
+
+		// 유령 패시브 6건
+		const ghosts = await prisma.fieldGap.findMany({
+			where: { entity: 'passive', field: 'name' },
+			select: { entityId: true },
+		});
+		checks.push({
+			name: '유령 패시브 6건 (마스터북 일치)',
+			ok:
+				ghosts.length === 6 &&
+				ghosts.map((g) => g.entityId).sort().join(',') ===
+					'1011003,1021202,1031102,1050803,1051102,1100903',
+			detail: ghosts.map((g) => g.entityId).sort().join(' '),
+		});
+
+		// 공격 스킬은 슬롯·매수를 갖는다 — 덱 구성 정보
+		// 공격 스킬 전건이 슬롯·매수를 갖는다
+		const atkTotal = await prisma.identitySkill.count({ where: { role: 'attack' } });
+		const atkSlot = await prisma.identitySkill.count({
+			where: { role: 'attack', slot: { not: null } },
+		});
+		checks.push({
+			name: '공격 스킬 전건이 슬롯을 갖는다',
+			ok: atkTotal === 624 && atkSlot === 624,
+			detail: `${atkSlot} / ${atkTotal} (624 기대)`,
+		});
+
+		// 모든 인격이 저항 3축을 갖는다
+		const badResist = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT identity_id FROM canonical.identity_resist GROUP BY identity_id HAVING count(*) <> 3
+			) x
+		`;
+		checks.push({
+			name: '저항 3축이 아닌 인격 (0이어야 한다)',
+			ok: Number(badResist[0]?.n ?? 1n) === 0,
+			detail: `${Number(badResist[0]?.n ?? 0n)} / 0`,
 		});
 
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다

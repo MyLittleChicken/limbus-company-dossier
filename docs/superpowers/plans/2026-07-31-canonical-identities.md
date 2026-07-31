@@ -580,12 +580,55 @@ Expected: raw 13건 · canonical 50건 통과
 
 ---
 
-## 완료 판정
+## 완료 판정 — **전부 통과 (2026-07-31)**
 
 ```
-1. canonical.identity 184 · skill 1,045 · passive 709 · sinner 12
-2. skill_stage 5,225 (전량 전개) · changedHere 로 델타 보존
-3. 유령 패시브 6건이 field_gap 에 특정됐다
-4. 계획 1–3 이 안 깨졌다
-5. 현행이 그대로 돈다
+1. identity 184 · skill 1,045 · passive 709 · sinner 12    ✔ 검사 76건 통과
+2. skill_stage 5,180 (전량 전개) · changedHere 2,561        ✔ 델타 보존
+3. 유령 패시브 6건이 field_gap 에 특정됐다                    ✔ 마스터북 일치
+4. 계획 1–3 이 안 깨졌다                                   ✔ raw 13건 · 테스트 216건
+5. 현행이 그대로 돈다                                      ✔ public.gift 456
+```
+
+### 실행 결과
+
+```
+skill 1,045 · skill_stage 5,180 · skill_stage_text 12,316 · skill_coin 10,419
+identity 184 · identity_text 552 · identity_resist 552 · identity_speed 184
+identity_skill 1,020 · identity_passive 768 · identity_association 241
+identity_keyword 266 · identity_unit_keyword 391
+passive 709 · passive_text 1,701 · sinner 12 · association 64
+field_gap 86 · field_source 7,270
+```
+
+### 계획과 달라진 것 — **원본 구조를 셋 놓쳤다**
+
+계획을 쓸 때 표본 하나만 보고 구조를 단정한 것이 셋 다 틀렸다. 적재가 터지며
+드러났다.
+
+**① `defType` 이 방어 타입이 아니다**
+
+```
+실측   attack 828 · guard 90 · counter 78 · evade 48 · non_action 1
+```
+
+이름과 달리 **스킬 종류**다. `enum DefType {guard, evade, counter}` 를
+`SkillKind` 5종으로 고쳤다.
+
+**② `attackSkills` 가 `{slot, copies, skillId}` 다**
+
+평평한 id 배열로 읽어 **덱 구성 정보를 잃고 있었다.** `slot` 은 스킬 번호(1·2·3),
+`copies` 는 덱에 들어가는 매수다. 두 컬럼을 더했다. 공격 스킬 624건 전부가 갖는다.
+
+**③ `battlePassives` 가 `{level, passives:[id]}` 다**
+
+`level` 은 **공명 요구 레벨**(1–4)이다. 같은 패시브가 여러 레벨에 걸리는 경우가
+172건 있어 키의 일부여야 한다. `@@id([identityId, passiveId, role, level])`.
+
+### 수치 정정
+
+```
+skill_stage       5,225 → 5,180   levels 가 빈 9건은 단계를 못 만든다
+identity_passive    556 →   768   앞선 추정은 그룹 수를 센 것이었다
+결손 합계            69 →    86   skill.levels 9 · passive 6 · association.ja 2 가 더해졌다
 ```
