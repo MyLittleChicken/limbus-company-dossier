@@ -1,6 +1,6 @@
 # E.G.O 기프트 계열 지도 (Gift Overview)
 
-> 상태: **회차 1–6 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
+> 상태: **회차 1–7 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
 > 인격 편(14회차)·E.G.O 편(9회차)이 닫힌 뒤 시작했다. 기프트 편은 8회차 예정이다.
 
 ## 1. 기프트 id 체계
@@ -64,7 +64,9 @@ mj 는 `cost`·`packs` 만 보강한다(`src/entities/gifts.ts:1`).
 | 저주/축복 쌍 | — | `cursedPair`·`blessedPair`(3+3) | **assets** | 서로 참조. **미적재** | 3 |
 | 애셋 스프라이트 키 | — | `gifts.srcPath` | **assets** | 381건이 이름. id 로 추정 불가 | 3 |
 | 죄악 / 색 | `gifts_detail.attributeType`(색 7종) | `gifts.affinity` | **assets** | mj `gifts.sin` 은 파생값. 441/441 일치 | 1·2 |
-| 상태명 키워드 | `gifts_detail.keyword`(상태명 12종) | — | 중복 | `gifts.keyword` 와 1:1. `blunt`↔`Hit` | 2 |
+| 상태명 키워드 | `gifts_detail.keyword`(상태명 12종) | — | 중복 | `gifts.keyword` 와 1:1 | 2 |
+| **키워드 공식 사전** | — | — | **loc-\*** | `EgoGiftCategory.json` 12종. `None`=「범용」·`Random` 추가 | 7 |
+| 획득 조건 문구 | — | — | **loc-\*** | `LockedDesc` 64건. 전부 `packs` 0개 | 7 |
 | 강화 단계 | `gifts_detail.upgrades`(0–2) | `gifts.enhanceable` | **mj** | 110 = 3단계 107 + 2단계 3. 완전 일치 | 2 |
 | 한국어 강화 텍스트 | `gifts_detail.upgrades[].effectKo` | — | **mj + loc** | loc 도 갖는다(id 에 단계). 유일 출처 아님 | 2·5 |
 | 능력 단위 한 줄 | — | — | **loc-\*** | `simpleDesc` 배열 1,087항목. `abilityID` 분해가 mj 와 105건 다르다 | 5 |

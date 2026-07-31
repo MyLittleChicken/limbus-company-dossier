@@ -140,7 +140,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 4 | [`mj/start_gifts.json` + `assets/md__universal_gifts.json`](gift/04-gifts-aux.md) | **완료** 2026-07-31 · 2파일 |
 | 5 | [`loc-*/EGOgift_MirrorDungeon*.json` 12파일 × 3로케일](gift/05-loc-egogift-mirror-dungeon.md) | **완료** 2026-07-31 · 604건 |
 | 6 | [`loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열](gift/06-loc-egogift-story-event.md) | **완료** 2026-07-31 · 16파일 · 189건 |
-| 7 | `loc-*/EGOgift.json` + `EgoGiftCategory` + `LockedDesc` | 미착수 |
+| 7 | [`loc-*/EGOgift.json` + `EgoGiftCategory` + `LockedDesc`](gift/07-loc-egogift-common.md) | **완료** 2026-07-31 · 3파일 |
 | 8 | `data/assets/gifts/` 476개 | 미착수 |
 
 ### 그 밖의 엔티티
