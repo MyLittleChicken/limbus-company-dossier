@@ -26,7 +26,7 @@ CREATE TYPE "canonical"."GiftDomain" AS ENUM ('mirror_dungeon', 'story_dungeon')
 CREATE TYPE "canonical"."AtkType" AS ENUM ('slash', 'pierce', 'blunt');
 
 -- CreateEnum
-CREATE TYPE "canonical"."DefType" AS ENUM ('guard', 'evade', 'counter');
+CREATE TYPE "canonical"."SkillKind" AS ENUM ('attack', 'guard', 'counter', 'evade', 'non_action');
 
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
@@ -343,7 +343,7 @@ CREATE TABLE "canonical"."skill" (
     "id" TEXT NOT NULL,
     "sin" "canonical"."Sin",
     "attack_type" "canonical"."AtkType",
-    "def_type" "canonical"."DefType",
+    "kind" "canonical"."SkillKind",
     "skill_tier" INTEGER,
 
     CONSTRAINT "skill_pkey" PRIMARY KEY ("id")
@@ -446,6 +446,8 @@ CREATE TABLE "canonical"."identity_skill" (
     "skill_id" TEXT NOT NULL,
     "role" TEXT NOT NULL,
     "ordinal" INTEGER NOT NULL,
+    "slot" INTEGER,
+    "copies" INTEGER,
 
     CONSTRAINT "identity_skill_pkey" PRIMARY KEY ("identity_id","skill_id","role")
 );
@@ -455,8 +457,9 @@ CREATE TABLE "canonical"."identity_passive" (
     "identity_id" TEXT NOT NULL,
     "passive_id" TEXT NOT NULL,
     "role" TEXT NOT NULL,
+    "level" INTEGER NOT NULL,
 
-    CONSTRAINT "identity_passive_pkey" PRIMARY KEY ("identity_id","passive_id","role")
+    CONSTRAINT "identity_passive_pkey" PRIMARY KEY ("identity_id","passive_id","role","level")
 );
 
 -- CreateTable

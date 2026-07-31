@@ -12,6 +12,9 @@ import { Meta } from './canonical/meta.js';
 import { buildPacks, type FloorTable } from './canonical/packs.js';
 import { buildVocab, buildKeywordLookup } from './canonical/vocab.js';
 import { buildGifts } from './canonical/gifts.js';
+import { buildSinners } from './canonical/sinners.js';
+import { buildSkills } from './canonical/skills.js';
+import { buildIdentities } from './canonical/identities.js';
 
 const CHUNK = 1_000;
 
@@ -94,10 +97,58 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── 인격 계열 ──────────────────────────────────────────────
+		const idKo = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-ko');
+		const idEn = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-en');
+		const idJa = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-ja');
+
+		const mjIdentities = await readSource(prisma, snapshotId, 'identities/limbus-data-mj/identities.json');
+		const sinners = buildSinners(
+			{
+				mjIdentities,
+				associations: await readSource(prisma, snapshotId, 'identities/limbus-data-mj/associations.json'),
+				unitKeywordJa: idJa,
+			},
+			meta,
+		);
+
+		const skills = buildSkills(
+			{
+				mjSkills: await readSource(prisma, snapshotId, 'identities/limbus-data-mj/skills.json'),
+				locKo: idKo,
+				locEn: idEn,
+				locJa: idJa,
+			},
+			meta,
+		);
+
+		const mjPassives = await readSource(prisma, snapshotId, 'identities/limbus-data-mj/passives.json');
+		const identities = buildIdentities(
+			{
+				mj: mjIdentities,
+				mjDetail: await readSource(prisma, snapshotId, 'identities/limbus-data-mj/identities_detail.json'),
+				assets: await readSource(prisma, snapshotId, 'identities/limbus-assets/identities.json'),
+				mjPassives,
+				locKo: idKo,
+				locEn: idEn,
+				locJa: idJa,
+				passiveKo: idKo,
+				passiveEn: idEn,
+				passiveJa: idJa,
+				knownSkills: new Set(skills.skill.map((s) => s.id)),
+				knownAssociations: new Set(sinners.association.map((a) => a.id)),
+				knownKeywords: new Set(vocab.keyword.map((k) => k.id)),
+				keywordDict: buildKeywordLookup(categoryEn),
+			},
+			meta,
+		);
+
 		// canonical 만 비운다. raw 도 app 도 건드리지 않는다.
 		await prisma.$executeRaw`
 			TRUNCATE canonical.pack, canonical.gift, canonical.keyword, canonical.trigger,
-			         canonical.effect, canonical.field_gap, canonical.field_source,
+			         canonical.effect, canonical.sinner, canonical.association,
+			         canonical.skill, canonical.passive, canonical.identity,
+			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
 
@@ -194,6 +245,30 @@ async function main(): Promise<void> {
 				prisma.toolAnnotation.createMany({ data: d as never }),
 			),
 		]);
+
+		// ── 인격 계열 적재 — 뿌리부터 ─────────────────────────────
+		counts.push(['sinner', (await prisma.sinner.createMany({ data: sinners.sinner })).count]);
+		counts.push(['sinner_text', await chunked(sinners.sinnerText, (d) => prisma.sinnerText.createMany({ data: d as never }))]);
+		counts.push(['association', (await prisma.association.createMany({ data: sinners.association })).count]);
+		counts.push(['association_text', await chunked(sinners.associationText, (d) => prisma.associationText.createMany({ data: d as never }))]);
+
+		counts.push(['skill', await chunked(skills.skill, (d) => prisma.skill.createMany({ data: d as never }))]);
+		counts.push(['skill_stage', await chunked(skills.skillStage, (d) => prisma.skillStage.createMany({ data: d }))]);
+		counts.push(['skill_stage_text', await chunked(skills.skillStageText, (d) => prisma.skillStageText.createMany({ data: d as never }))]);
+		counts.push(['skill_coin', await chunked(skills.skillCoin, (d) => prisma.skillCoin.createMany({ data: d }))]);
+
+		counts.push(['passive', await chunked(identities.passive, (d) => prisma.passive.createMany({ data: d }))]);
+		counts.push(['passive_text', await chunked(identities.passiveText, (d) => prisma.passiveText.createMany({ data: d as never }))]);
+
+		counts.push(['identity', await chunked(identities.identity, (d) => prisma.identity.createMany({ data: d }))]);
+		counts.push(['identity_text', await chunked(identities.identityText, (d) => prisma.identityText.createMany({ data: d as never }))]);
+		counts.push(['identity_resist', await chunked(identities.identityResist, (d) => prisma.identityResist.createMany({ data: d as never }))]);
+		counts.push(['identity_speed', await chunked(identities.identitySpeed, (d) => prisma.identitySpeed.createMany({ data: d }))]);
+		counts.push(['identity_skill', await chunked(identities.identitySkill, (d) => prisma.identitySkill.createMany({ data: d }))]);
+		counts.push(['identity_passive', await chunked(identities.identityPassive, (d) => prisma.identityPassive.createMany({ data: d }))]);
+		counts.push(['identity_association', await chunked(identities.identityAssociation, (d) => prisma.identityAssociation.createMany({ data: d }))]);
+		counts.push(['identity_keyword', await chunked(identities.identityKeyword, (d) => prisma.identityKeyword.createMany({ data: d }))]);
+		counts.push(['identity_unit_keyword', await chunked(identities.identityUnitKeyword, (d) => prisma.identityUnitKeyword.createMany({ data: d }))]);
 
 		counts.push([
 			'field_gap',
