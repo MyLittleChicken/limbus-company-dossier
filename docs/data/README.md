@@ -186,6 +186,21 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 `limbus-assets` 8파일 중 변환기가 읽는 것은 **`grace` 하나뿐**이다. 선택지 이벤트 ·
 업적 · 보상 · 시작 버프가 전부 미적재다.
 
+### 상태 (메카닉) — 5회차 · **완료 2026-07-31**
+
+계열 지도는 [`status/00-overview.md`](status/00-overview.md).
+
+| # | 대상 | 상태 |
+| --- | --- | --- |
+| 1 | [`limbus-assets/statuses.json`](status/01-limbus-assets-statuses.md) | **완료** 2026-07-31 · 1,472종 |
+| 2 | [`limbus-data-mj` 메카닉 3종](status/02-limbus-data-mj-mechanics.md) | **완료** 2026-07-31 |
+| 3 | [`shared-library` + `loc-*/BattleKeywords*`](status/03-shared-library-and-loc-battlekeywords.md) | **완료** 2026-07-31 · 1,409종 |
+| 4 | [`loc-*/Bufs*`](status/04-loc-bufs.md) | **완료** 2026-07-31 · 1,496종 |
+| 5 | [`data/assets/statuses/` 1,193개](status/05-assets-status-images.md) | **완료** 2026-07-31 |
+
+**상태 편 결산** — 5회차 전부 미해결 없이 닫혔다. **한국어가 245종(16.6 %) 비어 있고**,
+`undefined` 키 원본 버그가 1,653건으로 마스터북 최대 규모다.
+
 ### 그 밖의 엔티티
 
 파일 규모로 잡은 예상 회차다. 인격 편에서 공통 어휘(죄악 7 · 공격 타입 3 · 기믹 축 10 ·
@@ -194,7 +209,6 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 
 | 편 | 파일 | 예상 회차 | 비고 |
 | --- | ---: | ---: | --- |
-| 상태(메카닉) | 260 | ~6 | 08 문서의 `status_gimmick` 근거 |
 | 인카운터 | 380 | ~8 | `assets` 251개가 동형이면 묶인다 |
 
 ## 6. 회차 문서와 주제 문서
