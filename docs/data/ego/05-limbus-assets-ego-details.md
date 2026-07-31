@@ -68,6 +68,12 @@ corrosionSkills   그룹 0개  12건 · 1개 98건
 `affinity`·`atkType`·`defType`·`spCost` 가 정확히 210 인 것은 그룹 수와 같다 —
 **1단계 항목에만 적고 이후 단계는 생략한다.**
 
+#### `spCost` 는 화면에서 로마 숫자 등급이 된다
+
+원본은 정수(`20509` 착영휘도 = 20)인데 게임 상세는 **「정신 소모량 ⎯ Ⅳ」** 로 표시한다.
+정수를 그대로 쓰지 않고 **등급으로 접는 변환이 화면 쪽에 있다.** 우리 화면은 아직
+`spCost` 를 표시하지 않으므로 지금은 영향이 없다.
+
 ## 3. 환상 해석 단계는 1·3·4 다
 
 ```
@@ -139,6 +145,24 @@ mj 의 `awakeningPassives` 길이와도 일치한다.
 
 키는 `name` · `desc` 둘뿐이다. **영문만 있다** — 한국어는 회차 8(`loc-*/Passive_Ego.json`).
 
+### `desc` 앞머리는 화면에서 헤더로 치환되는 동적 토큰이다
+
+```
+[AlwaysUseEGOPassive2050911]  →  "[검계 우두머리 뫼르소 전용 상시 효과]"
+[WhenUseEGOPassive]           →  "[사용 효과]"
+```
+
+`20509` 착영휘도의 게임 화면에서 확인했다. **`AlwaysUseEGOPassive` 뒤에 패시브 id 가
+붙는다** — 인격 편 회차 8·10의 토큰 치환표는 전부 고정 키였고, **id 를 접미로 갖는
+동적 토큰은 이것이 처음**이다.
+
+`[Token]` 을 표시명으로 바꿀 때 정확히 일치하는 키만 찾으면 이 토큰은 못 찾는다.
+`substituteTokens`(`src/text.ts:216`)는 표에 없으면 원문을 남기고 리포트에 올리므로
+깨지지는 않지만, **리포트에 계속 뜬다.**
+
+위키가 뜻을 확인해준다 — 착영휘도는 "the **first identity to gain passive effects from an
+EGO skill before that EGO skill is used**" 로, 장착만으로 발동하는 첫 사례다.
+
 **적재** — `EgoPassive(egoId, index)` + `EgoPassiveText`(`src/entities/egos.ts`).
 E.G.O 패시브가 **요약 파일에 없고 이 파일에만 있다**는 스키마 주석이 실측과 맞는다.
 
@@ -175,12 +199,26 @@ notes.main    110건 (전부)      리스트 길이 1–5
 notes.other    18건             리스트 길이 1–2
 ```
 
-> `20509` main:
-> "Use with {id:10508} to give it {st:Laceration} application and to unlock the maximum
-> bonuses from this E.G.O."
+**게임 원문이 아니라 `limbus-assets` 가 쓴 공략 설명**이다. 근거 셋이다.
 
-**게임 원문이 아니라 `limbus-assets` 가 쓴 공략 설명**이다. `extractable` 과 같은
-도구 도메인이며, 사람이 쓴 문장이라 표기가 흔들린다.
+**① 2인칭 조언 문투** — 게임 데이터는 독자에게 권하지 않는다.
+
+```
+20101 오감도   "Reduces enemy power for the rest of the turn, useful if Yi Sang
+                clashes before the other sinners."
+20304 평생 스튜 "Converts non-{keyword:Lust} resources into {keyword:Lust}.
+                Careful when using this ego if you're lacking other E.G.O resources."
+20509 착영휘도  "Use with {id:10508} to give it {st:Laceration} application and to
+                unlock the maximum bonuses from this E.G.O."
+```
+
+`useful if you` · `Careful when` · `Use with` — **`{id:10508}` 로 특정 인격을 지목해
+조합을 권한다.** 게임 클라이언트가 하지 않는 일이다.
+
+**② 토큰 접두가 흔들린다** — 기계 생성이면 일어나지 않는다(9절).
+
+**③ 같은 출처가 `extractable` 을 붙였다** — 회차 3에서 확인한 추출 시뮬레이터 필드와
+같은 파일 계열이다. **도구 도메인을 데이터에 섞는 전례가 있다.**
 
 ### 토큰 표기가 이중화돼 있다
 
@@ -214,8 +252,10 @@ Vibration 346 · CantIdentify 296 · Charge 289 · Laceration 260 · Breath 218
 2. 환상 해석 **2단계는 보통 항목이 없다.** 없는 것이 결손이 아니다
 3. mj 와 assets 의 단계 기록 규칙이 다르다 — **델타 vs 전량**
 4. `notes` 는 **게임 원문이 아니다.** 편집자 해설이며 토큰 표기가 흔들린다
-5. `bonusesEnabled` 는 210 그룹 전부 `true` — 상수다
+5. `bonusesEnabled` 는 210 그룹 전부 `true` — **사실상 상수**다. `false` 표본이 없어
+   무엇을 끄는 플래그인지 알 수 없고, `teamCodeEligible` 과 같이 의미를 두지 않는다
 6. 조건부 기믹은 **구조가 아니라 텍스트에** 있다
+7. `[AlwaysUseEGOPassive{패시브 id}]` 는 **동적 토큰**이다. 고정 키 치환표로는 안 잡힌다
 
 ## 미해결
 

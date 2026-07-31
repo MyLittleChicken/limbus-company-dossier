@@ -1,6 +1,6 @@
 # E.G.O 계열 지도 (E.G.O Overview)
 
-> 상태: **E.G.O 편 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 상태: **E.G.O 편 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
 > 회차 1–9 를 모두 마쳤다. 미해결 없이 닫혔다.
 
 ## 1. E.G.O id 체계
@@ -76,17 +76,17 @@ Ego ─┬─ EgoText
 | E.G.O 스킬 문자열(ko) | `skills.json` 의 `nameKo`·`descKo`(208) | — | **loc-ko** | 코인 효과 한국어는 여기뿐. 210건으로 mj 보다 2건 많다 | 7 |
 | **유래 환상체** | — | — | **loc-\*** | `abName`. 72종. **어느 출처에도 없는 개념** | 7 |
 | E.G.O 패시브 문자열(ko) | `passives.json` 의 `nameKo`·`descKo`(113) | — | 동일 | loc-ko 와 113/113 글자까지 같다 | 8 |
-| 패시브 축약 설명 | — | — | **loc-\*** | `summary`. 20건만. 미적재 | 8 |
+| 패시브 축약 설명 | — | — | **loc-\*** | `summary`. 20건만. loc 공통 필드이며 화면 미표시 | 8 |
 | 팀코드 적격 | `egos.teamCodeEligible`(전부 `true`) | — | **없음** | 정보량 0. 인격 편과 같은 판정 | 1 |
 | 죄악 저항 | `egos_detail.attributeResists`(9축) | `egos.resists`(sin × 7) | 동일 | 죄악 7축 110/110 일치. `white`/`black` 은 상수 | 1·2 |
 | E.G.O 가 다루는 상태 | — | `egos.statuses`(137종) | **assets** | **mj 가 못 갖는 유일한 개념.** 64종은 인격 축에도 없다 | 1·3 |
-| 추출 시뮬레이터 풀 | — | `egos.extractable`(28건) | **도구 필드** | 게임 사실이 아니다. `updates__55.json` 이 밝힌다 | 3 |
+| 상시 추출 풀 | — | `egos.extractable`(28건) | **assets** | 게임 추출 확률표와 일치. `20509` 착영휘도는 이벤트라 `X` | 3 |
 | 환상 해석 최대 단계 | `skills.json` 의 `level: 5` | `egos.maxThreadspin`(3건) | 동일 | 기본 4. 4번째 성냥불 3종만 5 | 3 |
-| 침식 확률 곡선 | `egos_detail.corrosion` | — | **mj** | 110건 전부 같은 상수. 수치 출처는 여기뿐 | 2 |
+| 침식 확률 곡선 | `egos_detail.corrosion` | — | **mj** | 110건 전부 같은 상수. `section` 은 정규화 SP 위치(`0.5`=SP 0) | 2 |
 | E.G.O 스킬 | `egos_detail` 의 id 208 + `skills.json` 의 수치 없음 | `ego-details` 의 스킬 **210** + 수치 전량 | **assets** | assets 가 상위집합. `2060812`·`2120912` 는 mj 에 없다 | 2·5 |
 | E.G.O 패시브 | `egos_detail.awakeningPassives`(113) | `ego-details.passiveList`(113) | **assets** | 개수 일치. mj 는 id 만, assets 는 원문 | 2·5 |
 | 환상 해석 보너스 | — | `ego-details` 의 `bonuses` | **assets** | mj 에 없다 | 5 |
-| 조건부 기믹 원문 | — | `ego-details.passiveList[].desc` | **assets** | "counts as an Identity that…" 2건 | 5 |
+| 조건부 기믹 원문 | — | `ego-details.passiveList[].desc` · `loc-*/Passive_Ego.json` | **assets + loc** | "~로 취급됨" 2건. **게임 화면에 그대로 나온다** | 5·8 |
 | 죄악 자원 비용(색 표기) | `egos_detail.requirements` | — | 중복 | `resourceCost` 와 110/110 동일 | 2 |
 | 색 토큰 ↔ 죄악 치환표 | `mechanics/sins.json` | `skill_tags.json` 의 색 표기 | **mj** | 7종 완전 사전 | 2 |
 | E.G.O 이미지 | — | `assets/egos/` 318개 | **assets** | `iconId` 같은 중간 키 없이 id 로 직접 조회 | 9 |
@@ -99,14 +99,16 @@ E.G.O 편 9회차의 결론이다. **인격 편과 같은 답이지만 분포가
 | 출처 | 단독 보유 개념 | 내용 |
 | --- | ---: | --- |
 | `limbus-data-mj` | **1** | 침식 확률 곡선(`corrosion`) |
-| `limbus-assets` | **6** | `statuses` · 스킬 수치 전량 · `bonuses` · 조건부 기믹 원문 · 전투 대사 · 이미지 |
+| `limbus-assets` | **7** | `statuses` · 스킬 수치 전량 · `bonuses` · 조건부 기믹 원문 · 전투 대사 · 이미지 · `extractable` |
 | `loc-ko/en/ja` | **4** | **유래 환상체**(`abName`) · 코인 효과 한국어 · 연출 전용 E.G.O · 패시브 `summary` |
 | `shared-library` | 0 | 구버전 시간축만 제공 |
-| 도구 필드 | 1 | `extractable` — 게임 사실이 아니다 |
 
-**인격 편은 mj 9 · assets 15 · loc 6 이었다.** E.G.O 편은 mj 가 1로 줄고 assets 가
-6으로 좁혀졌다. 개념 수가 준 것은 E.G.O 가 단순해서가 아니라 **두 출처의 중복이 크기
-때문**이다 — 회차 3에서 mj 가 조인으로 4개 개념을 재구성함을 실측했다.
+**인격 편은 mj 9 · assets 15 · loc 6 이었다.** E.G.O 편은 mj 가 1로 줄었다. 개념 수가
+준 것은 E.G.O 가 단순해서가 아니라 **두 출처의 중복이 크기 때문**이다 — 회차 3에서
+mj 가 조인으로 4개 개념을 재구성함을 실측했다.
+
+도구 도메인 필드는 **없다.** `extractable` 을 한때 그렇게 판정했으나 게임의 상시 추출
+풀과 일치함이 확인돼 철회했다(회차 3).
 
 > **그래도 어느 하나로는 안 된다.** `loc-*` 이 4개를 단독으로 갖고, 그중 `abName`(환상체)은
 > **다른 어떤 파일에도 없다.**
