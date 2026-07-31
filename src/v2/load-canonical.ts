@@ -7,9 +7,11 @@
  * 실행: npm run v2:canonical
  */
 import { PrismaClient } from './generated/client.js';
-import { latestSnapshotId, readSource } from './source.js';
+import { latestSnapshotId, readSource, readSourceGroup } from './source.js';
 import { Meta } from './canonical/meta.js';
 import { buildPacks, type FloorTable } from './canonical/packs.js';
+import { buildVocab, buildKeywordLookup } from './canonical/vocab.js';
+import { buildGifts } from './canonical/gifts.js';
 
 const CHUNK = 1_000;
 
@@ -58,9 +60,44 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── 기프트 계열 ──────────────────────────────────────────────
+		// 로케일 기프트는 30파일로 흩어져 있다. 성격이 다른 두 파일은 뺀다.
+		const EXCLUDE = ['EgoGiftCategory.json', 'MirrorDungeonEgoGiftLockedDesc.json'];
+		const locGift = async (locale: string) =>
+			readSourceGroup(prisma, snapshotId, 'gifts', `loc-${locale}`, EXCLUDE);
+		const catOf = async (locale: string) =>
+			readSource(prisma, snapshotId, `gifts/loc-${locale}/EgoGiftCategory.json`);
+		const lockedOf = async (locale: string) =>
+			readSource(prisma, snapshotId, `gifts/loc-${locale}/MirrorDungeonEgoGiftLockedDesc.json`);
+
+		const assetGifts = await readSource(prisma, snapshotId, 'gifts/limbus-assets/gifts.json');
+		const categoryKo = await catOf('ko');
+		const categoryEn = await catOf('en');
+		const categoryJa = await catOf('ja');
+
+		const vocab = buildVocab({ categoryKo, categoryEn, categoryJa, assets: assetGifts }, meta);
+
+		const gifts = buildGifts(
+			{
+				mj: await readSource(prisma, snapshotId, 'gifts/limbus-data-mj/gifts.json'),
+				mjDetail: await readSource(prisma, snapshotId, 'gifts/limbus-data-mj/gifts_detail.json'),
+				assets: assetGifts,
+				locKo: await locGift('ko'),
+				locEn: await locGift('en'),
+				locJa: await locGift('ja'),
+				lockedKo: await lockedOf('ko'),
+				lockedEn: await lockedOf('en'),
+				lockedJa: await lockedOf('ja'),
+				keywordDict: buildKeywordLookup(categoryEn),
+				knownPacks: new Set(tables.pack.map((p) => p.id)),
+			},
+			meta,
+		);
+
 		// canonical 만 비운다. raw 도 app 도 건드리지 않는다.
 		await prisma.$executeRaw`
-			TRUNCATE canonical.pack, canonical.field_gap, canonical.field_source,
+			TRUNCATE canonical.pack, canonical.gift, canonical.keyword, canonical.trigger,
+			         canonical.effect, canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
 
@@ -84,6 +121,80 @@ async function main(): Promise<void> {
 			'floor_pack',
 			await chunked(tables.floorPack, (d) => prisma.floorPack.createMany({ data: d as never })),
 		]);
+		// 어휘 차원이 기프트보다 먼저 서야 외래 키가 선다.
+		counts.push(['keyword', (await prisma.keyword.createMany({ data: vocab.keyword })).count]);
+		counts.push([
+			'keyword_text',
+			await chunked(vocab.keywordText, (d) => prisma.keywordText.createMany({ data: d as never })),
+		]);
+		counts.push(['trigger', (await prisma.trigger.createMany({ data: vocab.trigger })).count]);
+		counts.push(['effect', (await prisma.effect.createMany({ data: vocab.effect })).count]);
+
+		counts.push([
+			'gift',
+			await chunked(gifts.gift, (d) => prisma.gift.createMany({ data: d as never })),
+		]);
+		counts.push([
+			'gift_stage',
+			await chunked(gifts.giftStage, (d) => prisma.giftStage.createMany({ data: d })),
+		]);
+		counts.push([
+			'gift_stage_text',
+			await chunked(gifts.giftStageText, (d) =>
+				prisma.giftStageText.createMany({ data: d as never }),
+			),
+		]);
+		counts.push([
+			'gift_effect',
+			await chunked(gifts.giftEffect, (d) => prisma.giftEffect.createMany({ data: d })),
+		]);
+		counts.push([
+			'gift_trigger',
+			await chunked(gifts.giftTrigger, (d) => prisma.giftTrigger.createMany({ data: d })),
+		]);
+		counts.push([
+			'gift_pack',
+			await chunked(gifts.giftPack, (d) => prisma.giftPack.createMany({ data: d })),
+		]);
+		counts.push([
+			'gift_exclusive_pack',
+			await chunked(gifts.giftExclusivePack, (d) =>
+				prisma.giftExclusivePack.createMany({ data: d }),
+			),
+		]);
+		counts.push([
+			'gift_requirement',
+			await chunked(gifts.giftRequirement, (d) =>
+				prisma.giftRequirement.createMany({ data: d as never }),
+			),
+		]);
+		counts.push([
+			'fusion_recipe',
+			await chunked(gifts.fusionRecipe, (d) => prisma.fusionRecipe.createMany({ data: d })),
+		]);
+		counts.push([
+			'fusion_slot',
+			await chunked(gifts.fusionSlot, (d) => prisma.fusionSlot.createMany({ data: d })),
+		]);
+		counts.push([
+			'fusion_slot_option',
+			await chunked(gifts.fusionSlotOption, (d) =>
+				prisma.fusionSlotOption.createMany({ data: d }),
+			),
+		]);
+		counts.push([
+			'gift_locked_desc',
+			await chunked(gifts.giftLockedDesc, (d) =>
+				prisma.giftLockedDesc.createMany({ data: d as never }),
+			),
+		]);
+		counts.push([
+			'tool_annotation',
+			await chunked(gifts.toolAnnotation, (d) =>
+				prisma.toolAnnotation.createMany({ data: d as never }),
+			),
+		]);
+
 		counts.push([
 			'field_gap',
 			await chunked(meta.gaps, (d) => prisma.fieldGap.createMany({ data: d })),

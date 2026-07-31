@@ -233,3 +233,15 @@ test('합성 레시피가 assets recipes 에서 나온다', () => {
 		{ giftId: '9001', recipeIdx: 0, slotIdx: 0, materialId: '9110' },
 	]);
 });
+
+test('중복 효과를 접는다 — 9429 가 같은 효과를 두 번 담는 원본 결함', () => {
+	const i = input();
+	i.assets.get('9001')!['effects'] = ['Gain Buff', 'Gain Buff', 'Deal More Damage'];
+	const meta = new Meta();
+	const t = buildGifts(i, meta);
+	assert.deepEqual(t.giftEffect, [
+		{ giftId: '9001', effectId: 'Gain Buff' },
+		{ giftId: '9001', effectId: 'Deal More Damage' },
+	]);
+	assert.equal(meta.sources.find((s) => s.field === 'effects')?.rule, 'assets-only-deduped');
+});

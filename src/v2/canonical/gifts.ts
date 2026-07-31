@@ -260,8 +260,18 @@ export function buildGifts(input: GiftInput, meta: Meta): GiftTables {
 		if (stageCount >= 2) meta.source('gift', id, 'stages', 'assets+loc', [ASSETS, 'loc-ko/en/ja']);
 
 		// ── 어휘 연결 ─────────────────────────────────────────────
-		for (const e of strArr(a, 'effects')) t.giftEffect.push({ giftId: id, effectId: e });
-		for (const g of strArr(a, 'triggers')) t.giftTrigger.push({ giftId: id, triggerId: g });
+		// **중복을 접는다.** 원본 결함 — 9429 가 "Gain Speed / Haste" 를 두 번 담는다.
+		// 마스터북 원본 결함 31건에 없던 것이며 여기서 처음 드러났다.
+		const effects = strArr(a, 'effects');
+		const triggers = strArr(a, 'triggers');
+		if (effects.length !== new Set(effects).size) {
+			meta.source('gift', id, 'effects', 'assets-only-deduped', [ASSETS]);
+		}
+		if (triggers.length !== new Set(triggers).size) {
+			meta.source('gift', id, 'triggers', 'assets-only-deduped', [ASSETS]);
+		}
+		for (const e of new Set(effects)) t.giftEffect.push({ giftId: id, effectId: e });
+		for (const g of new Set(triggers)) t.giftTrigger.push({ giftId: id, triggerId: g });
 
 		// ── 팩 연결 ──────────────────────────────────────────────
 		pushPacks(t.giftPack, meta, input.knownPacks, id, strArr(mj, 'packs'), 'packs', MJ);
