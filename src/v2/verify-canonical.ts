@@ -70,7 +70,7 @@ async function main(): Promise<void> {
 
 		eq('결손 textColor', await prisma.fieldGap.count({ where: { field: 'textColor' } }), 61);
 		eq('결손 unlockCode', await prisma.fieldGap.count({ where: { field: 'unlockCode' } }), 2);
-		eq('결손 합계', await prisma.fieldGap.count(), 63);
+		eq('결손 합계', await prisma.fieldGap.count(), 69);  // textColor 61 · unlockCode 2 · 한국어 이름 6
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
 		const p1309 = await prisma.packText.findUnique({
@@ -164,6 +164,121 @@ async function main(): Promise<void> {
 			ok: noName === 0,
 			detail: `${noName} / 0`,
 		});
+
+		// ══ 기프트 계열 ══════════════════════════════════════════════
+		eq('keyword', await prisma.keyword.count(), 12);
+		eq('keyword_text', await prisma.keywordText.count(), 36);
+		eq('trigger', await prisma.trigger.count(), 150);
+		eq('effect', await prisma.effect.count(), 55);
+
+		eq('gift', await prisma.gift.count(), 582);
+		eq('gift (mirror_dungeon)', await prisma.gift.count({ where: { domain: 'mirror_dungeon' } }), 456);
+		eq('gift (story_dungeon)', await prisma.gift.count({ where: { domain: 'story_dungeon' } }), 126);
+		eq('gift_stage', await prisma.giftStage.count(), 799);
+		eq('gift_stage_text', await prisma.giftStageText.count(), 2_391);
+		eq('gift_effect', await prisma.giftEffect.count(), 1_122);
+		eq('gift_trigger', await prisma.giftTrigger.count(), 1_081);
+		eq('gift_pack', await prisma.giftPack.count(), 10_115);
+		eq('gift_exclusive_pack', await prisma.giftExclusivePack.count(), 321);
+		eq('gift_requirement', await prisma.giftRequirement.count(), 142);
+		eq('fusion_recipe', await prisma.fusionRecipe.count(), 68);
+		eq('fusion_slot', await prisma.fusionSlot.count(), 179);
+		eq('fusion_slot_option', await prisma.fusionSlotOption.count(), 7);
+		eq('gift_locked_desc', await prisma.giftLockedDesc.count(), 192);
+
+		// hardOnly 는 합집합이어야 한다 — 백로그 08 이 여기서 해소된다
+		eq('hardOnly true (합집합 122)', await prisma.gift.count({ where: { hardOnly: true } }), 122);
+
+		const bySin = await prisma.gift.groupBy({ by: ['sin'], _count: { _all: true } });
+		const sinMap = Object.fromEntries(bySin.filter((r) => r.sin !== null).map((r) => [String(r.sin), r._count._all]));
+		const wantSin: Record<string, number> = {
+			wrath: 56, lust: 77, sloth: 57, gluttony: 60, gloom: 65, pride: 64, envy: 62,
+		};
+		checks.push({
+			name: '죄악별 기프트 수',
+			ok: Object.entries(wantSin).every(([k, v]) => sinMap[k] === v),
+			detail: JSON.stringify(sinMap),
+		});
+
+		// assets Keywordless 120 = mj null 109 + assets 단독 11
+		eq('keyword None (「범용」)', await prisma.gift.count({ where: { keywordId: 'None' } }), 120);
+		eq('tierLabel EX', await prisma.gift.count({ where: { tierLabel: 'EX' } }), 2);
+		eq('enhanceable true', await prisma.gift.count({ where: { enhanceable: true } }), 110);
+
+		const koGaps = await prisma.fieldGap.findMany({
+			where: { entity: 'gift', field: 'name', locale: 'ko' },
+			select: { entityId: true },
+		});
+		checks.push({
+			name: '한국어 결손 6건 (마스터북 일치)',
+			ok:
+				koGaps.length === 6 &&
+				koGaps.map((g) => g.entityId).sort().join(',') === '1017,1031,1035,1036,1045,1047',
+			detail: koGaps.map((g) => g.entityId).sort().join(' '),
+		});
+
+		// ── 마스터북 완전 일치 쌍 재현 ① 기프트 ↔ 팩 역참조 441/441 ──
+		const giftPackXref = await prisma.$queryRaw<Array<{ mj: bigint; ours: bigint; diff: bigint }>>`
+			WITH mj AS (
+			  SELECT o.id AS gift_id, jsonb_array_elements_text(o.payload->'packs') AS pack_id
+			  FROM raw.raw_object o
+			  WHERE o.src_path = 'gifts/limbus-data-mj/gifts.json' AND o.payload ? 'packs'
+			),
+			ours AS (SELECT gift_id, pack_id FROM canonical.gift_pack)
+			SELECT (SELECT count(*) FROM mj)::bigint   AS mj,
+			       (SELECT count(*) FROM ours)::bigint AS ours,
+			       (SELECT count(*) FROM (SELECT * FROM mj EXCEPT SELECT * FROM ours) x)::bigint AS diff
+		`;
+		const gp = giftPackXref[0];
+		checks.push({
+			name: '기프트 ↔ 팩 역참조 (raw ↔ canonical)',
+			ok: Number(gp?.mj ?? 0n) === 10_115 && Number(gp?.diff ?? 1n) === 0,
+			detail: `mj ${Number(gp?.mj ?? 0n)} · 적재 ${Number(gp?.ours ?? 0n)} · 차집합 ${Number(gp?.diff ?? 0n)}`,
+		});
+
+		// ── ② 기프트 색 attributeType → sin 441/441 (raw 직접 대조) ──
+		const colorXref = await prisma.$queryRaw<Array<{ total: bigint; mismatch: bigint }>>`
+			WITH m(color, sin) AS (VALUES
+			  ('CRIMSON','wrath'),('SCARLET','lust'),('AMBER','sloth'),('SHAMROCK','gluttony'),
+			  ('AZURE','gloom'),('INDIGO','pride'),('VIOLET','envy')),
+			d AS (
+			  SELECT o.id, o.payload->>'attributeType' AS color
+			  FROM raw.raw_object o
+			  WHERE o.src_path = 'gifts/limbus-data-mj/gifts_detail.json'
+			)
+			SELECT count(*)::bigint AS total,
+			       count(*) FILTER (WHERE m.sin IS DISTINCT FROM g.sin::text)::bigint AS mismatch
+			FROM d JOIN m ON m.color = d.color
+			JOIN canonical.gift g ON g.id = d.id
+		`;
+		const cx = colorXref[0];
+		checks.push({
+			name: '기프트 색 → 죄악 (attributeType ↔ sin)',
+			ok: Number(cx?.total ?? 0n) === 441 && Number(cx?.mismatch ?? 1n) === 0,
+			detail: `${Number(cx?.total ?? 0n)}건 중 불일치 ${Number(cx?.mismatch ?? 0n)}`,
+		});
+
+		// ── ③ assets affinity 는 4건 틀렸다 (게임 확인) ──
+		const affinityXref = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			WITH a AS (
+			  SELECT o.id, o.payload->>'affinity' AS affinity
+			  FROM raw.raw_object o
+			  WHERE o.src_path = 'gifts/limbus-assets/gifts.json'
+			)
+			SELECT count(*)::bigint AS n
+			FROM a JOIN canonical.gift g ON g.id = a.id
+			WHERE g.sin IS NOT NULL AND a.affinity IS DISTINCT FROM g.sin::text
+		`;
+		const af = Number(affinityXref[0]?.n ?? 0n);
+		checks.push({
+			name: 'assets affinity 오류 4건 (mj 가 정답)',
+			ok: af === 4,
+			detail: `${af} / 4`,
+		});
+
+		// 모든 기프트가 최소 한 단계 텍스트를 갖는다
+		const noText = await prisma.gift.count({ where: { stages: { none: { texts: { some: {} } } } } });
+		checks.push({ name: '텍스트 없는 기프트 (0이어야 한다)', ok: noText === 0, detail: `${noText} / 0` });
 	} finally {
 		await prisma.$disconnect();
 	}
