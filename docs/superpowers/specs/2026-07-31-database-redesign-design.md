@@ -57,8 +57,8 @@ API·화면이 여기 맞춘다.
                  ▼
 ┌────────────────────────────────────────────────────────────────┐
 │  schema raw          판정하지 않는다. 버리지 않는다              │
-│    snapshot · snapshot_source · raw_object · raw_blob           │
-│    45,868행 / 스냅샷 · 스냅샷은 덮어쓰지 않고 쌓는다              │
+│    snapshot · snapshot_source · raw_object                       │
+│    43,270행 / 스냅샷 · 스냅샷은 덮어쓰지 않고 쌓는다              │
 └────────────────────────────────────────────────────────────────┘
                  │
                  │  T — 판정 (마스터북 90개 개념)
@@ -145,19 +145,33 @@ WHERE a.snapshot_id = '2026-07-25' AND b.snapshot_id = '2026-09-01'
 파일 단위가 아니라 **개체 단위**로 담는다. 출처 간 대조가 JOIN 한 줄이 되기 때문이다.
 
 ```
-파일 1,664개  →  개체 45,868행
+파일 1,664개  →  개체 43,270행 · 키 중복 0
 ```
 
-id 확보 경로는 셋이며, 실측상 거의 다 확보된다.
+**파일 모양 4종이면 전부 덮인다.** 예외 테이블이 필요 없다.
+
+| 모양 | 파일 | id 를 어디서 | 개체 |
+| --- | ---: | --- | ---: |
+| `{dataList: [...]}` | 796 | 원소의 `id` | loc 계열 전부 |
+| `dict[id → obj]` | 34 | 맵의 키 | assets 계열 |
+| `list[obj]` | 7 | 원소의 `id` | mj 거대 파일 |
+| 단일 객체 | 827 | **파일명 stem** | `*-details/` · `encounters/` · 설정형 |
+| **합** | **1,664** | | **43,270행** |
+
+원소에 `id` 가 없으면 **배열 순번(`#0`·`#1`…)으로 대체**한다. 실측 190건이며
+전부 마스터북이 아는 것이다.
 
 ```
-{dataList: [...]} 안의 id      774파일     loc 계열 전부
-dict[id → obj] 의 키            34         assets 계열
-list[obj] 안의 id                4         mj 거대 파일
-파일명이 곧 id                 814         identity-details · ego-details · encounters
-───────────────────────────────────────
-id 없는 설정형 blob              13         md__details.json 등 → raw_blob 으로
+identities/{limbus-assets,shared-library}/identity_tag_list.json   95 + 79   id 없는 태그 목록
+gifts/limbus-data-mj/start_gifts.json                              10        시작 기프트
+egos/loc-*/{Passive_Ego,Skills_Ego}-a1c5p2.json                     6        원본 결함 [{}]
 ```
+
+`md__details.json` 같은 설정형도 **단일 객체로 취급해 stem 을 id 로 쓴다.**
+별도의 blob 테이블을 두지 않는다 — 파일 하나가 개체 하나라는 해석이 맞고,
+`srcPath` 가 이미 키에 있어 충돌하지 않는다.
+
+**이 규칙으로 (snapshot, source, srcPath, id) 중복은 0건이다**(실측).
 
 ### 2.3 모델
 
@@ -170,7 +184,6 @@ model Snapshot {
   note        String?
   sources     SnapshotSource[]
   objects     RawObject[]
-  blobs       RawBlob[]
   @@schema("raw")
 }
 
@@ -223,18 +236,6 @@ model RawObject {
 >   AND b.src_path = 'gifts/limbus-assets/gifts.json'
 >   AND (a.payload->>'hardOnly')::bool IS DISTINCT FROM (b.payload->>'hardonly')::bool;
 > ```
-
-/// id 를 뽑을 수 없는 설정형 파일 13개. 파일 통째로 한 행.
-model RawBlob {
-  snapshotId  String
-  source      String
-  srcPath     String
-  payload     Json
-  snapshot    Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
-  @@id([snapshotId, source, srcPath])
-  @@schema("raw")
-}
-```
 
 **스냅샷 메타는 `data/manifest.json` 에 이미 있다.** `generatedAt` · `gameStateAnchor` ·
 `sources[]`(repo·branch·commit·fileCount·status)를 그대로 옮긴다. 「버전」이 우리 것인지
@@ -700,6 +701,23 @@ datasource db {
 
 모델마다 `@@schema("...")` 를 붙인다. enum 에도 붙여야 한다.
 
+**검증 완료** — Prisma 6.19.3 에서 `previewFeatures` 없이 동작한다.
+`prisma migrate diff --from-empty --to-schema-datamodel` 이 세 스키마에 대해
+`CREATE SCHEMA IF NOT EXISTS` 를 먼저 내고 테이블을 각 스키마에 만든다.
+
+### 컬럼 이름은 snake_case 로 매핑한다
+
+현행 `public` 스키마는 컬럼을 Prisma 기본값(camelCase)으로 둔다. **신규 3스키마는
+`@map` 으로 snake_case 를 쓴다.**
+
+```prisma
+srcPath String @map("src_path")
+```
+
+이 층의 존재 이유가 **손으로 쓰는 SQL 탐색과 그래프 덤프**이기 때문이다.
+camelCase 컬럼은 SQL 에서 매번 큰따옴표를 요구하고, 빠뜨리면 조용히 소문자로
+접혀 오류가 난다. 스키마가 분리돼 있어 두 규약이 한 스키마 안에서 섞이지 않는다.
+
 ### 병존 방식 — 같은 데이터베이스, 다른 스키마
 
 현행 스키마는 `public` 에 있다(`.env.example` 의 `?schema=public`). 신규는
@@ -729,7 +747,7 @@ ORM 으로만 쓰고 마이그레이션 러너는 쓰지 않으므로, 스키마
 ### 규모
 
 ```
-raw         45,868행 / 스냅샷 · 35.5 MB       스냅샷 누적
+raw         43,270행 / 스냅샷 · 35.5 MB       스냅샷 누적
 canonical   대략 60–70 테이블
 애셋 이미지   3,360개는 DB 에 넣지 않는다. 파일로 둔다
 ```
