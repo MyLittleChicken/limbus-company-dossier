@@ -21,6 +21,7 @@
 | [07-report-artifact.md](07-report-artifact.md) | 변환 리포트가 콘솔로만 나가 원본 결손·오타를 추적할 수 없다 | 설계 확정 · 구현 미착수 |
 | [08-gift-hardonly.md](08-gift-hardonly.md) | 하드 전용 기프트를 `limbus-assets` 만 보고 적재해 6건이 빠진다 | 판정 완료 · 구현 미착수 |
 | [09-pack-model.md](09-pack-model.md) | 테마 팩 117종이 모델 없이 정수 id 로만 남아 있다 | 미착수 |
+| [10-encounter-linkage.md](10-encounter-linkage.md) | mj 전투 풀 2,525종의 정의가 리포에 없다 | 미착수 |
 
 ## 규칙
 
