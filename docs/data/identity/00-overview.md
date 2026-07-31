@@ -1,0 +1,226 @@
+# 인격 계열 지도 (Identity Overview)
+
+> 상태: **인격 편 완료** / 최종 수정 2026-07-30 · 스냅샷 2026-07-25
+> 회차 1–14 를 모두 마쳤다. 미해결 없이 닫혔다.
+
+## 1. 인격 id 체계
+
+```
+1 | 수감자(2자리) | 순번(2자리)
+
+10101 = 수감자 01(이상)의 1번째 인격
+11216 = 수감자 12(그레고르)의 16번째 인격
+```
+
+**184건 전부 이 규칙을 지킨다**(위반 0). 순번 범위는 1–16이며, 원본의 `slotId` 와 뒤 2자리가
+184/184 일치한다.
+
+E.G.O는 같은 자리에 `2` 를 쓴다 — `20509` = 수감자 05(뫼르소)의 9번째 E.G.O.
+
+## 2. 수감자별 인격 수
+
+```
+1 이상 16 · 2 파우스트 16 · 3 돈키호테 14 · 4 료슈 15 · 5 뫼르소 15 · 6 홍루 15
+7 히스클리프 16 · 8 이스마엘 15 · 9 로쟈 16 · 10 싱클레어 15 · 11 오티스 15 · 12 그레고르 16
+```
+
+돈키호테만 14로 가장 적다.
+
+## 3. 원본 파일 16종
+
+| 파일 | 회차 | 성격 |
+| --- | --- | --- |
+| `limbus-data-mj/identities.json` | 1 | **정본** · 인격 본체 184건 |
+| `limbus-data-mj/identities_detail.json` | 2 | **정본** · 스탯·정신 조건 |
+| `limbus-data-mj/skills.json` | 3 | **정본** · 스킬 |
+| `limbus-data-mj/passives.json` | 4 | **정본** · 패시브 |
+| `limbus-data-mj/associations.json` | 5 | **정본** · 조직 64종 |
+| `limbus-assets/identities.json` | 6 | 관계의 정본 · 태그·상태 |
+| `limbus-assets/identities_mini.json` | 7 | 요약판 |
+| `shared-library/identities.json` · `identities_mini.json` | 7 | 구버전 대조 |
+| `limbus-assets/passives.json` · `skill_tags.json` | 8 | 태그 사전 |
+| `limbus-assets/alt_names.json` | 9 | 별칭 |
+| `limbus-assets/identity_tag_list.json` | 9 | 태그 목록 95항목(마크업 제거 후 93종) |
+| `limbus-assets/identity_header_offsets.json` | 9 | 이미지 표시 오프셋 |
+| `limbus-assets/identity_keyword_modifiers.json` | 9 | **조건부 기믹 3건** |
+| `identity-details/limbus-assets/{id}.json` | 10 | 인격별 상세 184개 |
+| `loc-ko` · `loc-en` · `loc-ja` | 11–13 | 표시 문자열 |
+
+## 4. DB 모델 10종
+
+```
+Sinner ─┬─ SinnerText
+        └─ Identity ─┬─ IdentityText
+                     ├─ IdentityResist    (atkType × 3)
+                     ├─ IdentitySpeed     (uptie × 4)
+                     ├─ IdentityAffiliation ─ Affiliation ─ AffiliationText
+                     ├─ IdentityStatus ─ Status
+                     ├─ Skill ─ SkillStage ─ SkillCoin
+                     └─ IdentityPassive ─ Passive
+```
+
+## 5. 출처별 개념 보유 장부
+
+**회차마다 갱신하는 누적 장부다.** 인격 편(회차 1–14)을 마치면 이 표가 정본 배정을
+필드 단위로 다시 짤 근거가 된다.
+
+### 5.1 왜 필요한가
+
+ADR-04는 정본을 **엔티티 단위**로 배정했다 — "인격은 `limbus-data-mj`, 관계는 `limbus-assets`".
+그런데 실측은 **개념 단위**로 갈린다. 회차 1–2까지 확인된 것만 보아도 어느 쪽도 상대의
+부분집합이 아니다.
+
+```
+limbus-data-mj 에만 있는 것          limbus-assets 에만 있는 것
+  한국어 인라인(nameKo·titleKo)        statuses (인격이 다루는 상태 전부)
+  mentalCondition (정신력 조건 23종)    identity_keyword_modifiers (조건부 기믹)
+  passives 의 cost (해금 단계)          passives 의 condition (죄악 자원 요건)
+  unitKeywords (내부 플래그 포함)        E.G.O 의 statuses · resists
+  스킬 12개 (assets 누락분)             tags 의 Le Sette Famiglie
+  appearance (내부 애셋명)              identity_tag_list · header_offsets · alt_names
+```
+
+성격이 다르다.
+
+| 출처 | 성격 | 특징 |
+| --- | --- | --- |
+| `limbus-data-mj` | **DB형** | 정규화, 한국어 병기, 조건을 id 문자열로 인코딩 |
+| `limbus-assets` | **도구형** | 화면에 뿌릴 것 위주, 표시 오프셋·별칭까지 |
+
+**가설** — 두 출처는 각자 자기 도구에 필요한 만큼 완결적이며, 서로의 결손이 아니라
+구조가 다른 것이다. 회차 6(`limbus-assets/identities.json`)에서 mj에 없는 필드가
+무더기로 나오면 이 가설이 강화된다.
+
+단, 실제 결손·오타도 존재한다(회차 1의 `20306` 연도 오타 · 회차 2의 스킬 12개 누락).
+가설이 맞더라도 **교차 검증은 계속 필요하다.**
+
+### 5.2 장부
+
+| 개념 | `limbus-data-mj` | `limbus-assets` | 정본 | 근거 | 회차 |
+| --- | --- | --- | --- | --- | --- |
+| 체력 | `identities.hp`(base만) · `identities_detail.hp`(base+증가량) | `identities.hp` | **mj detail** | 증가량은 여기만 있다 | 1·2 |
+| 저항(공격 타입) | `identities.resists` · `identities_detail.resists` | `identities.resists` | **mj detail** | 3곳 184/184 동일 | 1·2 |
+| 스태거 | `identities.stagger` · `identities_detail.stagger` | — | **mj detail** | 값 동일, 요약 중복 | 1·2 |
+| 속도 | `identities.speed`(만렙 1쌍) · `identities_detail.minSpeed`/`maxSpeed`(4쌍) | — | **mj detail** | 단계별 값은 여기만 | 1·2 |
+| 방어 보정 | `identities_detail.defCorrection` | `identities.defCorrection` | **mj detail** | 184/184 동일 | 2 |
+| 정신력 조건 | `identities_detail.mentalCondition` | — | **mj** | assets 에 없다 | 2 |
+| 공격 스킬 | `identities_detail.attackSkills` | `identities.skillTypes` | **mj** | assets 가 6개 누락 | 2 |
+| 방어 스킬 | `identities_detail.defenseSkills` | `identities.defenseSkillTypes` | **mj** | assets 가 6개 누락 | 2 |
+| 패시브 목록 | `identities_detail.battlePassives`/`supporterPassives` | `passives.json` 의 `uptie` | **mj** | 단계별 스냅샷은 여기만 | 2 |
+| 패시브 해금 단계 | `passives.json` 의 `cost` | `passives.json` 의 `uptie` | 미정 | 둘 다 있다 · 회차 4·8에서 대조 | 2 |
+| 패시브 죄악 요건 | — | `passives.json` 의 `condition` | **assets** | mj 에 없다 | 2 |
+| 조직 | `identities.associations`(64) · `associations.json` | `identities.tags` 중 조직 | **assets** | 표시용은 게임 표기와 1:1 | 1 |
+| 특성 키워드 | `identities.associations` + `identities_detail.unitKeywords` | `identities.tags`(93) | **assets** | mj 는 두 필드로 쪼개고 `Le Sette Famiglie` 가 없다 | 1·2 |
+| 기믹 키워드(기본) | `identities.keywords`(7종) | `identities.skillKeywordList` | 동일 | 표기만 대소문자 차이 | 1 |
+| 인격이 다루는 상태 | — | `identities.statuses` | **assets** | mj 에 없다 | 1 |
+| 조건부 기믹 | `identities.egoKeywords`(1건) | `identity_keyword_modifiers.json`(3건) | **합집합** | 서로 못 덮는다 | 1 |
+| 대체 스킬 | `identities_detail.attackSkills` 의 `copies:0`(38건) | `identities.skillTypes` 의 `num:0`(37건) | **mj** | `10712` 가 assets 에 없다 | 1·2 |
+| 출시일 | `identities.updatedDate` | `identities.date` | **mj + 보강** | 미래 날짜면 assets 로 채운다 | 1 |
+| 시즌 | `identities.season`(182/184) | `identities.season` · `identities_mini.season` | **mj + 보강** | 결손 2건을 assets 로 채운다 | 1 |
+| 표시 문자열(ko) | `identities.nameKo`/`titleKo` · `skills`·`passives` 의 `*Ko` | — | **mj** | assets 는 영문만 | 1 |
+| 외형 애셋명 | `identities_detail.appearance` | `identity_header_offsets.json` | 다른 것 | 전자는 내부명, 후자는 표시 오프셋 | 2 |
+| 스킬 분류 | `skills.json` 의 `sin`·`attackType`·`defType`·`skillTier` | `identities.skillTypes[].type` | **mj** | assets 가 12개 누락 | 3 |
+| 죄악 해금 단계 | `skills.json` 의 `sinFrom`(131건) | `skillTypes[].type.affinityUptie`(131건) | 동일 | 131/131 값·집합 완전 일치 | 3 |
+| **합 가능 여부** | — | `defenseSkillTypes[].type.clashable`(52건) | **assets** | mj 에 없다. 우리 `Skill` 모델에도 없다 | 3 |
+| E.G.O 스킬 | `skills.json` 의 `2xxxxxx` 대역 208건 | `ego-details/` | **미적재** | `Skill` 이 `identityId` 필수라 담을 자리가 없다 | 3 |
+| 스킬 이름·설명(ko) | `skills.json` 의 `levels[].nameKo`·`descKo` | — | **mj** | assets 는 영문만 | 3 |
+| 코인 개수·순서·종류 | — | `identity-details/{id}.json` | **assets** | mj 는 효과 문자열만 | 3 |
+| 코인 효과(영문) | `skills.json` 의 `levels[].coins` | `identity-details` 의 `coins[].descs` | **assets** | 우리는 assets 를 쓴다 | 3 |
+| 코인 효과(한국어) | — | — | **loc-ko** | 양쪽 다 영문뿐. `Skills_personality-NN.json` 만 갖는다 | 3 |
+| 각성/침식 구분 | `skills.json` id 접미 `11`/`21` | `egos.json` 의 `awakeningType`·`corrosionType` | 미정 | E.G.O 편에서 판정 | 3 |
+| 패시브 이름·설명(ko) | `passives.json` 의 `nameKo`·`descKo` | — | **mj** | assets 는 영문만 | 4 |
+| 패시브 해금 조건 | `passives.json` 의 `cost`(5종 토큰) | `passives.json` 의 `uptie` · `identity-details` 의 `combatPassives[].uptie` | **assets** | 우리는 detail 의 `level` 을 쓴다 | 4 |
+| 패시브 목록 구성 | `identities_detail.json` 의 `battlePassives` | `identity-details` 의 `combatPassives` | **assets** | mj 는 스킬 6건을 패시브로 잘못 올린다 | 4 |
+| E.G.O 패시브 | `passives.json` 의 `2xxxxxx` 113건 | `ego-details` 의 `passiveList` + `loc-*` | **assets+loc** | mj 는 조회되지 않는다 | 4 |
+| 조직 코드 사전 | `associations.json`(64종 · UPPER_SNAKE) | `identity_tag_list.json`(93종 · 영문 표기) | **assets** | `affiliation.id` 가 영문 표기다 | 5 |
+| 조직 계층 | 접두사 문자열에만 (`BLACK_BEAST_*`) | 인격마다 상위·하위 태그를 **둘 다** 붙임 | **assets** | 구조로 담은 출처가 없다 | 1·5 |
+| 스포일러 마크업 | 없음 | `identity_tag_list.json` 5건 | **assets** | mj 는 해당 태그 자체가 없다 | 5 |
+| 기프트 조건 기믹 축 | `keywords`(1건 다름) | `skillKeywordList` | **assets** | `10104` 가 게임 판정 기준을 드러냈다 · 08 문서 4.1 | 6 |
+| 이벤트 출신 | — | `event`(31) · `eventReward`(13) | **assets** | mj 에 없다. 역사 정보라 대체 불가 | 6 |
+| 합 가능·죄악 해금 세부 | — | `defenseSkillTypes[].type` 의 `atkType`·`affinityUptie`·`clashable` | **assets** | `atkType` 과 `affinityUptie` 는 상호 배타적 | 6 |
+| 죄악 전체 집합 | `atkSins`+`altSins`(공격만) | `identities_mini.affinities`(공격+방어) | **assets** | mj 는 방어 스킬 죄악을 뺀다 · 169/184 | 7 |
+| 스킬 타입 전체 집합 | `atkTypes`(공격만·개수 맵) | `identities_mini.types`(공격+방어·목록) | **assets** | 축이 다르다 | 7 |
+| 구버전 시간축 | — | `shared-library` 163건 | **shared** | 스탯 10키 불일치 0 · 변경 5키가 패치 이력 | 7 |
+| 서포트 패시브 조건 | — | `passives.json` 의 `support[].condition` | **assets** | `owned`=보유 · `res`=공명 · 스크린샷 6/6 일치 | 8 |
+| 토큰 표시명(en) | — | `skill_tags.json` 의 `text`(72종) | **assets** | 대괄호를 품는다 | 8 |
+| 토큰 표시명(ko) | `mechanics/terms.json` 의 `nameKo` | — | **mj** | 치환표는 양쪽이 있어야 완성된다 | 8 |
+| 토큰 색 | — | `skill_tags.json` 의 `color`(47종) | **assets** | 우리가 쓰지 않는다 | 8 |
+| 별칭 | — | `alt_names.json`(인격 121 + E.G.O 110) | **assets** | 커뮤니티 별칭. 우리 검색이 쓰지 않는다 | 9 |
+| 초상 오프셋 | — | `identity_header_offsets.json`(105건) | **assets** | 우리가 쓰지 않는다 · `10701` 에 문자열 `"null"` | 9 |
+| 스킬 수치·코인 | `skills.json` 의 `levels`(이름·설명 이월용) | `identity-details` 의 `skills`(824건) | **assets** | 델타 구조. `atkWeight` 등이 1단계에만 | 10 |
+| 죄악 해금 표현 | `sinFrom`(바뀌는 단계) | `affinity: "none"`(바뀌기 전 값) | 동일 | 131종 두 집합 완전 동일 | 10 |
+| 전투 패시브 정의 | `passives.json`(596, 유령 6 포함) | `identity-details` 의 `passiveData`(590) | **assets** | 전투 패시브의 유일한 출처 | 10 |
+| 삭제된 스킬 회수 | 12건 전부 보유 | 현행 없음 | **shared** | 6건 회수 · 6건은 어디에도 없다 | 10 |
+| 운용 해설 | — | `identity-details` 의 `notes`(698항목) | **assets(저작)** | 게임 데이터가 아니다 | 10 |
+| 딜 계산 보너스 | — | `passiveBonuses`(242) · 스킬·코인 `bonuses` | **assets(저작)** | 게임 데이터가 아니다 | 10 |
+| 인격명 원문 | `titleKo`(줄바꿈 정규화) | — | **loc** | `loc-ko` 가 원본. mj 는 `\n` → 공백 변환본 · 184/184 | 11 |
+| 이야기 해금 조건 | — | — | **loc** | `Personality_Get_Condition` 172인격 × 2. 기본 인격 12명은 없다 | 11 |
+| 인격 외 유닛 | — | — | **loc** | 베르길리우스 `9999` · 스킨 `40501` · 이벤트 유닛 `4xxxxx` 12종 | 11 |
+| 코인 효과(한국어) | 영문뿐 | 영문뿐 | **loc** | `Skills_personality-NN` 의 `coinlist` 만 갖는다 · 회차 3 의 마지막 조각 | 12 |
+| 스킬 이름·설명(원문) | `skills.json` 의 `levels` | `identity-details` 의 `data` | **loc** | 세 곳 다 델타 구조. 한국어는 loc 만 | 12 |
+| 특성 키워드 표시명 | — | — | **loc** | `UnitKeyword*` 12파일 133종. 인격이 쓰는 36종 중 25종만 | 13 |
+| 조직명 표시 | `associations.json` 의 `nameKo`(64) | — | **loc** | `AssociationName` 은 3항목뿐. `UnitKeyword` 로 옮겨갔다 | 13 |
+| 패시브 요약·플레이버 | — | — | **loc** | `summary` 218 · `flavor` 23. 우리가 쓰지 않는다 | 13 |
+
+### 5.3 결산 — 인격 편 판정
+
+회차 1–14 를 마친 시점의 집계다.
+
+| 정본 | 개념 수 | 대표 |
+| --- | ---: | --- |
+| `limbus-data-mj` | 9 | 체력·저항·스태거·속도·방어보정·정신력조건·공격/방어 스킬·표시 문자열(ko) |
+| `limbus-assets` | 15 | 상태·특성 키워드·기프트 조건 기믹·이벤트 출신·합 가능·스킬 수치·코인·패시브 정의·별칭·초상 오프셋 |
+| `loc-ko/en/ja` | 6 | 코인 한국어·인격명 원문·특성 키워드 표시명·이야기 해금 조건·인격 외 유닛·패시브 요약 |
+| `shared-library` | 1 | 구버전 시간축 (삭제 6건 회수) |
+| **합집합 필요** | 1 | 조건부 기믹 — mj `egoKeywords` ∪ assets `keyword_modifiers` |
+| 동일 | 3 | 죄악 해금 표현 · 기믹 키워드 기본 · 조직 코드 |
+| 저작 데이터 | 2 | 운용 해설 · 딜 계산 보너스 (게임 원본 아님) |
+
+**단일 출처는 성립하지 않는다.** 세 출처 중 어느 하나도 뺄 수 없고, 특히 `loc-ko` 는
+한국어를 유일하게 갖는 자리가 6개라 대체 불가다.
+
+```
+limbus-data-mj 만으로 만들면    상태 · 조건부 기믹 · 패시브 죄악 요건 · 합 가능 ·
+                              코인 개수/순서 · 스킬 수치를 잃는다
+limbus-assets 만으로 만들면     한국어 전량 · 정신력 조건 · 패시브 해금 조건 ·
+                              스킬 12개 · 내부 플래그를 잃는다
+loc 없이 만들면                코인 한국어 · 인격명 원문 · 특성 키워드 표시명을 잃는다
+```
+
+### 5.4 인격 편에서 확인된 원본 오타 6건
+
+`docs/backlog/07-report-artifact.md` 6절의 관측 대상이다.
+
+| 사례 | 성격 | 회차 |
+| --- | --- | --- |
+| `20306` 전기울음 날짜 `2023-04-11` | **원본 오타.** mj 와 구버전 assets 가 같은 값을 갖고 현행 assets 만 2024로 고쳤다 (E.G.O 편 회차 4) | 1 |
+| `10116` 차원찢개 `updatedDate` | 픽업 종료일이 출시일 자리에 | 1 |
+| `1121102` lv4 `[[FirePunchFuel]` | 한국어 원문 대괄호 중복 | 3 |
+| `10701` `header_offsets` `"null"` | JSON `null` 이 아니라 문자열 | 9 |
+| `40501` `desc` `"사영 전투]["` | 대괄호 깨짐 | 11 |
+| `11213` 카피타노 `undefined` 키 4건 | JSON 키 이름이 `"undefined"` | 13 |
+| `"1050401 2"` 계열 애셋 파일명 | 공백 + 숫자. 중복 다운로드 잔재 | 14 |
+
+### 5.5 회차를 가로지른 인격 6종
+
+같은 인격이 여러 회차에서 극단값을 만든다. 회귀 검증에 쓸 표본이다.
+
+| 인격 | 나온 곳 |
+| --- | --- |
+| `10115` 거미집 검지 아비 (이상) | `altSins` Furioso-Replica · 코인 9개 · `statuses` 36종 · `atkTypes` 3종 유일 · 구버전에 없음 |
+| `10508` 검계 우두머리 (뫼르소) | 조건부 기믹(착영휘도) · 유령 패시브 · 방어 스킬 2개 · `owned` 조건 |
+| `11009` 새벽 사무소 해결사 (싱클레어) | 조건부 기믹(날개 모양 양초) · `allowInSolver:false` · 유령 패시브 |
+| `10104` 개화 E.G.O:: 동백 (이상) | 기프트 조건 기믹 판정 기준을 드러냄 · 구버전과 다름 |
+| `10312` 사랑과 증오의 이름으로 (돈키호테) | 대체 스킬 · `altKeywords` · `keywords`≠`keywordSkills` 유일 |
+| `11214` 로보토미 E.G.O:: 램프 (그레고르) | 속도 역행 · 도발 탱커 · `SMALL` 없음 |
+
+
+
+## 6. 화면
+
+| 화면 | 파일 |
+| --- | --- |
+| 목록 | `app/[locale]/identities/page.tsx` |
+| 상세 | `app/[locale]/identities/[id]/page.tsx` |
+| 스킬 패널 | `components/uptie-skills.tsx` |
+| 질의 | `lib/queries/identities.ts` |

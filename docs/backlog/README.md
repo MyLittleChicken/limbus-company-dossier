@@ -12,11 +12,17 @@
 
 | 문서 | 내용 | 상태 |
 | --- | --- | --- |
-| [01-identity-tags.md](01-identity-tags.md) | 소속과 인격 태그의 분리 — `tags` 93종에 조직·계급·종족·메타가 섞여 있다 | 미착수 |
+| [01-identity-tags.md](01-identity-tags.md) | 인격 태그의 이름이 틀렸다 — 게임은 「특성 키워드」라 부른다. 축 분리는 불필요로 결론 | 분리 취소 · 개명과 검사 미착수 |
 | [02-locale-fallback.md](02-locale-fallback.md) | 한국어 폴백이 화면에 표기되지 않는다 — 파이프라인이 `ko` 행에 영문을 채운다 | 미착수 |
 | [03-gift-affinity.md](03-gift-affinity.md) | 기프트의 색 속성을 어디에 쓰는지 모른다 — 원본 어휘로 되돌렸고 화면에서는 쓰지 않는다 | 표기 정정 완료 · 용도 미확인 |
 | [04-status-mechanics.md](04-status-mechanics.md) | 상태 기믹(탄환·보호)이 별개의 축인데 어디에도 없다 — 키워드·소속과 갈라 담아야 한다 | 엔진 배선 해소 · 화면 구획 미착수 |
 | [05-pack-art-verification.md](05-pack-art-verification.md) | 팩 카드 렌더를 눈으로만 검증하고 있다 — 같은 자리를 세 번 틀렸고 세 번 모두 사람이 잡았다 | 미착수 |
+| [06-atktypes-naming.md](06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 스킬 수·타입 종류·인격 수를 각각 가리킨다 | 미착수 · 개명 작업에 얹는다 |
+| [07-report-artifact.md](07-report-artifact.md) | 변환 리포트가 콘솔로만 나가 원본 결손·오타를 추적할 수 없다 | 설계 확정 · 구현 미착수 |
+| [08-gift-hardonly.md](08-gift-hardonly.md) | 하드 전용 기프트를 `limbus-assets` 만 보고 적재해 6건이 빠진다 | 판정 완료 · 구현 미착수 |
+| [09-pack-model.md](09-pack-model.md) | 테마 팩 117종이 모델 없이 정수 id 로만 남아 있다 | 미착수 |
+| [10-encounter-linkage.md](10-encounter-linkage.md) | mj 전투 풀 2,525종의 정의가 리포에 없다 | 미착수 |
+| [11-season-label.md](11-season-label.md) | 시즌 값이 화면에 원본 정수 그대로 나간다 — 발푸르기스가 `S9104`, 콜라보가 `S8000` 로 뜬다 | 미착수 |
 
 ## 규칙
 

@@ -1,6 +1,6 @@
 # ADR-04. 출처 권위 (Source Authority)
 
-> 상태: 채택 / 결정일 2026-07-26
+> 상태: 채택 / 결정일 2026-07-26 · **마스터북 51회차로 검증 2026-07-31**
 > 엔티티마다 **어느 출처를 정본으로 삼고, 어디까지 보강을 허용하는가**를 정한다.
 > 수집한 출처의 목록과 조건은 `docs/01-data-source.md`, 생성 경로 분석은 `docs/03-data-provenance.md`에 있다.
 > 이 문서의 수치는 2026-07-25 스냅샷을 직접 측정한 값이다.
@@ -18,6 +18,13 @@
 ### 출처가 셋 미만으로 줄지 않는다
 
 각 출처가 **배타적으로만 가진 데이터**가 있다. 하나를 빼면 그 줄이 통째로 사라진다.
+
+> **마스터북이 이를 수량으로 확인했다**(`docs/data/00-final-review.md`).
+> 51회차 실측 결과 단독 보유 개념이 **mj 24 · assets 43 · loc 23 = 90개**이며,
+> 가장 큰 `limbus-assets` 만 써도 **47개념(52 %)을 잃는다.**
+>
+> 다만 **셋을 합쳐도 결손 7건이 남는다.** 가장 큰 것은 거울 던전 전투 풀
+> **2,525종의 정의가 어디에도 없는 것**이다(`backlog/10`).
 
 | 출처 | 이 출처에만 있는 것 |
 | --- | --- |
@@ -64,8 +71,18 @@
 `identities_detail.json`이 `limbus-assets`의 인격 필드를 모두 덮으면서 `mentalCondition` ·
 `panicSkill`을 추가로 갖는다.
 
-E.G.O는 반대다. mj에는 `awakeningType` · `corrosionType` · `resists` · `statuses` · `extractable` ·
-`maxThreadspin`이 없다.
+E.G.O는 반대다. 다만 근거는 **필드 유무가 아니라 조인 비용과 수치**다
+(마스터북 E.G.O 편 회차 3 실측으로 2026-07-30 정정).
+
+mj 에 이름이 없을 뿐 개념은 재구성된다 — `resists` 는 `egos_detail.attributeResists` 의
+죄악 7축(110/110), `awakeningType` · `corrosionType` 은 `egos_detail` 의 스킬 id 를 거쳐
+`skills.json` 에서(110/110), `maxThreadspin` 은 `skills.json` 의 `level: 5` 에서 나온다.
+
+**mj 가 못 갖는 개념은 `statuses` 하나뿐이다.** `extractable` 은 게임 필드가 아니라
+`limbus-assets` 추출 시뮬레이터의 풀 플래그다.
+
+정본을 `limbus-assets`로 두는 이유는 한 파일에 담겨 3파일 조인이 필요 없고, 아래 표대로
+수치를 갖기 때문이다.
 
 **스킬·패시브 정본 정정 (2026-07-26).** 처음에는 한국어가 인라인이라는 이유로 `limbus-data-mj`를
 정본으로 두었으나, 구현 중 대조하니 **mj에는 수치가 없다.**
