@@ -31,6 +31,9 @@ CREATE TYPE "canonical"."SkillKind" AS ENUM ('attack', 'guard', 'counter', 'evad
 -- CreateEnum
 CREATE TYPE "canonical"."EgoRank" AS ENUM ('ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH');
 
+-- CreateEnum
+CREATE TYPE "canonical"."BuffType" AS ENUM ('Positive', 'Neutral', 'Negative');
+
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
     "id" TEXT NOT NULL,
@@ -619,6 +622,98 @@ CREATE TABLE "canonical"."ego_passive_link" (
     CONSTRAINT "ego_passive_link_pkey" PRIMARY KEY ("ego_id","passive_id")
 );
 
+-- CreateTable
+CREATE TABLE "canonical"."status" (
+    "id" TEXT NOT NULL,
+    "buff_type" "canonical"."BuffType" NOT NULL,
+    "sprite" TEXT,
+
+    CONSTRAINT "status_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."status_text" (
+    "status_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+    "summary" TEXT,
+
+    CONSTRAINT "status_text_pkey" PRIMARY KEY ("status_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."status_category" (
+    "status_id" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+
+    CONSTRAINT "status_category_pkey" PRIMARY KEY ("status_id","category")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."sin_info" (
+    "sin" "canonical"."Sin" NOT NULL,
+    "attribute" TEXT NOT NULL,
+    "order" INTEGER NOT NULL,
+
+    CONSTRAINT "sin_info_pkey" PRIMARY KEY ("sin")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."sin_text" (
+    "sin" "canonical"."Sin" NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "sin_text_pkey" PRIMARY KEY ("sin","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."term" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "term_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."term_text" (
+    "term_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "term_text_pkey" PRIMARY KEY ("term_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."coin_token" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+    "coin_idx" INTEGER NOT NULL,
+    "ordinal" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "amount" INTEGER,
+    "status_id" TEXT,
+
+    CONSTRAINT "coin_token_pkey" PRIMARY KEY ("skill_id","uptie","coin_idx","ordinal")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_status" (
+    "ego_id" TEXT NOT NULL,
+    "status_id" TEXT NOT NULL,
+
+    CONSTRAINT "ego_status_pkey" PRIMARY KEY ("ego_id","status_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_status" (
+    "identity_id" TEXT NOT NULL,
+    "status_id" TEXT NOT NULL,
+
+    CONSTRAINT "identity_status_pkey" PRIMARY KEY ("identity_id","status_id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -696,6 +791,24 @@ CREATE INDEX "ego_skill_ego_id_idx" ON "canonical"."ego_skill"("ego_id");
 
 -- CreateIndex
 CREATE INDEX "ego_passive_link_passive_id_idx" ON "canonical"."ego_passive_link"("passive_id");
+
+-- CreateIndex
+CREATE INDEX "status_buff_type_idx" ON "canonical"."status"("buff_type");
+
+-- CreateIndex
+CREATE INDEX "status_category_category_idx" ON "canonical"."status_category"("category");
+
+-- CreateIndex
+CREATE INDEX "coin_token_token_idx" ON "canonical"."coin_token"("token");
+
+-- CreateIndex
+CREATE INDEX "coin_token_status_id_idx" ON "canonical"."coin_token"("status_id");
+
+-- CreateIndex
+CREATE INDEX "ego_status_status_id_idx" ON "canonical"."ego_status"("status_id");
+
+-- CreateIndex
+CREATE INDEX "identity_status_status_id_idx" ON "canonical"."identity_status"("status_id");
 
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -861,4 +974,31 @@ ALTER TABLE "canonical"."ego_passive_link" ADD CONSTRAINT "ego_passive_link_ego_
 
 -- AddForeignKey
 ALTER TABLE "canonical"."ego_passive_link" ADD CONSTRAINT "ego_passive_link_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."ego_passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."status_text" ADD CONSTRAINT "status_text_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "canonical"."status"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."status_category" ADD CONSTRAINT "status_category_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "canonical"."status"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."sin_text" ADD CONSTRAINT "sin_text_sin_fkey" FOREIGN KEY ("sin") REFERENCES "canonical"."sin_info"("sin") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."term_text" ADD CONSTRAINT "term_text_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "canonical"."term"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."coin_token" ADD CONSTRAINT "coin_token_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "canonical"."status"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_status" ADD CONSTRAINT "ego_status_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_status" ADD CONSTRAINT "ego_status_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "canonical"."status"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_status" ADD CONSTRAINT "identity_status_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_status" ADD CONSTRAINT "identity_status_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "canonical"."status"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

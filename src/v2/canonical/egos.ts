@@ -43,6 +43,8 @@ export interface EgoInput {
 	locPassiveEn: RawIndex;
 	locPassiveJa: RawIndex;
 	knownSinners: Set<number>;
+	/** canonical.status 에 실제로 있는 id. 계획 6에서 이어진다 */
+	knownStatuses: Set<string>;
 }
 
 export interface EgoRow {
@@ -135,6 +137,11 @@ export interface EgoPassiveLinkRow {
 	passiveId: string;
 }
 
+export interface EgoStatusRow {
+	egoId: string;
+	statusId: string;
+}
+
 export interface ToolAnnotationRow {
 	source: string;
 	entity: string;
@@ -157,6 +164,7 @@ export interface EgoTables {
 	egoPassive: EgoPassiveRow[];
 	egoPassiveText: EgoPassiveTextRow[];
 	egoPassiveLink: EgoPassiveLinkRow[];
+	egoStatus: EgoStatusRow[];
 	toolAnnotation: ToolAnnotationRow[];
 }
 
@@ -182,6 +190,7 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 		egoPassive: [],
 		egoPassiveText: [],
 		egoPassiveLink: [],
+		egoStatus: [],
 		toolAnnotation: [],
 	};
 
@@ -335,6 +344,19 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 		if (corrosionId !== null) {
 			t.egoSkill.push({ id: corrosionId, egoId: id, role: 'corrosion', ordinal: 0 });
 			pushSkillStages(t, skillLoc, corrosionId);
+		}
+
+		// ── 다루는 상태 — 계획 6에서 이어진 연결. 실측 100 % 걸린다 ──
+		let droppedStatuses = 0;
+		for (const statusId of new Set(arr(a, 'statuses').map((v) => String(v)))) {
+			if (!input.knownStatuses.has(statusId)) {
+				droppedStatuses += 1;
+				continue;
+			}
+			t.egoStatus.push({ egoId: id, statusId });
+		}
+		if (droppedStatuses > 0) {
+			meta.gap('ego', id, 'statuses', `상태 목록에 없는 id 를 ${droppedStatuses}건 가리킨다`, EVIDENCE);
 		}
 
 		// ── 패시브 ────────────────────────────────────────────

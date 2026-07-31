@@ -774,6 +774,7 @@ model Identity {
   associations IdentityAssociation[]
   keywords     IdentityKeyword[]
   unitKeywords IdentityUnitKeyword[]
+  statuses     IdentityStatus[]
 
   @@index([sinnerId])
   @@index([star])
@@ -949,6 +950,7 @@ model Ego {
   requirements EgoRequirement[]
   skills       EgoSkill[]
   passives     EgoPassiveLink[]
+  statuses     EgoStatus[]
 
   @@index([sinnerId])
   @@index([rank])
@@ -1127,5 +1129,171 @@ model EgoPassiveLink {
   @@id([egoId, passiveId])
   @@index([passiveId])
   @@map("ego_passive_link")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 상태 · 어휘
+// ─────────────────────────────────────────────────────────────
+
+/// 상태의 성격
+enum BuffType {
+  Positive
+  Neutral
+  Negative
+
+  @@schema("canonical")
+}
+
+/// 전투 상태 1,472종. 정본은 limbus-assets 다.
+/// 한국어가 245종(16.6 %) 없다 — 세 출처를 합쳐도 못 얻는다.
+model Status {
+  id       String   @id
+  buffType BuffType @map("buff_type")
+  /// 아이콘 경로. 수치 변화형은 없다
+  sprite   String?
+
+  texts      StatusText[]
+  categories StatusCategory[]
+  egos       EgoStatus[]
+  identities IdentityStatus[]
+  coinTokens CoinToken[]
+
+  @@index([buffType])
+  @@map("status")
+  @@schema("canonical")
+}
+
+model StatusText {
+  statusId String  @map("status_id")
+  locale   Locale
+  name     String
+  desc     String?
+  /// 짧은 표기. 게임 상세 화면은 desc 를 쓴다
+  summary  String?
+
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([statusId, locale])
+  @@map("status_text")
+  @@schema("canonical")
+}
+
+/// 상태 분류. assets categoryKeywordList 24종.
+model StatusCategory {
+  statusId String @map("status_id")
+  category String
+
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([statusId, category])
+  @@index([category])
+  @@map("status_category")
+  @@schema("canonical")
+}
+
+/// 죄악 7종과 색 토큰의 대응. mj sins.json 이 유일 출처다.
+model SinInfo {
+  sin       Sin    @id
+  /// 색 토큰. CRIMSON · SCARLET · AMBER · SHAMROCK · AZURE · INDIGO · VIOLET
+  attribute String
+  order     Int
+
+  texts SinText[]
+
+  @@map("sin_info")
+  @@schema("canonical")
+}
+
+model SinText {
+  sin    Sin
+  locale Locale
+  name   String
+
+  info SinInfo @relation(fields: [sin], references: [sin], onDelete: Cascade)
+
+  @@id([sin, locale])
+  @@map("sin_text")
+  @@schema("canonical")
+}
+
+/// 치환 어휘 483종. 설명문의 토큰을 표시명으로 바꾸는 표다.
+model Term {
+  id String @id
+
+  texts TermText[]
+
+  @@map("term")
+  @@schema("canonical")
+}
+
+model TermText {
+  termId String @map("term_id")
+  locale Locale
+  name   String
+
+  term Term @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@id([termId, locale])
+  @@map("term_text")
+  @@schema("canonical")
+}
+
+/// 스킬 코인 효과 문자열에서 뽑은 토큰. **스펙 6절의 구현이다.**
+///
+/// 원문은 skill_coin.effects 에 그대로 남고 이것은 분해 결과다. 파싱이 틀려도
+/// 원문에서 다시 뽑을 수 있다.
+///
+/// kind = 'status' 189종은 canonical.status 로 FK 가 선다 →
+///   (Skill)-[:INFLICTS]->(Status)
+/// kind = 'timing' 26종은 발동 시점이다 → (Skill)-[:TIMED_AT]->(Timing)
+model CoinToken {
+  skillId  String @map("skill_id")
+  uptie    Int
+  coinIdx  Int    @map("coin_idx")
+  /// 효과 문자열 안 등장 순서
+  ordinal  Int
+  token    String
+  /// status · timing
+  kind     String
+  /// "Inflict 3 [Sinking]" 의 3. 못 뽑으면 null
+  amount   Int?
+  /// kind='status' 일 때만 찬다
+  statusId String? @map("status_id")
+
+  status Status? @relation(fields: [statusId], references: [id])
+
+  @@id([skillId, uptie, coinIdx, ordinal])
+  @@index([token])
+  @@index([statusId])
+  @@map("coin_token")
+  @@schema("canonical")
+}
+
+/// E.G.O 가 다루는 상태. 계획 5에서 미룬 연결이다.
+model EgoStatus {
+  egoId    String @map("ego_id")
+  statusId String @map("status_id")
+
+  ego    Ego    @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, statusId])
+  @@index([statusId])
+  @@map("ego_status")
+  @@schema("canonical")
+}
+
+/// 인격이 다루는 상태. 계획 4에서 미룬 연결이다.
+model IdentityStatus {
+  identityId String @map("identity_id")
+  statusId   String @map("status_id")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  status   Status   @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, statusId])
+  @@index([statusId])
+  @@map("identity_status")
   @@schema("canonical")
 }

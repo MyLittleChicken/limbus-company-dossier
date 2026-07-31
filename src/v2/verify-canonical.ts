@@ -70,9 +70,9 @@ async function main(): Promise<void> {
 
 		eq('결손 textColor', await prisma.fieldGap.count({ where: { field: 'textColor' } }), 61);
 		eq('결손 unlockCode', await prisma.fieldGap.count({ where: { field: 'unlockCode' } }), 2);
-		// pack.textColor 61 · skill.levels 9 · gift.name.ko 6 · passive.name 6
-		// · association.name.ja 2 · pack.unlockCode 2
-		eq('결손 합계', await prisma.fieldGap.count(), 86);
+		// status.name.ja 258 · status.name.ko 245 · pack.textColor 61 · skill.levels 9
+		// · passive.name 6 · gift.name.ko 6 · association.name.ja 2 · pack.unlockCode 2
+		eq('결손 합계', await prisma.fieldGap.count(), 589);
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
 		const p1309 = await prisma.packText.findUnique({
@@ -445,6 +445,59 @@ async function main(): Promise<void> {
 			ok: Number(badCorrosion[0]?.n ?? 1n) === 0,
 			detail: `${Number(badCorrosion[0]?.n ?? 0n)} / 0`,
 		});
+
+		// ══ 상태·어휘 계열 ═════════════════════════════════════════
+		eq('status', await prisma.status.count(), 1_472);
+		eq('status_text', await prisma.statusText.count(), 3_913);
+		eq('status_category', await prisma.statusCategory.count(), 163);
+		eq('sin_info', await prisma.sinInfo.count(), 7);
+		eq('sin_text', await prisma.sinText.count(), 14);
+		eq('term', await prisma.term.count(), 483);
+		eq('identity_status', await prisma.identityStatus.count(), 1_179);
+		eq('ego_status', await prisma.egoStatus.count(), 475);
+
+		const byBuff = await prisma.status.groupBy({ by: ['buffType'], _count: { _all: true } });
+		const buffMap = Object.fromEntries(byBuff.map((r) => [String(r.buffType), r._count._all]));
+		checks.push({
+			name: '상태 성격 분포',
+			ok: buffMap['Positive'] === 678 && buffMap['Neutral'] === 416 && buffMap['Negative'] === 378,
+			detail: JSON.stringify(buffMap),
+		});
+
+		// **한국어 결손 245종 (16.6 %)** — 마스터북 상태 편 회차 3 과 같다
+		eq(
+			'한국어 결손 245종 (마스터북 일치)',
+			await prisma.fieldGap.count({ where: { entity: 'status', field: 'name', locale: 'ko' } }),
+			245,
+		);
+
+		// ── 스펙 6절 — 코인 토큰이 그래프 투영 준비를 끝냈나 ──────────
+		const byKind = await prisma.$queryRaw<Array<{ kind: string; n: bigint; kinds: bigint }>>`
+			SELECT kind, count(*)::bigint AS n, count(DISTINCT token)::bigint AS kinds
+			FROM canonical.coin_token GROUP BY kind
+		`;
+		const st = byKind.find((r) => r.kind === 'status');
+		const tm = byKind.find((r) => r.kind === 'timing');
+		checks.push({
+			name: '코인 토큰이 상태 189 · 시점 26 으로 갈린다',
+			ok: Number(st?.kinds ?? 0n) === 189 && Number(tm?.kinds ?? 0n) === 26,
+			detail: `상태 ${Number(st?.kinds ?? 0n)}종 ${Number(st?.n ?? 0n)}건 · 시점 ${Number(tm?.kinds ?? 0n)}종 ${Number(tm?.n ?? 0n)}건`,
+		});
+
+		const tokenFk = await prisma.coinToken.count({ where: { statusId: { not: null } } });
+		const tokenStatus = await prisma.coinToken.count({ where: { kind: 'status' } });
+		checks.push({
+			name: 'status 토큰 전건이 FK 를 갖는다',
+			ok: tokenFk === tokenStatus && tokenFk === 14_389,
+			detail: `${tokenFk} / ${tokenStatus} (14,389 기대)`,
+		});
+
+		// E.G.O·인격의 상태 연결이 100 % 걸렸다 — 결손이 0이어야 한다
+		eq(
+			'상태 연결 결손 (0이어야 한다)',
+			await prisma.fieldGap.count({ where: { field: 'statuses' } }),
+			0,
+		);
 
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다
 		const noText = await prisma.gift.count({ where: { stages: { none: { texts: { some: {} } } } } });

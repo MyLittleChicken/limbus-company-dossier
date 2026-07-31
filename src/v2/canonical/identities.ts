@@ -33,6 +33,8 @@ export interface IdentityInput {
 	knownSkills: Set<string>;
 	knownAssociations: Set<string>;
 	knownKeywords: Set<string>;
+	/** canonical.status 에 실제로 있는 id. 계획 6에서 이어진다 */
+	knownStatuses: Set<string>;
 	keywordDict: Map<string, string>;
 }
 
@@ -99,6 +101,11 @@ export interface IdentityUnitKeywordRow {
 	keyword: string;
 }
 
+export interface IdentityStatusRow {
+	identityId: string;
+	statusId: string;
+}
+
 export interface PassiveRow {
 	id: string;
 	cost: number | null;
@@ -121,6 +128,7 @@ export interface IdentityTables {
 	identityAssociation: IdentityAssociationRow[];
 	identityKeyword: IdentityKeywordRow[];
 	identityUnitKeyword: IdentityUnitKeywordRow[];
+	identityStatus: IdentityStatusRow[];
 	passive: PassiveRow[];
 	passiveText: PassiveTextRow[];
 }
@@ -136,6 +144,7 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 		identityAssociation: [],
 		identityKeyword: [],
 		identityUnitKeyword: [],
+		identityStatus: [],
 		passive: [],
 		passiveText: [],
 	};
@@ -344,6 +353,19 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 		// ── 특성 키워드 — 소속과 별개 축이다(backlog/01) ───────────
 		for (const keyword of strArr(detail, 'unitKeywords')) {
 			t.identityUnitKeyword.push({ identityId: id, keyword });
+		}
+
+		// ── 다루는 상태 — 계획 6에서 이어진 연결. 실측 100 % 걸린다 ──
+		let droppedStatuses = 0;
+		for (const statusId of new Set(strArr(a, 'statuses'))) {
+			if (!input.knownStatuses.has(statusId)) {
+				droppedStatuses += 1;
+				continue;
+			}
+			t.identityStatus.push({ identityId: id, statusId });
+		}
+		if (droppedStatuses > 0) {
+			meta.gap('identity', id, 'statuses', `상태 목록에 없는 id 를 ${droppedStatuses}건 가리킨다`, EVIDENCE);
 		}
 	}
 

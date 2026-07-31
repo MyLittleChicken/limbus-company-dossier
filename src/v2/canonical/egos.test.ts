@@ -39,6 +39,7 @@ function input(): EgoInput {
 		locPassiveEn: new Map<string, Record<string, unknown>>(),
 		locPassiveJa: new Map<string, Record<string, unknown>>(),
 		knownSinners: new Set([1]),
+		knownStatuses: new Set(['Agility']),
 	};
 }
 

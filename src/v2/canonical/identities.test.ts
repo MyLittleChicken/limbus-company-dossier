@@ -55,6 +55,7 @@ function input(): IdentityInput {
 		knownAssociations: new Set(['LIMBUS_COMPANY']),
 		knownKeywords: new Set(['Sinking']),
 		keywordDict: new Map([['sinking', 'Sinking']]),
+		knownStatuses: new Set(['Sinking']),
 	};
 }
 

@@ -16,6 +16,8 @@ import { buildSinners } from './canonical/sinners.js';
 import { buildSkills } from './canonical/skills.js';
 import { buildIdentities } from './canonical/identities.js';
 import { buildEgos } from './canonical/egos.js';
+import { buildStatuses } from './canonical/statuses.js';
+import { parseCoinTokens } from './canonical/tokens.js';
 
 const CHUNK = 1_000;
 
@@ -98,6 +100,27 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── 상태·어휘 계열 ─────────────────────────────────────────
+		// 인격·E.G.O 보다 먼저 만든다 — 둘이 상태로 외래 키를 건다.
+		const mech = (locale: string, prefix: string) =>
+			readSourceGroup(prisma, snapshotId, 'mechanics', `loc-${locale}`, { startsWith: [prefix] });
+
+		const statuses = buildStatuses(
+			{
+				assets: await readSource(prisma, snapshotId, 'mechanics/limbus-assets/statuses.json'),
+				bufsKo: await mech('ko', 'Bufs'),
+				bufsEn: await mech('en', 'Bufs'),
+				bufsJa: await mech('ja', 'Bufs'),
+				bkKo: await mech('ko', 'BattleKeywords'),
+				bkEn: await mech('en', 'BattleKeywords'),
+				bkJa: await mech('ja', 'BattleKeywords'),
+				terms: await readSource(prisma, snapshotId, 'mechanics/limbus-data-mj/terms.json'),
+				sins: await readSource(prisma, snapshotId, 'mechanics/limbus-data-mj/sins.json'),
+			},
+			meta,
+		);
+		const knownStatuses = new Set(statuses.status.map((x) => x.id));
+
 		// ── 인격 계열 ──────────────────────────────────────────────
 		const idKo = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-ko');
 		const idEn = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-en');
@@ -140,6 +163,7 @@ async function main(): Promise<void> {
 				knownAssociations: new Set(sinners.association.map((a) => a.id)),
 				knownKeywords: new Set(vocab.keyword.map((k) => k.id)),
 				keywordDict: buildKeywordLookup(categoryEn),
+				knownStatuses,
 			},
 			meta,
 		);
@@ -165,9 +189,36 @@ async function main(): Promise<void> {
 				locPassiveEn: await egoLoc('en', 'Passive_Ego'),
 				locPassiveJa: await egoLoc('ja', 'Passive_Ego'),
 				knownSinners: new Set(sinners.sinner.map((s) => s.id)),
+				knownStatuses,
 			},
 			meta,
 		);
+
+		// ── 코인 토큰 분해 — 스펙 6절 「그래프 파생을 위한 조건」 ────────
+		// 원문은 skill_coin.effects 에 그대로 남는다. 이것은 분해 결과다.
+		const coinToken: Array<{
+			skillId: string; uptie: number; coinIdx: number; ordinal: number;
+			token: string; kind: string; amount: number | null; statusId: string | null;
+		}> = [];
+		for (const coin of skills.skillCoin) {
+			let ordinal = 0;
+			for (const effect of coin.effects) {
+				for (const parsed of parseCoinTokens(effect)) {
+					const isStatus = knownStatuses.has(parsed.token);
+					coinToken.push({
+						skillId: coin.skillId,
+						uptie: coin.uptie,
+						coinIdx: coin.index,
+						ordinal,
+						token: parsed.token,
+						kind: isStatus ? 'status' : 'timing',
+						amount: parsed.amount,
+						statusId: isStatus ? parsed.token : null,
+					});
+					ordinal += 1;
+				}
+			}
+		}
 
 		// canonical 만 비운다. raw 도 app 도 건드리지 않는다.
 		await prisma.$executeRaw`
@@ -175,6 +226,7 @@ async function main(): Promise<void> {
 			         canonical.effect, canonical.sinner, canonical.association,
 			         canonical.skill, canonical.passive, canonical.identity,
 			         canonical.ego, canonical.ego_passive,
+			         canonical.status, canonical.sin_info, canonical.term,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -273,6 +325,15 @@ async function main(): Promise<void> {
 			),
 		]);
 
+		// ── 상태·어휘 적재 — 인격·E.G.O 보다 먼저 ──────────────────
+		counts.push(['status', await chunked(statuses.status, (d) => prisma.status.createMany({ data: d as never }))]);
+		counts.push(['status_text', await chunked(statuses.statusText, (d) => prisma.statusText.createMany({ data: d as never }))]);
+		counts.push(['status_category', await chunked(statuses.statusCategory, (d) => prisma.statusCategory.createMany({ data: d }))]);
+		counts.push(['sin_info', await chunked(statuses.sinInfo, (d) => prisma.sinInfo.createMany({ data: d as never }))]);
+		counts.push(['sin_text', await chunked(statuses.sinText, (d) => prisma.sinText.createMany({ data: d as never }))]);
+		counts.push(['term', await chunked(statuses.term, (d) => prisma.term.createMany({ data: d }))]);
+		counts.push(['term_text', await chunked(statuses.termText, (d) => prisma.termText.createMany({ data: d as never }))]);
+
 		// ── 인격 계열 적재 — 뿌리부터 ─────────────────────────────
 		counts.push(['sinner', (await prisma.sinner.createMany({ data: sinners.sinner })).count]);
 		counts.push(['sinner_text', await chunked(sinners.sinnerText, (d) => prisma.sinnerText.createMany({ data: d as never }))]);
@@ -295,6 +356,8 @@ async function main(): Promise<void> {
 		counts.push(['identity_passive', await chunked(identities.identityPassive, (d) => prisma.identityPassive.createMany({ data: d }))]);
 		counts.push(['identity_association', await chunked(identities.identityAssociation, (d) => prisma.identityAssociation.createMany({ data: d }))]);
 		counts.push(['identity_keyword', await chunked(identities.identityKeyword, (d) => prisma.identityKeyword.createMany({ data: d }))]);
+		counts.push(['identity_status', await chunked(identities.identityStatus, (d) => prisma.identityStatus.createMany({ data: d }))]);
+		counts.push(['coin_token', await chunked(coinToken, (d) => prisma.coinToken.createMany({ data: d }))]);
 		counts.push(['identity_unit_keyword', await chunked(identities.identityUnitKeyword, (d) => prisma.identityUnitKeyword.createMany({ data: d }))]);
 
 		// ── E.G.O 계열 적재 ───────────────────────────────────────
@@ -311,6 +374,7 @@ async function main(): Promise<void> {
 		counts.push(['ego_skill_stage_text', await chunked(egos.egoSkillStageText, (d) => prisma.egoSkillStageText.createMany({ data: d as never }))]);
 		counts.push(['ego_skill_coin', await chunked(egos.egoSkillCoin, (d) => prisma.egoSkillCoin.createMany({ data: d as never }))]);
 		counts.push(['ego_passive_link', await chunked(egos.egoPassiveLink, (d) => prisma.egoPassiveLink.createMany({ data: d }))]);
+		counts.push(['ego_status', await chunked(egos.egoStatus, (d) => prisma.egoStatus.createMany({ data: d }))]);
 		counts.push(['tool_annotation (ego)', await chunked(egos.toolAnnotation, (d) => prisma.toolAnnotation.createMany({ data: d as never }))]);
 
 		counts.push([
