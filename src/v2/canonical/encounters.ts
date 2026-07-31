@@ -45,7 +45,7 @@ export interface EncounterInput {
 }
 
 export interface EncounterTables {
-	encounter: Array<{ id: string; group: string | null; name: string; siteId: string; waves: unknown; phases: unknown; battles: unknown }>;
+	encounter: Array<{ id: string; group: string | null; name: string; siteId: string; waves?: unknown; phases?: unknown; battles?: unknown }>;
 	encounterTarget: Array<{ encounterId: string; index: number; name: string }>;
 	encounterTargetPart: Array<{ encounterId: string; targetIndex: number; partId: string; name: string; hpBase: number | null; hpLevel: number | null; defCorrection: number | null; speedMin: number | null; speedMax: number | null }>;
 	encounterPartResist: Array<{ encounterId: string; targetIndex: number; partId: string; axis: string; value: number }>;
@@ -72,30 +72,41 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 			continue;
 		}
 		const group = [...groupNames].find((g) => id.startsWith(`${g}__`)) ?? null;
-		t.encounter.push({
-			id, group, name, siteId,
-			waves: e['waves'] ?? null,
-			phases: e['phases'] ?? null,
-			battles: e['battles'] ?? null,
-		});
+		// **JS null 을 주면 Prisma 가 JSON null 을 쓴다** — SQL NULL 이 아니다.
+		// 키를 아예 빼야 SQL NULL 이 된다. 아카이브가 「없음」을 거짓말하면 안 된다.
+		const row: EncounterTables['encounter'][number] = { id, group, name, siteId };
+		if (e['waves'] !== undefined) row.waves = e['waves'];
+		if (e['phases'] !== undefined) row.phases = e['phases'];
+		if (e['battles'] !== undefined) row.battles = e['battles'];
+		t.encounter.push(row);
 		meta.source('encounter', id, 'core', 'assets-only', [ASSETS]);
 
 		arr(e, 'targets').forEach((rawTarget, index) => {
 			const target = obj(rawTarget);
+			// **이름이 비어도 버리지 않는다.** 실측 1건(story__9-5-24 targets[3])이
+			// 빈 문자열이며, 버리면 부위와 저항까지 통째로 사라진다.
 			const targetName = str(target, 'name');
-			if (targetName === null) return;
-			t.encounterTarget.push({ encounterId: id, index, name: targetName });
+			if (targetName === null) {
+				meta.gap(
+					'encounter_target', `${id}#${index}`, 'name',
+					'적 이름이 비어 있다 (원본 결함)', EVIDENCE,
+				);
+			}
+			t.encounterTarget.push({ encounterId: id, index, name: targetName ?? '' });
 
 			for (const rawPart of arr(target, 'parts')) {
 				const part = obj(rawPart);
 				const partId = part['partId'] === undefined ? null : String(part['partId']);
 				const partName = str(part, 'name');
 				if (partId === null || partName === null) continue;
-				const hp = obj(part['hp']);
+				// hp 는 {base, level} 이 보통이지만 숫자만 있는 경우도 있다
+				const hpRaw = part['hp'];
+				const hp = obj(hpRaw);
+				const hpFlat = typeof hpRaw === 'number' ? hpRaw : null;
 				const speed = arr(part, 'speed');
 				t.encounterTargetPart.push({
 					encounterId: id, targetIndex: index, partId, name: partName,
-					hpBase: num(hp, 'base'), hpLevel: num(hp, 'level'),
+					hpBase: num(hp, 'base') ?? hpFlat, hpLevel: num(hp, 'level'),
 					defCorrection: num(part, 'defCorrection'),
 					speedMin: speed.length === 2 ? Number(speed[0]) : null,
 					speedMax: speed.length === 2 ? Number(speed[1]) : null,
@@ -143,7 +154,10 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		for (const locale of LOCALES) {
 			const o = enemyLoc[locale].get(id);
 			const name = str(o ?? {}, 'name');
-			if (name === null) continue;
+			if (name === null) {
+				meta.gap('enemy', id, 'name', `${locale} 표시명이 없다`, EVIDENCE, locale);
+				continue;
+			}
 			t.enemyText.push({ enemyId: id, locale, name, part: str(o ?? {}, 'desc') });
 		}
 		meta.source('enemy', id, 'name', 'loc-only', [LOC]);

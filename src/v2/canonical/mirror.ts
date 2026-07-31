@@ -128,6 +128,13 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 					hardOnly: arr(a, 'hardonly').map((v) => v === true),
 				});
 				if (text !== null) t.achievementText.push({ id, category, season, locale: 'en', text });
+				// 업적은 영문만 있다 — loc 에 대응 파일이 없다
+				for (const locale of ['ko', 'ja'] as const) {
+					meta.gap(
+						'achievement', `${id}#${season}`, 'text',
+						`${locale} 표시 문자열이 어느 출처에도 없다`, EVIDENCE, locale,
+					);
+				}
 			}
 		}
 	}
@@ -144,6 +151,10 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 			const lv = Number(level);
 			if (item === null || count === null || !Number.isFinite(lv)) continue;
 			t.reward.push({ season, level: lv, item, count });
+			// 보상 아이템 이름도 영문만 있다
+			for (const locale of ['ko', 'ja'] as const) {
+				meta.gap('reward', `${season}#${lv}`, 'item', `${locale} 아이템 이름이 없다`, EVIDENCE, locale);
+			}
 		}
 	}
 
@@ -159,6 +170,10 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 		t.grace.push({ id, index, cost });
 		const name = str(g, 'name');
 		if (name !== null) t.graceText.push({ graceId: id, locale: 'en', name, descs: g['descs'] ?? [] });
+		// 은총도 영문만 있다
+		for (const locale of ['ko', 'ja'] as const) {
+			meta.gap('grace', id, 'name', `${locale} 표시명이 어느 출처에도 없다`, EVIDENCE, locale);
+		}
 		meta.source('grace', id, 'core', 'assets-only', [ASSETS]);
 	});
 
@@ -185,6 +200,13 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 			const value = num(a, 'value');
 			if (name === null || desc === null || value === null) return;
 			t.adversity.push({ floorRange, index, name, desc, value });
+			// 역경도 영문만 있다. 이름·설명이 컬럼에 직접 들어가 로케일이 못 붙는다
+			for (const locale of ['ko', 'ja'] as const) {
+				meta.gap(
+					'adversity', `${floorRange}#${index}`, 'name',
+					`${locale} 표시 문자열이 어느 출처에도 없다`, EVIDENCE, locale,
+				);
+			}
 		});
 	}
 

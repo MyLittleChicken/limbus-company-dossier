@@ -72,9 +72,8 @@ async function main(): Promise<void> {
 		eq('결손 unlockCode', await prisma.fieldGap.count({ where: { field: 'unlockCode' } }), 2);
 		// status.name.ja 258 · status.name.ko 245 · pack.textColor 61 · skill.levels 9
 		// · passive.name 6 · gift.name.ko 6 · association.name.ja 2 · pack.unlockCode 2
-// 상태 ja 258 · 상태 ko 245 · 선택지 text 112 · pack.textColor 61 · skill.levels 9
-		// · passive 6 · gift 6 · association.ja 2 · pack.unlockCode 2 · battlePool 1
-		eq('결손 합계', await prisma.fieldGap.count(), 702);
+// name 598 · text 478 · item 400 · textColor 61 · levels 9 · unlockCode 2 · battlePool 1
+		eq('결손 합계', await prisma.fieldGap.count(), 1_549);
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
 		const p1309 = await prisma.packText.findUnique({
@@ -512,9 +511,9 @@ async function main(): Promise<void> {
 		eq('start_gift', await prisma.startGift.count(), 30);
 
 		eq('encounter', await prisma.encounter.count(), 251);
-		eq('encounter_target', await prisma.encounterTarget.count(), 397);
-		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 353);
-		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 3_530);
+		eq('encounter_target', await prisma.encounterTarget.count(), 398);
+		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 354);
+		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 3_540);
 		eq('enemy', await prisma.enemy.count(), 1_342);
 		eq('enemy_text', await prisma.enemyText.count(), 4_026);
 
@@ -542,6 +541,34 @@ async function main(): Promise<void> {
 			ok: bySeason.length === 2,
 			detail: bySeason.map((r) => `${r.season}:${r._count._all}`).join(' '),
 		});
+
+		// **JSON null 이 아니라 SQL NULL 이어야 한다.** 아카이브가 「없음」을 거짓말하면 안 된다
+		const jsonNull = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.encounter
+			WHERE waves = 'null'::jsonb OR phases = 'null'::jsonb OR battles = 'null'::jsonb
+		`;
+		checks.push({
+			name: 'JSON null 로 들어간 행 (0이어야 한다)',
+			ok: Number(jsonNull[0]?.n ?? 1n) === 0,
+			detail: `${Number(jsonNull[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 이름이 빈 적도 버리지 않는다 — 원본 398건이 그대로 들어와야 한다
+		eq(
+			'이름 빈 적 결손 기록',
+			await prisma.fieldGap.count({ where: { entity: 'encounter_target', field: 'name' } }),
+			1,
+		);
+
+		// 계획 7 계열의 한국어 결손이 기록됐나
+		for (const [entity, want] of [
+			['achievement', 366],
+			['grace', 20],
+			['adversity', 60],
+			['reward', 400],
+		] as const) {
+			eq(`${entity} 한국어·일본어 결손`, await prisma.fieldGap.count({ where: { entity } }), want);
+		}
 
 		// **전투 풀 2,525종은 여전히 못 잇는다** — backlog/10 이 살아 있다
 		eq(
