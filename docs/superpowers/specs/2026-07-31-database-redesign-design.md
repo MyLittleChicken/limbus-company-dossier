@@ -117,7 +117,7 @@ DB 에 두면 셋을 얻는다.
 
 ```sql
 SELECT id FROM raw.raw_object
-WHERE source = 'limbus-assets' AND entity = 'gift'
+WHERE src_path = 'gifts/limbus-assets/gifts.json'
   AND payload->>'hardonly' = 'true';
 ```
 
@@ -134,8 +134,8 @@ WHERE source = 'limbus-assets' AND entity = 'gift'
 마스터북의 두 목적 중 하나가 「업데이트 대응을 위한 분석 자료」였다. 이것이 그 자동화다.
 
 ```sql
-SELECT entity, id FROM raw.raw_object a
-JOIN raw.raw_object b USING (source, entity, id)
+SELECT src_path, id FROM raw.raw_object a
+JOIN raw.raw_object b USING (source, src_path, id)
 WHERE a.snapshot_id = '2026-07-25' AND b.snapshot_id = '2026-09-01'
   AND a.payload IS DISTINCT FROM b.payload;
 ```
@@ -190,16 +190,39 @@ model SnapshotSource {
 model RawObject {
   snapshotId  String
   source      String                    // 어느 repo 에서 왔나
-  entity      String                    // gift · identity · skill · status …
+  srcPath     String                    // 원래 파일 경로. 키의 일부다 — 아래 주석
   id          String                    // payload → 파일명 → 순서 순으로 확보
-  srcPath     String                    // 원래 파일 경로
+  entity      String                    // gifts · identities · mirror-dungeon … (조회 라벨)
   payload     Json                      // 손대지 않은 원본 객체
   snapshot    Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
-  @@id([snapshotId, source, entity, id])
+  @@id([snapshotId, source, srcPath, id])
   @@index([entity, id])                 // 출처 대조 조인용
   @@index([snapshotId, source])
   @@schema("raw")
 }
+```
+
+> **`srcPath` 가 기본키에 들어가는 이유** — `(source, entity, id)` 만으로는 유일하지
+> 않다. 실측 **충돌 8,530건**이다.
+>
+> ```
+> loc-ja · mirror-dungeon · ADDITIONAL_FLOOR_THEME_SLOT
+>   DungeonStartBuffs.json · DungeonStartBuffs_MD6.json · DungeonStartBuffs_MD7.json
+> ```
+>
+> 같은 출처·같은 계열 안에서 **파일이 다르면 다른 개체**다(시즌별 판본·강화판 등).
+> `entity` 는 키가 아니라 조회 라벨로만 쓴다.
+>
+> 따라서 **출처 대조 조인은 `(entity, id)` 만으로 하면 안 된다.** 어느 파일끼리
+> 맞대볼지 `srcPath` 로 좁혀야 한다.
+>
+> ```sql
+> SELECT a.id FROM raw.raw_object a
+> JOIN raw.raw_object b USING (snapshot_id, entity, id)
+> WHERE a.src_path = 'gifts/limbus-data-mj/gifts.json'
+>   AND b.src_path = 'gifts/limbus-assets/gifts.json'
+>   AND (a.payload->>'hardOnly')::bool IS DISTINCT FROM (b.payload->>'hardonly')::bool;
+> ```
 
 /// id 를 뽑을 수 없는 설정형 파일 13개. 파일 통째로 한 행.
 model RawBlob {
@@ -676,6 +699,27 @@ datasource db {
 ```
 
 모델마다 `@@schema("...")` 를 붙인다. enum 에도 붙여야 한다.
+
+### 병존 방식 — 같은 데이터베이스, 다른 스키마
+
+현행 스키마는 `public` 에 있다(`.env.example` 의 `?schema=public`). 신규는
+`raw`·`canonical`·`app` 이므로 **같은 Postgres 데이터베이스 `limbus` 안에서 충돌 없이
+공존한다.** 컨테이너도 접속 URL 도 새로 만들 필요가 없다.
+
+```
+DB limbus
+  schema public                현행 58모델 — 손대지 않는다
+  schema raw / canonical / app 신규
+```
+
+Prisma 스키마 파일과 생성 클라이언트는 분리한다.
+
+```
+prisma/schema.prisma          현행. 그대로
+prisma/v2/schema.prisma       신규. generator output 을 따로 지정
+```
+
+`npm run schema:ddl` 이 현행 것을 덮어쓰지 않도록 신규용 스크립트를 따로 만든다.
 
 **착수 전 확인** — 현행 Prisma 6.1.0 에서 `multiSchema` 가 `previewFeatures` 없이
 동작하는지 검증하고, 필요하면 버전을 올린다. ADR-02 는 Prisma 를 DDL 생성기와
