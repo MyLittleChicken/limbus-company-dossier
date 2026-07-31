@@ -91,14 +91,25 @@ export async function deckFromCode(code: string, name: string): Promise<Result<S
 	}
 
 	ordered.sort((a, b) => a.order - b.order);
-	deck.deployed = ordered.map((o) => o.sinnerId);
+	// `FIELD.order` 는 **편성 순서**다. 실물 코드에서 1..12 의 순열로 나온다 — 12칸 전부
+	// 값을 갖고 겹치지 않으므로 출전(최대 7)일 수 없다. 덱 코드는 온필드 인원을 담지
+	// 않는다(docs/07 7.1). `deployed` 는 비운 채로 두고 사용자가 화면에서 고른다 —
+	// 없는 근거로 출전을 지어내면 상한 7을 넘겨 저장분을 못 읽게 만든다.
+	deck.order = ordered.map((o) => o.sinnerId);
 	return ok(deck);
 }
 
 export function deckToCode(deck: StoredDeck): Promise<Result<string>> {
 	let bits = emptyBits();
+	// 편성 순서를 사용자가 정하는 화면이 아직 없다. 손으로 만든 덱은 `order` 가 비어 있으므로
+	// **인격이 든 칸을 수감자 번호 순으로 매긴다** — 지어내는 것이지만 0(미편성)으로 두면
+	// 게임이 빈 편성으로 읽는다. 가져온 덱은 코드가 준 순서를 그대로 쓴다(docs/07 7.1).
+	const order = deck.order.length > 0
+		? deck.order
+		: deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId);
+
 	for (const slot of deck.slots) {
-		const order = deck.deployed.indexOf(slot.sinnerId);
+		const at = order.indexOf(slot.sinnerId);
 		const egoIndex: Partial<Record<(typeof EGO_RANKS)[number], number>> = {};
 		for (const rank of EGO_RANKS) {
 			const id = slot.egos[rank];
@@ -106,7 +117,7 @@ export function deckToCode(deck: StoredDeck): Promise<Result<string>> {
 		}
 		bits = writeBlock(bits, slot.sinnerId, {
 			identityIndex: slot.identityId === null ? 0 : indexOf(slot.identityId),
-			order: order === -1 ? 0 : order + 1,
+			order: at === -1 ? 0 : at + 1,
 			egoIndex,
 		});
 	}
@@ -114,13 +125,15 @@ export function deckToCode(deck: StoredDeck): Promise<Result<string>> {
 }
 
 /**
- * 인게임 검증이 안 된 인격들.
+ * 순번 16 이상 인격의 경고는 **없앴다.**
  *
- * 순번 16 이상은 가이드가 추정만 해둔 구간이라 내보낸 코드가 게임에서 동작하는지 모른다.
- * 화면이 이 목록으로 경고를 띄운다.
+ * 가이드가 4비트로 적은 인격 필드를 우리가 넓게 읽는 것이 추정이었고, 그래서 순번 16 이상이
+ * 든 덱의 내보내기에 미검증 표기를 붙였다(`docs/07` 7.3). **실물 인게임 코드로 확인했다** —
+ * `lib/deck-code/game-code.test.ts` 의 검계·거미집 편성이 순번 16 인격 둘(10716 · 10916)을
+ * 담고 있고, 좁은 4비트로 읽으면 그 칸이 0("인격 없음")이 되는 반면 넓은 필드로 읽으면
+ * 실제 편성과 맞는다. 다시 인코드한 560비트도 원본과 완전히 같다.
+ *
+ * 읽기와 쓰기 모두 비트 수준에서 대조됐으므로 순번 16 에만 붙일 근거가 사라졌다. 남은
+ * 미검증은 **우리가 만든 컨테이너(gzip 산출물)를 게임이 받아들이는가**이고, 그것은 순번과
+ * 무관하게 모든 코드에 걸리므로 화면이 내보내기 전체에 한 번 적는다.
  */
-export function unverifiedIndexes(deck: StoredDeck): number[] {
-	return deck.slots
-		.map((s) => s.identityId)
-		.filter((id): id is number => id !== null && indexOf(id) > 15);
-}

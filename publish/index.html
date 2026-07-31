@@ -1,0 +1,318 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>디자인 시스템 — MIRROR TRACKER</title>
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/globals.css" />
+<link rel="stylesheet" href="css/proto-doc.css" />
+
+<header class="site-header">
+	<div class="hbar">
+		<div class="htitle">
+			<a href="index.html">MIRROR TRACKER</a>
+			<span class="sub">디자인 시스템 프로토타입</span>
+		</div>
+		<div class="locale-switch">
+			<span aria-current="true">한국어</span>
+			<a href="#">English</a>
+		</div>
+	</div>
+	<nav class="site-nav">
+		<a href="index.html" aria-current="page">토큰</a>
+		<a href="screens/states.html">상태</a>
+		<span class="nav-sep" aria-hidden="true"></span>
+		<a href="screens/home.html">홈</a>
+		<a href="screens/gifts.html">기프트</a>
+		<a href="screens/packs.html">테마 팩</a>
+		<a href="screens/identities.html">인격</a>
+		<a href="screens/egos.html">E.G.O</a>
+		<a href="screens/squad.html">편성</a>
+	</nav>
+</header>
+
+<main class="site-main">
+	<div class="seclabel">
+		<h2>디자인 시스템</h2>
+		<span class="kr">토큰과 화면</span>
+		<span class="rule"></span>
+		<span class="hint">22 화면 · 148 클래스</span>
+	</div>
+
+	<p class="lede">
+		실행 중인 앱의 DOM 을 그대로 떠 온 정적 화면 위에 토큰 기반 스타일을 입힌 것이다.
+		클래스명과 마크업 구조를 하나도 바꾸지 않았으므로 제품으로 되돌려 옮기는 일은
+		스타일시트 교체로 끝난다.
+	</p>
+
+	<!-- ── 화면 ────────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>화면</h2>
+		<span class="kr">Screens</span>
+		<span class="rule"></span>
+	</div>
+
+	<ul class="cardgrid entry-grid">
+		<li><a class="card card-entry" href="screens/home.html"><strong>홈</strong><span class="entry-n">1</span></a></li>
+		<li><a class="card card-entry" href="screens/gifts.html"><strong>기프트 목록</strong><span class="entry-n">456</span></a></li>
+		<li><a class="card card-entry" href="screens/gift-detail.html"><strong>기프트 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/gift-recipe.html"><strong>기프트 — 합성</strong></a></li>
+		<li><a class="card card-entry" href="screens/gift-material.html"><strong>기프트 — 재료</strong></a></li>
+		<li><a class="card card-entry" href="screens/packs.html"><strong>테마 팩 목록</strong><span class="entry-n">117</span></a></li>
+		<li><a class="card card-entry" href="screens/pack-detail.html"><strong>테마 팩 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/pack-dense.html"><strong>팩 — 최대 밀도</strong><span class="entry-n">188</span></a></li>
+		<li><a class="card card-entry" href="screens/identities.html"><strong>인격 목록</strong><span class="entry-n">184</span></a></li>
+		<li><a class="card card-entry" href="screens/identity-detail.html"><strong>인격 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/egos.html"><strong>E.G.O 목록</strong><span class="entry-n">110</span></a></li>
+		<li><a class="card card-entry" href="screens/ego-detail.html"><strong>E.G.O 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/squad.html"><strong>편성</strong><span class="entry-n">12</span></a></li>
+		<li><a class="card card-entry" href="screens/squad-picker.html"><strong>편성 — 선택 모달</strong></a></li>
+		<li><a class="card card-entry" href="screens/squad-partial.html"><strong>편성 — 빈 칸</strong></a></li>
+		<li><a class="card card-entry" href="screens/recommend.html"><strong>추천</strong></a></li>
+		<li><a class="card card-entry" href="screens/floors.html"><strong>층별 등장 팩</strong></a></li>
+		<li><a class="card card-entry" href="screens/dungeon.html"><strong>거울 던전</strong></a></li>
+		<li><a class="card card-entry" href="screens/glossary.html"><strong>용어</strong><span class="entry-n">1472</span></a></li>
+		<li><a class="card card-entry" href="screens/about.html"><strong>고지</strong></a></li>
+		<li><a class="card card-entry" href="screens/gifts-empty.html"><strong>빈 결과</strong></a></li>
+		<li><a class="card card-entry" href="screens/home-search.html"><strong>검색 결과</strong></a></li>
+		<li><a class="card card-entry" href="screens/states.html"><strong>상태 카탈로그</strong></a></li>
+	</ul>
+
+	<!-- ── 색 ──────────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>색</h2>
+		<span class="kr">세 축으로 나뉜다</span>
+		<span class="rule"></span>
+		<span class="hint">tokens.css</span>
+	</div>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>표면과 선</h3>
+			<span class="hint">위계 네 단</span>
+		</div>
+		<div class="panel-b">
+			<ul class="doc-swatches">
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--surface-page)"></span><span><strong>문서 바닥</strong><code>--surface-page</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--surface-1)"></span><span><strong>패널 · 카드</strong><code>--surface-1</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--surface-2)"></span><span><strong>한 단 위</strong><code>--surface-2</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--surface-3)"></span><span><strong>호버 · 눌림</strong><code>--surface-3</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--surface-inset)"></span><span><strong>파인 자리</strong><code>--surface-inset</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--line)"></span><span><strong>기본 경계</strong><code>--line</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--line-strong)"></span><span><strong>도드라진 경계</strong><code>--line-strong</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--line-active)"></span><span><strong>선택 · 활성</strong><code>--line-active</code></span></li>
+			</ul>
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>죄악 7종</h3>
+			<span class="hint">게임 엠블럼 실측</span>
+		</div>
+		<div class="panel-b">
+			<p class="lede">채도가 낮다. 나이브한 무지개로 바꾸지 않는다. 색은 단독으로 뜻을 전하지 않으며 항상 아이콘과 이름을 동반한다.</p>
+			<ul class="doc-swatches">
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-wrath)"></span><span><strong>분노</strong><code>--sin-wrath</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-lust)"></span><span><strong>색욕</strong><code>--sin-lust</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-sloth)"></span><span><strong>나태</strong><code>--sin-sloth</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-gluttony)"></span><span><strong>탐식</strong><code>--sin-gluttony</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-gloom)"></span><span><strong>우울</strong><code>--sin-gloom</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-pride)"></span><span><strong>오만</strong><code>--sin-pride</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-envy)"></span><span><strong>질투</strong><code>--sin-envy</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--sin-none)"></span><span><strong>죄악 없음</strong><code>--sin-none</code></span></li>
+			</ul>
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>상태 키워드</h3>
+			<span class="hint">죄악과 다른 축</span>
+		</div>
+		<div class="panel-b">
+			<p class="lede">
+				아이콘 PNG 실측값이며 죄악 색과 **다른 축**이다. 실측에서 서로 다른 색으로 나오므로 섞지 않는다.
+				파열과 충전이 육안으로 가깝지만 게임이 그렇게 정해 두었으므로 임의로 벌리지 않는다 — 아이콘과 이름이 구분을 맡는다.
+			</p>
+			<ul class="doc-swatches">
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-bleed)"></span><span><strong>출혈</strong><code>--kw-bleed</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-burn)"></span><span><strong>화상</strong><code>--kw-burn</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-tremor)"></span><span><strong>진동</strong><code>--kw-tremor</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-rupture)"></span><span><strong>파열</strong><code>--kw-rupture</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-sinking)"></span><span><strong>침잠</strong><code>--kw-sinking</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-charge)"></span><span><strong>충전</strong><code>--kw-charge</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--kw-poise)"></span><span><strong>호흡</strong><code>--kw-poise</code></span></li>
+			</ul>
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>공격 타입과 상태 표기</h3>
+			<span class="hint">색 체계를 지어내지 않는다</span>
+		</div>
+		<div class="panel-b">
+			<p class="lede">
+				공격 타입 3 종은 게임이 색을 나누지 않고 공용 브론즈 코인 계열로 다룬다. 등급도 색 체계가 없다 —
+				이전 단계에서 워드마크에서 색을 뽑았더니 ZAYIN 과 TETH 가 같은 값으로 나왔다. 구분은 글리프에 맡긴다.
+			</p>
+			<ul class="doc-swatches">
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--atk-slash)"></span><span><strong>참격 · 관통 · 타격</strong><code>--atk-*</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--state-missing)"></span><span><strong>결손</strong><code>--state-missing</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--state-absent)"></span><span><strong>부재</strong><code>--state-absent</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--state-short)"></span><span><strong>공급 부족</strong><code>--state-short</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--alert)"></span><span><strong>경보 · 주요</strong><code>--alert</code></span></li>
+				<li class="doc-swatch"><span class="doc-chip" style="background: var(--accent)"></span><span><strong>강조</strong><code>--accent</code></span></li>
+			</ul>
+		</div>
+	</section>
+
+	<!-- ── 타이포 ──────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>타이포</h2>
+		<span class="kr">일곱 단</span>
+		<span class="rule"></span>
+	</div>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>크기</h3>
+			<span class="hint">기존 값을 키우지 않았다</span>
+		</div>
+		<div class="panel-b">
+			<ul class="doc-scale">
+				<li><code>--fs-micro</code><span class="doc-val">9.5px</span><span style="font-size: var(--fs-micro)">코인 번호 · 속성 첨자</span></li>
+				<li><code>--fs-tiny</code><span class="doc-val">10.5px</span><span style="font-size: var(--fs-tiny)">태그 · 미세 라벨</span></li>
+				<li><code>--fs-xs</code><span class="doc-val">11.5px</span><span style="font-size: var(--fs-xs)">메타 · 흐린 라벨</span></li>
+				<li><code>--fs-sm</code><span class="doc-val">12.5px</span><span style="font-size: var(--fs-sm)">보조 본문 · 패널 제목</span></li>
+				<li><code>--fs-base</code><span class="doc-val">14px</span><span style="font-size: var(--fs-base)">본문</span></li>
+				<li><code>--fs-lg</code><span class="doc-val">15px</span><span style="font-size: var(--fs-lg)">구획 제목</span></li>
+				<li><code>--fs-xl</code><span class="doc-val">19px</span><span style="font-size: var(--fs-xl)">화면 제목 — 새로 생긴 단</span></li>
+			</ul>
+			<p class="notice-inline">
+				이전 구현은 9 · 9.5 · 10.5 · 11 · 11.5 · 12 · 12.5 · 14 · 15px 아홉 종이 54 개 선언에 흩어져 있었다.
+				9→9.5 · 11→11.5 · 12→12.5 로 접어 일곱 단으로 줄였고 어느 값도 키우지 않았다.
+			</p>
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>서체</h3>
+			<span class="hint">라틴 디스플레이와 국문 본문을 분리</span>
+		</div>
+		<div class="panel-b">
+			<ul class="doc-scale">
+				<li><code>--font-title</code><span class="doc-val">제목</span><span style="font-family: var(--font-title); font-size: var(--fs-xl); text-transform: uppercase; letter-spacing: var(--ls-wide)">MIRROR TRACKER 편성</span></li>
+				<li><code>--font-display</code><span class="doc-val">라벨</span><span style="font-family: var(--font-display); letter-spacing: var(--ls-wide); text-transform: uppercase">E.G.O GIFT 기프트</span></li>
+				<li><code>--font-body</code><span class="doc-val">본문</span><span style="font-family: var(--font-body)">E.G.O 는 인격이 아니라 수감자에 붙는다.</span></li>
+				<li><code>--font-num</code><span class="doc-val">숫자</span><span style="font-family: var(--font-num); font-size: var(--fs-lg); letter-spacing: var(--ls-wide)">188 / 456 · 12/12</span></li>
+			</ul>
+			<p class="notice-inline">
+				국문은 <strong>Pretendard</strong> 다 — 게임이 본문에 쓰는 그 서체이며 SIL OFL 이라 자체 호스팅에
+				걸리는 것이 없다. 숫자의 Bebas Neue 도 게임의 BebasKai 의 원형이다. 게임의 타이틀 서체
+				KOTRA Bold 는 <strong>재배포가 금지되어 쓸 수 없어</strong> 대체하며, 그것은 선택이 아니라 제약이다.
+				Black Han Sans 도 쓰지 않는다 — Google 이 unicode-range 로 쪼개 서빙하는데 서브셋이 도착하지 않으면
+				브라우저가 다음 서체로 넘어가지 않고 두부를 그린다(캡처로 확인).
+			</p>
+		</div>
+	</section>
+
+	<!-- ── 간격 ────────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>간격과 중단점</h2>
+		<span class="kr">기존 실측값을 계단으로</span>
+		<span class="rule"></span>
+	</div>
+
+	<section class="panel">
+		<div class="panel-b">
+			<ul class="doc-scale">
+				<li><code>--sp-1</code><span class="doc-val">2px</span><span class="doc-bar" style="width: 2px"></span></li>
+				<li><code>--sp-2</code><span class="doc-val">4px</span><span class="doc-bar" style="width: 4px"></span></li>
+				<li><code>--sp-3</code><span class="doc-val">6px</span><span class="doc-bar" style="width: 6px"></span></li>
+				<li><code>--sp-4</code><span class="doc-val">8px</span><span class="doc-bar" style="width: 8px"></span></li>
+				<li><code>--sp-5</code><span class="doc-val">10px</span><span class="doc-bar" style="width: 10px"></span></li>
+				<li><code>--sp-6</code><span class="doc-val">12px</span><span class="doc-bar" style="width: 12px"></span></li>
+				<li><code>--sp-7</code><span class="doc-val">14px</span><span class="doc-bar" style="width: 14px"></span></li>
+				<li><code>--sp-8</code><span class="doc-val">18px</span><span class="doc-bar" style="width: 18px"></span></li>
+				<li><code>--sp-9</code><span class="doc-val">22px</span><span class="doc-bar" style="width: 22px"></span></li>
+				<li><code>--sp-10</code><span class="doc-val">26px</span><span class="doc-bar" style="width: 26px"></span></li>
+				<li><code>--sp-11</code><span class="doc-val">32px</span><span class="doc-bar" style="width: 32px"></span></li>
+			</ul>
+			<p class="notice-inline">
+				중단점은 넷이다 — 480(한 손 폭) · 760(태블릿 세로) · 1020(좁은 노트북) · 1180(편성 3 열이 2 열이 되는 지점).
+				이전 구현의 430 · 700 · 760 · 900 · 1020 · 1180 여섯 개를 접었다.
+			</p>
+		</div>
+	</section>
+
+	<!-- ── 옮길 때 ─────────────────────────────────────── -->
+
+	<div class="seclabel">
+		<h2>제품에 옮길 때</h2>
+		<span class="kr">스타일 교체로 끝나지 않는 것</span>
+		<span class="rule"></span>
+	</div>
+
+	<section class="panel">
+		<div class="panel-h">
+			<h3>컴포넌트 변경이 필요한 항목</h3>
+			<span class="hint">4 건</span>
+		</div>
+		<div class="panel-b">
+			<ol class="doc-todo">
+				<li>
+					<strong>축 색 훅.</strong> 죄악·키워드를 식별하는 속성이 마크업에 없다. 프로토타입은
+					<code>js/proto.js</code> 가 아이콘 파일명에서 유도해 <code>data-sin</code> ·
+					<code>data-kw</code> · <code>data-atk</code> 를 붙인다. 제품에서는 서버 렌더가 같은 속성을
+					내면 되고 그러면 이 JS 는 버린다. 구조 변경이 아니라 속성 하나다.
+				</li>
+				<li>
+					<strong>원본 enum 노출.</strong> <code>components/uptie-skills.tsx</code> 가
+					<code>{skill.defType}</code> · <code>{skill.affinity}</code> · <code>{skill.atkType}</code> 를
+					그대로 출력해 <code>attack</code> · <code>pride</code> · <code>slash</code> 가 화면에 나온다.
+					한국어 라벨 맵은 이미 있고(<code>listSquadAxes</code> 의 <code>labels</code>) 편성 화면은 그것을
+					쓰는데 상세 화면만 쓰지 않는다. 프로토타입은 보여주기 위해 JS 로 덮어썼다.
+				</li>
+				<li>
+					<strong>이름이 없는 축.</strong> 팩 분류(<code>canto</code> · <code>walpurgis</code> ·
+					<code>attack_type</code> 등), 코인 구분(<code>normal</code>), 패시브 조건의 엔진 DSL
+					(<code>조건 (owned): pride 4</code>) 은 게임 표기를 우리가 모른다. <strong>지어내지 않았다.</strong>
+					데이터에서 표기를 확보하는 것이 선행 작업이다.
+				</li>
+				<li>
+					<strong>팩 그림 두 층 렌더.</strong> 팩 카드는 봉지(<code>{sprite}.webp</code>)와
+					보스 그림(<code>{sprite}_boss.webp</code>)을 겹친 것이며 <code>&lt;Icon&gt;</code> 하나로는
+					표현할 수 없다. 40 종이 대상이다. 공격 타입 6 종은 스프라이트를 공유해 규칙으로 짝을
+					찾을 수 없어 위키 대조로 확정한 표를 쓴다 — 제품에서는 팩 id 로 키를 잡아야 한다.
+					조사 전문은 <code>PACK-ART.md</code>.
+				</li>
+				<li>
+					<strong>팩 이름 텍스트.</strong> 게임은 카드에 이름을 <strong>그려 넣는다</strong> — 애셋이 아니다.
+					<code>.packart-name</code> 으로 <strong>117 종 전부에 인쇄했다.</strong> 카드 형식이 둘이라 띠 위치가
+					다르고 파일명(<code>_Extreme</code>)으로 갈린다. 제품에서는 <code>pack_text</code> 의 이름을 그대로 넘기면
+					되고 로케일이 따라온다.
+					서체는 게임의 KOTRA Bold 를 쓸 수 없다 — 재배포 금지 조건이 걸려 있다.
+				</li>
+				<li>
+					<strong>서체 자체 호스팅.</strong> 지금은 Google Fonts 를 <code>@import</code> 한다.
+					배포 시에는 자체 호스팅으로 바꾼다.
+				</li>
+			</ol>
+		</div>
+	</section>
+
+	<p class="stamp">MD7 · 2026-07-25 스냅샷 기준 · 148 클래스 / 22 화면</p>
+</main>
+
+<footer class="site-footer">
+	<p>비공식 팬 프로젝트이며 Project Moon과 제휴·승인 관계가 없습니다</p>
+	<a href="screens/about.html">고지</a>
+</footer>
+
+<script src="js/pack-names.js" defer></script>
+<script src="js/proto.js" defer></script>

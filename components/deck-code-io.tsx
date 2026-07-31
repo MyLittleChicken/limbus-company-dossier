@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { deckFromCode, deckToCode, unverifiedIndexes } from '@/lib/deck-code/codec';
+import { deckFromCode, deckToCode } from '@/lib/deck-code/codec';
 import type { StoredDeck } from '@/lib/storage/schema';
 
 /**
  * 인게임 덱 코드 입출력.
  *
- * 내보내기에 경고가 붙는 경우가 있다 — 순번 16 이상 인격이 든 덱이다. 가이드가 그 구간의
- * 인코딩을 추정만 해뒀고 인게임에서 확인된 적이 없다(07-recommendation-system 7.3).
- * 되는 척하지 않고 미검증임을 밝힌다.
+ * **덱 코드는 편성과 인격·E.G.O 만 담는다. 출전은 담지 않는다**(07-recommendation-system 7.1).
+ * 가져오기는 출전을 비운 채로 두고 사용자가 편성 화면에서 고른다.
+ *
+ * 내보낸 코드에는 미검증 표기가 붙는다 — 560비트는 실물 코드와 대조됐지만(7.3) 우리가 만든
+ * gzip 컨테이너를 게임이 받아들이는지는 확인된 적이 없다. 되는 척하지 않는다.
  */
 export function DeckCodeIo({
 	deck,
@@ -23,8 +25,6 @@ export function DeckCodeIo({
 	const [input, setInput] = useState('');
 	const [output, setOutput] = useState('');
 	const [message, setMessage] = useState<string | null>(null);
-
-	const unverified = deck ? unverifiedIndexes(deck) : [];
 
 	async function importCode() {
 		const r = await deckFromCode(input.trim(), ko ? '가져온 덱' : 'Imported deck');
@@ -67,14 +67,16 @@ export function DeckCodeIo({
 			<button type="button" className="chip" onClick={() => void exportCode()} disabled={deck === null}>
 				{ko ? '덱 코드 만들기' : 'Export'}
 			</button>
-			{output !== '' && <textarea rows={2} readOnly value={output} />}
-
-			{unverified.length > 0 && (
-				<p className="notice" role="status">
-					{ko
-						? `인격 ${unverified.join(', ')} 는 캐릭터 내 16번째 이후라 내보낸 코드가 인게임에서 동작하는지 확인되지 않았습니다.`
-						: `Identities ${unverified.join(', ')} are past the 16th for their sinner; the exported code is unverified in-game.`}
-				</p>
+			{output !== '' && (
+				<>
+					<textarea rows={2} readOnly value={output} />
+					{/* 560비트는 실물 코드와 대조됐다. 컨테이너는 아직 아니다 — 7.3 */}
+					<p className="notice" role="status">
+						{ko
+							? '내보낸 코드를 게임이 받아들이는지는 아직 확인되지 않았습니다. 편성 내용은 실물 코드와 비트 단위로 대조했습니다.'
+							: 'Whether the game accepts an exported code is unverified. The squad contents match a real code bit for bit.'}
+					</p>
+				</>
 			)}
 			{message && <p className="notice" role="alert">{message}</p>}
 		</div>

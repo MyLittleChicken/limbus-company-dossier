@@ -74,4 +74,19 @@ data/*
 
 # 이미지 애셋 — data/ 와 같은 이유로 커밋하지 않는다 (docs/adr/05-web-serving.md 5절)
 # `npm run fetch -- --assets` 로 받아 배치한다
-/public/assets/
+#
+# **후행 슬래시를 붙이지 않는다.** `npm run assets` 가 만드는 것은 디렉터리가 아니라
+# data/assets 로 가는 심볼릭 링크이고(204 MB 를 두 벌 두지 않기 위해서다), `/public/assets/`
+# 는 디렉터리만 매치해 그 링크를 놓친다 — 실제로 `?? public/` 로 새어 나왔다.
+# 링크로 물러선 환경에서는 디렉터리가 되므로 슬래시 없는 형태가 양쪽을 다 덮는다.
+/public/assets
+
+# 디자인 시스템 프로토타입의 로컬 산출물
+#
+# `publish/assets` 는 /public/assets 와 같은 성격의 접합이다 — 같은 이유로 슬래시를 붙이지 않는다.
+# `tools/cache` 는 측정 중간 산출물과 위키에서 내려받은 게임 카드가 쌓이는 자리이고,
+# `review` 는 훑어보기 컨택트 시트다. 둘 다 스크립트가 다시 만들며 저장소에 둘 것이 아니다
+# (publish/tools/README.md).
+/publish/assets
+/publish/tools/cache/
+/publish/review/

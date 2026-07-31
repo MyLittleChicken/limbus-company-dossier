@@ -27,7 +27,19 @@ export interface StoredDeck {
 	id: string;
 	name: string;
 	slots: DeckSlot[];
-	/** 출전 수감자 id. 순서가 곧 편성 순서다. */
+	/**
+	 * 편성 순서. 수감자 id 를 게임이 정한 차례대로 담는다. 최대 12.
+	 *
+	 * **덱 코드가 담는 것이 이것이다**(`docs/07` 7.1). 실물 코드에서 `FIELD.order` 가
+	 * 1..12 의 순열로 나온다 — 12칸 전부 값을 갖고 겹치지 않는다.
+	 */
+	order: number[];
+	/**
+	 * 출전 수감자 id. 최대 7.
+	 *
+	 * **덱 코드에 없다.** 온필드 인원은 전투를 시작할 때 고르는 것이라 편성 코드가 담지
+	 * 않는다. 가져오기는 이 값을 비우고 사용자가 화면에서 고른다.
+	 */
 	deployed: number[];
 	updatedAt: string;
 }
@@ -63,6 +75,7 @@ export function emptyDeck(name: string, id = newId()): StoredDeck {
 			identityId: null,
 			egos: {},
 		})),
+		order: [],
 		deployed: [],
 		updatedAt: new Date().toISOString(),
 	};
@@ -113,19 +126,36 @@ export function parseDeck(raw: unknown): Result<StoredDeck> {
 		slots.push({ sinnerId, identityId, egos });
 	}
 
-	if (!Array.isArray(d['deployed']) || d['deployed'].length > DEPLOY_MAX) {
-		return err(`출전이 ${DEPLOY_MAX}명을 넘는다`);
+	/** 수감자 id 목록을 상한과 중복까지 함께 본다 — 편성 순서와 출전이 같은 규칙을 쓴다. */
+	function sinnerIds(raw: unknown, max: number, what: string): Result<number[]> {
+		// 없는 것과 넘치는 것을 갈라 적는다. 한 문구로 뭉치면 예전 모양의 저장분이
+		// "12명을 넘는다"로 보고돼 무엇을 고쳐야 하는지 알 수 없다.
+		if (!Array.isArray(raw)) return err(`${what}이 배열이 아니다`);
+		if (raw.length > max) return err(`${what}이 ${max}명을 넘는다`);
+		const seen = new Set<number>();
+		const out: number[] = [];
+		for (const v of raw as unknown[]) {
+			if (!isInt(v) || v < 1 || v > SINNER_COUNT) return err(`${what} id 가 1..12 범위를 벗어난다`);
+			if (seen.has(v)) return err(`${what} id 가 중복된다`);
+			seen.add(v);
+			out.push(v);
+		}
+		return ok(out);
 	}
-	const seenDeployed = new Set<number>();
-	const deployed: number[] = [];
-	for (const v of d['deployed'] as unknown[]) {
-		if (!isInt(v) || v < 1 || v > SINNER_COUNT) return err('출전 id 가 1..12 범위를 벗어난다');
-		if (seenDeployed.has(v)) return err('출전 id 가 중복된다');
-		seenDeployed.add(v);
-		deployed.push(v);
-	}
+
+	const order = sinnerIds(d['order'], SINNER_COUNT, '편성 순서');
+	if (!order.ok) return order;
+	const deployed = sinnerIds(d['deployed'], DEPLOY_MAX, '출전');
+	if (!deployed.ok) return deployed;
 
 	if (typeof d['updatedAt'] !== 'string') return err('updatedAt 이 없다');
 
-	return ok({ id: d['id'], name: d['name'], slots, deployed, updatedAt: d['updatedAt'] });
+	return ok({
+		id: d['id'],
+		name: d['name'],
+		slots,
+		order: order.value,
+		deployed: deployed.value,
+		updatedAt: d['updatedAt'],
+	});
 }

@@ -268,8 +268,8 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 | [`../08-gimmick-keywords.md`](../08-gimmick-keywords.md) | 기믹 축이 인격·E.G.O·기프트 조합으로 정해지는 구조 | 1 |
 | [`../09-resistance.md`](../09-resistance.md) | 저항의 두 축과 E.G.O 종속 관계 | 1 |
 | [`../backlog/01-identity-tags.md`](../backlog/01-identity-tags.md) | 인격 태그의 이름이 틀렸다(→ `trait`) | 1 |
-| [`../backlog/05-season-label.md`](../backlog/05-season-label.md) | 시즌 값이 원본 정수 그대로 화면에 나간다 | 1 |
 | [`../backlog/06-atktypes-naming.md`](../backlog/06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 다른 단위를 가리킨다 | 1 |
 | [`../backlog/08-gift-hardonly.md`](../backlog/08-gift-hardonly.md) | 하드 전용 기프트를 한 출처만 보고 적재한다 | 기프트 1 |
 | [`../backlog/09-pack-model.md`](../backlog/09-pack-model.md) | 테마 팩이 모델 없이 정수 id 로만 남아 있다 | 팩 1–4 |
 | [`../backlog/10-encounter-linkage.md`](../backlog/10-encounter-linkage.md) | 인카운터를 가리키는 두 체계가 이어지지 않는다 | 인카운터 2 |
+| [`../backlog/11-season-label.md`](../backlog/11-season-label.md) | 시즌 값이 원본 정수 그대로 화면에 나간다 | 1 |

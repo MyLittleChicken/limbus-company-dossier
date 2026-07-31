@@ -173,7 +173,7 @@ Kurokumo Clan Wakashu    4건    W Corp. L3 Cleanup Agent  3건
 | 변환 | `season ?? limbus-assets.season ?? 0`. 보강 시 `ctx.report.note`, 셋 다 없으면 그 인격을 건너뛴다 |
 | 적재 | `identity.season` |
 | 화면 | 목록 카드 태그 `S{season}` · 상세 "시즌" |
-| 함정 | ① **한 컬럼에 축이 둘이다** — 시즌 번호와 이벤트 회차. 크기 비교·범위 필터가 무의미해진다 ② 원본 정수가 화면에 그대로 나가 `S9104` 로 뜬다 → `docs/backlog/05-season-label.md` |
+| 함정 | ① **한 컬럼에 축이 둘이다** — 시즌 번호와 이벤트 회차. 크기 비교·범위 필터가 무의미해진다 ② 원본 정수가 화면에 그대로 나가 `S9104` 로 뜬다 → `docs/backlog/11-season-label.md` |
 
 **발푸르기스 17건** — 회차마다 같은 날 2종씩. 3회차만 1종이며 이는 **정상**이다
 (싱클레어 새벽 사무소 해결사 단독).
