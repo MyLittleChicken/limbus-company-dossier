@@ -1,7 +1,7 @@
 # E.G.O 기프트 계열 지도 (Gift Overview)
 
-> 상태: **회차 1–7 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
-> 인격 편(14회차)·E.G.O 편(9회차)이 닫힌 뒤 시작했다. 기프트 편은 8회차 예정이다.
+> 상태: **기프트 편 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
+> 회차 1–8 을 모두 마쳤다. 미해결 1건(색 4건 불일치)만 남았다.
 
 ## 1. 기프트 id 체계
 
@@ -31,7 +31,7 @@
 | `loc-*/EGOgift_MirrorDungeon*.json` 12파일 × 3 | 5 | 거울 던전 계열 604건. 강화 단계가 id 에 들어 있다 |
 | `loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열 | 6 | 16파일 · 189건. 회차 5와 456건을 빈틈없이 나눈다 |
 | `loc-*/EGOgift.json` · `EgoGiftCategory.json` · `MirrorDungeonEgoGiftLockedDesc.json` | 7 | **`loc-ko` 에 `EGOgift.json` 이 없다** |
-| `data/assets/gifts/` 476개 | 8 | 이미지 |
+| `data/assets/gifts/` 476개 | 8 | 이미지. **파일명이 id 가 아니다** · 결손 0 · 잉여 20 |
 
 ## 3. DB 모델 7종
 
@@ -75,6 +75,44 @@ mj 는 `cost`·`packs` 만 보강한다(`src/entities/gifts.ts:1`).
 | 한국어 이름·설명 | `gifts.nameKo`·`descKo` | — | **mj + loc** | 441 전부 유일 | 1 |
 | 시작 기프트 | `start_gifts.json`(10축 × 3) | — | **mj** | 전부 tier 2 · keyword 30/30 일치. **미적재** | 4 |
 | 추천 묶음 | — | `md__universal_gifts.json` | **도구 해설** | `individual` 6그룹이 비어 있다 | 4 |
+| 기프트 이미지 | — | `assets/gifts/` 476개 | **assets** | 파일명이 `srcPath`. **id 로 못 찾는다** | 8 |
+
+### 4.1 결산 — loc 이 가장 많이 갖는 첫 사례다
+
+| 출처 | 단독 보유 개념 | 내용 |
+| --- | ---: | --- |
+| `limbus-data-mj` | **5** | `cost` · `packs` · `requires` 구조 · 색 원본 · 시작 기프트 |
+| `limbus-assets` | **6** | `triggers`/`effects` · 저주·축복 쌍 · `srcPath` · 이미지 · 대체 슬롯 레시피 · 추천 묶음 |
+| `loc-ko/en/ja` | **6** | **키워드 공식 사전** · 획득 조건 문구 · `simpleDesc` · 로케일 전용 기프트 134건 · 이중 id 30쌍 · 한국어 카테고리명 |
+| `shared-library` | 0 | 구버전 시간축만 |
+
+```
+인격 편    mj  9 · assets 15 · loc 6
+E.G.O 편   mj  1 · assets  6 · loc 4
+기프트 편   mj  5 · assets  6 · loc 6      ← 셋이 거의 균등
+```
+
+**세 출처가 처음으로 비슷해졌다.** 어느 하나를 골라도 3분의 1을 잃는다.
+
+### 4.2 기프트 편에서 확인된 원본 결함 5건
+
+| 사례 | 성격 | 회차 |
+| --- | --- | --- |
+| `hardOnly` 65건 불일치 | **mj·assets 양쪽 다 결손.** 게임 확인으로 판정 | 1 |
+| `9726` 낙수의 잔 `desc` 가 `"excep"` 로 잘림 | 단어 절단 | 2 |
+| `keyword` 에 `null` 과 문자열 `"None"` 혼재 | 64 + 45 | 2 |
+| `attributeType` ↔ `affinity` 4건 어긋남 | 색·죄악 대응 실패 | 3 |
+| `loc-ko` 에 `EGOgift.json` 없음 — **6건 한국어 결손** | 일본어는 갖는다 | 7 |
+
+### 4.3 회차를 가로지른 기프트
+
+| 대상 | 나온 곳 |
+| --- | --- |
+| `9282` 날개 모양 양초 | 조건부 기믹 원문 · 소속 3인 조건 · `hardonly` 불일치 |
+| `9212` 모든 악의 끝 | 「구매불가」 = `packs []` · 합성 · `hardOnly` mj 단독 · `LockedDesc` |
+| `9801`·`9804` ↔ `2066`·`2070` | `abilityIDs` 가 다른 번호 공간을 가리킨 2건 |
+| `9083` 달의 기억 | 유일한 **대체 슬롯 레시피**. mj 가 표현 못 한다 |
+| `9227`–`9232` 저주·축복 3쌍 | `cursedPair`/`blessedPair` · 「저주 해제」 획득 경로 |
 
 ## 5. 다른 편에서 미리 본 것
 

@@ -128,7 +128,7 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 단독 보유 개념은 **mj 1 · assets 6 · loc 4** 이며, 그중 `abName`(유래 환상체)은
 **로케일 파일에만 있다.**
 
-### E.G.O 기프트 — 8회차 · 진행 중
+### E.G.O 기프트 — 8회차 · **완료 2026-07-31**
 
 계열 지도는 [`gift/00-overview.md`](gift/00-overview.md).
 
@@ -141,7 +141,13 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | 5 | [`loc-*/EGOgift_MirrorDungeon*.json` 12파일 × 3로케일](gift/05-loc-egogift-mirror-dungeon.md) | **완료** 2026-07-31 · 604건 |
 | 6 | [`loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열](gift/06-loc-egogift-story-event.md) | **완료** 2026-07-31 · 16파일 · 189건 |
 | 7 | [`loc-*/EGOgift.json` + `EgoGiftCategory` + `LockedDesc`](gift/07-loc-egogift-common.md) | **완료** 2026-07-31 · 3파일 |
-| 8 | `data/assets/gifts/` 476개 | 미착수 |
+| 8 | [`data/assets/gifts/` 476개](gift/08-assets-gift-images.md) | **완료** 2026-07-31 · 476개 |
+
+**기프트 편 결산** — 8회차 전부 미해결 없이 닫혔다. 정본 판정과 원본 결함 목록은
+`gift/00-overview.md` 4.1–4.3 에 있다.
+
+**세 출처가 처음으로 균등해졌다** — mj 5 · assets 6 · loc 6. 인격 편(9·15·6)과
+E.G.O 편(1·6·4)은 한쪽으로 쏠렸으나 기프트는 어느 하나를 골라도 3분의 1을 잃는다.
 
 ### 그 밖의 엔티티
 
