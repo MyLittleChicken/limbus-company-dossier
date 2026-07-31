@@ -185,13 +185,22 @@ Unity 태그 화이트리스트만 지우므로 **우리 코드는 안전하다.
 
 ---
 
-## 이 파일은 전혀 읽히지 않는다
+## `attributeType` 만 읽힌다
 
-`src/entities/gifts.ts` 에 `gifts_detail` 참조가 **0건**이다.
+`src/entities/gifts.ts:49` 가 **이 파일에서 `attributeType` 하나를 가져온다.**
+
+```ts
+// **원본은 죄악이 아니라 색을 기록한다.** 정본(`limbus-assets`)의 `affinity` 는 그 색을
+// 죄악으로 되바꾼 값이라 원본 어휘가 아니다. 색을 그대로 담은 곳은 보강 출처의
+// `gifts_detail.json` 뿐이므로 거기서 가져온다.
+```
+
+`Gift.attributeType` 이 여기서 온다. **회차 3에서 assets `affinity` 와 4건 어긋남을
+확인했다**(`9038`·`9111`·`9404`·`9707`) — 우리는 이 파일 쪽을 쓴다.
 
 | 개념 | 우리가 쓰는 출처 |
 | --- | --- |
-| `attributeType` | assets `affinity` |
+| **`attributeType`** | **이 파일** |
 | `keyword` | assets `keyword`(기믹명) |
 | `upgrades` 텍스트 | `loc-*/EGOgift*.json` + `ENHANCE_ID_STRIDE` |
 
