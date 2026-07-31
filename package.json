@@ -32,6 +32,7 @@
     "v2:generate": "prisma generate --schema prisma/v2/schema.prisma",
     "v2:load": "tsx --env-file-if-exists=.env src/v2/load-raw.ts",
     "v2:verify": "tsx --env-file-if-exists=.env src/v2/verify-raw.ts",
+    "v2:canonical": "tsx --env-file-if-exists=.env src/v2/load-canonical.ts",
     "engine:proof": "tsx --env-file-if-exists=.env src/engine-proof.ts"
   },
   "devDependencies": {

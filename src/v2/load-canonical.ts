@@ -1,0 +1,108 @@
+/**
+ * canonical 층 적재기.
+ *
+ * **파일을 읽지 않는다.** raw.raw_object 를 질의해 만든다(스펙 2.1).
+ * 재적재는 canonical 만 비운다 — raw 도 app 도 건드리지 않는다.
+ *
+ * 실행: npm run v2:canonical
+ */
+import { PrismaClient } from './generated/client.js';
+import { latestSnapshotId, readSource } from './source.js';
+import { Meta } from './canonical/meta.js';
+import { buildPacks, type FloorTable } from './canonical/packs.js';
+
+const CHUNK = 1_000;
+
+async function chunked<T>(
+	rows: T[],
+	insert: (part: T[]) => Promise<{ count: number }>,
+): Promise<number> {
+	let n = 0;
+	for (let i = 0; i < rows.length; i += CHUNK) {
+		const r = await insert(rows.slice(i, i + CHUNK));
+		n += r.count;
+	}
+	return n;
+}
+
+async function main(): Promise<void> {
+	const prisma = new PrismaClient();
+	try {
+		const snapshotId = await latestSnapshotId(prisma);
+		console.log(`스냅샷 ${snapshotId} 를 읽는다`);
+
+		const meta = new Meta();
+
+		// md_floor_packs.json 은 {hard: {...}, normal: {...}} 이고 값이 전부 객체라
+		// 스캔 규칙상 map 으로 분류된다 — 즉 id 가 'hard' · 'normal' 인 두 행이다.
+		const floorRaw = await readSource(
+			prisma,
+			snapshotId,
+			'mirror-dungeon/limbus-assets/md_floor_packs.json',
+		);
+		const floorTable: FloorTable = {};
+		for (const [difficulty, ranges] of floorRaw) {
+			floorTable[difficulty] = ranges as Record<string, string[]>;
+		}
+
+		const tables = buildPacks(
+			{
+				mjPacks: await readSource(prisma, snapshotId, 'packs/limbus-data-mj/packs.json'),
+				mjDetail: await readSource(prisma, snapshotId, 'packs/limbus-data-mj/packs_detail.json'),
+				assets: await readSource(prisma, snapshotId, 'packs/limbus-assets/md_theme_packs.json'),
+				floorTable,
+				locKo: await readSource(prisma, snapshotId, 'packs/loc-ko/MirrorDungeonTheme-1.json'),
+				locEn: await readSource(prisma, snapshotId, 'packs/loc-en/MirrorDungeonTheme-1.json'),
+				locJa: await readSource(prisma, snapshotId, 'packs/loc-ja/MirrorDungeonTheme-1.json'),
+			},
+			meta,
+		);
+
+		// canonical 만 비운다. raw 도 app 도 건드리지 않는다.
+		await prisma.$executeRaw`
+			TRUNCATE canonical.pack, canonical.field_gap, canonical.field_source,
+			         canonical.tool_annotation CASCADE
+		`;
+
+		const counts: Array<[string, number]> = [];
+		counts.push(['pack', (await prisma.pack.createMany({ data: tables.pack as never })).count]);
+		counts.push([
+			'pack_text',
+			await chunked(tables.packText, (d) => prisma.packText.createMany({ data: d as never })),
+		]);
+		counts.push([
+			'pack_tag',
+			await chunked(tables.packTag, (d) => prisma.packTag.createMany({ data: d })),
+		]);
+		counts.push([
+			'pack_category_path',
+			await chunked(tables.packCategoryPath, (d) =>
+				prisma.packCategoryPath.createMany({ data: d }),
+			),
+		]);
+		counts.push([
+			'floor_pack',
+			await chunked(tables.floorPack, (d) => prisma.floorPack.createMany({ data: d as never })),
+		]);
+		counts.push([
+			'field_gap',
+			await chunked(meta.gaps, (d) => prisma.fieldGap.createMany({ data: d })),
+		]);
+		counts.push([
+			'field_source',
+			await chunked(meta.sources, (d) => prisma.fieldSource.createMany({ data: d })),
+		]);
+
+		console.log('');
+		for (const [t, n] of counts) console.log(`  ${t.padEnd(22)} ${String(n).padStart(6)}`);
+
+		const s = meta.summary();
+		console.log('');
+		console.log('판정 규칙별:', JSON.stringify(s.byRule));
+		console.log('결손 필드별:', JSON.stringify(s.gapsByField));
+	} finally {
+		await prisma.$disconnect();
+	}
+}
+
+await main();
