@@ -10,6 +10,7 @@
  *   단일 객체            827       *-details/ · encounters/ · 설정형
  */
 import { readFileSync } from 'node:fs';
+import { listEntityFiles, parseEntityPath } from './paths.js';
 
 export type Shape = 'dataList' | 'map' | 'list' | 'single';
 
@@ -81,4 +82,49 @@ export function extractObjects(parsed: unknown, stem: string): ScannedFile {
 export function readJsonFile(absPath: string): unknown {
 	const text = readFileSync(absPath, 'utf8').replace(/^﻿/, '');
 	return JSON.parse(text);
+}
+
+/** 적재 한 행. `snapshotId` 는 적재기가 붙인다. */
+export interface RawRow {
+	source: string;
+	srcPath: string;
+	id: string;
+	entity: string;
+	payload: unknown;
+}
+
+export interface ScanResult {
+	rows: RawRow[];
+	shapeCounts: Record<Shape, number>;
+	fileCount: number;
+}
+
+/**
+ * `data/entities` 전량을 훑어 개체 행으로 푼다.
+ *
+ * 파일 하나라도 파싱에 실패하면 던진다. 원본 결함은 값의 문제이지 문법의 문제가
+ * 아니므로(마스터북 §6 원본 결함 31건은 전부 파싱을 통과한다) 파싱 실패는
+ * 수집이 깨졌다는 뜻이다.
+ */
+export function scanAll(): ScanResult {
+	const files = listEntityFiles();
+	const rows: RawRow[] = [];
+	const shapeCounts: Record<Shape, number> = { dataList: 0, map: 0, list: 0, single: 0 };
+
+	for (const abs of files) {
+		const { entity, source, srcPath, stem } = parseEntityPath(abs);
+		let parsed: unknown;
+		try {
+			parsed = readJsonFile(abs);
+		} catch (cause) {
+			throw new Error(`JSON 파싱 실패: ${srcPath}`, { cause });
+		}
+		const scanned = extractObjects(parsed, stem);
+		shapeCounts[scanned.shape] += 1;
+		for (const obj of scanned.objects) {
+			rows.push({ source, srcPath, id: obj.id, entity, payload: obj.payload });
+		}
+	}
+
+	return { rows, shapeCounts, fileCount: files.length };
 }

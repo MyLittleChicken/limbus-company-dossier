@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractObjects } from './scan.js';
+import { extractObjects, scanAll } from './scan.js';
 
 test('dataList 모양 — 원소의 id 를 쓴다', () => {
 	const r = extractObjects({ dataList: [{ id: 'A', v: 1 }, { id: 'B', v: 2 }] }, 'Whatever');
@@ -74,4 +74,76 @@ test('원소가 문자열이어도 담는다 — identity_tag_list', () => {
 		{ id: '#0', payload: 'Slash' },
 		{ id: '#1', payload: 'Pierce' },
 	]);
+});
+
+test('scanAll 은 실측 기준값과 일치한다', () => {
+	const r = scanAll();
+	assert.equal(r.fileCount, 1664, '파일 수');
+	assert.equal(r.rows.length, 43270, '개체 행 수');
+	assert.deepEqual(r.shapeCounts, { dataList: 796, single: 827, map: 34, list: 7 });
+});
+
+test('scanAll 의 (source, srcPath, id) 는 유일하다', () => {
+	const r = scanAll();
+	const seen = new Set<string>();
+	const dups: string[] = [];
+	for (const row of r.rows) {
+		const k = `${row.source} ${row.srcPath} ${row.id}`;
+		if (seen.has(k)) dups.push(k);
+		seen.add(k);
+	}
+	assert.deepEqual(dups, [], '기본키 중복');
+});
+
+test('scanAll 의 출처별 개체 수가 실측과 일치한다', () => {
+	const r = scanAll();
+	const per: Record<string, number> = {};
+	for (const row of r.rows) per[row.source] = (per[row.source] ?? 0) + 1;
+	assert.deepEqual(per, {
+		'loc-ja': 11218,
+		'loc-en': 11013,
+		'loc-ko': 10919,
+		'limbus-data-mj': 4032,
+		'limbus-assets': 3830,
+		'shared-library': 2258,
+	});
+});
+
+test('#순번으로 대체된 개체는 190건이고 9파일에서만 나온다', () => {
+	const r = scanAll();
+	const fallback = r.rows.filter((row) => row.id.startsWith('#'));
+	assert.equal(fallback.length, 190);
+	assert.equal(new Set(fallback.map((row) => row.srcPath)).size, 9);
+});
+
+test('payload 는 객체 43,096 · 문자열 174 이고 null 이 없다', () => {
+	const r = scanAll();
+	let obj = 0;
+	let str = 0;
+	let other = 0;
+	for (const row of r.rows) {
+		if (row.payload === null) other += 1;
+		else if (typeof row.payload === 'string') str += 1;
+		else if (typeof row.payload === 'object') obj += 1;
+		else other += 1;
+	}
+	assert.equal(obj, 43096);
+	assert.equal(str, 174);
+	assert.equal(other, 0, 'null 이나 숫자 payload 가 있으면 적재 타입을 다시 봐야 한다');
+});
+
+test('알려진 개체가 제자리에 있다 — 기프트 9427', () => {
+	const r = scanAll();
+	const mj = r.rows.find(
+		(row) => row.srcPath === 'gifts/limbus-data-mj/gifts.json' && row.id === '9427',
+	);
+	assert.ok(mj, 'mj 9427 이 있어야 한다');
+	assert.equal(mj.entity, 'gifts');
+	assert.equal((mj.payload as Record<string, unknown>)['hardOnly'], true);
+
+	const assets = r.rows.find(
+		(row) => row.srcPath === 'gifts/limbus-assets/gifts.json' && row.id === '9427',
+	);
+	assert.ok(assets, 'assets 9427 이 있어야 한다');
+	assert.equal((assets.payload as Record<string, unknown>)['hardonly'], undefined);
 });
