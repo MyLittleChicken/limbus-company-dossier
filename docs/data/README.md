@@ -128,6 +128,21 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 단독 보유 개념은 **mj 1 · assets 6 · loc 4** 이며, 그중 `abName`(유래 환상체)은
 **로케일 파일에만 있다.**
 
+### E.G.O 기프트 — 8회차 · 진행 중
+
+계열 지도는 [`gift/00-overview.md`](gift/00-overview.md).
+
+| # | 대상 | 상태 |
+| --- | --- | --- |
+| 1 | [`limbus-data-mj/gifts.json`](gift/01-limbus-data-mj-gifts.md) | **완료** 2026-07-31 · 키 15종 |
+| 2 | `limbus-data-mj/gifts_detail.json` | 미착수 |
+| 3 | `limbus-assets/gifts.json` + `shared-library` 대조 | 미착수 |
+| 4 | `mj/start_gifts.json` + `assets/md__universal_gifts.json` | 미착수 |
+| 5 | `loc-*/EGOgift_MirrorDungeon*.json` 9파일 × 3로케일 | 미착수 |
+| 6 | `loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열 | 미착수 |
+| 7 | `loc-*/EGOgift.json` + `EgoGiftCategory` + `LockedDesc` | 미착수 |
+| 8 | `data/assets/gifts/` 476개 | 미착수 |
+
 ### 그 밖의 엔티티
 
 파일 규모로 잡은 예상 회차다. 인격 편에서 공통 어휘(죄악 7 · 공격 타입 3 · 기믹 축 10 ·
@@ -136,7 +151,6 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 
 | 편 | 파일 | 예상 회차 | 비고 |
 | --- | ---: | ---: | --- |
-| 기프트 | 98 | ~7 | 회차 1 에서 `9282` 날개 모양 양초 확인 |
 | 팩 | 7 | ~3 | 가장 작다 |
 | 거울 던전 | 163 | ~6 | |
 | 상태(메카닉) | 260 | ~6 | 08 문서의 `status_gimmick` 근거 |
@@ -172,3 +186,4 @@ identity/06-limbus-assets-identities.md           ← limbus-assets/identities.j
 | [`../backlog/01-identity-tags.md`](../backlog/01-identity-tags.md) | 인격 태그의 이름이 틀렸다(→ `trait`) | 1 |
 | [`../backlog/05-season-label.md`](../backlog/05-season-label.md) | 시즌 값이 원본 정수 그대로 화면에 나간다 | 1 |
 | [`../backlog/06-atktypes-naming.md`](../backlog/06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 다른 단위를 가리킨다 | 1 |
+| [`../backlog/08-gift-hardonly.md`](../backlog/08-gift-hardonly.md) | 하드 전용 기프트를 한 출처만 보고 적재한다 | 기프트 1 |

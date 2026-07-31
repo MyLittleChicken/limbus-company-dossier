@@ -1,0 +1,72 @@
+# E.G.O 기프트 계열 지도 (Gift Overview)
+
+> 상태: **회차 1 완료** / 최종 수정 2026-07-31 · 스냅샷 2026-07-25
+> 인격 편(14회차)·E.G.O 편(9회차)이 닫힌 뒤 시작했다. 기프트 편은 8회차 예정이다.
+
+## 1. 기프트 id 체계
+
+```
+9 | 대역(1자리) | 순번(2자리)
+
+9001 = 90 대역 1번
+9843 = 98 대역 43번
+```
+
+인격은 `1xxxx`, E.G.O 는 `2xxxx` 5자리인데 **기프트는 4자리**다. 대역이 6개이며
+**`93` · `95` · `96` 은 비어 있다.**
+
+```
+90xx  99      91xx 100      92xx  81
+94xx  28      97xx  99      98xx  34        합 441 (mj) / 456 (assets)
+```
+
+## 2. 원본 파일
+
+| 파일 | 회차 | 성격 |
+| --- | --- | --- |
+| `limbus-data-mj/gifts.json` | 1 | 441건 · 키 15종. **`requires` 구조가 여기만 있다** |
+| `limbus-data-mj/gifts_detail.json` | 2 | 441건 · 색 표기와 강화 단계 |
+| `limbus-assets/gifts.json` | 3 | **정본** · 456건 완전집합 (+`shared-library` 대조) |
+| `limbus-data-mj/start_gifts.json` · `limbus-assets/md__universal_gifts.json` | 4 | 부속 소파일 |
+| `loc-*/EGOgift_MirrorDungeon*.json` 9파일 × 3 | 5 | 거울 던전 계열 |
+| `loc-*/EGOgift_StoryDungeon*` + 이벤트·발푸르기스 계열 | 6 | |
+| `loc-*/EGOgift.json` · `EgoGiftCategory.json` · `MirrorDungeonEgoGiftLockedDesc.json` | 7 | **`loc-ko` 에 `EGOgift.json` 이 없다** |
+| `data/assets/gifts/` 476개 | 8 | 이미지 |
+
+## 3. DB 모델 7종
+
+```
+Gift ─┬─ GiftText
+      ├─ GiftPack           (packs)
+      ├─ GiftExclusivePack  (exclusiveTo)
+      ├─ GiftToken
+      ├─ Keyword            (기믹 7 + 공격 타입 3)
+      └─ FusionRecipe ─ FusionSlotOption
+```
+
+`prisma/schema.prisma:472` 부근. **정본은 `limbus-assets`** 이며(456종 완전집합),
+mj 는 `cost`·`packs` 만 보강한다(`src/entities/gifts.ts:1`).
+
+## 4. 개념 장부
+
+| 개념 | `limbus-data-mj` | `limbus-assets` | 정본 | 근거 | 회차 |
+| --- | --- | --- | --- | --- | --- |
+| 등급 | `gifts.tier`(문자열) | `gifts.tier` | 동일 | 441/441 일치. 화면은 로마 숫자 | 1 |
+| 기믹·공격 타입 키워드 | `gifts.keyword`(null 109) | `gifts.keyword`(`Keywordless`) | 동일 | 109건은 같은 사실의 다른 표현 | 1 |
+| 거울 던전 비용 | `gifts.cost` | — | **mj** | 게임 화면 코스트와 일치. 15종은 빈다 | 1 |
+| 팩 소속 | `gifts.packs`(117종) | — | **mj** | **정본에 없는 단일 출처** | 1 |
+| 테마 한정 | `gifts.uniquePacks`(171) | `gifts.exclusiveTo`(230) | **assets** | mj ⊂ assets · 겹치는 171건 값까지 동일 | 1 |
+| **하드 난이도 전용** | `gifts.hardOnly`(53) | `gifts.hardonly`(116) | **합집합 122** | **둘 다 결손이 있다** | 1 |
+| 발동 조건(구조) | `gifts.requires`(126) | — | **mj** | 5종 구조. **미적재** | 1 |
+| 발동 조건(문자열) | — | `gifts.triggers`(451) | **assets** | 엔진이 정규식으로 파싱 | 1 |
+| 융합 그래프 | `gifts.combinesFrom`·`fusesInto` | `gifts.recipes` | 미정 | 회차 3에서 대조 | 1 |
+| 죄악 / 색 | `gifts.sin`(죄악 7종) | — | 미정 | `gifts_detail.attributeType` 이 색. 회차 2에서 판정 | 1 |
+| 한국어 이름·설명 | `gifts.nameKo`·`descKo` | — | **mj + loc** | 441 전부 유일 | 1 |
+
+## 5. 다른 편에서 미리 본 것
+
+| 관측 | 나온 곳 | 기프트 편에서 |
+| --- | --- | --- |
+| `9282` 날개 모양 양초 — 조건부 기믹 | 인격 편 회차 1 · `08-gimmick-keywords.md` | **회차 1에서 원문 확보** |
+| `Tremor Skill Used` 계열 25건에서 엔진 과대 계상 | `08-gimmick-keywords.md` 4.2 | 회차 3 |
+| 기프트 색 표기(`attributeType`) | `backlog/03-gift-affinity.md` | 회차 2 |
