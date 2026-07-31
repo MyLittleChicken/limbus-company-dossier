@@ -90,3 +90,6 @@ data/*
 /publish/assets
 /publish/tools/cache/
 /publish/review/
+
+# Prisma v2 생성 클라이언트
+src/v2/generated/

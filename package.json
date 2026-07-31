@@ -27,6 +27,10 @@
     "db:down": "docker compose down",
     "db:ddl": "docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1",
     "verify": "tsx --env-file-if-exists=.env src/verify.ts",
+    "v2:schema:validate": "prisma validate --schema prisma/v2/schema.prisma",
+    "v2:schema:ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/v2/schema.prisma --script > prisma/v2/schema.sql",
+    "v2:generate": "prisma generate --schema prisma/v2/schema.prisma",
+    "v2:load": "tsx --env-file-if-exists=.env src/v2/load-raw.ts",
     "engine:proof": "tsx --env-file-if-exists=.env src/engine-proof.ts"
   },
   "devDependencies": {

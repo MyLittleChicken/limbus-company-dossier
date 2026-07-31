@@ -1,0 +1,86 @@
+// 신규 3스키마 데이터베이스 — raw 층
+//
+// 설계 근거  docs/superpowers/specs/2026-07-31-database-redesign-design.md
+// 구현 계획  docs/superpowers/plans/2026-07-31-raw-layer.md
+//
+// 현행 prisma/schema.prisma 와 **병존한다.** 같은 데이터베이스 limbus 안에서
+// 현행은 public 스키마를, 이쪽은 raw / canonical / app 을 쓴다.
+//
+// 규약
+//   1. 테이블·컬럼을 전부 snake_case 로 매핑한다. 이 층의 존재 이유가 손으로 쓰는
+//      SQL 탐색이므로 큰따옴표를 요구하면 안 된다.
+//   2. raw 는 판정하지 않는다. 원본 payload 를 손대지 않고 담는다.
+//   3. 스냅샷은 덮어쓰지 않고 쌓는다.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/v2/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["raw", "canonical", "app"]
+}
+
+/// 한 번의 수집. 버전(우리 일련)과 게임 시점을 함께 담는다.
+model Snapshot {
+  /// manifest 의 generatedAt. "2026-07-25"
+  id         String   @id
+  /// 우리 스냅샷 일련. 단조 증가
+  version    Int      @unique
+  /// 수집 시각
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
+  /// 게임 시점. "차원찢개 이상 인격 출시 시점"
+  gameAnchor String?  @map("game_anchor")
+  note       String?
+
+  sources SnapshotSource[]
+  objects RawObject[]
+
+  @@map("snapshot")
+  @@schema("raw")
+}
+
+/// 출처마다 커밋이 다르다. status 가 removed 인 것도 담는다 — 재현에 필요하다.
+model SnapshotSource {
+  snapshotId String @map("snapshot_id")
+  sourceId   String @map("source_id")
+  repo       String
+  branch     String
+  commit     String
+  fileCount  Int    @map("file_count")
+  status     String
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, sourceId])
+  @@map("snapshot_source")
+  @@schema("raw")
+}
+
+/// 원본 개체 하나. 판정하지 않는다.
+///
+/// **srcPath 가 기본키에 들어간다.** (source, entity, id) 만으로는 유일하지 않다 —
+/// 실측 충돌 8,530건이다. 같은 출처·같은 계열 안에서 파일이 다르면 다른 개체다
+/// (DungeonStartBuffs.json · _MD6.json · _MD7.json 처럼 시즌별 판본).
+model RawObject {
+  snapshotId String @map("snapshot_id")
+  source     String
+  /// data/entities 기준 상대경로. "gifts/limbus-assets/gifts.json"
+  srcPath    String @map("src_path")
+  /// payload 의 id → 파일명 stem → 배열 순번(#0) 순으로 확보
+  id         String
+  /// 계열. 조회 라벨이며 키가 아니다
+  entity     String
+  /// 손대지 않은 원본 객체
+  payload    Json
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, source, srcPath, id])
+  @@index([entity, id])
+  @@index([snapshotId, source])
+  @@map("raw_object")
+  @@schema("raw")
+}
