@@ -168,7 +168,8 @@ E.G.O 편(1·6·4)은 한쪽으로 쏠렸으나 기프트는 어느 하나를 �
 (mj 6 · assets 2 · loc 1). 기프트 목록도 맵 생성 규칙도 `limbus-data-mj` 에만 있어
 ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 → `backlog/09`.
 
-**팩은 DB 모델이 없다.** `GiftPack.packId` 가 정수로만 남아 이름조차 조회되지 않는다.
+**팩 모델은 있다**(`schema.prisma:615`). 다만 `tags` · `overlayImage` · `unlockCode` ·
+`bokgak` · `textColor` · `mapGen` 6개념이 안 담긴다.
 
 ### 거울 던전 — 7회차 · **완료 2026-07-31**
 
@@ -270,6 +271,6 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 | [`../backlog/01-identity-tags.md`](../backlog/01-identity-tags.md) | 인격 태그의 이름이 틀렸다(→ `trait`) | 1 |
 | [`../backlog/06-atktypes-naming.md`](../backlog/06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 다른 단위를 가리킨다 | 1 |
 | [`../backlog/08-gift-hardonly.md`](../backlog/08-gift-hardonly.md) | 하드 전용 기프트를 한 출처만 보고 적재한다 | 기프트 1 |
-| [`../backlog/09-pack-model.md`](../backlog/09-pack-model.md) | 테마 팩이 모델 없이 정수 id 로만 남아 있다 | 팩 1–4 |
+| [`../backlog/09-pack-model.md`](../backlog/09-pack-model.md) | 테마 팩 모델에 보강 필드가 없다 | 팩 1–4 |
 | [`../backlog/10-encounter-linkage.md`](../backlog/10-encounter-linkage.md) | 인카운터를 가리키는 두 체계가 이어지지 않는다 | 인카운터 2 |
 | [`../backlog/11-season-label.md`](../backlog/11-season-label.md) | 시즌 값이 원본 정수 그대로 화면에 나간다 | 1 |
