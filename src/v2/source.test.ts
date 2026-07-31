@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { indexRows, str, num, bool, arr, strArr } from './source.js';
+import { indexRows, mergeIndexes, str, num, bool, arr, strArr } from './source.js';
 
 test('indexRows 는 id 를 열쇠로 하는 맵을 만든다', () => {
 	const m = indexRows([
@@ -50,4 +50,19 @@ test('arr 는 배열이 아니면 빈 배열이다', () => {
 test('strArr 는 원소를 문자열로 정규화한다 — 팩 id 가 숫자와 문자열로 갈린다', () => {
 	assert.deepEqual(strArr({ a: [1014, '1015'] }, 'a'), ['1014', '1015']);
 	assert.deepEqual(strArr({ a: [1, null, 2] }, 'a'), ['1', '2'], 'null 은 버린다');
+});
+
+test('mergeIndexes 는 여러 맵을 하나로 합친다', () => {
+	const m = mergeIndexes([new Map([['a', { v: 1 }]]), new Map([['b', { v: 2 }]])]);
+	assert.equal(m.size, 2);
+	assert.deepEqual(m.get('b'), { v: 2 });
+});
+
+test('mergeIndexes 는 뒤에 온 것이 이긴다', () => {
+	const m = mergeIndexes([new Map([['a', { v: 1 }]]), new Map([['a', { v: 2 }]])]);
+	assert.deepEqual(m.get('a'), { v: 2 });
+});
+
+test('mergeIndexes 는 빈 입력에 빈 맵을 낸다', () => {
+	assert.equal(mergeIndexes([]).size, 0);
 });

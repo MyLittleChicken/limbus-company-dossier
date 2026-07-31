@@ -89,3 +89,37 @@ export function strArr(o: Record<string, unknown>, k: string): string[] {
 		.filter((v) => v !== null && v !== undefined)
 		.map((v) => String(v));
 }
+
+/** 여러 맵을 하나로 합친다. 뒤에 온 것이 이긴다. */
+export function mergeIndexes(parts: RawIndex[]): RawIndex {
+	const m: RawIndex = new Map();
+	for (const part of parts) for (const [k, v] of part) m.set(k, v);
+	return m;
+}
+
+/**
+ * 한 계열·한 출처의 **모든 파일**을 합쳐 읽는다.
+ *
+ * 기프트 로케일이 30파일로 흩어져 있어 필요하다. `exclude` 는 파일명(basename)
+ * 목록이며 성격이 다른 파일을 뺀다 — EgoGiftCategory 는 키워드 사전이고
+ * MirrorDungeonEgoGiftLockedDesc 는 획득 문구라 기프트 본체와 섞으면 안 된다.
+ */
+export async function readSourceGroup(
+	prisma: PrismaClient,
+	snapshotId: string,
+	entity: string,
+	source: string,
+	exclude: string[] = [],
+): Promise<RawIndex> {
+	const rows = await prisma.rawObject.findMany({
+		where: { snapshotId, entity, source },
+		select: { id: true, payload: true, srcPath: true },
+	});
+	if (rows.length === 0) throw new Error(`raw 에 ${entity}/${source} 가 없다`);
+	const skip = new Set(exclude);
+	return indexRows(
+		rows
+			.filter((r) => !skip.has(r.srcPath.split('/').pop() ?? ''))
+			.map((r) => ({ id: r.id, payload: (r.payload ?? {}) as Record<string, unknown> })),
+	);
+}
