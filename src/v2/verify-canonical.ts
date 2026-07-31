@@ -72,7 +72,9 @@ async function main(): Promise<void> {
 		eq('결손 unlockCode', await prisma.fieldGap.count({ where: { field: 'unlockCode' } }), 2);
 		// status.name.ja 258 · status.name.ko 245 · pack.textColor 61 · skill.levels 9
 		// · passive.name 6 · gift.name.ko 6 · association.name.ja 2 · pack.unlockCode 2
-		eq('결손 합계', await prisma.fieldGap.count(), 589);
+// 상태 ja 258 · 상태 ko 245 · 선택지 text 112 · pack.textColor 61 · skill.levels 9
+		// · passive 6 · gift 6 · association.ja 2 · pack.unlockCode 2 · battlePool 1
+		eq('결손 합계', await prisma.fieldGap.count(), 702);
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
 		const p1309 = await prisma.packText.findUnique({
@@ -497,6 +499,55 @@ async function main(): Promise<void> {
 			'상태 연결 결손 (0이어야 한다)',
 			await prisma.fieldGap.count({ where: { field: 'statuses' } }),
 			0,
+		);
+
+		// ══ 거울 던전·인카운터 계열 ═════════════════════════════════
+		eq('choice_event', await prisma.choiceEvent.count(), 159);
+		eq('choice_option', await prisma.choiceOption.count(), 372);
+		eq('choice_event_gift', await prisma.choiceEventGift.count(), 219);
+		eq('achievement (마스터북 183)', await prisma.achievement.count(), 183);
+		eq('reward', await prisma.reward.count(), 200);
+		eq('adversity', await prisma.adversity.count(), 30);
+		eq('grace', await prisma.grace.count(), 10);
+		eq('start_gift', await prisma.startGift.count(), 30);
+
+		eq('encounter', await prisma.encounter.count(), 251);
+		eq('encounter_target', await prisma.encounterTarget.count(), 397);
+		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 353);
+		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 3_530);
+		eq('enemy', await prisma.enemy.count(), 1_342);
+		eq('enemy_text', await prisma.enemyText.count(), 4_026);
+
+		// 팩 계열에서 미룬 연결이 이어졌다
+		eq('pack_boss_encounter (팩 계열 이월)', await prisma.packBossEncounter.count(), 75);
+
+		// **적 저항은 10축이다** — 인격 3축 · E.G.O 7축과 다르다
+		const badAxes = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT encounter_id, target_index, part_id
+			  FROM canonical.encounter_part_resist
+			  GROUP BY 1,2,3 HAVING count(*) <> 10
+			) x
+		`;
+		checks.push({
+			name: '적 저항 10축이 아닌 부위 (0이어야 한다)',
+			ok: Number(badAxes[0]?.n ?? 1n) === 0,
+			detail: `${Number(badAxes[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 업적은 두 시즌 판본으로 갈린다
+		const bySeason = await prisma.achievement.groupBy({ by: ['season'], _count: { _all: true } });
+		checks.push({
+			name: '업적 시즌 판본 2종',
+			ok: bySeason.length === 2,
+			detail: bySeason.map((r) => `${r.season}:${r._count._all}`).join(' '),
+		});
+
+		// **전투 풀 2,525종은 여전히 못 잇는다** — backlog/10 이 살아 있다
+		eq(
+			'전투 풀 미해결이 기록됐다',
+			await prisma.fieldGap.count({ where: { field: 'battlePool' } }),
+			1,
 		);
 
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다

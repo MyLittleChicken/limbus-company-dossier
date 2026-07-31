@@ -161,6 +161,14 @@ CREATE TABLE "canonical"."pack_category_path" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."pack_boss_encounter" (
+    "pack_id" TEXT NOT NULL,
+    "encounter_id" TEXT NOT NULL,
+
+    CONSTRAINT "pack_boss_encounter_pkey" PRIMARY KEY ("pack_id","encounter_id")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."floor_pack" (
     "difficulty" "canonical"."Difficulty" NOT NULL,
     "floor_range" TEXT NOT NULL,
@@ -714,6 +722,189 @@ CREATE TABLE "canonical"."identity_status" (
     CONSTRAINT "identity_status_pkey" PRIMARY KEY ("identity_id","status_id")
 );
 
+-- CreateTable
+CREATE TABLE "canonical"."choice_event" (
+    "id" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "illust_id" TEXT,
+
+    CONSTRAINT "choice_event_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."choice_event_text" (
+    "event_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT,
+    "desc" TEXT,
+
+    CONSTRAINT "choice_event_text_pkey" PRIMARY KEY ("event_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."choice_event_gift" (
+    "event_id" TEXT NOT NULL,
+    "gift_id" TEXT NOT NULL,
+
+    CONSTRAINT "choice_event_gift_pkey" PRIMARY KEY ("event_id","gift_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."choice_option" (
+    "event_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "message" TEXT NOT NULL,
+    "results" JSONB NOT NULL,
+
+    CONSTRAINT "choice_option_pkey" PRIMARY KEY ("event_id","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."choice_option_text" (
+    "event_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "message" TEXT NOT NULL,
+    "desc" TEXT,
+
+    CONSTRAINT "choice_option_text_pkey" PRIMARY KEY ("event_id","index","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."achievement" (
+    "id" TEXT NOT NULL,
+    "season" INTEGER NOT NULL,
+    "category" TEXT NOT NULL,
+    "points" INTEGER[],
+    "hard_only" BOOLEAN[],
+
+    CONSTRAINT "achievement_pkey" PRIMARY KEY ("id","category","season")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."achievement_text" (
+    "id" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "season" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "text" TEXT NOT NULL,
+
+    CONSTRAINT "achievement_text_pkey" PRIMARY KEY ("id","category","season","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."reward" (
+    "season" INTEGER NOT NULL,
+    "level" INTEGER NOT NULL,
+    "item" TEXT NOT NULL,
+    "count" INTEGER NOT NULL,
+
+    CONSTRAINT "reward_pkey" PRIMARY KEY ("season","level")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."adversity" (
+    "floor_range" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT NOT NULL,
+    "value" INTEGER NOT NULL,
+
+    CONSTRAINT "adversity_pkey" PRIMARY KEY ("floor_range","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."grace" (
+    "id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "cost" INTEGER NOT NULL,
+
+    CONSTRAINT "grace_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."grace_text" (
+    "grace_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "descs" JSONB NOT NULL,
+
+    CONSTRAINT "grace_text_pkey" PRIMARY KEY ("grace_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."start_gift" (
+    "keyword_id" TEXT NOT NULL,
+    "gift_id" TEXT NOT NULL,
+
+    CONSTRAINT "start_gift_pkey" PRIMARY KEY ("keyword_id","gift_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."encounter" (
+    "id" TEXT NOT NULL,
+    "group" TEXT,
+    "name" TEXT NOT NULL,
+    "site_id" TEXT NOT NULL,
+    "waves" JSONB,
+    "phases" JSONB,
+    "battles" JSONB,
+
+    CONSTRAINT "encounter_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."encounter_target" (
+    "encounter_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "encounter_target_pkey" PRIMARY KEY ("encounter_id","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."encounter_target_part" (
+    "encounter_id" TEXT NOT NULL,
+    "target_index" INTEGER NOT NULL,
+    "part_id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "hp_base" DOUBLE PRECISION,
+    "hp_level" DOUBLE PRECISION,
+    "def_correction" INTEGER,
+    "speed_min" INTEGER,
+    "speed_max" INTEGER,
+
+    CONSTRAINT "encounter_target_part_pkey" PRIMARY KEY ("encounter_id","target_index","part_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."encounter_part_resist" (
+    "encounter_id" TEXT NOT NULL,
+    "target_index" INTEGER NOT NULL,
+    "part_id" TEXT NOT NULL,
+    "axis" TEXT NOT NULL,
+    "value" DOUBLE PRECISION NOT NULL,
+
+    CONSTRAINT "encounter_part_resist_pkey" PRIMARY KEY ("encounter_id","target_index","part_id","axis")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."enemy" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "enemy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."enemy_text" (
+    "enemy_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "part" TEXT,
+
+    CONSTRAINT "enemy_text_pkey" PRIMARY KEY ("enemy_id","locale")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -740,6 +931,9 @@ CREATE INDEX "pack_category_idx" ON "canonical"."pack"("category");
 
 -- CreateIndex
 CREATE INDEX "pack_tag_tag_idx" ON "canonical"."pack_tag"("tag");
+
+-- CreateIndex
+CREATE INDEX "pack_boss_encounter_encounter_id_idx" ON "canonical"."pack_boss_encounter"("encounter_id");
 
 -- CreateIndex
 CREATE INDEX "floor_pack_pack_id_idx" ON "canonical"."floor_pack"("pack_id");
@@ -810,6 +1004,18 @@ CREATE INDEX "ego_status_status_id_idx" ON "canonical"."ego_status"("status_id")
 -- CreateIndex
 CREATE INDEX "identity_status_status_id_idx" ON "canonical"."identity_status"("status_id");
 
+-- CreateIndex
+CREATE INDEX "choice_event_gift_gift_id_idx" ON "canonical"."choice_event_gift"("gift_id");
+
+-- CreateIndex
+CREATE INDEX "achievement_category_idx" ON "canonical"."achievement"("category");
+
+-- CreateIndex
+CREATE INDEX "start_gift_gift_id_idx" ON "canonical"."start_gift"("gift_id");
+
+-- CreateIndex
+CREATE INDEX "encounter_group_idx" ON "canonical"."encounter"("group");
+
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -827,6 +1033,12 @@ ALTER TABLE "canonical"."pack_tag" ADD CONSTRAINT "pack_tag_pack_id_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "canonical"."pack_category_path" ADD CONSTRAINT "pack_category_path_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."pack_boss_encounter" ADD CONSTRAINT "pack_boss_encounter_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."pack_boss_encounter" ADD CONSTRAINT "pack_boss_encounter_encounter_id_fkey" FOREIGN KEY ("encounter_id") REFERENCES "canonical"."encounter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."floor_pack" ADD CONSTRAINT "floor_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1001,4 +1213,43 @@ ALTER TABLE "canonical"."identity_status" ADD CONSTRAINT "identity_status_identi
 
 -- AddForeignKey
 ALTER TABLE "canonical"."identity_status" ADD CONSTRAINT "identity_status_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "canonical"."status"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."choice_event_text" ADD CONSTRAINT "choice_event_text_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "canonical"."choice_event"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."choice_event_gift" ADD CONSTRAINT "choice_event_gift_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "canonical"."choice_event"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."choice_event_gift" ADD CONSTRAINT "choice_event_gift_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."choice_option" ADD CONSTRAINT "choice_option_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "canonical"."choice_event"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."choice_option_text" ADD CONSTRAINT "choice_option_text_event_id_index_fkey" FOREIGN KEY ("event_id", "index") REFERENCES "canonical"."choice_option"("event_id", "index") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."achievement_text" ADD CONSTRAINT "achievement_text_id_category_season_fkey" FOREIGN KEY ("id", "category", "season") REFERENCES "canonical"."achievement"("id", "category", "season") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."grace_text" ADD CONSTRAINT "grace_text_grace_id_fkey" FOREIGN KEY ("grace_id") REFERENCES "canonical"."grace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."start_gift" ADD CONSTRAINT "start_gift_keyword_id_fkey" FOREIGN KEY ("keyword_id") REFERENCES "canonical"."keyword"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."start_gift" ADD CONSTRAINT "start_gift_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."encounter_target" ADD CONSTRAINT "encounter_target_encounter_id_fkey" FOREIGN KEY ("encounter_id") REFERENCES "canonical"."encounter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."encounter_target_part" ADD CONSTRAINT "encounter_target_part_encounter_id_target_index_fkey" FOREIGN KEY ("encounter_id", "target_index") REFERENCES "canonical"."encounter_target"("encounter_id", "index") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_resist_encounter_id_target_index_part_id_fkey" FOREIGN KEY ("encounter_id", "target_index", "part_id") REFERENCES "canonical"."encounter_target_part"("encounter_id", "target_index", "part_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."enemy_text" ADD CONSTRAINT "enemy_text_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -243,6 +243,7 @@ model Pack {
   tags           PackTag[]
   categoryPath   PackCategoryPath[]
   floors         FloorPack[]
+  bosses         PackBossEncounter[]
   gifts          GiftPack[]
   exclusiveGifts GiftExclusivePack[]
 
@@ -289,6 +290,20 @@ model PackCategoryPath {
 
   @@id([packId, depth])
   @@map("pack_category_path")
+  @@schema("canonical")
+}
+
+/// 팩의 보스 조우. 팩 계열에서 미룬 연결이다. 실측 75건.
+model PackBossEncounter {
+  packId      String @map("pack_id")
+  encounterId String @map("encounter_id")
+
+  pack      Pack      @relation(fields: [packId], references: [id], onDelete: Cascade)
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@id([packId, encounterId])
+  @@index([encounterId])
+  @@map("pack_boss_encounter")
   @@schema("canonical")
 }
 
@@ -342,8 +357,9 @@ enum GiftDomain {
 model Keyword {
   id String @id
 
-  texts KeywordText[]
-  gifts Gift[]
+  texts      KeywordText[]
+  gifts      Gift[]
+  startGifts StartGift[]
 
   @@map("keyword")
   @@schema("canonical")
@@ -413,6 +429,8 @@ model Gift {
   requirements   GiftRequirement[]
   recipes        FusionRecipe[]
   lockedDescs    GiftLockedDesc[]
+  choiceEvents   ChoiceEventGift[]
+  startGifts     StartGift[]
 
   @@index([domain])
   @@index([sin])
@@ -1295,5 +1313,283 @@ model IdentityStatus {
   @@id([identityId, statusId])
   @@index([statusId])
   @@map("identity_status")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 거울 던전 구성
+// ─────────────────────────────────────────────────────────────
+
+/// 거울 던전 선택지 이벤트 159종.
+model ChoiceEvent {
+  id      String  @id
+  type    String
+  /// 삽화 id. 실측 1건만 있다
+  illustId String? @map("illust_id")
+
+  texts   ChoiceEventText[]
+  options ChoiceOption[]
+  gifts   ChoiceEventGift[]
+
+  @@map("choice_event")
+  @@schema("canonical")
+}
+
+model ChoiceEventText {
+  eventId String @map("event_id")
+  locale  Locale
+  name    String?
+  desc    String?
+
+  event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, locale])
+  @@map("choice_event_text")
+  @@schema("canonical")
+}
+
+/// 이 이벤트가 줄 수 있는 기프트.
+model ChoiceEventGift {
+  eventId String @map("event_id")
+  giftId  String @map("gift_id")
+
+  event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  gift  Gift        @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, giftId])
+  @@index([giftId])
+  @@map("choice_event_gift")
+  @@schema("canonical")
+}
+
+/// 선택지 하나.
+///
+/// **결과는 JSONB 로 담는다.** options[].result[].results[] 가 3중 중첩이고
+/// 마스터북이 구조를 확정하지 않았다. 종류를 세지 않은 채 정규화하면 틀린
+/// 스키마를 만든다 — 선택지까지 행으로 펴고 그 아래는 원문을 남긴다.
+model ChoiceOption {
+  eventId String @map("event_id")
+  index   Int
+  message String
+  /// 원문 result 배열
+  results Json
+
+  event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  texts ChoiceOptionText[]
+
+  @@id([eventId, index])
+  @@map("choice_option")
+  @@schema("canonical")
+}
+
+model ChoiceOptionText {
+  eventId String  @map("event_id")
+  index   Int
+  locale  Locale
+  message String
+  desc    String?
+
+  option ChoiceOption @relation(fields: [eventId, index], references: [eventId, index], onDelete: Cascade)
+
+  @@id([eventId, index, locale])
+  @@map("choice_option_text")
+  @@schema("canonical")
+}
+
+/// 거울 던전 업적. md__*(기본)과 md__md6__*(시즌 판본)를 season 으로 가른다.
+model Achievement {
+  id       String
+  /// **키의 일부다** — 두 시즌 판본이 같은 (id, category) 를 쓴다.
+  /// 0 이 기본(md__*), 6 이 MD6 판본(md__md6__*)
+  season   Int
+  category String
+  /// 단계별 점수
+  points   Int[]
+  /// 하드 전용 여부. 단계별
+  hardOnly Boolean[] @map("hard_only")
+
+  texts AchievementText[]
+
+  @@id([id, category, season])
+  @@index([category])
+  @@map("achievement")
+  @@schema("canonical")
+}
+
+model AchievementText {
+  id       String
+  category String
+  season   Int
+  locale   Locale
+  text     String
+
+  achievement Achievement @relation(fields: [id, category, season], references: [id, category, season], onDelete: Cascade)
+
+  @@id([id, category, season, locale])
+  @@map("achievement_text")
+  @@schema("canonical")
+}
+
+/// 층별 보상. 100단계 × 시즌.
+model Reward {
+  season Int
+  level  Int
+  item   String
+  count  Int
+
+  @@id([season, level])
+  @@map("reward")
+  @@schema("canonical")
+}
+
+/// 역경. 층 구간별 적용 효과다.
+model Adversity {
+  floorRange String @map("floor_range")
+  index      Int
+  name       String
+  desc       String
+  value      Int
+
+  @@id([floorRange, index])
+  @@map("adversity")
+  @@schema("canonical")
+}
+
+/// 은총. 시작 시 고르는 강화 10종.
+model Grace {
+  id    String @id
+  index Int
+  cost  Int
+
+  texts GraceText[]
+
+  @@map("grace")
+  @@schema("canonical")
+}
+
+model GraceText {
+  graceId String @map("grace_id")
+  locale  Locale
+  name    String
+  /// 단계별 설명. 중첩 배열이라 원문을 담는다
+  descs   Json
+
+  grace Grace @relation(fields: [graceId], references: [id], onDelete: Cascade)
+
+  @@id([graceId, locale])
+  @@map("grace_text")
+  @@schema("canonical")
+}
+
+/// 시작 기프트 풀. 기믹 키워드별로 3개씩이다.
+model StartGift {
+  keywordId String @map("keyword_id")
+  giftId    String @map("gift_id")
+
+  keyword Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  gift    Gift    @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([keywordId, giftId])
+  @@index([giftId])
+  @@map("start_gift")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 인카운터
+// ─────────────────────────────────────────────────────────────
+
+/// 전투 조우 251종. 파일 하나가 조우 하나다.
+model Encounter {
+  id     String @id
+  /// luxcavation · md · reflectrial · rr · story
+  group  String?
+  name   String
+  siteId String @map("site_id")
+  /// targets 와 배타적인 다른 모양들. 구조가 갈려 원문을 남긴다
+  waves    Json?
+  phases   Json?
+  battles  Json?
+
+  targets EncounterTarget[]
+  packs   PackBossEncounter[]
+
+  @@index([group])
+  @@map("encounter")
+  @@schema("canonical")
+}
+
+/// 조우에 나오는 적.
+model EncounterTarget {
+  encounterId String @map("encounter_id")
+  index       Int
+  name        String
+
+  encounter Encounter            @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  parts     EncounterTargetPart[]
+
+  @@id([encounterId, index])
+  @@map("encounter_target")
+  @@schema("canonical")
+}
+
+/// 적의 부위. **저항이 부위마다 따로 있고 10축이다** —
+/// 물리 3축 + 죄악 7축. 인격 3축 · E.G.O 7축과 다르다.
+model EncounterTargetPart {
+  encounterId   String @map("encounter_id")
+  targetIndex   Int    @map("target_index")
+  partId        String @map("part_id")
+  name          String
+  hpBase        Float? @map("hp_base")
+  hpLevel       Float? @map("hp_level")
+  defCorrection Int?   @map("def_correction")
+  speedMin      Int?   @map("speed_min")
+  speedMax      Int?   @map("speed_max")
+
+  target  EncounterTarget       @relation(fields: [encounterId, targetIndex], references: [encounterId, index], onDelete: Cascade)
+  resists EncounterPartResist[]
+
+  @@id([encounterId, targetIndex, partId])
+  @@map("encounter_target_part")
+  @@schema("canonical")
+}
+
+/// 부위별 저항 10축.
+model EncounterPartResist {
+  encounterId String @map("encounter_id")
+  targetIndex Int    @map("target_index")
+  partId      String @map("part_id")
+  /// slash · pierce · blunt · 죄악 7종
+  axis        String
+  value       Float
+
+  part EncounterTargetPart @relation(fields: [encounterId, targetIndex, partId], references: [encounterId, targetIndex, partId], onDelete: Cascade)
+
+  @@id([encounterId, targetIndex, partId, axis])
+  @@map("encounter_part_resist")
+  @@schema("canonical")
+}
+
+/// 적 표시명 1,342종. loc 단독이며 desc 가 부위 이름이다.
+model Enemy {
+  id String @id
+
+  texts EnemyText[]
+
+  @@map("enemy")
+  @@schema("canonical")
+}
+
+model EnemyText {
+  enemyId String @map("enemy_id")
+  locale  Locale
+  name    String
+  /// 부위 이름. "본체" 등
+  part    String?
+
+  enemy Enemy @relation(fields: [enemyId], references: [id], onDelete: Cascade)
+
+  @@id([enemyId, locale])
+  @@map("enemy_text")
   @@schema("canonical")
 }

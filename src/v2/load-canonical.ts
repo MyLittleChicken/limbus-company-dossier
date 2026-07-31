@@ -18,6 +18,8 @@ import { buildIdentities } from './canonical/identities.js';
 import { buildEgos } from './canonical/egos.js';
 import { buildStatuses } from './canonical/statuses.js';
 import { parseCoinTokens } from './canonical/tokens.js';
+import { buildMirror } from './canonical/mirror.js';
+import { buildEncounters } from './canonical/encounters.js';
 
 const CHUNK = 1_000;
 
@@ -194,6 +196,48 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── 거울 던전 구성 ─────────────────────────────────────────
+		const mdAsset = (f: string) =>
+			readSource(prisma, snapshotId, `mirror-dungeon/limbus-assets/${f}`);
+		const evLoc = (locale: string) =>
+			readSourceGroup(prisma, snapshotId, 'mirror-dungeon', `loc-${locale}`, {
+				startsWith: ['ActionEvents_Mirror', 'AbEvents_Mirror'],
+			});
+		const knownGifts = new Set(gifts.gift.map((g) => g.id));
+		const mirror = buildMirror(
+			{
+				choiceEvents: await mdAsset('md_choice_events.json'),
+				achievements: await mdAsset('md__achievements.json'),
+				achievementsMd6: await mdAsset('md__md6__achievements.json'),
+				rewards: await mdAsset('md__rewards.json'),
+				rewardsMd6: await mdAsset('md__md6__rewards.json'),
+				details: await mdAsset('md__details.json'),
+				eventLocKo: await evLoc('ko'),
+				eventLocEn: await evLoc('en'),
+				eventLocJa: await evLoc('ja'),
+				knownGifts,
+				knownKeywords: new Set(vocab.keyword.map((k) => k.id)),
+				keywordDict: buildKeywordLookup(categoryEn),
+			},
+			meta,
+		);
+
+		// ── 인카운터 ───────────────────────────────────────────────
+		const enemyLocOf = (locale: string) =>
+			readSourceGroup(prisma, snapshotId, 'encounters', `loc-${locale}`);
+		const encounters = buildEncounters(
+			{
+				encounters: await readSourceGroup(prisma, snapshotId, 'encounters', 'limbus-assets'),
+				groups: await mdAsset('encounters.json'),
+				enemyKo: await enemyLocOf('ko'),
+				enemyEn: await enemyLocOf('en'),
+				enemyJa: await enemyLocOf('ja'),
+				knownPacks: new Set(tables.pack.map((p) => p.id)),
+				packs: await readSource(prisma, snapshotId, 'packs/limbus-assets/md_theme_packs.json'),
+			},
+			meta,
+		);
+
 		// ── 코인 토큰 분해 — 스펙 6절 「그래프 파생을 위한 조건」 ────────
 		// 원문은 skill_coin.effects 에 그대로 남는다. 이것은 분해 결과다.
 		const coinToken: Array<{
@@ -227,6 +271,8 @@ async function main(): Promise<void> {
 			         canonical.skill, canonical.passive, canonical.identity,
 			         canonical.ego, canonical.ego_passive,
 			         canonical.status, canonical.sin_info, canonical.term,
+			         canonical.choice_event, canonical.achievement, canonical.reward,
+			         canonical.adversity, canonical.grace, canonical.encounter, canonical.enemy,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -376,6 +422,28 @@ async function main(): Promise<void> {
 		counts.push(['ego_passive_link', await chunked(egos.egoPassiveLink, (d) => prisma.egoPassiveLink.createMany({ data: d }))]);
 		counts.push(['ego_status', await chunked(egos.egoStatus, (d) => prisma.egoStatus.createMany({ data: d }))]);
 		counts.push(['tool_annotation (ego)', await chunked(egos.toolAnnotation, (d) => prisma.toolAnnotation.createMany({ data: d as never }))]);
+
+		// ── 거울 던전·인카운터 적재 ────────────────────────────────
+		counts.push(['choice_event', await chunked(mirror.choiceEvent, (d) => prisma.choiceEvent.createMany({ data: d }))]);
+		counts.push(['choice_event_text', await chunked(mirror.choiceEventText, (d) => prisma.choiceEventText.createMany({ data: d as never }))]);
+		counts.push(['choice_event_gift', await chunked(mirror.choiceEventGift, (d) => prisma.choiceEventGift.createMany({ data: d }))]);
+		counts.push(['choice_option', await chunked(mirror.choiceOption, (d) => prisma.choiceOption.createMany({ data: d as never }))]);
+		counts.push(['choice_option_text', await chunked(mirror.choiceOptionText, (d) => prisma.choiceOptionText.createMany({ data: d as never }))]);
+		counts.push(['achievement', await chunked(mirror.achievement, (d) => prisma.achievement.createMany({ data: d }))]);
+		counts.push(['achievement_text', await chunked(mirror.achievementText, (d) => prisma.achievementText.createMany({ data: d as never }))]);
+		counts.push(['reward', await chunked(mirror.reward, (d) => prisma.reward.createMany({ data: d }))]);
+		counts.push(['adversity', await chunked(mirror.adversity, (d) => prisma.adversity.createMany({ data: d }))]);
+		counts.push(['grace', await chunked(mirror.grace, (d) => prisma.grace.createMany({ data: d }))]);
+		counts.push(['grace_text', await chunked(mirror.graceText, (d) => prisma.graceText.createMany({ data: d as never }))]);
+		counts.push(['start_gift', await chunked(mirror.startGift, (d) => prisma.startGift.createMany({ data: d }))]);
+
+		counts.push(['encounter', await chunked(encounters.encounter, (d) => prisma.encounter.createMany({ data: d as never }))]);
+		counts.push(['encounter_target', await chunked(encounters.encounterTarget, (d) => prisma.encounterTarget.createMany({ data: d }))]);
+		counts.push(['encounter_target_part', await chunked(encounters.encounterTargetPart, (d) => prisma.encounterTargetPart.createMany({ data: d }))]);
+		counts.push(['encounter_part_resist', await chunked(encounters.encounterPartResist, (d) => prisma.encounterPartResist.createMany({ data: d }))]);
+		counts.push(['enemy', await chunked(encounters.enemy, (d) => prisma.enemy.createMany({ data: d }))]);
+		counts.push(['enemy_text', await chunked(encounters.enemyText, (d) => prisma.enemyText.createMany({ data: d as never }))]);
+		counts.push(['pack_boss_encounter', await chunked(encounters.packBossEncounter, (d) => prisma.packBossEncounter.createMany({ data: d }))]);
 
 		counts.push([
 			'field_gap',
