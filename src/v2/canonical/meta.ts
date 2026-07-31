@@ -50,6 +50,14 @@ export class Meta {
 		this.sourceMap.set(key, { entity, entityId, field, rule, sources });
 	}
 
+	/**
+	 * 결손을 해소한다. 수동 보정이 값을 채우면 그 결손은 더 이상 결손이 아니다.
+	 * 지우지 않으면 gap-report 가 이미 채운 것을 계속 채우라고 시킨다.
+	 */
+	resolve(entity: string, entityId: string, field: string, locale = ''): boolean {
+		return this.gapMap.delete(`${entity} ${entityId} ${field} ${locale}`);
+	}
+
 	get gaps(): GapRow[] {
 		return [...this.gapMap.values()];
 	}

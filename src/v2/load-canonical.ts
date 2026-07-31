@@ -20,6 +20,7 @@ import { buildStatuses } from './canonical/statuses.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
+import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
 
 const CHUNK = 1_000;
 
@@ -264,7 +265,37 @@ async function main(): Promise<void> {
 			}
 		}
 
-		// canonical 만 비운다. raw 도 app 도 건드리지 않는다.
+		// ── 수동 보정 — 적재의 마지막 판정 ─────────────────────────
+		// app.field_override 는 TRUNCATE 범위 밖이라 재적재에 살아남는다.
+		// 여기서 canonical 위에 덮고 field_source.rule = 'manual' 로 남긴다.
+		const overrides: OverrideRow[] = (
+			await prisma.fieldOverride.findMany({
+				select: { entity: true, entityId: true, field: true, locale: true, value: true, note: true },
+			})
+		).map((o) => ({ ...o, value: o.value as unknown }));
+		if (overrides.length > 0) console.log(`수동 보정 ${overrides.length}건을 덮는다`);
+
+		statuses.statusText = applyTextOverrides(
+			statuses.statusText, overrides,
+			{ entity: 'status', idKey: 'statusId', field: 'name' }, meta,
+		);
+		gifts.giftStageText = applyTextOverrides(
+			gifts.giftStageText, overrides,
+			{ entity: 'gift', idKey: 'giftId', field: 'name' }, meta,
+		);
+		tables.packText = applyTextOverrides(
+			tables.packText, overrides,
+			{ entity: 'pack', idKey: 'packId', field: 'name' }, meta,
+		);
+		encounters.enemyText = applyTextOverrides(
+			encounters.enemyText, overrides,
+			{ entity: 'enemy', idKey: 'enemyId', field: 'name' }, meta,
+		);
+		tables.pack = applyColumnOverrides(
+			tables.pack, overrides, { entity: 'pack', idKey: 'id' }, meta,
+		);
+
+		// canonical 만 비운다. **raw 도 app 도 건드리지 않는다.**
 		await prisma.$executeRaw`
 			TRUNCATE canonical.pack, canonical.gift, canonical.keyword, canonical.trigger,
 			         canonical.effect, canonical.sinner, canonical.association,

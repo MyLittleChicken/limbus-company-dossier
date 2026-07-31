@@ -73,7 +73,14 @@ async function main(): Promise<void> {
 		// status.name.ja 258 · status.name.ko 245 · pack.textColor 61 · skill.levels 9
 		// · passive.name 6 · gift.name.ko 6 · association.name.ja 2 · pack.unlockCode 2
 // name 598 · text 478 · item 400 · textColor 61 · levels 9 · unlockCode 2 · battlePool 1
-		eq('결손 합계', await prisma.fieldGap.count(), 1_549);
+		// 수동 보정이 채운 만큼 줄어든다. 지금 1건 채워져 1,548 이다
+		const gapTotal = await prisma.fieldGap.count();
+		const overrideCount = await prisma.fieldOverride.count();
+		checks.push({
+			name: '결손 합계 (보정한 만큼 줄어든다)',
+			ok: gapTotal + overrideCount === 1_549,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,549`,
+		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
 		const p1309 = await prisma.packText.findUnique({
@@ -449,7 +456,15 @@ async function main(): Promise<void> {
 
 		// ══ 상태·어휘 계열 ═════════════════════════════════════════
 		eq('status', await prisma.status.count(), 1_472);
-		eq('status_text', await prisma.statusText.count(), 3_913);
+		// 수동 보정이 결손을 채우면 행이 늘어난다. 보정 수를 빼고 본다
+		const statusTextBase =
+			(await prisma.statusText.count()) -
+			(await prisma.fieldOverride.count({ where: { entity: 'status', field: 'name' } }));
+		checks.push({
+			name: 'status_text (보정 제외)',
+			ok: statusTextBase === 3_913,
+			detail: `${statusTextBase.toLocaleString()} / 3,913`,
+		});
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);
@@ -465,12 +480,19 @@ async function main(): Promise<void> {
 			detail: JSON.stringify(buffMap),
 		});
 
-		// **한국어 결손 245종 (16.6 %)** — 마스터북 상태 편 회차 3 과 같다
-		eq(
-			'한국어 결손 245종 (마스터북 일치)',
-			await prisma.fieldGap.count({ where: { entity: 'status', field: 'name', locale: 'ko' } }),
-			245,
-		);
+		// **한국어 결손 245종 (16.6 %)** — 마스터북 상태 편 회차 3 과 같다.
+		// 보정으로 채운 만큼 줄어들므로 되더한다.
+		const statusKoGap = await prisma.fieldGap.count({
+			where: { entity: 'status', field: 'name', locale: 'ko' },
+		});
+		const statusKoFixed = await prisma.fieldOverride.count({
+			where: { entity: 'status', field: 'name', locale: 'ko' },
+		});
+		checks.push({
+			name: '한국어 결손 245종 (마스터북 일치, 보정 되더함)',
+			ok: statusKoGap + statusKoFixed === 245,
+			detail: `결손 ${statusKoGap} + 보정 ${statusKoFixed} = ${statusKoGap + statusKoFixed} / 245`,
+		});
 
 		// ── 스펙 6절 — 코인 토큰이 그래프 투영 준비를 끝냈나 ──────────
 		const byKind = await prisma.$queryRaw<Array<{ kind: string; n: bigint; kinds: bigint }>>`
@@ -578,6 +600,104 @@ async function main(): Promise<void> {
 			await prisma.fieldGap.count({ where: { field: 'battlePool' } }),
 			1,
 		);
+
+		// ══ 마스터북 완전 일치 쌍 — 나머지 3쌍 ══════════════════════
+		// raw 를 직접 맞댄다. 이것이 깨지면 곧 회귀 신호다(마스터북 §4.1).
+
+		// ⑤ E.G.O 스킬 — mj awakening+corrosion 208 ↔ canonical.ego_skill
+		const egoSkillXref = await prisma.$queryRaw<Array<{ mj: bigint; diff: bigint }>>`
+			WITH mj AS (
+			  SELECT payload->>'awakeningSkill' AS id FROM raw.raw_object
+			  WHERE src_path = 'egos/limbus-data-mj/egos_detail.json' AND payload->>'awakeningSkill' IS NOT NULL
+			  UNION
+			  SELECT payload->>'corrosionSkill' FROM raw.raw_object
+			  WHERE src_path = 'egos/limbus-data-mj/egos_detail.json' AND payload->>'corrosionSkill' IS NOT NULL
+			)
+			SELECT (SELECT count(*) FROM mj)::bigint AS mj,
+			       (SELECT count(*) FROM (SELECT id FROM mj EXCEPT SELECT id FROM canonical.ego_skill) x)::bigint AS diff
+		`;
+		const es = egoSkillXref[0];
+		checks.push({
+			name: 'E.G.O 스킬 mj 208 ↔ 적재 (차집합 0)',
+			ok: Number(es?.mj ?? 0n) === 208 && Number(es?.diff ?? 1n) === 0,
+			detail: `mj ${Number(es?.mj ?? 0n)} · 차집합 ${Number(es?.diff ?? 0n)}`,
+		});
+
+		// ⑥ E.G.O 패시브 — mj awakeningPassives 113 ↔ canonical.ego_passive
+		const egoPassiveXref = await prisma.$queryRaw<Array<{ mj: bigint; diff: bigint }>>`
+			WITH mj AS (
+			  SELECT DISTINCT jsonb_array_elements_text(payload->'awakeningPassives') AS id
+			  FROM raw.raw_object
+			  WHERE src_path = 'egos/limbus-data-mj/egos_detail.json' AND payload ? 'awakeningPassives'
+			)
+			SELECT (SELECT count(*) FROM mj)::bigint AS mj,
+			       (SELECT count(*) FROM (SELECT id FROM mj EXCEPT SELECT id FROM canonical.ego_passive) x)::bigint AS diff
+		`;
+		const ep = egoPassiveXref[0];
+		checks.push({
+			name: 'E.G.O 패시브 mj 113 ↔ 적재 (차집합 0)',
+			ok: Number(ep?.mj ?? 0n) === 113 && Number(ep?.diff ?? 1n) === 0,
+			detail: `mj ${Number(ep?.mj ?? 0n)} · 차집합 ${Number(ep?.diff ?? 0n)}`,
+		});
+
+		// ⑦ 시작 기프트 — assets startGiftPool 30 ↔ mj start_gifts 30
+		const startGiftXref = await prisma.$queryRaw<Array<{ a: bigint; m: bigint; d1: bigint; d2: bigint }>>`
+			WITH assets AS (
+			  SELECT lower(k.key) AS kw, jsonb_array_elements_text(k.value) AS gift
+			  FROM raw.raw_object o
+			  CROSS JOIN LATERAL jsonb_each(o.payload->'startGiftPool') k
+			  WHERE o.src_path = 'mirror-dungeon/limbus-assets/md__details.json'
+			),
+			mj AS (
+			  SELECT lower(payload->>'keyword') AS kw,
+			         jsonb_array_elements_text(payload->'gifts') AS gift
+			  FROM raw.raw_object
+			  WHERE src_path = 'gifts/limbus-data-mj/start_gifts.json'
+			)
+			SELECT (SELECT count(*) FROM assets)::bigint AS a,
+			       (SELECT count(*) FROM mj)::bigint AS m,
+			       (SELECT count(*) FROM (SELECT * FROM assets EXCEPT SELECT * FROM mj) x)::bigint AS d1,
+			       (SELECT count(*) FROM (SELECT * FROM mj EXCEPT SELECT * FROM assets) y)::bigint AS d2
+		`;
+		const sg = startGiftXref[0];
+		checks.push({
+			name: '시작 기프트 assets ↔ mj 30/30 (차집합 0)',
+			ok:
+				Number(sg?.a ?? 0n) === 30 && Number(sg?.m ?? 0n) === 30 &&
+				Number(sg?.d1 ?? 1n) === 0 && Number(sg?.d2 ?? 1n) === 0,
+			detail: `assets ${Number(sg?.a ?? 0n)} · mj ${Number(sg?.m ?? 0n)} · 차집합 ${Number(sg?.d1 ?? 0n)}/${Number(sg?.d2 ?? 0n)}`,
+		});
+
+		// ④ 팩 ↔ 인카운터 — 행 수만 보던 것을 차집합 대조로 강화
+		const bossXref = await prisma.$queryRaw<Array<{ raw: bigint; diff: bigint }>>`
+			WITH src AS (
+			  SELECT o.id AS pack_id,
+			         replace(jsonb_array_elements_text(o.payload->'bossEncounters'), '|', '__') AS enc
+			  FROM raw.raw_object o
+			  WHERE o.src_path = 'packs/limbus-assets/md_theme_packs.json' AND o.payload ? 'bossEncounters'
+			)
+			SELECT (SELECT count(*) FROM src)::bigint AS raw,
+			       (SELECT count(*) FROM (
+			          SELECT pack_id, enc FROM src
+			          EXCEPT SELECT pack_id, encounter_id FROM canonical.pack_boss_encounter
+			        ) x)::bigint AS diff
+		`;
+		const bx = bossXref[0];
+		checks.push({
+			name: '팩 ↔ 인카운터 75/75 (차집합 0)',
+			ok: Number(bx?.raw ?? 0n) === 75 && Number(bx?.diff ?? 1n) === 0,
+			detail: `raw ${Number(bx?.raw ?? 0n)} · 차집합 ${Number(bx?.diff ?? 0n)}`,
+		});
+
+		// ══ app 층이 재생성에 살아남나 ══════════════════════════════
+		const appTables = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
+		`;
+		checks.push({
+			name: 'app 스키마가 섰다',
+			ok: Number(appTables[0]?.n ?? 0n) === 6,
+			detail: `${Number(appTables[0]?.n ?? 0n)} / 6`,
+		});
 
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다
 		const noText = await prisma.gift.count({ where: { stages: { none: { texts: { some: {} } } } } });

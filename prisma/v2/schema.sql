@@ -1,4 +1,7 @@
 -- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "app";
+
+-- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "canonical";
 
 -- CreateSchema
@@ -914,6 +917,66 @@ CREATE TABLE "canonical"."enemy_text" (
     CONSTRAINT "enemy_text_pkey" PRIMARY KEY ("enemy_id","locale")
 );
 
+-- CreateTable
+CREATE TABLE "app"."field_override" (
+    "entity" TEXT NOT NULL,
+    "entity_id" TEXT NOT NULL,
+    "field" TEXT NOT NULL,
+    "locale" TEXT NOT NULL DEFAULT '',
+    "value" JSONB NOT NULL,
+    "note" TEXT NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "field_override_pkey" PRIMARY KEY ("entity","entity_id","field","locale")
+);
+
+-- CreateTable
+CREATE TABLE "app"."account" (
+    "id" TEXT NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "app"."setting" (
+    "account_id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+
+    CONSTRAINT "setting_pkey" PRIMARY KEY ("account_id","key")
+);
+
+-- CreateTable
+CREATE TABLE "app"."run" (
+    "id" TEXT NOT NULL,
+    "account_id" TEXT NOT NULL,
+    "difficulty" "canonical"."Difficulty" NOT NULL,
+    "started_at" TIMESTAMPTZ(3) NOT NULL,
+    "ended_at" TIMESTAMPTZ(3),
+    "floor" INTEGER NOT NULL DEFAULT 1,
+
+    CONSTRAINT "run_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "app"."run_floor" (
+    "run_id" TEXT NOT NULL,
+    "floor" INTEGER NOT NULL,
+    "pack_id" TEXT NOT NULL,
+
+    CONSTRAINT "run_floor_pkey" PRIMARY KEY ("run_id","floor")
+);
+
+-- CreateTable
+CREATE TABLE "app"."run_gift" (
+    "run_id" TEXT NOT NULL,
+    "gift_id" TEXT NOT NULL,
+    "level" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "run_gift_pkey" PRIMARY KEY ("run_id","gift_id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -1024,6 +1087,18 @@ CREATE INDEX "start_gift_gift_id_idx" ON "canonical"."start_gift"("gift_id");
 
 -- CreateIndex
 CREATE INDEX "encounter_group_idx" ON "canonical"."encounter"("group");
+
+-- CreateIndex
+CREATE INDEX "field_override_entity_field_idx" ON "app"."field_override"("entity", "field");
+
+-- CreateIndex
+CREATE INDEX "run_account_id_idx" ON "app"."run"("account_id");
+
+-- CreateIndex
+CREATE INDEX "run_floor_pack_id_idx" ON "app"."run_floor"("pack_id");
+
+-- CreateIndex
+CREATE INDEX "run_gift_gift_id_idx" ON "app"."run_gift"("gift_id");
 
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1264,4 +1339,22 @@ ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_r
 
 -- AddForeignKey
 ALTER TABLE "canonical"."enemy_text" ADD CONSTRAINT "enemy_text_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app"."setting" ADD CONSTRAINT "setting_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "app"."account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app"."run" ADD CONSTRAINT "run_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "app"."account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app"."run_floor" ADD CONSTRAINT "run_floor_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "app"."run"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app"."run_floor" ADD CONSTRAINT "run_floor_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app"."run_gift" ADD CONSTRAINT "run_gift_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "app"."run"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app"."run_gift" ADD CONSTRAINT "run_gift_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
