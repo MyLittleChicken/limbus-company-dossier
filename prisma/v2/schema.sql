@@ -98,6 +98,59 @@ CREATE TABLE "canonical"."tool_annotation" (
     CONSTRAINT "tool_annotation_pkey" PRIMARY KEY ("source","entity","entity_id","field")
 );
 
+-- CreateTable
+CREATE TABLE "canonical"."pack" (
+    "id" TEXT NOT NULL,
+    "category" "canonical"."PackCategory" NOT NULL,
+    "chapter" INTEGER,
+    "variant" "canonical"."PackVariant",
+    "sprite" TEXT NOT NULL,
+    "overlay_sprite" TEXT,
+    "superposition" BOOLEAN NOT NULL DEFAULT false,
+    "extreme" BOOLEAN NOT NULL DEFAULT false,
+    "bokgak" BOOLEAN NOT NULL DEFAULT false,
+    "floor_length" INTEGER NOT NULL,
+    "text_color" TEXT,
+    "unlock_code" INTEGER,
+
+    CONSTRAINT "pack_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."pack_text" (
+    "pack_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "pack_text_pkey" PRIMARY KEY ("pack_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."pack_tag" (
+    "pack_id" TEXT NOT NULL,
+    "tag" TEXT NOT NULL,
+
+    CONSTRAINT "pack_tag_pkey" PRIMARY KEY ("pack_id","tag")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."pack_category_path" (
+    "pack_id" TEXT NOT NULL,
+    "depth" INTEGER NOT NULL,
+    "value" TEXT NOT NULL,
+
+    CONSTRAINT "pack_category_path_pkey" PRIMARY KEY ("pack_id","depth")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."floor_pack" (
+    "difficulty" "canonical"."Difficulty" NOT NULL,
+    "floor_range" TEXT NOT NULL,
+    "pack_id" TEXT NOT NULL,
+
+    CONSTRAINT "floor_pack_pkey" PRIMARY KEY ("difficulty","floor_range","pack_id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -119,6 +172,15 @@ CREATE INDEX "field_source_entity_rule_idx" ON "canonical"."field_source"("entit
 -- CreateIndex
 CREATE INDEX "tool_annotation_entity_entity_id_idx" ON "canonical"."tool_annotation"("entity", "entity_id");
 
+-- CreateIndex
+CREATE INDEX "pack_category_idx" ON "canonical"."pack"("category");
+
+-- CreateIndex
+CREATE INDEX "pack_tag_tag_idx" ON "canonical"."pack_tag"("tag");
+
+-- CreateIndex
+CREATE INDEX "floor_pack_pack_id_idx" ON "canonical"."floor_pack"("pack_id");
+
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -127,4 +189,16 @@ ALTER TABLE "raw"."raw_object" ADD CONSTRAINT "raw_object_snapshot_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "raw"."raw_file" ADD CONSTRAINT "raw_file_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."pack_text" ADD CONSTRAINT "pack_text_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."pack_tag" ADD CONSTRAINT "pack_tag_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."pack_category_path" ADD CONSTRAINT "pack_category_path_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."floor_pack" ADD CONSTRAINT "floor_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -206,3 +206,106 @@ model ToolAnnotation {
   @@map("tool_annotation")
   @@schema("canonical")
 }
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 거울 던전 테마 팩
+// ─────────────────────────────────────────────────────────────
+
+/// 층 진입 시 고르는 단위. 117종이며 id 대역이 곧 분류다.
+///
+/// 정본은 limbus-data-mj 다 — 마스터북 팩 편 실측에서 mj 단독 개념 6 · assets 2 로
+/// mj 쪽으로 쏠렸다(ADR-04 의 「거울 던전 구성 = assets」와 어긋난다, backlog/09).
+model Pack {
+  /// mj packs.id. 정수지만 문자열로 담는다 — 다른 계열의 id 와 규약을 맞춘다
+  id            String       @id
+  category      PackCategory
+  /// 본편 장. canto 27건만
+  chapter       Int?
+  variant       PackVariant?
+  /// 애셋은 id 가 아니라 이 값으로 찾는다. assets image 와 117/117 일치
+  sprite        String
+  /// assets overlayImage. 41건
+  overlaySprite String?      @map("overlay_sprite")
+  /// 6–10층 구간에 배정되는 중첩 팩
+  superposition Boolean      @default(false)
+  /// 11–15층 구간에 배정되는 극한 팩
+  extreme       Boolean      @default(false)
+  /// 복각 여부
+  bokgak        Boolean      @default(false)
+  /// 팩이 차지하는 층 수
+  floorLength   Int          @map("floor_length")
+  /// 이름 표시색. 6자리 16진수. 61건 결손 → NULL (field_gap 참조)
+  textColor     String?      @map("text_color")
+  /// packs_detail.unlock.unlockCode. 2건 결손
+  unlockCode    Int?         @map("unlock_code")
+
+  texts        PackText[]
+  tags         PackTag[]
+  categoryPath PackCategoryPath[]
+  floors       FloorPack[]
+
+  @@index([category])
+  @@map("pack")
+  @@schema("canonical")
+}
+
+/// 표시명. ko 는 mj.nameKo 가 정본이고 loc 이 폴백이다.
+/// 1309 「감정 앞에 게으른 것」은 loc-ko 에 후행 공백이 있어 mj 를 쓴다.
+model PackText {
+  packId String @map("pack_id")
+  locale Locale
+  name   String
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, locale])
+  @@map("pack_text")
+  @@schema("canonical")
+}
+
+/// assets tags. 유일 47종 · 연결 184건. 화면 필터용이며 assets 단독 개념이다.
+model PackTag {
+  packId String @map("pack_id")
+  tag    String
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, tag])
+  @@index([tag])
+  @@map("pack_tag")
+  @@schema("canonical")
+}
+
+/// assets category 배열. 2단 계층이며 mj 의 평평한 category 가 담지 못하는 것이다.
+/// 예: ["Canto", "I"] → depth 0 "Canto", depth 1 "I". 실측 202원소(2단 85 · 1단 32).
+model PackCategoryPath {
+  packId String @map("pack_id")
+  depth  Int
+  value  String
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, depth])
+  @@map("pack_category_path")
+  @@schema("canonical")
+}
+
+/// 난이도·층 구간별 등장 팩. 정본은 assets md_floor_packs 다(ADR-04 2.1). 288행.
+///
+/// 1–5층은 mj 와 assets 가 218/218 완전 일치한다(차집합 0, 실측).
+/// 6층 이상은 표현이 갈릴 뿐 모순이 아니다 — assets 는 구간으로("6-10"·"11-15"),
+/// mj 는 플래그로(superposition·extreme) 담는다. 실측상
+/// 6-10 구간 46건이 전부 superposition 이고 11-15 구간 24건이 전부 extreme 이다.
+model FloorPack {
+  difficulty Difficulty
+  /// "1" · "2" · … · "6-10" · "11-15"
+  floorRange String     @map("floor_range")
+  packId     String     @map("pack_id")
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([difficulty, floorRange, packId])
+  @@index([packId])
+  @@map("floor_pack")
+  @@schema("canonical")
+}
