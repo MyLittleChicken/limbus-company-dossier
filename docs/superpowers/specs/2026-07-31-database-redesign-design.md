@@ -57,7 +57,7 @@ API·화면이 여기 맞춘다.
                  ▼
 ┌────────────────────────────────────────────────────────────────┐
 │  schema raw          판정하지 않는다. 버리지 않는다              │
-│    snapshot · snapshot_source · raw_object                       │
+│    snapshot · snapshot_source · raw_object · raw_file            │
 │    43,270행 / 스냅샷 · 스냅샷은 덮어쓰지 않고 쌓는다              │
 └────────────────────────────────────────────────────────────────┘
                  │
@@ -173,6 +173,54 @@ egos/loc-*/{Passive_Ego,Skills_Ego}-a1c5p2.json                     6        원
 
 **이 규칙으로 (snapshot, source, srcPath, id) 중복은 0건이다**(실측).
 
+### 빈 파일 16개는 개체를 0개 낸다 — `raw_file` 이 필요한 이유
+
+개체가 0개인 파일은 `raw_object` 에 행을 만들지 못한다. 실측 16파일이 그렇다.
+
+```
+계열          파일                                    ko     en     ja
+──────────────────────────────────────────────────────────────────────
+egos         Passive_Ego-a1c9p2.json                 빈    없음     빈
+egos         Passive_Ego-a1c9p3.json                 빈     빈     빈
+egos         Skills_Ego_Personality-a1c9p2.json      빈    없음     빈
+gifts        EGOgift_MirrorDungeon-x1p1c1.json       빈     빈     빈
+identities   Personalities-a1c9p2.json               빈    없음     빈
+identities   Skills_personality-a1c9p1.json          빈    없음     빈
+identities   Skills_personality-a1c9p2.json          빈    없음     빈
+```
+
+**데이터가 사라진 것이 아니다.** 전부 「만들어졌으나 쓰이지 않은 패치 델타 껍데기」이며
+내용은 기본 파일에 들어갔다.
+
+```
+Egos-a1c9p3.json 5건        Passive_Ego-a1c9p3.json 0건
+  201011 오감도               → 기본 Passive_Ego.json(113건)에 2010111 있음
+  203011 · 205011 · 206011 · 211011  전부 같다
+
+Skills_personality-01…12    수감자 12명별 579건       ← 스킬은 여기 들어간다
+Skills_personality-a1c9p1/p2  델타 껍데기 0건
+
+EGOgift_MirrorDungeon-*     12파일 중 11파일이 차 있다
+  -x1p1c1 만 0건            → 이 이벤트가 거울 던전 기프트를 안 냈다
+```
+
+그럼에도 **두 사실이 DB 에서 안 보인다.**
+
+```
+① 파일이 존재했다는 사실        1,664 중 16이 raw_object 에 흔적 없음
+② en 은 파일조차 없다는 사실     「빈 파일」과 「파일 없음」이 구분되지 않는다
+```
+
+②가 중요하다. `loc-en` 은 5건에 대해 **파일을 아예 안 만들고**, `loc-ko`·`loc-ja` 는
+빈 껍데기를 만든다. 같은 「없음」의 두 표현이며, 이 차이가 마스터북 인격 편
+회차 11·12 의 「`loc-en` 결손」 서술을 정정하는 근거가 된다 — 결손이 아니라
+표현 방식 차이다.
+
+스펙 2.1 ③(스냅샷 비교로 업데이트 대응)도 파일 수준에서 성립해야 한다. 파일이
+비어 있다가 채워지는 것은 콘텐츠 추가의 가장 강한 신호다.
+
+**따라서 스캔한 파일 전량을 `raw_file` 에 기록한다.**
+
 ### 2.3 모델
 
 ```prisma
@@ -184,6 +232,7 @@ model Snapshot {
   note        String?
   sources     SnapshotSource[]
   objects     RawObject[]
+  files       RawFile[]
   @@schema("raw")
 }
 
@@ -211,6 +260,21 @@ model RawObject {
   @@id([snapshotId, source, srcPath, id])
   @@index([entity, id])                 // 출처 대조 조인용
   @@index([snapshotId, source])
+  @@schema("raw")
+}
+
+/// 스캔한 파일 전량. **개체가 0개인 파일도 여기 남는다.**
+/// 파일 목록 자체가 스냅샷 간 비교 대상이다 — 「빈 파일」과 「파일 없음」을 가른다.
+model RawFile {
+  snapshotId  String
+  source      String
+  srcPath     String
+  entity      String
+  shape       String                    // dataList · map · list · single
+  objectCount Int                       // 0 이면 빈 파일
+  snapshot    Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  @@id([snapshotId, source, srcPath])
+  @@index([snapshotId, objectCount])    // 빈 파일 조회
   @@schema("raw")
 }
 ```
@@ -747,7 +811,7 @@ ORM 으로만 쓰고 마이그레이션 러너는 쓰지 않으므로, 스키마
 ### 규모
 
 ```
-raw         43,270행 / 스냅샷 · 35.5 MB       스냅샷 누적
+raw         43,270행 + 파일 1,664행 / 스냅샷 · 35.5 MB   스냅샷 누적
 canonical   대략 60–70 테이블
 애셋 이미지   3,360개는 DB 에 넣지 않는다. 파일로 둔다
 ```
