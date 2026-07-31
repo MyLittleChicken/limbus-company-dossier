@@ -15,6 +15,28 @@
 **데이터가 근간이다.** 기존 API·화면 설계를 참조하지 않는다. 스키마가 확정된 뒤
 API·화면이 여기 맞춘다.
 
+### 기존 데이터베이스와 병존한다
+
+이 작업은 **현행 58모델 스키마를 고치지 않는다.** 새 데이터베이스를 따로 세운다.
+현행 파이프라인·API·화면은 그대로 돌아간다. 호환을 맞추려 설계를 굽히지 않는다.
+
+```
+현행    prisma/schema.prisma  58모델   → 지금 서비스가 쓴다. 손대지 않는다
+신규    3스키마 구조                   → 이 스펙. 독립 구축
+```
+
+전환은 신규 DB 가 완성된 뒤 별도 작업으로 판단한다.
+
+### 이 데이터베이스에서 파생될 것
+
+```
+정보 제공        아카이브 조회·검색           canonical 을 직접 읽는다
+추천 엔진 재설계  메카닉·트리거 기반 그래프     canonical 에서 Neo4j 로 투영
+```
+
+추천 엔진과 Neo4j 는 이 스펙의 범위가 아니다. 다만 **canonical 이 그래프 투영의
+원천이 되어야 하므로** §6 의 조건을 지킨다.
+
 ### 이 설계가 답하는 질문
 
 마스터북 최종 검토가 「하나의 repo 에 모든 데이터가 온전히 담겨있나」에 **아니다**로
@@ -518,7 +540,81 @@ E.G.O    abName(유래 환상체 72) · 연출 전용 개체
 
 ---
 
-## 6. 검증
+## 6. 그래프 파생을 위한 조건
+
+추천 엔진을 메카닉·트리거 기반 그래프(Neo4j 등)로 재설계할 계획이다. canonical 이
+그 원천이 되므로 **어휘를 문자열로 두지 않고 차원 테이블로 담는다.**
+
+### 6.1 어휘는 이미 유한 집합이다
+
+원본 실측 결과 자유 문장이 아니라 토큰화된 값이다.
+
+```
+기프트  triggers   150종   "Clash Win" · "Bleed Skill Used" · "Staggered Ally" · "Always"
+       effects     55종   "Deal More Damage" · "Gain Skill Power" · "Inflict Debuff"
+                          (451/456 이 배열. 5건은 null)
+
+스킬 코인 효과 문자열 7,498개
+       대괄호 토큰 215종   [OnSucceedAttack] 5,073 · [Vibration] 922 · [Laceration] 795
+                          [Combustion] 767 · [Burst] 672 · [Sinking] 601 …
+```
+
+`lib/engine/vocab.ts` 의 `mapTrigger` 가 지금 이 문자열을 런타임에 파싱한다.
+canonical 이 미리 풀어 담으면 그 파싱이 사라진다.
+
+### 6.2 차원 테이블 + 연결 테이블
+
+```prisma
+model Trigger {                          // 150종
+  id     String @id                      // 정규화 키
+  raw    String                          // 원본 문자열
+  gifts  GiftTrigger[]
+  @@schema("canonical")
+}
+
+model Effect {                           // 55종
+  id     String @id
+  raw    String
+  gifts  GiftEffect[]
+  @@schema("canonical")
+}
+
+/// 코인 효과 문자열에서 뽑은 토큰. 215종.
+/// 상태 토큰([Vibration] 등)은 status 로, 발동 시점 토큰([OnSucceedAttack])은 timing 으로 나뉜다.
+model CoinToken {
+  coinId    Int
+  ordinal   Int                          // 문자열 안 등장 순서
+  token     String                       // Vibration · OnSucceedAttack
+  kind      String                       // status · timing · modifier
+  amount    Int?                         // "Inflict 1 [Sinking]" 의 1
+  @@id([coinId, ordinal])
+  @@index([token])
+  @@schema("canonical")
+}
+```
+
+### 6.3 그러면 그래프 투영이 덤프 한 번이 된다
+
+```
+(Gift)      -[:TRIGGERS_ON]-> (Trigger)      gift_trigger 그대로
+(Gift)      -[:PRODUCES]->    (Effect)       gift_effect 그대로
+(Skill)     -[:INFLICTS]->    (Status)       coin_token where kind='status'
+(Skill)     -[:TIMED_AT]->    (Timing)       coin_token where kind='timing'
+(Identity)  -[:HAS_SKILL]->   (Skill)        identity_skill
+(Pack)      -[:CONTAINS]->    (Gift)         gift_pack
+```
+
+재파싱도 재해석도 없다. **canonical 의 연결 테이블이 곧 간선이다.**
+
+### 6.4 이 절이 요구하는 것
+
+- 코인 효과 문자열을 **원문과 파싱 결과 둘 다** 담는다. 파싱이 틀려도 원문에서 다시 뽑는다
+- `kind` 분류(status · timing · modifier)는 T 착수 때 215종을 실측해 확정한다
+- 상태 토큰은 `canonical.status` 로 FK 를 건다. 못 잇는 토큰은 `field_gap` 에 남긴다
+
+---
+
+## 7. 검증
 
 마스터북 §4.1 의 **완전 일치 쌍 7건**을 적재 후 검사로 옮긴다. 이것이 깨지면
 곧 회귀 신호다.
@@ -541,21 +637,33 @@ E.G.O    abName(유래 환상체 72) · 연출 전용 개체
 
 ---
 
-## 7. 개정할 ADR
+## 8. ADR 처리
 
-| ADR | 현행 | 개정 |
+신규 DB 는 현행과 **병존**하므로 기존 ADR 01–05 를 고쳐 쓰면 두 시스템의 결정이
+한 문서에서 뒤섞인다. **새 ADR 을 추가하고 기존은 현행 DB 의 기록으로 남긴다.**
+
+```
+ADR-06  3스키마 데이터베이스        신규. 이 스펙의 결정을 기록
+        · raw / canonical / app 의 역할과 재생성 경계
+        · 원본 전 필드 정규화 · 단계 전량 전개 · 로케일 3종
+        · 수동 보정이 재생성을 이긴다
+```
+
+기존 ADR 과 달라지는 지점을 ADR-06 안에 명시한다.
+
+| ADR | 현행 결정 | ADR-06 에서 |
 | --- | --- | --- |
-| **01** 데이터 저장 형식 | 「파일 하나 = 테이블 하나」 | 3스키마 · `raw` 층 추가 |
-| **02** 파이프라인 | 「전체를 재생성한다」 | **재생성 범위를 `raw`·`canonical` 로 한정.** `app` 제외 |
-| **03** 다국어 | ko · en | **ko · en · ja** |
+| **01** 데이터 저장 형식 | 「파일 하나 = 테이블 하나」 | `raw` 층 추가로 대체 |
+| **02** 파이프라인 | 「전체를 재생성한다」 | 범위를 `raw`·`canonical` 로 한정. `app` 제외 |
+| **03** 다국어 | ko · en | ko · en · ja |
 | **04** 출처 권위 | 엔티티마다 정본 하나 | 유지. **팩은 mj** 로 정정 (백로그 09 §4) |
 
-`prisma/schema.prisma` 머리말의 원칙 5(「이 스키마는 게임 데이터만 담는다. 추천용
-저작 데이터와 런 기록은 범위 밖이다」)도 `app` 스키마 추가에 맞춰 고친다.
+**단 하나 기존 문서를 직접 고친다** — ADR-04 의 「거울 던전 구성 = `limbus-assets`」
+문장은 현행 DB 에도 틀린 서술이므로 정정한다(백로그 09 §4).
 
 ---
 
-## 8. 기술 제약
+## 9. 기술 제약
 
 ### Prisma 다중 스키마
 
@@ -586,13 +694,23 @@ Postgres 에게 부담이 되는 규모가 아니다. 규모는 설계 제약이
 
 ---
 
-## 9. 범위 밖
+## 10. 범위 밖
 
+- **현행 DB·파이프라인·API·화면** — 손대지 않는다. 병존한다. 전환 여부는 신규 DB 가
+  완성된 뒤 별도로 판단한다.
 - **`schema service`** — 조인 없이 읽히는 파생표. 화면 요구가 정해진 뒤에 만든다.
   `canonical` 만으로 서비스가 완전히 돌아가므로 속도 문제일 뿐이다.
-- **API·화면 수정** — 스키마 확정 후 별도 작업. 이 설계는 기존 API·화면을
-  참조하지 않았다.
+- **추천 엔진 재설계와 Neo4j 구축** — 이 DB 에서 파생될 다음 작업이다. 이 스펙은
+  §6 으로 **투영 가능한 형태를 보장**하는 데까지만 책임진다.
 - **결손 7건의 데이터 자체를 메우는 일** — 수동 보정으로 처리한다. 파이프라인은
   결손을 정확히 특정해 `field_gap` 과 리포트로 전달하는 데까지 책임진다.
-- **추천 엔진 로직 변경** — 읽는 테이블이 바뀌므로 조정은 필요하나, 알고리즘
-  자체는 이 설계의 범위가 아니다.
+
+### 완료 기준
+
+이 스펙은 **데이터베이스가 완벽하게 구축되면 끝난다.** 판정 기준은 셋이다.
+
+```
+1. 원본 1,664파일의 모든 개체가 raw 에 들어갔다        (누락 0)
+2. 마스터북 90개 개념이 canonical 컬럼으로 옮겨졌다
+3. 검증 7쌍이 전부 통과하고, 결손이 field_gap 에 특정됐다
+```
