@@ -53,15 +53,52 @@ async function main(): Promise<void> {
 			});
 		}
 
-		const files = await prisma.rawObject.findMany({
+		const fileCount = await prisma.rawFile.count({ where: { snapshotId: snapshot.id } });
+		checks.push({
+			name: '스캔한 파일 수',
+			ok: fileCount === 1_664,
+			detail: `${fileCount.toLocaleString()} / 1,664`,
+		});
+
+		// 빈 파일은 raw_object 에 행을 못 만든다. 차이가 정확히 16이어야 한다.
+		const withObjects = await prisma.rawObject.findMany({
 			where: { snapshotId: snapshot.id },
 			distinct: ['srcPath'],
 			select: { srcPath: true },
 		});
+		const empty = await prisma.rawFile.count({
+			where: { snapshotId: snapshot.id, objectCount: 0 },
+		});
 		checks.push({
-			name: '고유 srcPath',
-			ok: files.length === 1_664,
-			detail: `${files.length.toLocaleString()} / 1,664`,
+			name: '빈 파일 (개체 0개)',
+			ok: empty === 16,
+			detail: `${empty} / 16`,
+		});
+		checks.push({
+			name: '개체를 낸 파일 + 빈 파일 = 전체',
+			ok: withObjects.length + empty === fileCount,
+			detail: `${withObjects.length.toLocaleString()} + ${empty} = ${fileCount.toLocaleString()}`,
+		});
+
+		// loc-en 은 5건에 대해 파일조차 만들지 않는다 — 빈 파일과 다른 사실이다.
+		const koEmptyEnMissing = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n
+			FROM raw.raw_file ko
+			WHERE ko.snapshot_id = ${snapshot.id}
+			  AND ko.source = 'loc-ko'
+			  AND ko.object_count = 0
+			  AND NOT EXISTS (
+			    SELECT 1 FROM raw.raw_file en
+			    WHERE en.snapshot_id = ko.snapshot_id
+			      AND en.source = 'loc-en'
+			      AND en.src_path = replace(ko.src_path, '/loc-ko/', '/loc-en/')
+			  )
+		`;
+		const missingInEn = Number(koEmptyEnMissing[0]?.n ?? 0n);
+		checks.push({
+			name: 'loc-ko 는 빈 껍데기 · loc-en 은 파일 없음',
+			ok: missingInEn === 5,
+			detail: `${missingInEn} / 5`,
 		});
 
 		// 마스터북이 게임으로 판정한 기프트 9427 이 두 출처에 다르게 들어 있어야 한다.
