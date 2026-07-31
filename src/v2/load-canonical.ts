@@ -15,6 +15,7 @@ import { buildGifts } from './canonical/gifts.js';
 import { buildSinners } from './canonical/sinners.js';
 import { buildSkills } from './canonical/skills.js';
 import { buildIdentities } from './canonical/identities.js';
+import { buildEgos } from './canonical/egos.js';
 
 const CHUNK = 1_000;
 
@@ -143,11 +144,37 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── E.G.O 계열 ─────────────────────────────────────────────
+		// **파일명으로 가른다.** E.G.O 는 각성 스킬과 패시브가 같은 번호를 쓴다
+		// (실측 교집합 110건) — id 자릿수로 가르면 한쪽이 다른 쪽을 덮어쓴다.
+		const egoLoc = (locale: string, prefix: string) =>
+			readSourceGroup(prisma, snapshotId, 'egos', `loc-${locale}`, { startsWith: [prefix] });
+
+		const egos = buildEgos(
+			{
+				mj: await readSource(prisma, snapshotId, 'egos/limbus-data-mj/egos.json'),
+				mjDetail: await readSource(prisma, snapshotId, 'egos/limbus-data-mj/egos_detail.json'),
+				assets: await readSource(prisma, snapshotId, 'egos/limbus-assets/egos.json'),
+				locEgoKo: await egoLoc('ko', 'Egos'),
+				locEgoEn: await egoLoc('en', 'Egos'),
+				locEgoJa: await egoLoc('ja', 'Egos'),
+				locSkillKo: await egoLoc('ko', 'Skills_Ego'),
+				locSkillEn: await egoLoc('en', 'Skills_Ego'),
+				locSkillJa: await egoLoc('ja', 'Skills_Ego'),
+				locPassiveKo: await egoLoc('ko', 'Passive_Ego'),
+				locPassiveEn: await egoLoc('en', 'Passive_Ego'),
+				locPassiveJa: await egoLoc('ja', 'Passive_Ego'),
+				knownSinners: new Set(sinners.sinner.map((s) => s.id)),
+			},
+			meta,
+		);
+
 		// canonical 만 비운다. raw 도 app 도 건드리지 않는다.
 		await prisma.$executeRaw`
 			TRUNCATE canonical.pack, canonical.gift, canonical.keyword, canonical.trigger,
 			         canonical.effect, canonical.sinner, canonical.association,
 			         canonical.skill, canonical.passive, canonical.identity,
+			         canonical.ego, canonical.ego_passive,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -269,6 +296,22 @@ async function main(): Promise<void> {
 		counts.push(['identity_association', await chunked(identities.identityAssociation, (d) => prisma.identityAssociation.createMany({ data: d }))]);
 		counts.push(['identity_keyword', await chunked(identities.identityKeyword, (d) => prisma.identityKeyword.createMany({ data: d }))]);
 		counts.push(['identity_unit_keyword', await chunked(identities.identityUnitKeyword, (d) => prisma.identityUnitKeyword.createMany({ data: d }))]);
+
+		// ── E.G.O 계열 적재 ───────────────────────────────────────
+		counts.push(['ego_passive', await chunked(egos.egoPassive, (d) => prisma.egoPassive.createMany({ data: d }))]);
+		counts.push(['ego_passive_text', await chunked(egos.egoPassiveText, (d) => prisma.egoPassiveText.createMany({ data: d as never }))]);
+		counts.push(['ego', await chunked(egos.ego, (d) => prisma.ego.createMany({ data: d as never }))]);
+		counts.push(['ego_text', await chunked(egos.egoText, (d) => prisma.egoText.createMany({ data: d as never }))]);
+		counts.push(['ego_resist', await chunked(egos.egoResist, (d) => prisma.egoResist.createMany({ data: d as never }))]);
+		counts.push(['ego_cost', await chunked(egos.egoCost, (d) => prisma.egoCost.createMany({ data: d as never }))]);
+		counts.push(['ego_corrosion', await chunked(egos.egoCorrosion, (d) => prisma.egoCorrosion.createMany({ data: d }))]);
+		counts.push(['ego_requirement', await chunked(egos.egoRequirement, (d) => prisma.egoRequirement.createMany({ data: d }))]);
+		counts.push(['ego_skill', await chunked(egos.egoSkill, (d) => prisma.egoSkill.createMany({ data: d }))]);
+		counts.push(['ego_skill_stage', await chunked(egos.egoSkillStage, (d) => prisma.egoSkillStage.createMany({ data: d }))]);
+		counts.push(['ego_skill_stage_text', await chunked(egos.egoSkillStageText, (d) => prisma.egoSkillStageText.createMany({ data: d as never }))]);
+		counts.push(['ego_skill_coin', await chunked(egos.egoSkillCoin, (d) => prisma.egoSkillCoin.createMany({ data: d as never }))]);
+		counts.push(['ego_passive_link', await chunked(egos.egoPassiveLink, (d) => prisma.egoPassiveLink.createMany({ data: d }))]);
+		counts.push(['tool_annotation (ego)', await chunked(egos.toolAnnotation, (d) => prisma.toolAnnotation.createMany({ data: d as never }))]);
 
 		counts.push([
 			'field_gap',

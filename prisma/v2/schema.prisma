@@ -585,6 +585,7 @@ model Sinner {
 
   texts      SinnerText[]
   identities Identity[]
+  egos       Ego[]
 
   @@map("sinner")
   @@schema("canonical")
@@ -904,5 +905,227 @@ model IdentityUnitKeyword {
 
   @@id([identityId, keyword])
   @@map("identity_unit_keyword")
+  @@schema("canonical")
+}
+// canonical — E.G.O
+// ─────────────────────────────────────────────────────────────
+
+/// E.G.O 등급. 게임 표기는 세피로트 이름이다.
+enum EgoRank {
+  ZAYIN
+  TETH
+  HE
+  WAW
+  ALEPH
+
+  @@schema("canonical")
+}
+
+/// E.G.O 115종.
+///
+/// 정본은 limbus-assets 다(ADR-04) — 인격과 뒤집힌다. 다만 loc 가 두 가지를
+/// 더 안다: 연출 전용 개체 5건과 두 번째 각성 스킬 2건.
+model Ego {
+  id            String   @id
+  sinnerId      Int      @map("sinner_id")
+  rank          EgoRank?
+  /// 각성 시 공격 죄악
+  sin           Sin?
+  attackType    AtkType? @map("attack_type")
+  season        Int?
+  releaseDate   String?  @map("release_date")
+  /// 환상 해석 최대 단계. 실측 3건만 값이 있다
+  maxThreadspin Int?     @map("max_threadspin")
+  /// 거울 던전에서 추출 가능한가. 게임 확인으로 값이 맞음을 밝혔다
+  extractable   Boolean  @default(false)
+  /// 컷신 전용이라 플레이할 수 없다. loc 에만 있는 5건
+  presentationOnly Boolean @default(false) @map("presentation_only")
+
+  sinner       Sinner           @relation(fields: [sinnerId], references: [id])
+  texts        EgoText[]
+  resists      EgoResist[]
+  costs        EgoCost[]
+  corrosions   EgoCorrosion[]
+  requirements EgoRequirement[]
+  skills       EgoSkill[]
+  passives     EgoPassiveLink[]
+
+  @@index([sinnerId])
+  @@index([rank])
+  @@map("ego")
+  @@schema("canonical")
+}
+
+model EgoText {
+  egoId  String  @map("ego_id")
+  locale Locale
+  name   String
+  desc   String?
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, locale])
+  @@map("ego_text")
+  @@schema("canonical")
+}
+
+/// 죄악 7축 저항. 인격은 물리 3축이라 축이 다르다.
+///
+/// mj 는 white·black 2축을 더 갖지만 **전작 로보토미의 개념이고 현재 게임에
+/// 없다**(마스터북 게임 확인). 그 둘은 tool_annotation 에 legacyResist 로 남긴다.
+model EgoResist {
+  egoId String @map("ego_id")
+  sin   Sin
+  value Float
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, sin])
+  @@map("ego_resist")
+  @@schema("canonical")
+}
+
+/// 사용 자원. 죄악별 개수다.
+model EgoCost {
+  egoId String @map("ego_id")
+  sin   Sin
+  count Int
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, sin])
+  @@map("ego_cost")
+  @@schema("canonical")
+}
+
+/// 침식 확률표.
+///
+/// **section 은 백분율이 아니다.** 정신력 [-45, +45] 를 [0, 1] 로 정규화한
+/// 위치다 — 0.5 가 SP 0 이고, 그때 침식 확률이 25 % 다. 마스터북이 처음
+/// 백분율로 오독했다가 게임 카드로 정정했다.
+model EgoCorrosion {
+  egoId       String @map("ego_id")
+  index       Int
+  section     Float
+  probability Float
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, index])
+  @@map("ego_corrosion")
+  @@schema("canonical")
+}
+
+/// 사용 조건. 색 토큰을 몇 개 요구하는가.
+model EgoRequirement {
+  egoId         String @map("ego_id")
+  /// CRIMSON · SCARLET · AMBER · SHAMROCK · AZURE · INDIGO · VIOLET
+  attributeType String @map("attribute_type")
+  num           Int
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, attributeType])
+  @@map("ego_requirement")
+  @@schema("canonical")
+}
+
+/// E.G.O 스킬. 인격 스킬과 **구조가 다르다** —
+/// 원본이 levelList[].coinlist[].coindescs[] 이고 단계가 델타가 아니다.
+/// 있는 단계만 담는다(실측 1·3·4 가 주력).
+model EgoSkill {
+  id    String @id
+  egoId String @map("ego_id")
+  /// awakening · corrosion
+  role  String
+  /// 같은 역할 안의 순서. 두 번째 각성 스킬이 실측 2건 있다
+  ordinal Int  @default(0)
+
+  ego    Ego              @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  stages EgoSkillStage[]
+
+  @@index([egoId])
+  @@map("ego_skill")
+  @@schema("canonical")
+}
+
+model EgoSkillStage {
+  skillId String @map("skill_id")
+  uptie   Int
+
+  skill EgoSkill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  texts EgoSkillStageText[]
+  coins EgoSkillCoin[]
+
+  @@id([skillId, uptie])
+  @@map("ego_skill_stage")
+  @@schema("canonical")
+}
+
+model EgoSkillStageText {
+  skillId String  @map("skill_id")
+  uptie   Int
+  locale  Locale
+  name    String
+  desc    String?
+  /// 유래 환상체. loc 단독 개념이다
+  abName  String? @map("ab_name")
+
+  stage EgoSkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, locale])
+  @@map("ego_skill_stage_text")
+  @@schema("canonical")
+}
+
+/// 코인 효과. loc 이 로케일별로 갖는다.
+model EgoSkillCoin {
+  skillId String @map("skill_id")
+  uptie   Int
+  index   Int
+  locale  Locale
+  effects String[]
+
+  stage EgoSkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, index, locale])
+  @@map("ego_skill_coin")
+  @@schema("canonical")
+}
+
+/// E.G.O 패시브 113종. mj·assets·loc 3중 일치를 마스터북이 확인했다(순서까지).
+model EgoPassive {
+  id String @id
+
+  texts EgoPassiveText[]
+  egos  EgoPassiveLink[]
+
+  @@map("ego_passive")
+  @@schema("canonical")
+}
+
+model EgoPassiveText {
+  passiveId String  @map("passive_id")
+  locale    Locale
+  name      String
+  desc      String?
+
+  passive EgoPassive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, locale])
+  @@map("ego_passive_text")
+  @@schema("canonical")
+}
+
+model EgoPassiveLink {
+  egoId     String @map("ego_id")
+  passiveId String @map("passive_id")
+
+  ego     Ego        @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  passive EgoPassive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, passiveId])
+  @@index([passiveId])
+  @@map("ego_passive_link")
   @@schema("canonical")
 }

@@ -28,6 +28,9 @@ CREATE TYPE "canonical"."AtkType" AS ENUM ('slash', 'pierce', 'blunt');
 -- CreateEnum
 CREATE TYPE "canonical"."SkillKind" AS ENUM ('attack', 'guard', 'counter', 'evade', 'non_action');
 
+-- CreateEnum
+CREATE TYPE "canonical"."EgoRank" AS ENUM ('ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH');
+
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
     "id" TEXT NOT NULL,
@@ -487,6 +490,135 @@ CREATE TABLE "canonical"."identity_unit_keyword" (
     CONSTRAINT "identity_unit_keyword_pkey" PRIMARY KEY ("identity_id","keyword")
 );
 
+-- CreateTable
+CREATE TABLE "canonical"."ego" (
+    "id" TEXT NOT NULL,
+    "sinner_id" INTEGER NOT NULL,
+    "rank" "canonical"."EgoRank",
+    "sin" "canonical"."Sin",
+    "attack_type" "canonical"."AtkType",
+    "season" INTEGER,
+    "release_date" TEXT,
+    "max_threadspin" INTEGER,
+    "extractable" BOOLEAN NOT NULL DEFAULT false,
+    "presentation_only" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "ego_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_text" (
+    "ego_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+
+    CONSTRAINT "ego_text_pkey" PRIMARY KEY ("ego_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_resist" (
+    "ego_id" TEXT NOT NULL,
+    "sin" "canonical"."Sin" NOT NULL,
+    "value" DOUBLE PRECISION NOT NULL,
+
+    CONSTRAINT "ego_resist_pkey" PRIMARY KEY ("ego_id","sin")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_cost" (
+    "ego_id" TEXT NOT NULL,
+    "sin" "canonical"."Sin" NOT NULL,
+    "count" INTEGER NOT NULL,
+
+    CONSTRAINT "ego_cost_pkey" PRIMARY KEY ("ego_id","sin")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_corrosion" (
+    "ego_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "section" DOUBLE PRECISION NOT NULL,
+    "probability" DOUBLE PRECISION NOT NULL,
+
+    CONSTRAINT "ego_corrosion_pkey" PRIMARY KEY ("ego_id","index")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_requirement" (
+    "ego_id" TEXT NOT NULL,
+    "attribute_type" TEXT NOT NULL,
+    "num" INTEGER NOT NULL,
+
+    CONSTRAINT "ego_requirement_pkey" PRIMARY KEY ("ego_id","attribute_type")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_skill" (
+    "id" TEXT NOT NULL,
+    "ego_id" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "ordinal" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ego_skill_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_skill_stage" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+
+    CONSTRAINT "ego_skill_stage_pkey" PRIMARY KEY ("skill_id","uptie")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_skill_stage_text" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+    "ab_name" TEXT,
+
+    CONSTRAINT "ego_skill_stage_text_pkey" PRIMARY KEY ("skill_id","uptie","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_skill_coin" (
+    "skill_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
+    "index" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "effects" TEXT[],
+
+    CONSTRAINT "ego_skill_coin_pkey" PRIMARY KEY ("skill_id","uptie","index","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_passive" (
+    "id" TEXT NOT NULL,
+
+    CONSTRAINT "ego_passive_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_passive_text" (
+    "passive_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+    "desc" TEXT,
+
+    CONSTRAINT "ego_passive_text_pkey" PRIMARY KEY ("passive_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."ego_passive_link" (
+    "ego_id" TEXT NOT NULL,
+    "passive_id" TEXT NOT NULL,
+
+    CONSTRAINT "ego_passive_link_pkey" PRIMARY KEY ("ego_id","passive_id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "snapshot_version_key" ON "raw"."snapshot"("version");
 
@@ -552,6 +684,18 @@ CREATE INDEX "identity_passive_passive_id_idx" ON "canonical"."identity_passive"
 
 -- CreateIndex
 CREATE INDEX "identity_association_association_id_idx" ON "canonical"."identity_association"("association_id");
+
+-- CreateIndex
+CREATE INDEX "ego_sinner_id_idx" ON "canonical"."ego"("sinner_id");
+
+-- CreateIndex
+CREATE INDEX "ego_rank_idx" ON "canonical"."ego"("rank");
+
+-- CreateIndex
+CREATE INDEX "ego_skill_ego_id_idx" ON "canonical"."ego_skill"("ego_id");
+
+-- CreateIndex
+CREATE INDEX "ego_passive_link_passive_id_idx" ON "canonical"."ego_passive_link"("passive_id");
 
 -- AddForeignKey
 ALTER TABLE "raw"."snapshot_source" ADD CONSTRAINT "snapshot_source_snapshot_id_fkey" FOREIGN KEY ("snapshot_id") REFERENCES "raw"."snapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -678,4 +822,43 @@ ALTER TABLE "canonical"."identity_keyword" ADD CONSTRAINT "identity_keyword_iden
 
 -- AddForeignKey
 ALTER TABLE "canonical"."identity_unit_keyword" ADD CONSTRAINT "identity_unit_keyword_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego" ADD CONSTRAINT "ego_sinner_id_fkey" FOREIGN KEY ("sinner_id") REFERENCES "canonical"."sinner"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_text" ADD CONSTRAINT "ego_text_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_resist" ADD CONSTRAINT "ego_resist_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_cost" ADD CONSTRAINT "ego_cost_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_corrosion" ADD CONSTRAINT "ego_corrosion_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_requirement" ADD CONSTRAINT "ego_requirement_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_skill" ADD CONSTRAINT "ego_skill_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_skill_stage" ADD CONSTRAINT "ego_skill_stage_skill_id_fkey" FOREIGN KEY ("skill_id") REFERENCES "canonical"."ego_skill"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_skill_stage_text" ADD CONSTRAINT "ego_skill_stage_text_skill_id_uptie_fkey" FOREIGN KEY ("skill_id", "uptie") REFERENCES "canonical"."ego_skill_stage"("skill_id", "uptie") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_skill_coin" ADD CONSTRAINT "ego_skill_coin_skill_id_uptie_fkey" FOREIGN KEY ("skill_id", "uptie") REFERENCES "canonical"."ego_skill_stage"("skill_id", "uptie") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_passive_text" ADD CONSTRAINT "ego_passive_text_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."ego_passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_passive_link" ADD CONSTRAINT "ego_passive_link_ego_id_fkey" FOREIGN KEY ("ego_id") REFERENCES "canonical"."ego"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."ego_passive_link" ADD CONSTRAINT "ego_passive_link_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."ego_passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

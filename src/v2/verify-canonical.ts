@@ -371,6 +371,81 @@ async function main(): Promise<void> {
 			detail: `${Number(badResist[0]?.n ?? 0n)} / 0`,
 		});
 
+		// ══ E.G.O 계열 ═════════════════════════════════════════════
+		eq('ego', await prisma.ego.count(), 115);
+		eq('ego (플레이)', await prisma.ego.count({ where: { presentationOnly: false } }), 110);
+		eq('ego (연출 전용)', await prisma.ego.count({ where: { presentationOnly: true } }), 5);
+		eq('ego_text', await prisma.egoText.count(), 345);
+		eq('ego_resist', await prisma.egoResist.count(), 770);
+		eq('ego_cost', await prisma.egoCost.count(), 314);
+		eq('ego_corrosion', await prisma.egoCorrosion.count(), 330);
+		eq('ego_requirement', await prisma.egoRequirement.count(), 314);
+		eq('ego_skill', await prisma.egoSkill.count(), 215);
+		eq('ego_skill_stage', await prisma.egoSkillStage.count(), 616);
+		eq('ego_skill_stage_text', await prisma.egoSkillStageText.count(), 1_848);
+		eq('ego_skill_coin', await prisma.egoSkillCoin.count(), 2_745);
+		eq('ego_passive', await prisma.egoPassive.count(), 113);
+		eq('ego_passive_text', await prisma.egoPassiveText.count(), 339);
+		eq('ego_passive_link', await prisma.egoPassiveLink.count(), 113);
+
+		const byRank = await prisma.ego.groupBy({ by: ['rank'], _count: { _all: true } });
+		const rankMap = Object.fromEntries(
+			byRank.filter((r) => r.rank !== null).map((r) => [String(r.rank), r._count._all]),
+		);
+		checks.push({
+			name: 'E.G.O 등급 분포',
+			ok:
+				rankMap['ZAYIN'] === 20 &&
+				rankMap['TETH'] === 32 &&
+				rankMap['HE'] === 40 &&
+				rankMap['WAW'] === 18,
+			detail: JSON.stringify(rankMap),
+		});
+
+		// 저항은 죄악 7축이다 — white·black 은 담기지 않는다
+		const badEgoResist = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT ego_id FROM canonical.ego_resist GROUP BY ego_id HAVING count(*) <> 7
+			) x
+		`;
+		checks.push({
+			name: '저항 7축이 아닌 E.G.O (0이어야 한다)',
+			ok: Number(badEgoResist[0]?.n ?? 1n) === 0,
+			detail: `${Number(badEgoResist[0]?.n ?? 0n)} / 0`,
+		});
+
+		eq(
+			'white·black 이 tool_annotation 으로 격리',
+			await prisma.toolAnnotation.count({ where: { entity: 'ego', field: 'legacyResist' } }),
+			110,
+		);
+
+		// **두 번째 각성 스킬** — mj 만으로는 못 얻는다
+		const second = await prisma.egoSkill.findMany({
+			where: { role: 'awakening', ordinal: { gt: 0 } },
+			select: { id: true },
+		});
+		checks.push({
+			name: '두 번째 각성 스킬 7건 (loc 단독)',
+			ok:
+				second.length === 7 &&
+				second.map((s) => s.id).sort().join(',') ===
+					'2010112,2030112,2050112,2060112,2060812,2110112,2120912',
+			detail: second.map((s) => s.id).sort().join(' '),
+		});
+
+		// 침식 확률표는 E.G.O 마다 3행이다
+		const badCorrosion = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT ego_id FROM canonical.ego_corrosion GROUP BY ego_id HAVING count(*) <> 3
+			) x
+		`;
+		checks.push({
+			name: '침식 3구간이 아닌 E.G.O (0이어야 한다)',
+			ok: Number(badCorrosion[0]?.n ?? 1n) === 0,
+			detail: `${Number(badCorrosion[0]?.n ?? 0n)} / 0`,
+		});
+
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다
 		const noText = await prisma.gift.count({ where: { stages: { none: { texts: { some: {} } } } } });
 		checks.push({ name: '텍스트 없는 기프트 (0이어야 한다)', ok: noText === 0, detail: `${noText} / 0` });

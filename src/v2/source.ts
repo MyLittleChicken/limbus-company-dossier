@@ -104,22 +104,41 @@ export function mergeIndexes(parts: RawIndex[]): RawIndex {
  * 목록이며 성격이 다른 파일을 뺀다 — EgoGiftCategory 는 키워드 사전이고
  * MirrorDungeonEgoGiftLockedDesc 는 획득 문구라 기프트 본체와 섞으면 안 된다.
  */
+export interface GroupFilter {
+	/** 뺄 파일명(basename) 목록 */
+	exclude?: string[];
+	/**
+	 * 이 접두어로 시작하는 파일만 읽는다.
+	 *
+	 * **id 자릿수로 가르면 안 되는 경우가 있다.** E.G.O 는 각성 스킬과 패시브가
+	 * 같은 번호를 쓴다(실측 교집합 110건) — 2010111 이 스킬이자 패시브다.
+	 * 마스터북이 인격 편에서 찾은 번호 공간 충돌이며, 파일로 갈라야 한다.
+	 */
+	startsWith?: string[];
+}
+
 export async function readSourceGroup(
 	prisma: PrismaClient,
 	snapshotId: string,
 	entity: string,
 	source: string,
-	exclude: string[] = [],
+	filter: string[] | GroupFilter = [],
 ): Promise<RawIndex> {
+	const f: GroupFilter = Array.isArray(filter) ? { exclude: filter } : filter;
 	const rows = await prisma.rawObject.findMany({
 		where: { snapshotId, entity, source },
 		select: { id: true, payload: true, srcPath: true },
 	});
 	if (rows.length === 0) throw new Error(`raw 에 ${entity}/${source} 가 없다`);
-	const skip = new Set(exclude);
+	const skip = new Set(f.exclude ?? []);
 	return indexRows(
 		rows
-			.filter((r) => !skip.has(r.srcPath.split('/').pop() ?? ''))
+			.filter((r) => {
+				const base = r.srcPath.split('/').pop() ?? '';
+				if (skip.has(base)) return false;
+				if (f.startsWith === undefined) return true;
+				return f.startsWith.some((prefix) => base.startsWith(prefix));
+			})
 			.map((r) => ({ id: r.id, payload: (r.payload ?? {}) as Record<string, unknown> })),
 	);
 }
