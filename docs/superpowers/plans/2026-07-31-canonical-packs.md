@@ -1588,16 +1588,42 @@ git commit -m "feat(v2): canonical 검증 — 팩 계열 실측 대조 21건"
 
 ---
 
-## 완료 판정
+## 완료 판정 — **전부 통과 (2026-07-31)**
 
 ```
-1. canonical.pack 117종이 있다                    npm run v2:verify:canonical
-2. 표시명이 3로케일로 351행                        ja 포함
-3. 결손 63건이 field_gap 에 특정됐다               textColor 61 · unlockCode 2
-4. 판정 근거가 field_source 에 남았다              규칙별 집계 출력
-5. 계획 1이 안 깨졌다                             npm run v2:verify 13건
-6. 현행이 그대로 돈다                             public.gift 456 · schema:validate
+1. canonical.pack 117종이 있다                    ✔ 검사 22건 전부 통과
+2. 표시명이 3로케일로 351행                        ✔ ja 포함
+3. 결손 63건이 field_gap 에 특정됐다               ✔ textColor 61 · unlockCode 2
+4. 판정 근거가 field_source 에 남았다              ✔ 1,733행
+5. 계획 1이 안 깨졌다                             ✔ npm run v2:verify 13건
+6. 현행이 그대로 돈다                             ✔ public.gift 456 · schema:validate
 ```
+
+### 실행 결과
+
+```
+npm test                    161건 통과 (v2 59건 + lib 102건)
+npm run v2:canonical        pack 117 · pack_text 351 · pack_tag 184
+                            pack_category_path 202 · floor_pack 288
+                            field_gap 63 · field_source 1,733
+npm run v2:verify:canonical 검사 22건 전부 통과
+```
+
+판정 집계 — **어긋난 곳이 하나도 없다.**
+
+```
+agreed        117    sprite 가 두 출처에서 전건 일치
+disagreed       0
+mj-only       990    117×7 + textColor 56 + unlockCode 115
+assets-only   275    overlaySprite 41 + tags 117 + categoryPath 117
+로케일 우선    351    ko(mj) 117 · en(loc) 117 · ja(loc) 117
+```
+
+### 계획과 달라진 것
+
+없다. 실측 기준값이 전부 맞았다. 계획을 쓰는 단계에서 원본을 직접 세고
+층 대조 SQL 까지 미리 돌려본 것이 효과가 있었다 — `pack_category_path` 를
+처음 234로 잘못 적었다가 202로, `extreme` 을 20에서 24로 고친 것도 그 과정에서다.
 
 ## 이 계획이 남기는 것
 
