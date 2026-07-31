@@ -166,6 +166,26 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 
 **팩은 DB 모델이 없다.** `GiftPack.packId` 가 정수로만 남아 이름조차 조회되지 않는다.
 
+### 거울 던전 — 7회차 · **완료 2026-07-31**
+
+계열 지도는 [`mirror-dungeon/00-overview.md`](mirror-dungeon/00-overview.md).
+
+| # | 대상 | 상태 |
+| --- | --- | --- |
+| 1 | [`md__details.json` + `md_floor_packs.json`](mirror-dungeon/01-limbus-assets-md-details-floor-packs.md) | **완료** 2026-07-31 |
+| 2 | [`md_choice_events.json`](mirror-dungeon/02-limbus-assets-md-choice-events.md) | **완료** 2026-07-31 · 159건 |
+| 3 | [업적 2파일](mirror-dungeon/03-limbus-assets-md-achievements.md) | **완료** 2026-07-31 · 183건 |
+| 4 | [보상 2파일 + `encounters.json`](mirror-dungeon/04-limbus-assets-rewards-encounters.md) | **완료** 2026-07-31 |
+| 5 | [`md-resource/*.sql`](mirror-dungeon/05-md-resource-sql.md) | **완료** 2026-07-31 · **게임 데이터 아님** |
+| 6 | [`loc-*` 이벤트 계열 12파일](mirror-dungeon/06-loc-events.md) | **완료** 2026-07-31 · 364건 |
+| 7 | [`loc-*` UI·버프·스킬 38파일](mirror-dungeon/07-loc-ui-buffs-skills.md) | **완료** 2026-07-31 · 2,672건 |
+
+**거울 던전 편 결산** — 7회차 전부 미해결 없이 닫혔다. **`limbus-data-mj` 가 0인 첫 사례**
+(assets 5 · loc 4)이지만, 맵 생성 규칙은 팩 편의 `packs_detail.json` 에 있다.
+
+`limbus-assets` 8파일 중 변환기가 읽는 것은 **`grace` 하나뿐**이다. 선택지 이벤트 ·
+업적 · 보상 · 시작 버프가 전부 미적재다.
+
 ### 그 밖의 엔티티
 
 파일 규모로 잡은 예상 회차다. 인격 편에서 공통 어휘(죄악 7 · 공격 타입 3 · 기믹 축 10 ·
@@ -174,7 +194,6 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 
 | 편 | 파일 | 예상 회차 | 비고 |
 | --- | ---: | ---: | --- |
-| 거울 던전 | 163 | ~6 | |
 | 상태(메카닉) | 260 | ~6 | 08 문서의 `status_gimmick` 근거 |
 | 인카운터 | 380 | ~8 | `assets` 251개가 동형이면 묶인다 |
 
