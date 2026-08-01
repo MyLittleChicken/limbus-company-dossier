@@ -54,7 +54,7 @@ npm run v2:canonical  →  TRUNCATE canonical.*  후 재적재
 
 ```
 prisma/schema.prisma      현행. 그대로
-prisma/v2/schema.prisma   신규 96모델
+prisma/v2/schema.prisma   신규 97모델
 ```
 
 ## 3. 층별 결정
@@ -189,8 +189,8 @@ schema canonical   86테이블 · 124,000여 행
 schema app          6테이블
 schema public      52테이블 ·  52,781행   ← 현행. 무손상
 
-검사   raw 13건 + canonical 139건 전부 통과
-테스트 277건 전부 통과 (변환기 12개 전부 TDD)
+검사   raw 13건 + canonical 147건 전부 통과
+테스트 289건 전부 통과 (변환기 13개 전부 TDD)
 ```
 
 ### 5.1 스펙 완료 기준 3항 전부 통과
@@ -280,7 +280,7 @@ npm run v2:generate           Prisma Client 생성 (src/v2/generated)
 npm run v2:load               raw 적재
 npm run v2:canonical          canonical 재계산 + override 덮기
 npm run v2:verify             raw 검증 13건
-npm run v2:verify:canonical   canonical 검증 139건
+npm run v2:verify:canonical   canonical 검증 147건
 npm run v2:gap-report         결손 대장 → build/gap-report.md
 ```
 
