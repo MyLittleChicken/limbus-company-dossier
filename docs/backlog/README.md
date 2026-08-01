@@ -23,6 +23,7 @@
 | [09-pack-model.md](09-pack-model.md) | 테마 팩 모델에 보강 필드 6종이 없다 | **신규 DB 해소** · 현행 미착수 |
 | [10-encounter-linkage.md](10-encounter-linkage.md) | mj 전투 풀 2,525종의 정의가 리포에 없다 | 미해결 · 신규 DB 가 `field_gap` 에 기록 |
 | [11-season-label.md](11-season-label.md) | 시즌 값이 화면에 원본 정수 그대로 나간다 — 발푸르기스가 `S9104`, 콜라보가 `S8000` 로 뜬다 | 미착수 |
+| [12-v1-local-assets.md](12-v1-local-assets.md) | 매니페스트가 아는 애셋 16건이 디스크에 없다 — 출처가 지금 없는 로컬 저장소다 | 확인만 완료 · 조치 미정 |
 
 ## 규칙
 

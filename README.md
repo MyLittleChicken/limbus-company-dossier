@@ -39,7 +39,12 @@ npm run v2:canonical          canonical 재계산 + 수동 보정 덮기
 npm run v2:verify             raw 검증 13건
 npm run v2:verify:canonical   canonical 검증 139건
 npm run v2:gap-report         결손 대장 → build/gap-report.md
+npm run v2:reproduce          재현 시험 — 지우고 다시 만들어도 같은지
 ```
+
+**재현성을 실측으로 확인했다.** `data/entities/` 를 지우고 원격에서 다시 받아
+DB 를 통째로 재생성한 결과가 **바이트 단위로 같았다**(덤프 해시 동일 ·
+파일 체크섬 1,664/1,664 일치). [ADR-06 5.5](docs/adr/06-three-schema-database.md)
 
 | 항목 | 상태 |
 | --- | --- |

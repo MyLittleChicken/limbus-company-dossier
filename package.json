@@ -35,7 +35,8 @@
     "v2:canonical": "tsx --env-file-if-exists=.env src/v2/load-canonical.ts",
     "v2:verify:canonical": "tsx --env-file-if-exists=.env src/v2/verify-canonical.ts",
     "engine:proof": "tsx --env-file-if-exists=.env src/engine-proof.ts",
-    "v2:gap-report": "tsx --env-file-if-exists=.env src/v2/gap-report.ts"
+    "v2:gap-report": "tsx --env-file-if-exists=.env src/v2/gap-report.ts",
+    "v2:reproduce": "tsx --env-file-if-exists=.env src/v2/reproduce.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

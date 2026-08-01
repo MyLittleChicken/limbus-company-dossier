@@ -262,6 +262,37 @@ desc_raw  마크업이 있던 원문. 없으면 null (desc 가 곧 원문)
 
 회귀 검사 8건을 더했다(검사 139 → 147).
 
+### 5.5 재현 시험 — 지우고 다시 만들어도 같은가 (2026-08-01)
+
+ADR-02 원칙 3(같은 입력이면 같은 결과)이 실제로 성립하는지 **전 과정을 다시
+밟아** 확인했다.
+
+```
+1. pg_dump 로 스냅샷 · 원본 1,664파일 체크섬 기록
+2. data/entities/ 삭제
+3. npm run fetch          manifest 커밋 해시 고정으로 원격 재수집
+4. 파일 체크섬 대조
+5. DROP SCHEMA → DDL → v2:load → v2:canonical
+6. 덤프 대조
+```
+
+**결과 — 바이트 단위로 같다.**
+
+```
+원본 파일   1,664/1,664 체크섬 일치   수집 1,749파일 49초
+행 수       98테이블 전수 일치
+덤프        해시 49ee6696b874e23a  →  49ee6696b874e23a
+            차이는 pg_dump 가 매번 새로 만드는 세션 토큰 4줄뿐
+검증        raw 13건 · canonical 147건 · 테스트 289건 전부 통과
+```
+
+두 번 돌려 두 번 다 같은 해시가 나왔다. `npm run v2:reproduce` 로 언제든
+다시 돌린다(기본은 모의 실행, `--run` 이 실제 실행).
+
+> **`data/assets/` 는 시험 범위 밖이다.** v2 파이프라인이 한 번도 읽지 않는다.
+> 그중 16건(`v1-local`)은 지금 존재하지 않는 로컬 저장소에서 와 복원되지 않으므로
+> 시험이 건드리지 않게 했다.
+
 ## 6. 범위 밖
 
 ```
@@ -282,6 +313,7 @@ npm run v2:canonical          canonical 재계산 + override 덮기
 npm run v2:verify             raw 검증 13건
 npm run v2:verify:canonical   canonical 검증 147건
 npm run v2:gap-report         결손 대장 → build/gap-report.md
+npm run v2:reproduce          재현 시험 (모의) · --run 으로 실제 실행
 ```
 
 DDL 은 스크립트가 적용하지 않는다. `prisma/v2/schema.sql` 을 psql 로 직접 넣는다
