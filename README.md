@@ -30,7 +30,7 @@ app         재생성 대상 아님. 수동 보정 · 트래커 런 기록    6�
 **지금 버려지던 것이 담겼다** — 선택지 이벤트 159 · 업적 183 · 층별 보상 200 ·
 적 부위별 저항 3,540 · 코인 토큰 26,942.
 
-**결손 1,548건이 사유와 함께 특정됐고**([`build/gap-report.md`](docs/adr/06-three-schema-database.md#33-결손과-수동-보정))
+**결손 1,549건이 사유와 함께 특정됐고**([`build/gap-report.md`](docs/adr/06-three-schema-database.md#33-결손과-수동-보정))
 `app.field_override` 로 손으로 채우면 재적재에도 살아남는다.
 
 ```

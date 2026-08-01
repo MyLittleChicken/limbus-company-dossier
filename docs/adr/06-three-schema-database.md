@@ -216,10 +216,10 @@ E.G.O 패시브               113     차집합 0
 
 마스터북이 「이것이 깨지면 곧 회귀 신호」라 적은 것이 코드가 됐다.
 
-### 5.3 결손 1,548건이 특정됐다
+### 5.3 결손 1,549건이 특정됐다
 
 ```
-status.name      ja 258 · ko 244      한국어 16.6 %
+status.name      ja 258 · ko 245      한국어 16.6 %
 reward.item      ko 200 · ja 200
 achievement.text ko 183 · ja 183
 choice_event     ko  56 · ja  56
