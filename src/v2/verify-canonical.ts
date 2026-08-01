@@ -699,6 +699,91 @@ async function main(): Promise<void> {
 			detail: `${Number(appTables[0]?.n ?? 0n)} / 6`,
 		});
 
+		// ══ 감사에서 찾은 것 — 회귀 검사 ═══════════════════════════
+		// ① 흐트러짐 구간은 배열이다. 스칼라로 읽으면 184건이 통째로 사라진다
+		const staggerTotal = await prisma.$queryRaw<Array<{ n: bigint; s: bigint }>>`
+			SELECT count(*)::bigint AS n, sum(array_length(stagger, 1))::bigint AS s
+			FROM canonical.identity WHERE array_length(stagger, 1) > 0
+		`;
+		checks.push({
+			name: '흐트러짐 구간 184인격 · 값 421개',
+			ok: Number(staggerTotal[0]?.n ?? 0n) === 184 && Number(staggerTotal[0]?.s ?? 0n) === 421,
+			detail: `${Number(staggerTotal[0]?.n ?? 0n)}인격 · ${Number(staggerTotal[0]?.s ?? 0n)}구간`,
+		});
+
+		// ② passive.cost 는 비용이 아니라 발동 조건 코드 배열이다
+		const condTotal = await prisma.$queryRaw<Array<{ n: bigint; s: bigint }>>`
+			SELECT count(*)::bigint AS n, sum(array_length(conditions, 1))::bigint AS s
+			FROM canonical.passive WHERE array_length(conditions, 1) > 0
+		`;
+		// 원본 604건이 배열이지만 그중 5건은 빈 배열이라 599 가 맞다
+		checks.push({
+			name: '패시브 발동 조건 599건 · 코드 599개',
+			ok: Number(condTotal[0]?.n ?? 0n) === 599 && Number(condTotal[0]?.s ?? 0n) === 599,
+			detail: `${Number(condTotal[0]?.n ?? 0n)}건 · ${Number(condTotal[0]?.s ?? 0n)}코드`,
+		});
+
+		// ③ illustId 는 숫자다. 문자열로 읽으면 null 이 된다
+		eq('선택지 삽화 id', await prisma.choiceEvent.count({ where: { illustId: { not: null } } }), 1);
+
+		// ④ 마크업이 desc 에 남으면 안 된다. 원문은 desc_raw 에 있다
+		const markupLeft = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT (
+			  (SELECT count(*) FROM canonical.skill_stage_text WHERE "desc" ~ '</?(style|color|noparse|link|sprite|mark|size)\M')
+			+ (SELECT count(*) FROM canonical.gift_stage_text  WHERE "desc" ~ '</?(style|color|noparse|link|sprite|mark|size)\M')
+			+ (SELECT count(*) FROM canonical.status_text      WHERE "desc" ~ '</?(style|color|noparse|link|sprite|mark|size)\M')
+			+ (SELECT count(*) FROM canonical.passive_text     WHERE "desc" ~ '</?(style|color|noparse|link|sprite|mark|size)\M')
+			+ (SELECT count(*) FROM canonical.ego_skill_stage_text WHERE "desc" ~ '</?(style|color|noparse|link|sprite|mark|size)\M')
+			+ (SELECT count(*) FROM canonical.choice_event_text WHERE "desc" ~ '</?(style|color|noparse|link|sprite|mark|size)\M')
+			)::bigint AS n
+		`;
+		checks.push({
+			name: 'desc 에 남은 마크업 (0이어야 한다)',
+			ok: Number(markupLeft[0]?.n ?? 1n) === 0,
+			detail: `${Number(markupLeft[0]?.n ?? 0n)} / 0`,
+		});
+
+		// ⑤ **리터럴 꺾쇠는 지우면 안 된다.** <Bloodfiend> 는 게임 텍스트다
+		const literal = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.skill_stage_text
+			WHERE "desc" ~ '<Bloodfiend|<La |<Mechanical'
+		`;
+		checks.push({
+			name: '리터럴 꺾쇠 보존 41건 (지우면 안 된다)',
+			ok: Number(literal[0]?.n ?? 0n) === 41,
+			detail: `${Number(literal[0]?.n ?? 0n)} / 41`,
+		});
+
+		// E.G.O 패시브 설명에 마크업이 있다 — ko 6 · ja 6 · en 3 (원본과 일치).
+		// 반면 Egos*.json 에는 0건이라 ego_text.desc_raw 가 전량 null 인 것이 정상이다
+		eq(
+			'E.G.O 패시브 마크업 원문 보존',
+			await prisma.egoPassiveText.count({ where: { descRaw: { not: null } } }),
+			15,
+		);
+		eq(
+			'E.G.O 설명에는 마크업이 없다 (desc_raw 전량 null)',
+			await prisma.egoText.count({ where: { descRaw: { not: null } } }),
+			0,
+		);
+
+		// ⑥ 마크업이 있던 것은 원문이 남아야 한다
+		const rawKept = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT (
+			  (SELECT count(*) FROM canonical.skill_stage_text WHERE desc_raw IS NOT NULL)
+			+ (SELECT count(*) FROM canonical.gift_stage_text  WHERE desc_raw IS NOT NULL)
+			+ (SELECT count(*) FROM canonical.status_text      WHERE desc_raw IS NOT NULL)
+			+ (SELECT count(*) FROM canonical.passive_text     WHERE desc_raw IS NOT NULL)
+			+ (SELECT count(*) FROM canonical.ego_skill_stage_text WHERE desc_raw IS NOT NULL)
+			+ (SELECT count(*) FROM canonical.choice_event_text WHERE desc_raw IS NOT NULL)
+			)::bigint AS n
+		`;
+		checks.push({
+			name: '마크업 원문이 desc_raw 에 보존됐다',
+			ok: Number(rawKept[0]?.n ?? 0n) > 4_000,
+			detail: `${Number(rawKept[0]?.n ?? 0n)}건`,
+		});
+
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다
 		const noText = await prisma.gift.count({ where: { stages: { none: { texts: { some: {} } } } } });
 		checks.push({ name: '텍스트 없는 기프트 (0이어야 한다)', ok: noText === 0, detail: `${noText} / 0` });

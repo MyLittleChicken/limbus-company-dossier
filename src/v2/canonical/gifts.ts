@@ -10,6 +10,7 @@
  */
 import { arr, bool, num, str, strArr, type RawIndex } from '../source.js';
 import { keywordIdOf } from './vocab.js';
+import { descOf } from './markup.js';
 import type { Meta } from './meta.js';
 
 const MJ = 'limbus-data-mj';
@@ -66,6 +67,7 @@ export interface GiftStageTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 }
 
 export interface GiftLinkRow {
@@ -253,7 +255,7 @@ export function buildGifts(input: GiftInput, meta: Meta): GiftTables {
 					level,
 					locale,
 					name,
-					desc: str(loc, 'desc') ?? fallbackDesc,
+					...descOf(str(loc, 'desc') ?? fallbackDesc),
 				});
 			}
 		}

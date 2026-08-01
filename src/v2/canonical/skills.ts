@@ -11,6 +11,7 @@
  * 계획 6에서 상태 어휘와 함께 한다 — 상태 테이블이 있어야 외래 키가 선다.
  */
 import { arr, num, str, type RawIndex } from '../source.js';
+import { descOf } from './markup.js';
 import type { Meta } from './meta.js';
 
 const MJ = 'limbus-data-mj';
@@ -82,6 +83,7 @@ export interface SkillStageTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 }
 
 export interface SkillCoinRow {
@@ -154,7 +156,7 @@ export function buildSkills(input: SkillInput, meta: Meta): SkillTables {
 					uptie: stage.uptie,
 					locale,
 					name,
-					desc: str(loc ?? {}, 'desc') ?? mjDesc,
+					...descOf(str(loc ?? {}, 'desc') ?? mjDesc),
 				});
 			}
 

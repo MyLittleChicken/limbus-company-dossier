@@ -10,6 +10,7 @@
  * `BattleKeywords` · `terms.json` 순으로 폴백한다.
  */
 import { arr, num, str, type RawIndex } from '../source.js';
+import { descOf } from './markup.js';
 import type { Meta } from './meta.js';
 
 const ASSETS = 'limbus-assets';
@@ -42,6 +43,7 @@ export interface StatusTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 	summary: string | null;
 }
 
@@ -134,7 +136,7 @@ export function buildStatuses(input: StatusInput, meta: Meta): StatusTables {
 				statusId: id,
 				locale,
 				name,
-				desc: str(b, 'desc') ?? str(k, 'desc') ?? (locale === 'en' ? str(a, 'desc') : null),
+				...descOf(str(b, 'desc') ?? str(k, 'desc') ?? (locale === 'en' ? str(a, 'desc') : null)),
 				summary: str(b, 'summary') ?? str(k, 'summary'),
 			});
 		}

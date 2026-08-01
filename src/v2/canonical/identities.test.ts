@@ -11,7 +11,7 @@ function input(): IdentityInput {
 				{
 					id: 10101, sinnerId: 1, star: 1, teamCodeEligible: true, season: 0,
 					name: 'LCB Sinner', nameKo: 'LCB 수감자', title: 'Yi Sang', titleKo: '이상',
-					hp: 72, stagger: 30, speed: [4, 8],
+					hp: 72, stagger: [65, 35, 15], speed: [4, 8],
 					resists: { slash: 2, pierce: 0.5, blunt: 1 },
 					associations: ['LIMBUS_COMPANY'],
 					keywords: ['sinking'], keywordSkills: { sinking: [1, 2, 3] },
@@ -38,7 +38,7 @@ function input(): IdentityInput {
 			['10101', { date: '2023-02-27', defCorrection: -2, hp: { base: 72, level: 2.48 }, resists: { blunt: 1, pierce: 0.5, slash: 2 } }],
 		]),
 		mjPassives: new Map<string, Record<string, unknown>>([
-			['1010101', { id: 1010101, name: 'Information Relay', nameKo: '정보전달', desc: 'd', descKo: '설명', cost: null }],
+			['1010101', { id: 1010101, name: 'Information Relay', nameKo: '정보전달', desc: 'd', descKo: '설명', cost: ['CheckAwakenLevel4'] }],
 			['1010102', { id: 1010102, name: null, nameKo: null, desc: null, descKo: null }],
 		]),
 		locKo: new Map<string, Record<string, unknown>>([
@@ -64,7 +64,7 @@ test('identity 행이 두 출처를 합쳐 나온다', () => {
 	assert.deepEqual(t.identity, [
 		{
 			id: '10101', sinnerId: 1, star: 1, teamCodeEligible: true, season: 0,
-			hp: 72, stagger: 30, defCorrection: -2, releaseDate: '2023-02-27',
+			hp: 72, stagger: [65, 35, 15], defCorrection: -2, releaseDate: '2023-02-27',
 		},
 	]);
 });
@@ -130,6 +130,32 @@ test('패시브 연결이 역할별로 나온다', () => {
 			['1010102', 'supporter', 3],
 		],
 	);
+});
+
+test('패시브 conditions 가 조건 코드 배열로 담긴다 — cost 가 아니다', () => {
+	const t = buildIdentities(input(), new Meta());
+	assert.deepEqual(t.passive.find((p) => p.id === '1010101')?.conditions, ['CheckAwakenLevel4']);
+	assert.deepEqual(t.passive.find((p) => p.id === '1010102')?.conditions, []);
+});
+
+test('흐트러짐 구간이 배열로 담긴다 — 스칼라가 아니다', () => {
+	const t = buildIdentities(input(), new Meta());
+	assert.deepEqual(t.identity[0]?.stagger, [65, 35, 15]);
+});
+
+test('설명의 마크업을 지우고 원문을 descRaw 에 남긴다', () => {
+	const i = input();
+	i.passiveKo.set('1010101', { id: '1010101', name: '정보전달(loc)', desc: '<style="highlight">강화</style> 설명' });
+	const t = buildIdentities(i, new Meta());
+	const ko = t.passiveText.find((p) => p.passiveId === '1010101' && p.locale === 'ko');
+	assert.equal(ko?.desc, '강화 설명');
+	assert.equal(ko?.descRaw, '<style="highlight">강화</style> 설명');
+});
+
+test('마크업이 없으면 descRaw 는 null 이다', () => {
+	const t = buildIdentities(input(), new Meta());
+	const en = t.passiveText.find((p) => p.passiveId === '1010101' && p.locale === 'en');
+	assert.equal(en?.descRaw, null);
 });
 
 test('이름이 전부 null 인 패시브는 유령이며 결손으로 남는다', () => {

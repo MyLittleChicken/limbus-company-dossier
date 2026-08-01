@@ -7,6 +7,7 @@
  * `md__*` 와 `md__md6__*` 는 시즌 판본이며 범주 구성이 같다. season 으로 가른다.
  */
 import { arr, num, str, strArr, type RawIndex } from '../source.js';
+import { descOf } from './markup.js';
 import type { Meta } from './meta.js';
 
 const ASSETS = 'limbus-assets';
@@ -37,8 +38,8 @@ export interface MirrorInput {
 }
 
 export interface MirrorTables {
-	choiceEvent: Array<{ id: string; type: string; illustId: string | null }>;
-	choiceEventText: Array<{ eventId: string; locale: Loc; name: string | null; desc: string | null }>;
+	choiceEvent: Array<{ id: string; type: string; illustId: number | null }>;
+	choiceEventText: Array<{ eventId: string; locale: Loc; name: string | null; desc: string | null; descRaw: string | null }>;
 	choiceEventGift: Array<{ eventId: string; giftId: string }>;
 	choiceOption: Array<{ eventId: string; index: number; message: string; results: unknown }>;
 	choiceOptionText: Array<{ eventId: string; index: number; locale: Loc; message: string; desc: string | null }>;
@@ -70,7 +71,8 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 			meta.gap('choice_event', id, 'type', 'type 이 없다', EVIDENCE);
 			continue;
 		}
-		t.choiceEvent.push({ id, type, illustId: str(e, 'illustId') });
+		// 원본이 숫자다 — 문자열로 읽으면 null 이 된다
+		t.choiceEvent.push({ id, type, illustId: num(e, 'illustId') });
 		meta.source('choice_event', id, 'core', 'assets-only', [ASSETS]);
 
 		for (const giftId of strArr(e, 'gifts')) {
@@ -87,7 +89,7 @@ export function buildMirror(input: MirrorInput, meta: Meta): MirrorTables {
 				meta.gap('choice_event', id, 'text', `${locale} 표시 문자열이 없다`, EVIDENCE, locale);
 				continue;
 			}
-			t.choiceEventText.push({ eventId: id, locale, name, desc });
+			t.choiceEventText.push({ eventId: id, locale, name, ...descOf(desc) });
 		}
 
 		// **결과는 JSONB 로 담는다.** 3중 중첩이고 마스터북이 구조를 확정하지 않았다.

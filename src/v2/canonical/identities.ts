@@ -9,6 +9,7 @@
  */
 import { arr, bool, num, str, strArr, type RawIndex } from '../source.js';
 import { keywordIdOf } from './vocab.js';
+import { descOf } from './markup.js';
 import type { Meta } from './meta.js';
 
 const MJ = 'limbus-data-mj';
@@ -45,7 +46,7 @@ export interface IdentityRow {
 	teamCodeEligible: boolean;
 	season: number | null;
 	hp: number | null;
-	stagger: number | null;
+	stagger: number[];
 	defCorrection: number | null;
 	releaseDate: string | null;
 }
@@ -108,7 +109,7 @@ export interface IdentityStatusRow {
 
 export interface PassiveRow {
 	id: string;
-	cost: number | null;
+	conditions: string[];
 }
 
 export interface PassiveTextRow {
@@ -116,6 +117,7 @@ export interface PassiveTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 }
 
 export interface IdentityTables {
@@ -159,7 +161,8 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 	// ── 패시브 ───────────────────────────────────────────────────
 	// 이름이 전부 null 인 6건이 마스터북의 「유령」이다. 적재하되 결손으로 남긴다.
 	for (const [id, p] of input.mjPassives) {
-		t.passive.push({ id, cost: num(p, 'cost') });
+		// 원본 필드명은 cost 이지만 발동 조건 코드 배열이다 (CheckAwakenLevel4 등)
+		t.passive.push({ id, conditions: strArr(p, 'cost') });
 		let any = false;
 		for (const locale of LOCALES) {
 			const loc = passiveLoc[locale].get(id) ?? {};
@@ -172,7 +175,7 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 				passiveId: id,
 				locale,
 				name,
-				desc: str(loc, 'desc') ?? mjDesc,
+				...descOf(str(loc, 'desc') ?? mjDesc),
 			});
 		}
 		if (!any) {
@@ -215,7 +218,10 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 			teamCodeEligible: bool(mj, 'teamCodeEligible'),
 			season: num(mj, 'season'),
 			hp,
-			stagger: num(mj, 'stagger'),
+			// 흐트러짐 구간 임계값 배열이다 — [65, 35, 15]. 스칼라가 아니다
+			stagger: arr(mj, 'stagger')
+				.map((v) => Number(v))
+				.filter((v) => Number.isFinite(v)),
 			defCorrection: num(detail, 'defCorrection') ?? num(a, 'defCorrection'),
 			releaseDate: str(a, 'date'),
 		});

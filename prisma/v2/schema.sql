@@ -240,6 +240,7 @@ CREATE TABLE "canonical"."gift_stage_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
 
     CONSTRAINT "gift_stage_text_pkey" PRIMARY KEY ("gift_id","level","locale")
 );
@@ -382,6 +383,7 @@ CREATE TABLE "canonical"."skill_stage_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
 
     CONSTRAINT "skill_stage_text_pkey" PRIMARY KEY ("skill_id","uptie","locale")
 );
@@ -399,7 +401,7 @@ CREATE TABLE "canonical"."skill_coin" (
 -- CreateTable
 CREATE TABLE "canonical"."passive" (
     "id" TEXT NOT NULL,
-    "cost" INTEGER,
+    "conditions" TEXT[],
 
     CONSTRAINT "passive_pkey" PRIMARY KEY ("id")
 );
@@ -410,6 +412,7 @@ CREATE TABLE "canonical"."passive_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
 
     CONSTRAINT "passive_text_pkey" PRIMARY KEY ("passive_id","locale")
 );
@@ -422,7 +425,7 @@ CREATE TABLE "canonical"."identity" (
     "team_code_eligible" BOOLEAN NOT NULL DEFAULT true,
     "season" INTEGER,
     "hp" INTEGER,
-    "stagger" INTEGER,
+    "stagger" INTEGER[],
     "def_correction" INTEGER,
     "release_date" TEXT,
 
@@ -526,6 +529,7 @@ CREATE TABLE "canonical"."ego_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
 
     CONSTRAINT "ego_text_pkey" PRIMARY KEY ("ego_id","locale")
 );
@@ -592,6 +596,7 @@ CREATE TABLE "canonical"."ego_skill_stage_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
     "ab_name" TEXT,
 
     CONSTRAINT "ego_skill_stage_text_pkey" PRIMARY KEY ("skill_id","uptie","locale")
@@ -621,6 +626,7 @@ CREATE TABLE "canonical"."ego_passive_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
 
     CONSTRAINT "ego_passive_text_pkey" PRIMARY KEY ("passive_id","locale")
 );
@@ -648,6 +654,7 @@ CREATE TABLE "canonical"."status_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
     "desc" TEXT,
+    "desc_raw" TEXT,
     "summary" TEXT,
 
     CONSTRAINT "status_text_pkey" PRIMARY KEY ("status_id","locale")
@@ -729,7 +736,7 @@ CREATE TABLE "canonical"."identity_status" (
 CREATE TABLE "canonical"."choice_event" (
     "id" TEXT NOT NULL,
     "type" TEXT NOT NULL,
-    "illust_id" TEXT,
+    "illust_id" INTEGER,
 
     CONSTRAINT "choice_event_pkey" PRIMARY KEY ("id")
 );
@@ -740,6 +747,7 @@ CREATE TABLE "canonical"."choice_event_text" (
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT,
     "desc" TEXT,
+    "desc_raw" TEXT,
 
     CONSTRAINT "choice_event_text_pkey" PRIMARY KEY ("event_id","locale")
 );

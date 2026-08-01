@@ -11,6 +11,7 @@
  * 단계가 델타가 아니라 실제로 그 단계만 존재한다. 전량 전개하지 않는다.
  */
 import { arr, bool, num, str, type RawIndex } from '../source.js';
+import { descOf } from './markup.js';
 import type { Meta } from './meta.js';
 
 const MJ = 'limbus-data-mj';
@@ -65,6 +66,7 @@ export interface EgoTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 }
 
 export interface EgoResistRow {
@@ -110,6 +112,7 @@ export interface EgoSkillStageTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 	abName: string | null;
 }
 
@@ -130,6 +133,7 @@ export interface EgoPassiveTextRow {
 	locale: Loc;
 	name: string;
 	desc: string | null;
+	descRaw: string | null;
 }
 
 export interface EgoPassiveLinkRow {
@@ -264,7 +268,7 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 				meta.gap('ego', id, 'name', `${locale} 표시명이 어느 출처에도 없다`, EVIDENCE, locale);
 				continue;
 			}
-			t.egoText.push({ egoId: id, locale, name, desc: str(loc, 'desc') });
+			t.egoText.push({ egoId: id, locale, name, ...descOf(str(loc, 'desc')) });
 		}
 
 		if (presentationOnly) continue;
@@ -374,7 +378,7 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 			const loc = passiveLoc[locale].get(passiveId) ?? {};
 			const name = str(loc, 'name');
 			if (name === null) continue;
-			t.egoPassiveText.push({ passiveId, locale, name, desc: str(loc, 'desc') });
+			t.egoPassiveText.push({ passiveId, locale, name, ...descOf(str(loc, 'desc')) });
 		}
 		meta.source('ego_passive', passiveId, 'name', 'loc-only', [LOC]);
 	}
@@ -406,7 +410,7 @@ function pushSkillStages(t: EgoTables, skillLoc: Record<Loc, RawIndex>, skillId:
 					uptie,
 					locale,
 					name,
-					desc: str(l, 'desc'),
+					...descOf(str(l, 'desc')),
 					abName: str(l, 'abName'),
 				});
 			}

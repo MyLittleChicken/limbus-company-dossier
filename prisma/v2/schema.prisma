@@ -461,6 +461,8 @@ model GiftStageText {
   locale Locale
   name   String
   desc   String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
 
   stage GiftStage @relation(fields: [giftId, level], references: [giftId, level], onDelete: Cascade)
 
@@ -712,6 +714,8 @@ model SkillStageText {
   locale  Locale
   name    String
   desc    String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
 
   stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
 
@@ -744,7 +748,10 @@ model SkillCoin {
 /// 어느 층에서도 패시브가 아니다(회차 4·10·13 세 번 확인).
 model Passive {
   id   String @id
-  cost Int?
+  /// 원본 필드명은 `cost` 이지만 **비용이 아니라 발동 조건 코드**다.
+  /// CheckAwakenLevel2 … 5 · CheckAwakenLevelBetween_2_4 — 각성 단계에 따라 켜진다.
+  /// 실측 604/709 가 배열을 갖는다
+  conditions String[]
 
   texts      PassiveText[]
   identities IdentityPassive[]
@@ -758,6 +765,8 @@ model PassiveText {
   locale    Locale
   name      String
   desc      String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
 
   passive Passive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
 
@@ -780,7 +789,9 @@ model Identity {
   /// 원본 시즌 정수. 8000 은 명일방주 콜라보다(backlog/11)
   season           Int?
   hp               Int?
-  stagger          Int?
+  /// 흐트러짐 구간 임계값. **배열이다** — [65, 35, 15] 처럼 여러 구간을 갖는다.
+  /// 실측 3구간 85 · 2구간 67 · 1구간 32 인격. assets 는 같은 것을 breakSection 으로 담는다
+  stagger          Int[]
   defCorrection    Int?    @map("def_correction")
   /// 출시일. assets date
   releaseDate      String? @map("release_date")
@@ -983,6 +994,8 @@ model EgoText {
   locale Locale
   name   String
   desc   String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
 
   ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
 
@@ -1090,6 +1103,8 @@ model EgoSkillStageText {
   locale  Locale
   name    String
   desc    String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
   /// 유래 환상체. loc 단독 개념이다
   abName  String? @map("ab_name")
 
@@ -1131,6 +1146,8 @@ model EgoPassiveText {
   locale    Locale
   name      String
   desc      String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
 
   passive EgoPassive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
 
@@ -1189,6 +1206,8 @@ model StatusText {
   locale   Locale
   name     String
   desc     String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
   /// 짧은 표기. 게임 상세 화면은 desc 를 쓴다
   summary  String?
 
@@ -1326,8 +1345,8 @@ model IdentityStatus {
 model ChoiceEvent {
   id      String  @id
   type    String
-  /// 삽화 id. 실측 1건만 있다
-  illustId String? @map("illust_id")
+  /// 삽화 id. 원본이 **숫자**다. 실측 1건만 있다
+  illustId Int?    @map("illust_id")
 
   texts   ChoiceEventText[]
   options ChoiceOption[]
@@ -1342,6 +1361,8 @@ model ChoiceEventText {
   locale  Locale
   name    String?
   desc    String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
 
   event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
