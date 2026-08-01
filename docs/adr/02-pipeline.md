@@ -4,6 +4,8 @@
 > 원본 스냅샷을 정규화하고 PostgreSQL에 적재하는 프로그램을 **어떤 언어로, 어떤 구조로** 만드는가를 정한다.
 > 산출물의 형식과 적재 대상은 `01-data-storage.md`에서 정했다. 무엇을 저장하는가는 `docs/02-data-model.md`에 있다.
 > 이 문서의 수치는 2026-07-25 스냅샷을 직접 측정한 값이다.
+>
+> **범위** — 이 문서는 현행 `public` 스키마의 결정이다. 신규 3스키마에서는 재생성 범위가 `raw`·`canonical` 로 한정되고 `app` 은 제외된다 → [`06-three-schema-database.md`](06-three-schema-database.md).
 
 ## 1. 맥락 — 변환이 실제로 해야 하는 일
 

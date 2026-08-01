@@ -1,7 +1,27 @@
 # 인카운터를 가리키는 두 체계가 이어지지 않는다
 
-> 상태: 미착수 / 확인 2026-07-31
+> 상태: **여전히 미해결** · 신규 DB 가 기록
 > 데이터 마스터북 인카운터 편 회차 2에서 확인했다.
+
+## 0. 여전히 미해결 — 다만 기록됐다 (2026-08-01)
+
+신규 3스키마 DB 도 **잇지 못했다.** `data/` 전역에 연결표가 없다는 판정이
+그대로다.
+
+```
+mj packs_detail 의 5개 풀    7자리 숫자 2,525종
+assets encounters/*.json     UUID + "md|canto-1-1"  251개
+                             ↕  연결표 없음
+```
+
+다만 **미해결이라는 사실이 DB 안에 기록됐다.**
+
+```sql
+SELECT reason, evidence FROM canonical.field_gap WHERE field = 'battlePool';
+```
+
+검증에도 박혀 있어(`v2:verify:canonical`) 나중에 연결표가 생기면 그 검사가
+알려준다.
 
 ## 1. 증상
 

@@ -1,8 +1,21 @@
 # 인격 태그 — 이름이 틀렸다 (분리는 불필요)
 
-> 상태: **결론 변경 2026-07-29** / 최초 조사 2026-07-27
+> 상태: **신규 DB 해소** · 현행 미착수
 > 축을 둘로 나누기로 했으나, 실측 결과 **나눌 필요가 없다.** 남는 문제는 이름 하나다.
 > 조사용 분류 시트가 저장소 루트 `tags-classify.csv` 에 있다(추적하지 않는다).
+
+## 0. 신규 3스키마 DB 에서 해소됐다 (2026-08-01)
+
+`canonical.identity_unit_keyword` **391연결**이 특성 키워드를 담고, 소속은
+`canonical.identity_association` **241연결**로 따로 있다. **이름과 축이 둘 다
+바로잡혔다.**
+
+```
+identity_unit_keyword   detail unitKeywords   특성 키워드
+identity_association    mj associations       소속 (association 64종)
+```
+
+현행 `public` 스키마의 `affiliation` 은 그대로다. 아래는 그 판정 기록이다.
 
 ## 1. 무엇이 문제였나
 
