@@ -6,6 +6,10 @@
 > **[최종 검토 → `00-final-review.md`](00-final-review.md)** — 51회차 실측으로
 > 「하나의 repo 에 모든 데이터가 온전히 담겨있나」에 답한다. **아니다** —
 > 단독 보유 개념 90개가 세 출처에 흩어져 있고, 셋을 합쳐도 결손 7건이 남는다.
+>
+> **이 마스터북이 데이터베이스 재설계의 근거가 됐다** (2026-08-01).
+> 90개 개념이 `canonical` 컬럼이 되고, 완전 일치 쌍 7건이 회귀 검사가 되고,
+> 결손이 `field_gap` 1,548건으로 특정됐다 → [ADR-06](../adr/06-three-schema-database.md).
 
 `data/` 에 수집한 원본 JSON의 **모든 프로퍼티**가 각각 무슨 뜻이고, 변환을 거쳐 어디에 적재되고,
 화면에 어떤 레이블로 나타나는지를 필드 단위로 기록한다.
@@ -168,7 +172,8 @@ E.G.O 편(1·6·4)은 한쪽으로 쏠렸으나 기프트는 어느 하나를 �
 (mj 6 · assets 2 · loc 1). 기프트 목록도 맵 생성 규칙도 `limbus-data-mj` 에만 있어
 ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 → `backlog/09`.
 
-**팩은 DB 모델이 없다.** `GiftPack.packId` 가 정수로만 남아 이름조차 조회되지 않는다.
+**팩 모델은 있다**(`schema.prisma:615`). 다만 `tags` · `overlayImage` · `unlockCode` ·
+`bokgak` · `textColor` · `mapGen` 6개념이 안 담긴다.
 
 ### 거울 던전 — 7회차 · **완료 2026-07-31**
 
@@ -270,6 +275,6 @@ ADR-04 의 「거울 던전 구성 = assets」 문장을 다시 봐야 한다 �
 | [`../backlog/01-identity-tags.md`](../backlog/01-identity-tags.md) | 인격 태그의 이름이 틀렸다(→ `trait`) | 1 |
 | [`../backlog/06-atktypes-naming.md`](../backlog/06-atktypes-naming.md) | `atkTypes` 가 세 곳에서 다른 단위를 가리킨다 | 1 |
 | [`../backlog/08-gift-hardonly.md`](../backlog/08-gift-hardonly.md) | 하드 전용 기프트를 한 출처만 보고 적재한다 | 기프트 1 |
-| [`../backlog/09-pack-model.md`](../backlog/09-pack-model.md) | 테마 팩이 모델 없이 정수 id 로만 남아 있다 | 팩 1–4 |
+| [`../backlog/09-pack-model.md`](../backlog/09-pack-model.md) | 테마 팩 모델에 보강 필드가 없다 | 팩 1–4 |
 | [`../backlog/10-encounter-linkage.md`](../backlog/10-encounter-linkage.md) | 인카운터를 가리키는 두 체계가 이어지지 않는다 | 인카운터 2 |
 | [`../backlog/11-season-label.md`](../backlog/11-season-label.md) | 시즌 값이 원본 정수 그대로 화면에 나간다 | 1 |

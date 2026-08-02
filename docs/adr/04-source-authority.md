@@ -4,6 +4,8 @@
 > 엔티티마다 **어느 출처를 정본으로 삼고, 어디까지 보강을 허용하는가**를 정한다.
 > 수집한 출처의 목록과 조건은 `docs/01-data-source.md`, 생성 경로 분석은 `docs/03-data-provenance.md`에 있다.
 > 이 문서의 수치는 2026-07-25 스냅샷을 직접 측정한 값이다.
+>
+> **범위** — 정본 배정은 신규 3스키마에도 그대로 쓰인다. 다만 거울 던전 구성은 2026-07-31 정정됐다(아래 2.1) → [`06-three-schema-database.md`](06-three-schema-database.md).
 
 ## 1. 맥락
 
@@ -64,8 +66,15 @@
 | 상태 | `limbus-assets` | 유일한 출처다 |
 | 소속 | `limbus-assets` | 93종 전량. mj는 64종뿐이다 |
 | 죄악 · 키워드 | `limbus-data-mj` | 유일한 목록 출처다 |
-| 거울 던전 구성 | `limbus-assets` | 은총·제약이 여기에만 있다 |
+| 거울 던전 **은총·제약** | `limbus-assets` | `md__details.grace` 가 여기에만 있다 |
+| 거울 던전 **구조** | `limbus-data-mj` | 기프트 풀·맵 생성 규칙·해금 코드가 여기에만 있다 (2026-07-31 정정) |
 | 표시 문자열 | `loc-ko` · `loc-en` | `03-localized-text.md` |
+
+> **2026-07-31 정정.** 처음 「거울 던전 구성 = `limbus-assets`」로 한 줄에 적었으나
+> 마스터북 팩 편 실측이 반대였다 — 단독 보유 개념이 **mj 6 · assets 2 · loc 1** 이다.
+> `limbus-assets` 에는 기프트 목록도 맵 생성 규칙도 없다. 「은총」과 「구조」를 나눠
+> 적어야 정확하다. 다만 **층별 등장 팩**(`md_floor_packs`)은 assets 가 정본이며 위 표
+> 그대로다. 근거는 `docs/backlog/09-pack-model.md` 4절 · ADR-06 4.1.
 
 인격의 정본을 `limbus-data-mj`로 두는 근거는 필드 대조다. mj의 `identities.json` +
 `identities_detail.json`이 `limbus-assets`의 인격 필드를 모두 덮으면서 `mentalCondition` ·

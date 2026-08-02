@@ -1,0 +1,1735 @@
+// 신규 3스키마 데이터베이스 — raw 층
+//
+// 설계 근거  docs/superpowers/specs/2026-07-31-database-redesign-design.md
+// 구현 계획  docs/superpowers/plans/2026-07-31-raw-layer.md
+//
+// 현행 prisma/schema.prisma 와 **병존한다.** 같은 데이터베이스 limbus 안에서
+// 현행은 public 스키마를, 이쪽은 raw / canonical / app 을 쓴다.
+//
+// 규약
+//   1. 테이블·컬럼을 전부 snake_case 로 매핑한다. 이 층의 존재 이유가 손으로 쓰는
+//      SQL 탐색이므로 큰따옴표를 요구하면 안 된다.
+//   2. raw 는 판정하지 않는다. 원본 payload 를 손대지 않고 담는다.
+//   3. 스냅샷은 덮어쓰지 않고 쌓는다.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/v2/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["raw", "canonical", "app"]
+}
+
+/// 한 번의 수집. 버전(우리 일련)과 게임 시점을 함께 담는다.
+model Snapshot {
+  /// manifest 의 generatedAt. "2026-07-25"
+  id         String   @id
+  /// 우리 스냅샷 일련. 단조 증가
+  version    Int      @unique
+  /// 수집 시각
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
+  /// 게임 시점. "차원찢개 이상 인격 출시 시점"
+  gameAnchor String?  @map("game_anchor")
+  note       String?
+
+  sources SnapshotSource[]
+  objects RawObject[]
+  files   RawFile[]
+
+  @@map("snapshot")
+  @@schema("raw")
+}
+
+/// 출처마다 커밋이 다르다. status 가 removed 인 것도 담는다 — 재현에 필요하다.
+model SnapshotSource {
+  snapshotId String @map("snapshot_id")
+  sourceId   String @map("source_id")
+  repo       String
+  branch     String
+  commit     String
+  fileCount  Int    @map("file_count")
+  status     String
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, sourceId])
+  @@map("snapshot_source")
+  @@schema("raw")
+}
+
+/// 원본 개체 하나. 판정하지 않는다.
+///
+/// **srcPath 가 기본키에 들어간다.** (source, entity, id) 만으로는 유일하지 않다 —
+/// 실측 충돌 8,530건이다. 같은 출처·같은 계열 안에서 파일이 다르면 다른 개체다
+/// (DungeonStartBuffs.json · _MD6.json · _MD7.json 처럼 시즌별 판본).
+model RawObject {
+  snapshotId String @map("snapshot_id")
+  source     String
+  /// data/entities 기준 상대경로. "gifts/limbus-assets/gifts.json"
+  srcPath    String @map("src_path")
+  /// payload 의 id → 파일명 stem → 배열 순번(#0) 순으로 확보
+  id         String
+  /// 계열. 조회 라벨이며 키가 아니다
+  entity     String
+  /// 손대지 않은 원본 객체
+  payload    Json
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, source, srcPath, id])
+  @@index([entity, id])
+  @@index([snapshotId, source])
+  @@map("raw_object")
+  @@schema("raw")
+}
+
+/// 스캔한 파일 전량. **개체가 0개인 파일도 여기 남는다.**
+///
+/// raw_object 만으로는 두 사실이 사라진다 — 파일이 존재했다는 것, 그리고
+/// loc-en 은 파일조차 안 만든다는 것. 실측 16파일이 개체 0개이며 전부
+/// a1c9(9장) · x1p1c1(이벤트) 패치 델타 껍데기다. loc-en 은 그중 5건에 대해
+/// 파일을 아예 만들지 않는다 — 같은 「없음」의 두 표현이다.
+/// 마스터북 인격 편 회차 11·12 가 문서로는 이미 기록한 사실이며, 이 테이블이
+/// 그것을 질의 가능하게 만든다.
+///
+/// 파일 목록 자체가 스냅샷 간 비교 대상이다. 파일이 비어 있다가 채워지는 것은
+/// 콘텐츠 추가의 가장 강한 신호다.
+model RawFile {
+  snapshotId  String @map("snapshot_id")
+  source      String
+  srcPath     String @map("src_path")
+  entity      String
+  /// dataList · map · list · single
+  shape       String
+  /// 0 이면 빈 파일
+  objectCount Int    @map("object_count")
+
+  snapshot Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, source, srcPath])
+  @@index([snapshotId, objectCount])
+  @@map("raw_file")
+  @@schema("raw")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 공통
+// ─────────────────────────────────────────────────────────────
+
+/// 표시 문자열 로케일. 현행 public 스키마는 ko·en 만 담지만 신규는 ja 를 더한다.
+enum Locale {
+  ko
+  en
+  ja
+
+  @@schema("canonical")
+}
+
+/// 거울 던전 난이도
+enum Difficulty {
+  normal
+  hard
+
+  @@schema("canonical")
+}
+
+/// 테마 팩 분류. mj packs.category 8종이며 id 대역과 1:1 대응한다.
+enum PackCategory {
+  canto
+  event
+  walpurgis
+  railway
+  attack_type
+  sin
+  keyword
+  extreme
+
+  @@schema("canonical")
+}
+
+/// 본편 장 팩의 난이도 변형. canto 27건만 값이 있다.
+enum PackVariant {
+  normal
+  mid
+  hard
+
+  @@schema("canonical")
+}
+
+/// 세 출처 어디에도 없는 것. 값은 NULL 로 두고 사유를 여기 남긴다.
+/// 적재 후 build/gap-report.md 로 뽑아 수동 보정 지시서가 된다.
+model FieldGap {
+  entity   String
+  entityId String @map("entity_id")
+  field    String
+  /// 한국어만 없는 경우 등. 로케일 무관이면 빈 문자열
+  locale   String @default("")
+  reason   String
+  /// 근거 문서 경로
+  evidence String
+
+  @@id([entity, entityId, field, locale])
+  @@index([entity, field])
+  @@map("field_gap")
+  @@schema("canonical")
+}
+
+/// 이 값이 어느 출처에서 어떤 규칙으로 왔나. 「왜 이렇지?」를 DB 안에서 답한다.
+model FieldSource {
+  entity   String
+  entityId String   @map("entity_id")
+  field    String
+  /// mj-only · assets-only · loc-only · union · agreed · disagreed · game-verified · manual
+  rule     String
+  sources  String[]
+
+  @@id([entity, entityId, field])
+  @@index([entity, rule])
+  @@map("field_source")
+  @@schema("canonical")
+}
+
+/// limbus-assets 가 자기 도구를 위해 붙인 필드. 게임 사실이 아니다.
+/// 게임 데이터 테이블을 열었을 때 게임 사실만 보이게 하려고 따로 둔다.
+model ToolAnnotation {
+  source   String
+  entity   String
+  entityId String @map("entity_id")
+  field    String
+  value    Json
+
+  @@id([source, entity, entityId, field])
+  @@index([entity, entityId])
+  @@map("tool_annotation")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 거울 던전 테마 팩
+// ─────────────────────────────────────────────────────────────
+
+/// 층 진입 시 고르는 단위. 117종이며 id 대역이 곧 분류다.
+///
+/// 정본은 limbus-data-mj 다 — 마스터북 팩 편 실측에서 mj 단독 개념 6 · assets 2 로
+/// mj 쪽으로 쏠렸다(ADR-04 의 「거울 던전 구성 = assets」와 어긋난다, backlog/09).
+model Pack {
+  /// mj packs.id. 정수지만 문자열로 담는다 — 다른 계열의 id 와 규약을 맞춘다
+  id            String       @id
+  category      PackCategory
+  /// 본편 장. canto 27건만
+  chapter       Int?
+  variant       PackVariant?
+  /// 애셋은 id 가 아니라 이 값으로 찾는다. assets image 와 117/117 일치
+  sprite        String
+  /// assets overlayImage. 41건
+  overlaySprite String?      @map("overlay_sprite")
+  /// 6–10층 구간에 배정되는 중첩 팩
+  superposition Boolean      @default(false)
+  /// 11–15층 구간에 배정되는 극한 팩
+  extreme       Boolean      @default(false)
+  /// 복각 여부
+  bokgak        Boolean      @default(false)
+  /// 팩이 차지하는 층 수
+  floorLength   Int          @map("floor_length")
+  /// 이름 표시색. 6자리 16진수. 61건 결손 → NULL (field_gap 참조)
+  textColor     String?      @map("text_color")
+  /// packs_detail.unlock.unlockCode. 2건 결손
+  unlockCode    Int?         @map("unlock_code")
+
+  texts          PackText[]
+  tags           PackTag[]
+  categoryPath   PackCategoryPath[]
+  floors         FloorPack[]
+  bosses         PackBossEncounter[]
+  runFloors      RunFloor[]
+  gifts          GiftPack[]
+  exclusiveGifts GiftExclusivePack[]
+
+  @@index([category])
+  @@map("pack")
+  @@schema("canonical")
+}
+
+/// 표시명. ko 는 mj.nameKo 가 정본이고 loc 이 폴백이다.
+/// 1309 「감정 앞에 게으른 것」은 loc-ko 에 후행 공백이 있어 mj 를 쓴다.
+model PackText {
+  packId String @map("pack_id")
+  locale Locale
+  name   String
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, locale])
+  @@map("pack_text")
+  @@schema("canonical")
+}
+
+/// assets tags. 유일 47종 · 연결 184건. 화면 필터용이며 assets 단독 개념이다.
+model PackTag {
+  packId String @map("pack_id")
+  tag    String
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, tag])
+  @@index([tag])
+  @@map("pack_tag")
+  @@schema("canonical")
+}
+
+/// assets category 배열. 2단 계층이며 mj 의 평평한 category 가 담지 못하는 것이다.
+/// 예: ["Canto", "I"] → depth 0 "Canto", depth 1 "I". 실측 202원소(2단 85 · 1단 32).
+model PackCategoryPath {
+  packId String @map("pack_id")
+  depth  Int
+  value  String
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([packId, depth])
+  @@map("pack_category_path")
+  @@schema("canonical")
+}
+
+/// 팩의 보스 조우. 팩 계열에서 미룬 연결이다. 실측 75건.
+model PackBossEncounter {
+  packId      String @map("pack_id")
+  encounterId String @map("encounter_id")
+
+  pack      Pack      @relation(fields: [packId], references: [id], onDelete: Cascade)
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@id([packId, encounterId])
+  @@index([encounterId])
+  @@map("pack_boss_encounter")
+  @@schema("canonical")
+}
+
+/// 난이도·층 구간별 등장 팩. 정본은 assets md_floor_packs 다(ADR-04 2.1). 288행.
+///
+/// 1–5층은 mj 와 assets 가 218/218 완전 일치한다(차집합 0, 실측).
+/// 6층 이상은 표현이 갈릴 뿐 모순이 아니다 — assets 는 구간으로("6-10"·"11-15"),
+/// mj 는 플래그로(superposition·extreme) 담는다. 실측상
+/// 6-10 구간 46건이 전부 superposition 이고 11-15 구간 24건이 전부 extreme 이다.
+model FloorPack {
+  difficulty Difficulty
+  /// "1" · "2" · … · "6-10" · "11-15"
+  floorRange String     @map("floor_range")
+  packId     String     @map("pack_id")
+
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([difficulty, floorRange, packId])
+  @@index([packId])
+  @@map("floor_pack")
+  @@schema("canonical")
+}
+// canonical — 어휘 (그래프 파생의 기반, 스펙 6절)
+// ─────────────────────────────────────────────────────────────
+
+/// 죄악 7종. 색 토큰과 1:1 대응한다
+/// (CRIMSON 분노 · SCARLET 색욕 · AMBER 나태 · SHAMROCK 탐식 ·
+///  AZURE 우울 · INDIGO 오만 · VIOLET 질투).
+enum Sin {
+  wrath
+  lust
+  sloth
+  gluttony
+  gloom
+  pride
+  envy
+
+  @@schema("canonical")
+}
+
+/// 기프트가 속한 게임 모드.
+enum GiftDomain {
+  mirror_dungeon
+  story_dungeon
+
+  @@schema("canonical")
+}
+
+/// 기믹 키워드. loc EgoGiftCategory.json 12종이 공식 사전이다.
+/// id 는 사전의 상태명(Combustion)이고 표시명이 ko 화상 · en Burn 이다.
+model Keyword {
+  id String @id
+
+  texts      KeywordText[]
+  gifts      Gift[]
+  startGifts StartGift[]
+
+  @@map("keyword")
+  @@schema("canonical")
+}
+
+model KeywordText {
+  keywordId String @map("keyword_id")
+  locale    Locale
+  name      String
+
+  keyword Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@id([keywordId, locale])
+  @@map("keyword_text")
+  @@schema("canonical")
+}
+
+/// 발동 조건. assets triggers 150종. 그래프에서 (Gift)-[:TRIGGERS_ON]->(Trigger) 가 된다.
+model Trigger {
+  id    String @id
+  gifts GiftTrigger[]
+
+  @@map("trigger")
+  @@schema("canonical")
+}
+
+/// 효과 분류. assets effects 55종. 그래프에서 (Gift)-[:PRODUCES]->(Effect) 가 된다.
+model Effect {
+  id    String @id
+  gifts GiftEffect[]
+
+  @@map("effect")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — E.G.O 기프트
+// ─────────────────────────────────────────────────────────────
+
+/// E.G.O 기프트 582종. 정본은 limbus-assets 다(ADR-04).
+///
+/// 스토리 던전 기프트 126종은 loc 에만 있어 구조 필드가 전부 NULL 이다.
+/// domain 으로 가른다.
+model Gift {
+  /// 원본 id. 4자리(스토리) · 4–5자리(거울 던전)
+  id            String     @id
+  domain        GiftDomain
+  /// 죄악. mj sin 이 정본이다 — assets affinity 는 4건 틀렸다(게임 확인)
+  sin           Sin?
+  /// 등급 1–5. "EX" 2건은 숫자가 아니라 null 이고 tierLabel 에 남는다
+  tier          Int?
+  /// tier 가 숫자가 아닐 때의 원문. "EX"
+  tierLabel     String?    @map("tier_label")
+  cost          Int?
+  keywordId     String?    @map("keyword_id")
+  /// mj ∪ assets = 122. 한쪽만 보면 6건 또는 69건을 놓친다(게임 5건 확인)
+  hardOnly      Boolean    @default(false) @map("hard_only")
+  /// 강화 가능 여부. 단계가 2 이상이면 true
+  enhanceable   Boolean    @default(false)
+
+  keyword        Keyword?            @relation(fields: [keywordId], references: [id])
+  stages         GiftStage[]
+  effects        GiftEffect[]
+  triggers       GiftTrigger[]
+  packs          GiftPack[]
+  exclusivePacks GiftExclusivePack[]
+  requirements   GiftRequirement[]
+  recipes        FusionRecipe[]
+  lockedDescs    GiftLockedDesc[]
+  choiceEvents   ChoiceEventGift[]
+  startGifts     StartGift[]
+  runGifts       RunGift[]
+
+  @@index([domain])
+  @@index([sin])
+  @@index([keywordId])
+  @@map("gift")
+  @@schema("canonical")
+}
+
+/// 강화 단계. level 0 이 기본이고 1·2 가 + · ++ 다.
+/// assets 는 names/descs 배열로, loc 은 id+10000·id+20000 으로 담는다.
+model GiftStage {
+  giftId String @map("gift_id")
+  level  Int
+
+  gift  Gift            @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  texts GiftStageText[]
+
+  @@id([giftId, level])
+  @@map("gift_stage")
+  @@schema("canonical")
+}
+
+model GiftStageText {
+  giftId String  @map("gift_id")
+  level  Int
+  locale Locale
+  name   String
+  desc   String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+
+  stage GiftStage @relation(fields: [giftId, level], references: [giftId, level], onDelete: Cascade)
+
+  @@id([giftId, level, locale])
+  @@map("gift_stage_text")
+  @@schema("canonical")
+}
+
+model GiftEffect {
+  giftId   String @map("gift_id")
+  effectId String @map("effect_id")
+
+  gift   Gift   @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  effect Effect @relation(fields: [effectId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, effectId])
+  @@index([effectId])
+  @@map("gift_effect")
+  @@schema("canonical")
+}
+
+model GiftTrigger {
+  giftId    String @map("gift_id")
+  triggerId String @map("trigger_id")
+
+  gift    Gift    @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  trigger Trigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, triggerId])
+  @@index([triggerId])
+  @@map("gift_trigger")
+  @@schema("canonical")
+}
+
+/// 팩별 등장 기프트 풀. mj 단독 개념이다 — 정본(assets)에 없다.
+/// 마스터북 팩 편에서 역참조 441/441 완전 일치를 확인했다.
+model GiftPack {
+  giftId String @map("gift_id")
+  packId String @map("pack_id")
+
+  gift Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, packId])
+  @@index([packId])
+  @@map("gift_pack")
+  @@schema("canonical")
+}
+
+/// 테마 한정 기프트. assets exclusiveTo 321 이 mj uniquePacks 236 을 포함한다.
+model GiftExclusivePack {
+  giftId String @map("gift_id")
+  packId String @map("pack_id")
+
+  gift Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  pack Pack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, packId])
+  @@index([packId])
+  @@map("gift_exclusive_pack")
+  @@schema("canonical")
+}
+
+/// 발동 조건. mj requires 가 유일 출처이며 다섯 갈래다.
+/// resonance · sinAffinity · slots · skills · teamWide
+model GiftRequirement {
+  giftId String @map("gift_id")
+  kind   String
+  /// 갈래마다 모양이 다르다. 원문을 그대로 담는다
+  value  Json
+
+  gift Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, kind])
+  @@map("gift_requirement")
+  @@schema("canonical")
+}
+
+/// 합성 레시피. 한 기프트가 여러 레시피를 가질 수 있다.
+model FusionRecipe {
+  giftId String @map("gift_id")
+  index  Int
+
+  gift  Gift         @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  slots FusionSlot[]
+
+  @@id([giftId, index])
+  @@map("fusion_recipe")
+  @@schema("canonical")
+}
+
+/// 레시피의 재료 자리. 고정 재료면 giftId 가 차고, 대체 가능하면 options 가 찬다.
+model FusionSlot {
+  giftId     String @map("gift_id")
+  recipeIdx  Int    @map("recipe_idx")
+  slotIdx    Int    @map("slot_idx")
+  /// 고정 재료
+  materialId String? @map("material_id")
+  /// 이 자리에 필요한 개수. 대체 가능한 자리에만 있다
+  count      Int?
+
+  recipe  FusionRecipe       @relation(fields: [giftId, recipeIdx], references: [giftId, index], onDelete: Cascade)
+  options FusionSlotOption[]
+
+  @@id([giftId, recipeIdx, slotIdx])
+  @@map("fusion_slot")
+  @@schema("canonical")
+}
+
+/// 대체 가능한 재료 후보. 9083 달의 기억처럼 mj 가 표현하지 못하는 것이다.
+model FusionSlotOption {
+  giftId     String @map("gift_id")
+  recipeIdx  Int    @map("recipe_idx")
+  slotIdx    Int    @map("slot_idx")
+  materialId String @map("material_id")
+
+  slot FusionSlot @relation(fields: [giftId, recipeIdx, slotIdx], references: [giftId, recipeIdx, slotIdx], onDelete: Cascade)
+
+  @@id([giftId, recipeIdx, slotIdx, materialId])
+  @@map("fusion_slot_option")
+  @@schema("canonical")
+}
+
+/// 미획득 시 표시 문구. 64건 전부 상점 팩에 안 들어가는 기프트다.
+model GiftLockedDesc {
+  giftId String @map("gift_id")
+  locale Locale
+  text   String
+
+  gift Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, locale])
+  @@map("gift_locked_desc")
+  @@schema("canonical")
+}
+// canonical — 수감자 · 소속
+// ─────────────────────────────────────────────────────────────
+
+/// 수감자 12명. star=1 인 LCB 기본 인격에서 이름을 얻는다.
+model Sinner {
+  id Int @id
+
+  texts      SinnerText[]
+  identities Identity[]
+  egos       Ego[]
+
+  @@map("sinner")
+  @@schema("canonical")
+}
+
+model SinnerText {
+  sinnerId Int    @map("sinner_id")
+  locale   Locale
+  name     String
+
+  sinner Sinner @relation(fields: [sinnerId], references: [id], onDelete: Cascade)
+
+  @@id([sinnerId, locale])
+  @@map("sinner_text")
+  @@schema("canonical")
+}
+
+/// 소속. mj associations.json 64종이 유일 출처다.
+/// id 는 영문 코드(LIMBUS_COMPANY)이며 표시명이 따로 온다.
+model Association {
+  id String @id
+
+  texts      AssociationText[]
+  identities IdentityAssociation[]
+
+  @@map("association")
+  @@schema("canonical")
+}
+
+model AssociationText {
+  associationId String @map("association_id")
+  locale        Locale
+  name          String
+
+  association Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@id([associationId, locale])
+  @@map("association_text")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 스킬
+// ─────────────────────────────────────────────────────────────
+
+/// 공격 타입 3종
+enum AtkType {
+  slash
+  pierce
+  blunt
+
+  @@schema("canonical")
+}
+
+/// 스킬 종류. 이름이 `defType` 이지만 방어만 가리키지 않는다 —
+/// 실측 attack 828 · guard 90 · counter 78 · evade 48 · non_action 1 이다.
+/// 원본 필드명을 남기되 뜻은 「스킬 종류」다.
+enum SkillKind {
+  attack
+  guard
+  counter
+  evade
+  non_action
+
+  @@schema("canonical")
+}
+
+/// 스킬 1,045종. mj skills.json 이 유일 출처다.
+model Skill {
+  id         String   @id
+  sin        Sin?
+  attackType AtkType? @map("attack_type")
+  /// 원본 defType. 뜻은 스킬 종류다
+  kind       SkillKind? @map("kind")
+  skillTier  Int?     @map("skill_tier")
+
+  stages     SkillStage[]
+  identities IdentitySkill[]
+
+  @@map("skill")
+  @@schema("canonical")
+}
+
+/// 동기화 단계 1–5. **전량 전개**한다 — 값이 안 바뀐 단계도 앞 단계를 복사해 채운다.
+/// changedHere 가 원본 델타 정보를 보존하므로 충실성을 잃지 않는다(스펙 3.3).
+model SkillStage {
+  skillId     String  @map("skill_id")
+  uptie       Int
+  /// 원본 델타가 이 단계에 있었나. false 면 앞 단계 복사본이다
+  changedHere Boolean @map("changed_here")
+
+  skill Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  texts SkillStageText[]
+  coins SkillCoin[]
+
+  @@id([skillId, uptie])
+  @@map("skill_stage")
+  @@schema("canonical")
+}
+
+model SkillStageText {
+  skillId String  @map("skill_id")
+  uptie   Int
+  locale  Locale
+  name    String
+  desc    String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+
+  stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, locale])
+  @@map("skill_stage_text")
+  @@schema("canonical")
+}
+
+/// 코인. 효과 문자열은 원문 그대로 담는다.
+/// 대괄호 토큰(215종) 분해는 계획 6에서 상태 어휘와 함께 한다.
+model SkillCoin {
+  skillId String @map("skill_id")
+  uptie   Int
+  index   Int
+  /// 코인 효과 문자열. 여러 줄일 수 있어 배열로 담는다
+  effects String[]
+
+  stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, index])
+  @@map("skill_coin")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 패시브
+// ─────────────────────────────────────────────────────────────
+
+/// 패시브 709종. 이름이 전부 null 인 6건은 마스터북의 「유령」이며
+/// 어느 층에서도 패시브가 아니다(회차 4·10·13 세 번 확인).
+model Passive {
+  id   String @id
+  /// 원본 필드명은 `cost` 이지만 **비용이 아니라 발동 조건 코드**다.
+  /// CheckAwakenLevel2 … 5 · CheckAwakenLevelBetween_2_4 — 각성 단계에 따라 켜진다.
+  /// 실측 604/709 가 배열을 갖는다
+  conditions String[]
+
+  texts      PassiveText[]
+  identities IdentityPassive[]
+
+  @@map("passive")
+  @@schema("canonical")
+}
+
+model PassiveText {
+  passiveId String  @map("passive_id")
+  locale    Locale
+  name      String
+  desc      String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+
+  passive Passive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, locale])
+  @@map("passive_text")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 인격
+// ─────────────────────────────────────────────────────────────
+
+model Identity {
+  id               String  @id
+  sinnerId         Int     @map("sinner_id")
+  /// 등급 1–3
+  star             Int
+  /// 편성 코드에 넣을 수 있나
+  teamCodeEligible Boolean @default(true) @map("team_code_eligible")
+  /// 원본 시즌 정수. 8000 은 명일방주 콜라보다(backlog/11)
+  season           Int?
+  hp               Int?
+  /// 흐트러짐 구간 임계값. **배열이다** — [65, 35, 15] 처럼 여러 구간을 갖는다.
+  /// 실측 3구간 85 · 2구간 67 · 1구간 32 인격. assets 는 같은 것을 breakSection 으로 담는다
+  stagger          Int[]
+  defCorrection    Int?    @map("def_correction")
+  /// 출시일. assets date
+  releaseDate      String? @map("release_date")
+
+  sinner       Sinner                @relation(fields: [sinnerId], references: [id])
+  texts        IdentityText[]
+  resists      IdentityResist[]
+  speed        IdentitySpeed?
+  skills       IdentitySkill[]
+  passives     IdentityPassive[]
+  associations IdentityAssociation[]
+  keywords     IdentityKeyword[]
+  unitKeywords IdentityUnitKeyword[]
+  statuses     IdentityStatus[]
+
+  @@index([sinnerId])
+  @@index([star])
+  @@map("identity")
+  @@schema("canonical")
+}
+
+model IdentityText {
+  identityId String  @map("identity_id")
+  locale     Locale
+  /// 인격명. "죄와 벌"
+  name       String
+  /// 수감자 칭호. "LCB 수감자"
+  title      String?
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, locale])
+  @@map("identity_text")
+  @@schema("canonical")
+}
+
+/// 물리 저항 3축. E.G.O 는 죄악 7축, 적은 10축이라 축이 다르다.
+model IdentityResist {
+  identityId String  @map("identity_id")
+  atkType    AtkType @map("atk_type")
+  value      Float
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, atkType])
+  @@map("identity_resist")
+  @@schema("canonical")
+}
+
+model IdentitySpeed {
+  identityId String @map("identity_id")
+  min        Int
+  max        Int
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId])
+  @@map("identity_speed")
+  @@schema("canonical")
+}
+
+/// 인격이 쓰는 스킬.
+///
+/// 공격 스킬은 원본이 {slot, copies, skillId} 라 **덱 구성 정보**를 함께 담는다 —
+/// slot 은 스킬 번호(1·2·3), copies 는 덱에 들어가는 매수다. 방어·패닉 스킬은
+/// 평평한 id 배열이라 둘 다 null 이다.
+model IdentitySkill {
+  identityId String @map("identity_id")
+  skillId    String @map("skill_id")
+  /// attack · defense · panic
+  role       String
+  /// 같은 역할 안에서의 순서
+  ordinal    Int
+  /// 스킬 번호 1·2·3. 공격 스킬만
+  slot       Int?
+  /// 덱에 들어가는 매수. 공격 스킬만
+  copies     Int?
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, skillId, role])
+  @@index([skillId])
+  @@map("identity_skill")
+  @@schema("canonical")
+}
+
+/// 인격이 갖는 패시브.
+///
+/// 원본이 {level, passives:[id]} 라 **공명 요구 레벨**을 함께 담는다 —
+/// 전투 패시브는 해당 죄악 공명이 level 이상일 때 발동한다.
+model IdentityPassive {
+  identityId String @map("identity_id")
+  passiveId  String @map("passive_id")
+  /// battle · supporter
+  role       String
+  /// 공명 요구 레벨 1–4. **키의 일부다** — 같은 패시브가 여러 레벨에 걸리는
+  /// 경우가 실측 172건 있다(강화판이 같은 id 를 재사용).
+  level      Int
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  passive  Passive  @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, passiveId, role, level])
+  @@index([passiveId])
+  @@map("identity_passive")
+  @@schema("canonical")
+}
+
+model IdentityAssociation {
+  identityId    String @map("identity_id")
+  associationId String @map("association_id")
+
+  identity    Identity    @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  association Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, associationId])
+  @@index([associationId])
+  @@map("identity_association")
+  @@schema("canonical")
+}
+
+/// 기믹 축. mj keywords 이며 기프트 keyword 와 같은 어휘를 쓴다.
+model IdentityKeyword {
+  identityId String @map("identity_id")
+  keywordId  String @map("keyword_id")
+  /// 이 기믹을 쓰는 스킬 번호들
+  skillSlots Int[]  @map("skill_slots")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, keywordId])
+  @@map("identity_keyword")
+  @@schema("canonical")
+}
+
+/// 특성 키워드. detail unitKeywords 이며 소속과 다른 축이다(backlog/01).
+model IdentityUnitKeyword {
+  identityId String @map("identity_id")
+  keyword    String
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, keyword])
+  @@map("identity_unit_keyword")
+  @@schema("canonical")
+}
+// canonical — E.G.O
+// ─────────────────────────────────────────────────────────────
+
+/// E.G.O 등급. 게임 표기는 세피로트 이름이다.
+enum EgoRank {
+  ZAYIN
+  TETH
+  HE
+  WAW
+  ALEPH
+
+  @@schema("canonical")
+}
+
+/// E.G.O 115종.
+///
+/// 정본은 limbus-assets 다(ADR-04) — 인격과 뒤집힌다. 다만 loc 가 두 가지를
+/// 더 안다: 연출 전용 개체 5건과 두 번째 각성 스킬 2건.
+model Ego {
+  id            String   @id
+  sinnerId      Int      @map("sinner_id")
+  rank          EgoRank?
+  /// 각성 시 공격 죄악
+  sin           Sin?
+  attackType    AtkType? @map("attack_type")
+  season        Int?
+  releaseDate   String?  @map("release_date")
+  /// 환상 해석 최대 단계. 실측 3건만 값이 있다
+  maxThreadspin Int?     @map("max_threadspin")
+  /// 거울 던전에서 추출 가능한가. 게임 확인으로 값이 맞음을 밝혔다
+  extractable   Boolean  @default(false)
+  /// 컷신 전용이라 플레이할 수 없다. loc 에만 있는 5건
+  presentationOnly Boolean @default(false) @map("presentation_only")
+
+  sinner       Sinner           @relation(fields: [sinnerId], references: [id])
+  texts        EgoText[]
+  resists      EgoResist[]
+  costs        EgoCost[]
+  corrosions   EgoCorrosion[]
+  requirements EgoRequirement[]
+  skills       EgoSkill[]
+  passives     EgoPassiveLink[]
+  statuses     EgoStatus[]
+
+  @@index([sinnerId])
+  @@index([rank])
+  @@map("ego")
+  @@schema("canonical")
+}
+
+model EgoText {
+  egoId  String  @map("ego_id")
+  locale Locale
+  name   String
+  desc   String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, locale])
+  @@map("ego_text")
+  @@schema("canonical")
+}
+
+/// 죄악 7축 저항. 인격은 물리 3축이라 축이 다르다.
+///
+/// mj 는 white·black 2축을 더 갖지만 **전작 로보토미의 개념이고 현재 게임에
+/// 없다**(마스터북 게임 확인). 그 둘은 tool_annotation 에 legacyResist 로 남긴다.
+model EgoResist {
+  egoId String @map("ego_id")
+  sin   Sin
+  value Float
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, sin])
+  @@map("ego_resist")
+  @@schema("canonical")
+}
+
+/// 사용 자원. 죄악별 개수다.
+model EgoCost {
+  egoId String @map("ego_id")
+  sin   Sin
+  count Int
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, sin])
+  @@map("ego_cost")
+  @@schema("canonical")
+}
+
+/// 침식 확률표.
+///
+/// **section 은 백분율이 아니다.** 정신력 [-45, +45] 를 [0, 1] 로 정규화한
+/// 위치다 — 0.5 가 SP 0 이고, 그때 침식 확률이 25 % 다. 마스터북이 처음
+/// 백분율로 오독했다가 게임 카드로 정정했다.
+model EgoCorrosion {
+  egoId       String @map("ego_id")
+  index       Int
+  section     Float
+  probability Float
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, index])
+  @@map("ego_corrosion")
+  @@schema("canonical")
+}
+
+/// 사용 조건. 색 토큰을 몇 개 요구하는가.
+model EgoRequirement {
+  egoId         String @map("ego_id")
+  /// CRIMSON · SCARLET · AMBER · SHAMROCK · AZURE · INDIGO · VIOLET
+  attributeType String @map("attribute_type")
+  num           Int
+
+  ego Ego @relation(fields: [egoId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, attributeType])
+  @@map("ego_requirement")
+  @@schema("canonical")
+}
+
+/// E.G.O 스킬. 인격 스킬과 **구조가 다르다** —
+/// 원본이 levelList[].coinlist[].coindescs[] 이고 단계가 델타가 아니다.
+/// 있는 단계만 담는다(실측 1·3·4 가 주력).
+model EgoSkill {
+  id    String @id
+  egoId String @map("ego_id")
+  /// awakening · corrosion
+  role  String
+  /// 같은 역할 안의 순서. 두 번째 각성 스킬이 실측 2건 있다
+  ordinal Int  @default(0)
+
+  ego    Ego              @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  stages EgoSkillStage[]
+
+  @@index([egoId])
+  @@map("ego_skill")
+  @@schema("canonical")
+}
+
+model EgoSkillStage {
+  skillId String @map("skill_id")
+  uptie   Int
+
+  skill EgoSkill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  texts EgoSkillStageText[]
+  coins EgoSkillCoin[]
+
+  @@id([skillId, uptie])
+  @@map("ego_skill_stage")
+  @@schema("canonical")
+}
+
+model EgoSkillStageText {
+  skillId String  @map("skill_id")
+  uptie   Int
+  locale  Locale
+  name    String
+  desc    String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+  /// 유래 환상체. loc 단독 개념이다
+  abName  String? @map("ab_name")
+
+  stage EgoSkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, locale])
+  @@map("ego_skill_stage_text")
+  @@schema("canonical")
+}
+
+/// 코인 효과. loc 이 로케일별로 갖는다.
+model EgoSkillCoin {
+  skillId String @map("skill_id")
+  uptie   Int
+  index   Int
+  locale  Locale
+  effects String[]
+
+  stage EgoSkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
+
+  @@id([skillId, uptie, index, locale])
+  @@map("ego_skill_coin")
+  @@schema("canonical")
+}
+
+/// E.G.O 패시브 113종. mj·assets·loc 3중 일치를 마스터북이 확인했다(순서까지).
+model EgoPassive {
+  id String @id
+
+  texts EgoPassiveText[]
+  egos  EgoPassiveLink[]
+
+  @@map("ego_passive")
+  @@schema("canonical")
+}
+
+model EgoPassiveText {
+  passiveId String  @map("passive_id")
+  locale    Locale
+  name      String
+  desc      String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+
+  passive EgoPassive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, locale])
+  @@map("ego_passive_text")
+  @@schema("canonical")
+}
+
+model EgoPassiveLink {
+  egoId     String @map("ego_id")
+  passiveId String @map("passive_id")
+
+  ego     Ego        @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  passive EgoPassive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, passiveId])
+  @@index([passiveId])
+  @@map("ego_passive_link")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 상태 · 어휘
+// ─────────────────────────────────────────────────────────────
+
+/// 상태의 성격
+enum BuffType {
+  Positive
+  Neutral
+  Negative
+
+  @@schema("canonical")
+}
+
+/// 전투 상태 1,472종. 정본은 limbus-assets 다.
+/// 한국어가 245종(16.6 %) 없다 — 세 출처를 합쳐도 못 얻는다.
+model Status {
+  id       String   @id
+  buffType BuffType @map("buff_type")
+  /// 아이콘 경로. 수치 변화형은 없다
+  sprite   String?
+
+  texts      StatusText[]
+  categories StatusCategory[]
+  egos       EgoStatus[]
+  identities IdentityStatus[]
+  coinTokens CoinToken[]
+
+  @@index([buffType])
+  @@map("status")
+  @@schema("canonical")
+}
+
+model StatusText {
+  statusId String  @map("status_id")
+  locale   Locale
+  name     String
+  desc     String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+  /// 짧은 표기. 게임 상세 화면은 desc 를 쓴다
+  summary  String?
+
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([statusId, locale])
+  @@map("status_text")
+  @@schema("canonical")
+}
+
+/// 상태 분류. assets categoryKeywordList 24종.
+model StatusCategory {
+  statusId String @map("status_id")
+  category String
+
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([statusId, category])
+  @@index([category])
+  @@map("status_category")
+  @@schema("canonical")
+}
+
+/// 죄악 7종과 색 토큰의 대응. mj sins.json 이 유일 출처다.
+model SinInfo {
+  sin       Sin    @id
+  /// 색 토큰. CRIMSON · SCARLET · AMBER · SHAMROCK · AZURE · INDIGO · VIOLET
+  attribute String
+  order     Int
+
+  texts SinText[]
+
+  @@map("sin_info")
+  @@schema("canonical")
+}
+
+model SinText {
+  sin    Sin
+  locale Locale
+  name   String
+
+  info SinInfo @relation(fields: [sin], references: [sin], onDelete: Cascade)
+
+  @@id([sin, locale])
+  @@map("sin_text")
+  @@schema("canonical")
+}
+
+/// 치환 어휘 483종. 설명문의 토큰을 표시명으로 바꾸는 표다.
+model Term {
+  id String @id
+
+  texts TermText[]
+
+  @@map("term")
+  @@schema("canonical")
+}
+
+model TermText {
+  termId String @map("term_id")
+  locale Locale
+  name   String
+
+  term Term @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@id([termId, locale])
+  @@map("term_text")
+  @@schema("canonical")
+}
+
+/// 스킬 코인 효과 문자열에서 뽑은 토큰. **스펙 6절의 구현이다.**
+///
+/// 원문은 skill_coin.effects 에 그대로 남고 이것은 분해 결과다. 파싱이 틀려도
+/// 원문에서 다시 뽑을 수 있다.
+///
+/// kind = 'status' 189종은 canonical.status 로 FK 가 선다 →
+///   (Skill)-[:INFLICTS]->(Status)
+/// kind = 'timing' 26종은 발동 시점이다 → (Skill)-[:TIMED_AT]->(Timing)
+model CoinToken {
+  skillId  String @map("skill_id")
+  uptie    Int
+  coinIdx  Int    @map("coin_idx")
+  /// 효과 문자열 안 등장 순서
+  ordinal  Int
+  token    String
+  /// status · timing
+  kind     String
+  /// "Inflict 3 [Sinking]" 의 3. 못 뽑으면 null
+  amount   Int?
+  /// kind='status' 일 때만 찬다
+  statusId String? @map("status_id")
+
+  status Status? @relation(fields: [statusId], references: [id])
+
+  @@id([skillId, uptie, coinIdx, ordinal])
+  @@index([token])
+  @@index([statusId])
+  @@map("coin_token")
+  @@schema("canonical")
+}
+
+/// E.G.O 가 다루는 상태. 계획 5에서 미룬 연결이다.
+model EgoStatus {
+  egoId    String @map("ego_id")
+  statusId String @map("status_id")
+
+  ego    Ego    @relation(fields: [egoId], references: [id], onDelete: Cascade)
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([egoId, statusId])
+  @@index([statusId])
+  @@map("ego_status")
+  @@schema("canonical")
+}
+
+/// 인격이 다루는 상태. 계획 4에서 미룬 연결이다.
+model IdentityStatus {
+  identityId String @map("identity_id")
+  statusId   String @map("status_id")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  status   Status   @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, statusId])
+  @@index([statusId])
+  @@map("identity_status")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 거울 던전 구성
+// ─────────────────────────────────────────────────────────────
+
+/// 거울 던전 선택지 이벤트 159종.
+model ChoiceEvent {
+  id      String  @id
+  type    String
+  /// 삽화 id. 원본이 **숫자**다. 실측 1건만 있다
+  illustId Int?    @map("illust_id")
+
+  texts   ChoiceEventText[]
+  options ChoiceOption[]
+  gifts   ChoiceEventGift[]
+
+  @@map("choice_event")
+  @@schema("canonical")
+}
+
+model ChoiceEventText {
+  eventId String @map("event_id")
+  locale  Locale
+  name    String?
+  desc    String?
+  /// 마크업이 있던 원문. 없으면 null — desc 가 곧 원문이다
+  descRaw String? @map("desc_raw")
+
+  event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, locale])
+  @@map("choice_event_text")
+  @@schema("canonical")
+}
+
+/// 이 이벤트가 줄 수 있는 기프트.
+model ChoiceEventGift {
+  eventId String @map("event_id")
+  giftId  String @map("gift_id")
+
+  event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  gift  Gift        @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, giftId])
+  @@index([giftId])
+  @@map("choice_event_gift")
+  @@schema("canonical")
+}
+
+/// 선택지 하나.
+///
+/// **결과는 JSONB 로 담는다.** options[].result[].results[] 가 3중 중첩이고
+/// 마스터북이 구조를 확정하지 않았다. 종류를 세지 않은 채 정규화하면 틀린
+/// 스키마를 만든다 — 선택지까지 행으로 펴고 그 아래는 원문을 남긴다.
+model ChoiceOption {
+  eventId String @map("event_id")
+  index   Int
+  message String
+  /// 원문 result 배열
+  results Json
+
+  event ChoiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  texts ChoiceOptionText[]
+
+  @@id([eventId, index])
+  @@map("choice_option")
+  @@schema("canonical")
+}
+
+model ChoiceOptionText {
+  eventId String  @map("event_id")
+  index   Int
+  locale  Locale
+  message String
+  desc    String?
+
+  option ChoiceOption @relation(fields: [eventId, index], references: [eventId, index], onDelete: Cascade)
+
+  @@id([eventId, index, locale])
+  @@map("choice_option_text")
+  @@schema("canonical")
+}
+
+/// 거울 던전 업적. md__*(기본)과 md__md6__*(시즌 판본)를 season 으로 가른다.
+model Achievement {
+  id       String
+  /// **키의 일부다** — 두 시즌 판본이 같은 (id, category) 를 쓴다.
+  /// 0 이 기본(md__*), 6 이 MD6 판본(md__md6__*)
+  season   Int
+  category String
+  /// 단계별 점수
+  points   Int[]
+  /// 하드 전용 여부. 단계별
+  hardOnly Boolean[] @map("hard_only")
+
+  texts AchievementText[]
+
+  @@id([id, category, season])
+  @@index([category])
+  @@map("achievement")
+  @@schema("canonical")
+}
+
+model AchievementText {
+  id       String
+  category String
+  season   Int
+  locale   Locale
+  text     String
+
+  achievement Achievement @relation(fields: [id, category, season], references: [id, category, season], onDelete: Cascade)
+
+  @@id([id, category, season, locale])
+  @@map("achievement_text")
+  @@schema("canonical")
+}
+
+/// 층별 보상. 100단계 × 시즌.
+model Reward {
+  season Int
+  level  Int
+  item   String
+  count  Int
+
+  @@id([season, level])
+  @@map("reward")
+  @@schema("canonical")
+}
+
+/// 역경. 층 구간별 적용 효과다.
+///
+/// 원본 `md__details.adversity` 는 {name, desc, value} 한 덩어리지만 **표시
+/// 문자열을 떼어낸다**(ADR-03). 로케일이 셋이고 결손을 「행이 없다」로 표현하는
+/// 규약을 다른 계열과 맞춘다 — Grace 와 짝도 맞는다.
+model Adversity {
+  floorRange String @map("floor_range")
+  index      Int
+  value      Int
+
+  texts AdversityText[]
+
+  @@id([floorRange, index])
+  @@map("adversity")
+  @@schema("canonical")
+}
+
+model AdversityText {
+  floorRange String @map("floor_range")
+  index      Int
+  locale     Locale
+  name       String
+  desc       String
+
+  adversity Adversity @relation(fields: [floorRange, index], references: [floorRange, index], onDelete: Cascade)
+
+  @@id([floorRange, index, locale])
+  @@map("adversity_text")
+  @@schema("canonical")
+}
+
+/// 은총. 시작 시 고르는 강화 10종.
+model Grace {
+  id    String @id
+  index Int
+  cost  Int
+
+  texts GraceText[]
+
+  @@map("grace")
+  @@schema("canonical")
+}
+
+model GraceText {
+  graceId String @map("grace_id")
+  locale  Locale
+  name    String
+  /// 단계별 설명. 중첩 배열이라 원문을 담는다
+  descs   Json
+
+  grace Grace @relation(fields: [graceId], references: [id], onDelete: Cascade)
+
+  @@id([graceId, locale])
+  @@map("grace_text")
+  @@schema("canonical")
+}
+
+/// 시작 기프트 풀. 기믹 키워드별로 3개씩이다.
+model StartGift {
+  keywordId String @map("keyword_id")
+  giftId    String @map("gift_id")
+
+  keyword Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  gift    Gift    @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([keywordId, giftId])
+  @@index([giftId])
+  @@map("start_gift")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// canonical — 인카운터
+// ─────────────────────────────────────────────────────────────
+
+/// 전투 조우 251종. 파일 하나가 조우 하나다.
+model Encounter {
+  id     String @id
+  /// luxcavation · md · reflectrial · rr · story
+  group  String?
+  name   String
+  siteId String @map("site_id")
+  /// targets 와 배타적인 다른 모양들. 구조가 갈려 원문을 남긴다
+  waves    Json?
+  phases   Json?
+  battles  Json?
+
+  targets EncounterTarget[]
+  packs   PackBossEncounter[]
+
+  @@index([group])
+  @@map("encounter")
+  @@schema("canonical")
+}
+
+/// 조우에 나오는 적.
+model EncounterTarget {
+  encounterId String @map("encounter_id")
+  index       Int
+  name        String
+
+  encounter Encounter            @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  parts     EncounterTargetPart[]
+
+  @@id([encounterId, index])
+  @@map("encounter_target")
+  @@schema("canonical")
+}
+
+/// 적의 부위. **저항이 부위마다 따로 있고 10축이다** —
+/// 물리 3축 + 죄악 7축. 인격 3축 · E.G.O 7축과 다르다.
+model EncounterTargetPart {
+  encounterId   String @map("encounter_id")
+  targetIndex   Int    @map("target_index")
+  partId        String @map("part_id")
+  name          String
+  hpBase        Float? @map("hp_base")
+  hpLevel       Float? @map("hp_level")
+  defCorrection Int?   @map("def_correction")
+  speedMin      Int?   @map("speed_min")
+  speedMax      Int?   @map("speed_max")
+
+  target  EncounterTarget       @relation(fields: [encounterId, targetIndex], references: [encounterId, index], onDelete: Cascade)
+  resists EncounterPartResist[]
+
+  @@id([encounterId, targetIndex, partId])
+  @@map("encounter_target_part")
+  @@schema("canonical")
+}
+
+/// 부위별 저항 10축.
+model EncounterPartResist {
+  encounterId String @map("encounter_id")
+  targetIndex Int    @map("target_index")
+  partId      String @map("part_id")
+  /// slash · pierce · blunt · 죄악 7종
+  axis        String
+  value       Float
+
+  part EncounterTargetPart @relation(fields: [encounterId, targetIndex, partId], references: [encounterId, targetIndex, partId], onDelete: Cascade)
+
+  @@id([encounterId, targetIndex, partId, axis])
+  @@map("encounter_part_resist")
+  @@schema("canonical")
+}
+
+/// 적 표시명 1,342종. loc 단독이며 desc 가 부위 이름이다.
+model Enemy {
+  id String @id
+
+  texts EnemyText[]
+
+  @@map("enemy")
+  @@schema("canonical")
+}
+
+model EnemyText {
+  enemyId String @map("enemy_id")
+  locale  Locale
+  name    String
+  /// 부위 이름. "본체" 등
+  part    String?
+
+  enemy Enemy @relation(fields: [enemyId], references: [id], onDelete: Cascade)
+
+  @@id([enemyId, locale])
+  @@map("enemy_text")
+  @@schema("canonical")
+}
+
+// ─────────────────────────────────────────────────────────────
+// app — 재생성 대상이 아니다
+// ─────────────────────────────────────────────────────────────
+
+/// 사람이 게임에서 직접 확인해 채운 값. **canonical 을 덮어쓴다.**
+///
+/// 재적재가 이 테이블을 건드리지 않는다 — TRUNCATE 범위가 raw·canonical 이고
+/// app 은 스키마가 달라 닿지 않는다(스펙 1절). 그것이 층을 가른 이유다.
+model FieldOverride {
+  entity    String
+  entityId  String   @map("entity_id")
+  field     String
+  /// 로케일 무관이면 빈 문자열
+  locale    String   @default("")
+  /// 모양이 필드마다 달라 원문을 담는다
+  value     Json
+  /// 왜 이 값인가. "게임에서 직접 확인 2026-08-02"
+  note      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([entity, entityId, field, locale])
+  @@index([entity, field])
+  @@map("field_override")
+  @@schema("app")
+}
+
+/// 트래커 사용자.
+model Account {
+  id        String   @id
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  runs     Run[]
+  settings Setting[]
+
+  @@map("account")
+  @@schema("app")
+}
+
+model Setting {
+  accountId String @map("account_id")
+  key       String
+  value     Json
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, key])
+  @@map("setting")
+  @@schema("app")
+}
+
+/// 거울 던전 한 판.
+model Run {
+  id         String     @id
+  accountId  String     @map("account_id")
+  difficulty Difficulty
+  startedAt  DateTime   @map("started_at") @db.Timestamptz(3)
+  endedAt    DateTime?  @map("ended_at") @db.Timestamptz(3)
+  /// 도달 층
+  floor      Int        @default(1)
+
+  account Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  floors  RunFloor[]
+  gifts   RunGift[]
+
+  @@index([accountId])
+  @@map("run")
+  @@schema("app")
+}
+
+/// 층마다 고른 테마 팩. **canonical 로 외래 키가 걸린다** — 같은 DB 라 가능하다.
+model RunFloor {
+  runId  String @map("run_id")
+  floor  Int
+  packId String @map("pack_id")
+
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  pack Pack @relation(fields: [packId], references: [id])
+
+  @@id([runId, floor])
+  @@index([packId])
+  @@map("run_floor")
+  @@schema("app")
+}
+
+/// 획득한 기프트. 강화 단계까지 담는다.
+model RunGift {
+  runId  String @map("run_id")
+  giftId String @map("gift_id")
+  level  Int    @default(0)
+
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  gift Gift @relation(fields: [giftId], references: [id])
+
+  @@id([runId, giftId])
+  @@index([giftId])
+  @@map("run_gift")
+  @@schema("app")
+}

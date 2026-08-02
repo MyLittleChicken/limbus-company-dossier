@@ -5,13 +5,52 @@
 
 ## 현재 상태
 
-**1단계(데이터베이스 구축) 완료.** 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+**1단계(데이터베이스 구축) 완료 · 데이터베이스 전면 재설계 완료.**
+제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
+
+### 데이터베이스가 둘이다 — 병존한다
+
+같은 PostgreSQL 데이터베이스(`limbus`) 안에서 두 구조가 충돌 없이 돌아간다.
+
+| | 스키마 | 규모 | 쓰는 곳 |
+| --- | --- | --- | --- |
+| **현행** | `public` | 52테이블 · 52,781행 | 지금 웹·엔진이 읽는다 |
+| **신규** | `raw` · `canonical` · `app` | 96테이블 · 약 170,000행 | [ADR-06](docs/adr/06-three-schema-database.md) |
+
+신규는 [데이터 마스터북 51회차](docs/data/00-final-review.md)의 결론
+(「하나의 repo 로는 안 된다 · 단독 개념 90개 · 결손 7건」)을 담기 위해 세웠다.
+전환 여부는 별도로 판단한다.
+
+```
+raw         원본이 준 그대로. 셋이 모순인 채로 공존       43,270행 / 스냅샷
+canonical   모순 해소된 하나의 답. 최종 적재              86테이블
+app         재생성 대상 아님. 수동 보정 · 트래커 런 기록    6테이블
+```
+
+**지금 버려지던 것이 담겼다** — 선택지 이벤트 159 · 업적 183 · 층별 보상 200 ·
+적 부위별 저항 3,540 · 코인 토큰 26,942.
+
+**결손 1,549건이 사유와 함께 특정됐고**([`build/gap-report.md`](docs/adr/06-three-schema-database.md#33-결손과-수동-보정))
+`app.field_override` 로 손으로 채우면 재적재에도 살아남는다.
+
+```
+npm run v2:load               raw 적재
+npm run v2:canonical          canonical 재계산 + 수동 보정 덮기
+npm run v2:verify             raw 검증 13건
+npm run v2:verify:canonical   canonical 검증 139건
+npm run v2:gap-report         결손 대장 → build/gap-report.md
+npm run v2:reproduce          재현 시험 — 지우고 다시 만들어도 같은지
+```
+
+**재현성을 실측으로 확인했다.** `data/entities/` 를 지우고 원격에서 다시 받아
+DB 를 통째로 재생성한 결과가 **바이트 단위로 같았다**(덤프 해시 동일 ·
+파일 체크섬 1,664/1,664 일치). [ADR-06 5.5](docs/adr/06-three-schema-database.md)
 
 | 항목 | 상태 |
 | --- | --- |
 | 원본 데이터 수집 | 완료 — 6,486 파일, 체크섬 전수 검증 |
 | 수집기 (원격 → 원본) | 완료 — 빈 상태에서 1,749 파일 복원 · 체크섬 전수 대조 |
-| 의사결정 기록 | 완료 — ADR 4건 |
+| 의사결정 기록 | 완료 — ADR 6건 |
 | 데이터베이스 스키마 | 완료 — 52 테이블 |
 | 변환기 (원본 → 정규화 JSON) | 완료 — 52/52 테이블 · 미분류 입력 0 |
 | 적재기 (JSON → PostgreSQL) | 완료 — 52,781행 적재 |
@@ -39,8 +78,13 @@
 - **소속 93종은 소속만 담고 있지 않다.** 원본 필드가 `tags` 이고 조직·계급·종족·메타가 섞여 있다
   ([backlog/01](docs/backlog/01-identity-tags.md)).
 - **한국어 폴백이 화면에 표기되지 않는다.** 파이프라인이 `ko` 행에 영문을 채우기 때문이다
-  ([backlog/02](docs/backlog/02-locale-fallback.md)).
-- 추천에 필요한 효과 분해와 조건 정의는 이 단계에 없다. 3단계의 저작 대상이다.
+  ([backlog/02](docs/backlog/02-locale-fallback.md)). 신규 DB 는 폴백 대신 행을 만들지 않고
+  `field_gap` 에 남긴다.
+- 추천에 필요한 효과 분해와 조건 정의는 현행 DB 에 없다. 신규 DB 는 코인 토큰 26,942건을
+  상태 189종으로 분해해 담았다([ADR-06](docs/adr/06-three-schema-database.md) 3.4).
+
+> 위 한계는 **현행 `public` 스키마의 것**이다. 신규 3스키마에서 해소된 것과 남은 것은
+> [ADR-06](docs/adr/06-three-schema-database.md) 5절에 있다.
 
 ## 무엇을 만드는가
 

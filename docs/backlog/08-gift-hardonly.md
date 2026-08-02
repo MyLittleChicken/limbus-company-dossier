@@ -1,7 +1,24 @@
 # 하드 난이도 전용 기프트를 한 출처만 보고 적재한다
 
-> 상태: **판정 완료 · 구현 미착수** / 확인 2026-07-31
+> 상태: **신규 DB 에서 해소 · 현행 DB 는 미착수** / 확인 2026-07-31
 > 데이터 마스터북 기프트 편 회차 1(`limbus-data-mj/gifts.json`)에서 확인했다.
+
+## 0. 신규 3스키마 DB 에서는 해소됐다 (2026-07-31)
+
+`canonical.gift.hardOnly` 를 합집합으로 적재한다.
+
+```ts
+// src/v2/canonical/gifts.ts
+const hardOnly = bool(mj, 'hardOnly') || bool(a, 'hardonly');
+meta.source('gift', id, 'hardOnly', 'union', [MJ, ASSETS]);
+```
+
+검증이 이 값을 지킨다 — `npm run v2:verify:canonical` 의
+「hardOnly true (합집합 122)」 검사. 판정 근거는 `canonical.field_source` 에
+`rule = 'union'` 으로 남는다.
+
+**현행 `public` 스키마(`src/entities/gifts.ts:107`)는 그대로다.** 신규 DB 와
+병존 중이며 전환 시점에 함께 정리한다. 아래는 그 판정 기록이다.
 
 ## 1. 증상
 

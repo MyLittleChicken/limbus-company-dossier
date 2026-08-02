@@ -33,16 +33,19 @@
 
 ## 3. DB 모델
 
-**팩 전용 모델이 없다.** `GiftPack` · `GiftExclusivePack` 이 팩 id 를 정수로 들고 있을 뿐
-`Pack` 테이블이 없다(`prisma/schema.prisma`).
+> **정정 2026-07-31** — 처음 이 절을 「팩 전용 모델이 없다」로 적었다. 틀렸다.
+> `model Pack`(`prisma/schema.prisma:615`)이 있고 `buildPacks()` 가 채운다.
 
 ```
-Gift ─┬─ GiftPack           (packId: Int)      ← 이름도 분류도 없다
-      └─ GiftExclusivePack  (packId: Int)
+Pack (117) ─┬─ PackText           ko · en 이름
+            ├─ FloorPack          난이도 × 층 구간 (218)
+            ├─ PackBossEncounter  → Encounter (75)
+            ├─ GiftPack           (packId: String, FK)
+            └─ GiftExclusivePack  (packId: String, FK)
 ```
 
-> **팩은 이름조차 적재되지 않는다.** 화면에서 「'검과 작품' 한정」을 보여주려면
-> 모델이 필요하다 → `backlog/09-pack-model.md`
+담기는 것 8개념 · **안 담기는 것 6개념**(`tags` · `overlayImage` · `unlockCode` ·
+`bokgak` · `textColor` · `mapGen`) → `backlog/09-pack-model.md`
 
 ## 4. 개념 장부
 
