@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { hasSnapshot } from './paths.js';
 import { parseSnapshot, readManifest } from './snapshot.js';
+
+/** 원본 스냅샷은 커밋하지 않는다. CI 는 원본 없이 돌므로 건너뛴다. */
+const SNAPSHOT = { skip: hasSnapshot() ? false : 'data/entities 가 없다 (원본은 커밋하지 않는다)' };
 
 const FIXTURE = {
 	generatedAt: '2026-07-25',
@@ -59,7 +64,7 @@ test('parseSnapshot 은 sources 가 배열이 아니면 던진다', () => {
 	assert.throws(() => parseSnapshot({ generatedAt: '2026-07-25' }, 1), /sources/);
 });
 
-test('실제 manifest 를 파싱한다 — 출처가 하나 이상이고 커밋이 40자다', () => {
+test('실제 manifest 를 파싱한다 — 출처가 하나 이상이고 커밋이 40자다', SNAPSHOT, () => {
 	const m = parseSnapshot(readManifest(), 1);
 	assert.equal(m.snapshot.id, '2026-07-25');
 	assert.ok(m.sources.length >= 6, '출처 6종 이상');

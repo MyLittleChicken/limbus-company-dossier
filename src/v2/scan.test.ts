@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+import { hasSnapshot } from './paths.js';
 import { extractObjects, scanAll } from './scan.js';
+
+/** 원본 스냅샷은 커밋하지 않는다. CI 는 원본 없이 돌므로 건너뛴다. */
+const SNAPSHOT = { skip: hasSnapshot() ? false : 'data/entities 가 없다 (원본은 커밋하지 않는다)' };
 
 test('dataList 모양 — 원소의 id 를 쓴다', () => {
 	const r = extractObjects({ dataList: [{ id: 'A', v: 1 }, { id: 'B', v: 2 }] }, 'Whatever');
@@ -76,14 +81,14 @@ test('원소가 문자열이어도 담는다 — identity_tag_list', () => {
 	]);
 });
 
-test('scanAll 은 실측 기준값과 일치한다', () => {
+test('scanAll 은 실측 기준값과 일치한다', SNAPSHOT, () => {
 	const r = scanAll();
 	assert.equal(r.fileCount, 1664, '파일 수');
 	assert.equal(r.rows.length, 43270, '개체 행 수');
 	assert.deepEqual(r.shapeCounts, { dataList: 796, single: 827, map: 34, list: 7 });
 });
 
-test('scanAll 의 (source, srcPath, id) 는 유일하다', () => {
+test('scanAll 의 (source, srcPath, id) 는 유일하다', SNAPSHOT, () => {
 	const r = scanAll();
 	const seen = new Set<string>();
 	const dups: string[] = [];
@@ -95,7 +100,7 @@ test('scanAll 의 (source, srcPath, id) 는 유일하다', () => {
 	assert.deepEqual(dups, [], '기본키 중복');
 });
 
-test('scanAll 의 출처별 개체 수가 실측과 일치한다', () => {
+test('scanAll 의 출처별 개체 수가 실측과 일치한다', SNAPSHOT, () => {
 	const r = scanAll();
 	const per: Record<string, number> = {};
 	for (const row of r.rows) per[row.source] = (per[row.source] ?? 0) + 1;
@@ -109,14 +114,14 @@ test('scanAll 의 출처별 개체 수가 실측과 일치한다', () => {
 	});
 });
 
-test('#순번으로 대체된 개체는 190건이고 9파일에서만 나온다', () => {
+test('#순번으로 대체된 개체는 190건이고 9파일에서만 나온다', SNAPSHOT, () => {
 	const r = scanAll();
 	const fallback = r.rows.filter((row) => row.id.startsWith('#'));
 	assert.equal(fallback.length, 190);
 	assert.equal(new Set(fallback.map((row) => row.srcPath)).size, 9);
 });
 
-test('payload 는 객체 43,096 · 문자열 174 이고 null 이 없다', () => {
+test('payload 는 객체 43,096 · 문자열 174 이고 null 이 없다', SNAPSHOT, () => {
 	const r = scanAll();
 	let obj = 0;
 	let str = 0;
@@ -132,7 +137,7 @@ test('payload 는 객체 43,096 · 문자열 174 이고 null 이 없다', () => 
 	assert.equal(other, 0, 'null 이나 숫자 payload 가 있으면 적재 타입을 다시 봐야 한다');
 });
 
-test('알려진 개체가 제자리에 있다 — 기프트 9427', () => {
+test('알려진 개체가 제자리에 있다 — 기프트 9427', SNAPSHOT, () => {
 	const r = scanAll();
 	const mj = r.rows.find(
 		(row) => row.srcPath === 'gifts/limbus-data-mj/gifts.json' && row.id === '9427',
@@ -148,19 +153,19 @@ test('알려진 개체가 제자리에 있다 — 기프트 9427', () => {
 	assert.equal((assets.payload as Record<string, unknown>)['hardonly'], undefined);
 });
 
-test('scanAll 은 파일 1,664개를 전부 files 에 남긴다', () => {
+test('scanAll 은 파일 1,664개를 전부 files 에 남긴다', SNAPSHOT, () => {
 	const r = scanAll();
 	assert.equal(r.files.length, 1664);
 	assert.equal(new Set(r.files.map((f) => `${f.source} ${f.srcPath}`)).size, 1664);
 });
 
-test('files 의 objectCount 합이 rows 수와 같다', () => {
+test('files 의 objectCount 합이 rows 수와 같다', SNAPSHOT, () => {
 	const r = scanAll();
 	const sum = r.files.reduce((a, f) => a + f.objectCount, 0);
 	assert.equal(sum, r.rows.length);
 });
 
-test('빈 파일 16개가 objectCount 0 으로 남는다', () => {
+test('빈 파일 16개가 objectCount 0 으로 남는다', SNAPSHOT, () => {
 	const r = scanAll();
 	const empty = r.files.filter((f) => f.objectCount === 0).map((f) => f.srcPath).sort();
 	assert.deepEqual(empty, [
@@ -183,7 +188,7 @@ test('빈 파일 16개가 objectCount 0 으로 남는다', () => {
 	]);
 });
 
-test('loc-en 은 5건에 대해 파일 자체가 없다 — 빈 파일과 다르다', () => {
+test('loc-en 은 5건에 대해 파일 자체가 없다 — 빈 파일과 다르다', SNAPSHOT, () => {
 	const r = scanAll();
 	const has = (p: string): boolean => r.files.some((f) => f.srcPath === p);
 	// loc-ko 에는 빈 껍데기가 있고 loc-en 에는 파일이 없다

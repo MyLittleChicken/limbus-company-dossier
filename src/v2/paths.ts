@@ -7,7 +7,7 @@
  * 현행 `src/io.ts` 와 겹치는 상수가 있으나 **의도적으로 복제한다.** 신규 파이프라인이
  * 현행 코드에 의존하면 현행을 고칠 때 신규가 깨진다(스펙 0절 「병존」).
  */
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, relative, resolve, sep } from 'node:path';
 
 /** 저장소 루트. `src/v2/` 의 두 단계 위다. */
@@ -60,6 +60,16 @@ export function parseEntityPath(absPath: string): EntityPath {
 		srcPath: parts.join('/'),
 		stem: basename(file, '.json'),
 	};
+}
+
+/**
+ * 원본 스냅샷이 이 클론에 있나.
+ *
+ * `data/` 는 커밋하지 않는다(Project Moon IP 준수 · `docs/01-data-source.md` 7절).
+ * CI 는 원본 없이 돌므로 원본을 읽는 테스트는 건너뛰어야 한다. 그 판단에 쓴다.
+ */
+export function hasSnapshot(): boolean {
+	return existsSync(ENTITIES);
 }
 
 /** `data/entities` 아래의 모든 `.json` 을 절대경로로, 정렬해 낸다. */

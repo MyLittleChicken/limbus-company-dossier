@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
 import { join } from 'node:path';
-import { ROOT, ENTITIES, SOURCES, parseEntityPath, listEntityFiles } from './paths.js';
+import { ROOT, ENTITIES, SOURCES, parseEntityPath, listEntityFiles, hasSnapshot } from './paths.js';
+
+/** 원본 스냅샷은 커밋하지 않는다. CI 는 원본 없이 돌므로 건너뛴다. */
+const SNAPSHOT = { skip: hasSnapshot() ? false : 'data/entities 가 없다 (원본은 커밋하지 않는다)' };
 
 test('parseEntityPath 는 계열·출처·상대경로·stem 을 뽑는다', () => {
 	const abs = join(ENTITIES, 'gifts', 'limbus-assets', 'gifts.json');
@@ -35,7 +39,7 @@ test('SOURCES 는 출처 6종이다', () => {
 	]);
 });
 
-test('listEntityFiles 는 1,664파일을 정렬해 낸다', () => {
+test('listEntityFiles 는 1,664파일을 정렬해 낸다', SNAPSHOT, () => {
 	const files = listEntityFiles();
 	assert.equal(files.length, 1664);
 	assert.deepEqual(files, [...files].sort());
