@@ -193,9 +193,9 @@ test('portrait 와 num 을 담는다 — portrait 는 FK 가 아니다', () => {
 });
 
 // Task 2 Step 5 실측: 실제로 겹친다 (battle/0/0 이 두 번 나온다) — FAIL 로 확인됨.
-// 지금 고치면 브리프 범위를 넘는다. Task 3 가 index 를 그룹 안에서 이어 붙이도록
-// 고치고 나서 이 test.skip 을 되살린다.
-test.skip('한 battle 이 targets 와 phases 를 둘 다 가지면 index 가 겹친다 — 키 설계를 확인한다', () => {
+// Task 3 에서 pushTargets 가 base(시작 index)를 받아 이어 붙이도록 고쳐 해소됨 —
+// 이 test 는 그 회귀를 막기 위해 남긴다.
+test('한 battle 이 targets 와 phases 를 둘 다 가지면 index 가 겹친다 — 키 설계를 확인한다', () => {
 	const t = buildEncounters(input(), new Meta());
 	const rows = t.encounterTarget
 		.filter((r) => r.encounterId === 'md__battle-mixed')

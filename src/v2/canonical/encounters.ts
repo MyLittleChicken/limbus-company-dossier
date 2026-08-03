@@ -88,8 +88,10 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		// 원본은 타깃을 네 갈래로 담는다. **뜻이 서로 달라 한 축으로 뭉개면 안 된다** —
 		// battle 은 서로 배타적인 보스 후보고, wave·phase 는 같은 보스전의 내용이다.
 		// 초판은 top 만 읽어 보스 데이터가 있는 44팩을 통째로 잃었다.
-		const pushTargets = (kind: TargetKind, groupIndex: number, rawTargets: unknown[]) => {
-			rawTargets.forEach((rawTarget, index) => {
+		/** 같은 (kind, groupIndex) 안에서 index 를 이어 붙인다. 넣은 개수를 돌려준다 */
+		const pushTargets = (kind: TargetKind, groupIndex: number, rawTargets: unknown[], base = 0): number => {
+			rawTargets.forEach((rawTarget, offset) => {
+				const index = base + offset;
 				const target = obj(rawTarget);
 				// **이름이 비어도 버리지 않는다.** 실측 1건(story__9-5-24)이 빈 문자열이며
 				// 버리면 부위와 저항까지 통째로 사라진다.
@@ -133,6 +135,7 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 					}
 				}
 			});
+			return rawTargets.length;
 		};
 
 		pushTargets('top', 0, arr(e, 'targets'));
@@ -141,11 +144,14 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		// **battle 안에 다시 waves·phases 가 들어간다**(md__canto-1-2 의 Golden Apple).
 		// 중첩된 것도 같은 battle 의 내용이므로 groupIndex 를 그대로 이어 쓴다 —
 		// 그래야 「이 보스 후보의 전체 등장 적」이 한 groupIndex 로 모인다.
+		// 한 battle 이 targets 와 waves(또는 phases)를 함께 가지면 둘 다 index 0부터
+		// 시작해 (kind, groupIndex, index) 가 겹친다(실측: battle/0/0 이 두 번 나옴).
+		// base 로 앞서 넣은 개수를 넘겨 같은 groupIndex 안에서 index 를 이어 붙인다.
 		arr(e, 'battles').forEach((b, i) => {
 			const battle = obj(b);
-			pushTargets('battle', i, arr(battle, 'targets'));
-			for (const w of arr(battle, 'waves')) pushTargets('battle', i, arr(obj(w), 'targets'));
-			for (const p of arr(battle, 'phases')) pushTargets('battle', i, arr(obj(p), 'targets'));
+			let n = pushTargets('battle', i, arr(battle, 'targets'));
+			for (const w of arr(battle, 'waves')) n += pushTargets('battle', i, arr(obj(w), 'targets'), n);
+			for (const p of arr(battle, 'phases')) n += pushTargets('battle', i, arr(obj(p), 'targets'), n);
 		});
 	}
 
