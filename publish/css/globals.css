@@ -1648,7 +1648,8 @@ body::after {
 	padding: 0 var(--sp-3) var(--sp-4);
 }
 
-.rail-actions button {
+.rail-actions button,
+.rail-actions a {
 	appearance: none;
 	flex: 1;
 	padding: var(--sp-3) var(--sp-4);
@@ -2326,7 +2327,8 @@ body::after {
 	border-color: var(--line-active);
 }
 
-.deck-code button {
+.deck-code button,
+.deck-code a {
 	appearance: none;
 	padding: var(--sp-4) var(--sp-7);
 	background: var(--surface-2);
@@ -2338,10 +2340,146 @@ body::after {
 	cursor: pointer;
 }
 
-.deck-code button:hover {
+.deck-code button:hover,
+.deck-code a:hover {
 	border-color: var(--line-active);
 	color: var(--ink-gold);
 	background: var(--surface-3);
+}
+
+/* ── 거울 던전 트래커 ──────────────────────────────────────
+   3열 골격과 층 레일은 편성 것을 그대로 쓴다 — `.formation-cols` · `.deckrail` ·
+   `.rail-*`. 트래커가 새로 갖는 것은 아래 다섯뿐이다.
+
+     .runstep      층 레일 슬롯의 진행 상태
+     .runstep-mark 그 상태의 기호
+     .packrank     후보 팩 순위 뱃지 (3위까지)
+     .packscore    후보 팩 점수
+     .owned        보유 기프트 목록
+
+   순위를 **색과 위치로만 말하지 않는다.** 뱃지 숫자 · 카드 테두리 · 정렬 순서가 함께 간다. */
+
+.runstep {
+	justify-content: space-between;
+}
+
+/*
+	지나온 층 · 지금 층 · 아직 안 간 층.
+
+	색만으로 가르지 않는다 — `.runstep-mark` 의 기호(✓ · ●)가 함께 있고, 아직 안 간 층은
+	이름 자리가 비어 있어 셋이 글자만으로도 구분된다.
+*/
+.runstep[data-state='done'] {
+	border-left-color: var(--ink-muted);
+	color: var(--ink-dim);
+}
+
+.runstep[data-state='current'] {
+	border-color: var(--line-active);
+	border-left-color: var(--accent);
+	background: var(--surface-2);
+	color: var(--ink-gold);
+}
+
+.runstep[data-state='todo'] {
+	border-left-color: var(--line-faint);
+	color: var(--ink-muted);
+	cursor: default;
+}
+
+.runstep[data-state='todo']:hover {
+	background: none;
+	color: var(--ink-muted);
+}
+
+.runstep-mark {
+	flex: none;
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	color: var(--ink-muted);
+}
+
+.runstep[data-state='current'] .runstep-mark {
+	color: var(--accent);
+}
+
+/* 레일 안에서 펼쳐지는 그 층의 획득분. 목록 자체는 사이드바 것과 같은 `.owned` 다. */
+.owned {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+}
+
+.owned li {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	font-size: var(--fs-xs);
+	color: var(--ink-dim);
+}
+
+.owned-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/*
+	층 레일이 168px 이라 한 줄로는 기프트 이름이 잘린다. 여기서만 줄바꿈을 푼다 —
+	이름을 자르는 것보다 두 줄로 흐르는 편이 낫다.
+*/
+.owned-inrail {
+	margin: var(--sp-2) 0 var(--sp-3) var(--sp-5);
+	padding: var(--sp-3) 9px;
+	border-left: 1px solid var(--line-faint);
+}
+
+.owned-inrail .owned-name {
+	overflow: visible;
+	white-space: normal;
+	line-height: var(--lh-tight);
+}
+
+/* 15 층이 한눈에 들어와야 한다. 편성 덱 목록(최대 10)보다 길다. */
+.deckrail .rail-list:has(.runstep) {
+	max-height: none;
+}
+
+/*
+	순위 뱃지.
+
+	상위 셋에만 붙는다. 넷째부터는 점수만으로 충분하고, 뱃지를 다 붙이면 27 장이 전부
+	강조되어 아무것도 강조되지 않는다.
+*/
+.packrank {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 4;
+	min-width: 20px;
+	padding: 2px var(--sp-3);
+	background: var(--accent);
+	color: var(--surface-page);
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	line-height: 1.5;
+	text-align: center;
+}
+
+.cardgrid-wide .card[data-rank] {
+	border-color: var(--line-active);
+}
+
+.packscore {
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	color: var(--ink-gold);
+	letter-spacing: var(--ls-normal);
 }
 
 /* ── 스타일을 두지 않는 마크업 훅 ─────────────────────────
