@@ -1,7 +1,7 @@
 # 메카닉 축 그래프 — 추천 엔진의 근간
 
 > 설계 2026-08-03 · 상태 WIP — **반증 통과 전이다**
-> 12절이 초판의 기둥 여섯을 무너뜨렸다. 구현 계획으로 가기 전에 14절의 판단 여섯을 닫아야 한다
+> 12절이 초판의 기둥 여섯을 무너뜨렸고 14절이 판단 여섯을 닫았다. 15·16절이 결정 후 구조다
 > 선행 [ADR-06 3스키마 데이터베이스](../../adr/06-three-schema-database.md) · [소비자 관점 감사](../../audit/00-summary.md)
 > 이 문서의 모든 수치는 `canonical` 실측이다. 스냅샷 `2026-07-25`(MD7).
 
@@ -409,32 +409,157 @@ normal 51팩 중 0팩         축 태그가 없다.  hard 도 14/116
 association 64 중 37       트리거가 참조하지 않는다 (실사용률 42%)
 ```
 
-## 14. 그래서 설계를 어떻게 고치나
+## 14. 판단 여섯 — 전부 닫았다
 
-**바로 고칠 수 있는 것**
+### 결정 1 · 장착 파생은 저작 2행이다
 
-```
-E.G.O 입력          (identityId, egoId[]) 로 바꾸고 sinner 일치 검사를 넣는다
-최장일치            「최장일치하되 축이 없으면 짧은 매칭으로 내려간다」로 바꾼다
-exclusiveTo         「이 기프트가 나오는 팩」으로 읽는다. gift_pack 을 1차 소스로
-배치 슬롯           다중값을 담는 구조로. 슬롯 공간은 8
-EffectRef.refKind   attack_type 추가
-TriggerRef.refKind  skill_kind(counter·guard·evade) · coin(부호·개수) 추가
-                    resonance mode 를 Boolean 이 아니라 enum + threshold 로
-```
-
-**설계 판단이 필요한 것**
+`ego_status` 경로를 **버린다.** 155/159 엣지가 근거 없다.
 
 ```
-장착 파생          저작 2행으로 갈지, coin_token 경로를 「부여 능력」이라는 다른 축으로 둘지
-트리거 결합         AND/OR 를 기프트마다 저작할지(451행), 아니면 보수적으로 AND 로 통일할지
-identity_rewrite   3행을 위해 일반 스키마를 만들지, 예외 처리로 둘지
-판정 불가 83건      화면에서 어떻게 다룰지 — 후보에서 빼나, 「모름」으로 표시하나
-pack_axis          노멀 런에서 못 쓰는데 유지할지, 다른 팩→덱 적합도 신호를 찾을지
-연쇄 종료          visited 집합 + 깊이 상한. 상한을 몇으로 할지
+identity_axis(source='ego_granted')     저작 2행   20509 착영휘도 · 20109 엄숙한 애도
+                                        「인격으로 취급됨」이 명시된 것만
 ```
 
-## 15. 무너지지 않은 것
+`ego_skill → coin_token(kind='status')` 는 **다른 질문에 쓴다** — 「이 E.G.O 로 무엇을
+부여하게 되나」다. 축 소속이 아니라 **런타임 상태 예측**의 입력이다. 트리거는 「이 인격이
+X 축인가」를 묻지 「X 를 부여할 수 있나」를 묻지 않는다. 20705 홀리데이가 그 차이다 —
+5축을 증폭하지만 어느 축의 인격도 아니다.
+
+**새 메카닉이 나오면 저작 행이 는다.** 게임이 「인격으로 취급됨」을 명시하므로 판별은 쉽다.
+
+### 결정 2 · 트리거 결합을 판정하지 않는다
+
+AND/OR 를 451행 저작하는 것도, AND 로 통일하는 것도 틀린다. **결합을 접지 않고 그대로 낸다.**
+
+```
+실측 (mirror 451)
+  A  전부 roster/always      62    「켜진다」
+  B  일부만 판정 가능        291    「N개 중 M개 충족」 — 접지 않고 그대로 표기
+  C  전부 runtime/unclassified 98   「편성으로는 모름」
+```
+
+**B 291건이 정보의 대부분이다.** 여기서 AND 를 가정하면 과소, OR 를 가정하면 과대가 된다.
+「5개 중 3개 충족」이 사용자에게 가장 정확한 답이고, 점수화는 충족 비율로 한다.
+
+결합 저작은 **필요해지면 그때 더한다.** 지금 451행을 저작하면 대부분이 쓰이지 않는다.
+
+### 결정 3 · `identity_rewrite` 테이블을 만들지 않는다
+
+3행을 위해 6필드 스키마를 세웠는데 **3행 모두 필드가 안 맞았다.** 일반화 실패의 신호다.
+
+```
+9280     자기참조 순환.  S_CORP 소속 인격이 10615 홍루 1인뿐이라 orderBy·take 가 무의미
+9841     필터가 소속이 아니라 스킬-상태 술어 ([DimensionRift] 부여 인격 중)
+1041302  targetId 다값(흑수=unit_keyword · 가씨=association) + 런타임 조건
+```
+
+**대신 `field_gap` 계열에 「미지원 메카닉」으로 기록한다.** 이 셋을 보유했을 때 화면이
+「이 기프트는 소속 판정을 바꿉니다 — 수동 확인 필요」로 표기한다.
+
+넷째 사례가 나와 패턴이 보이면 그때 스키마를 만든다. 지금은 **셋이 서로 다른 모양**이다.
+
+### 결정 4 · 판정 불가 98건을 후보에서 빼지 않는다
+
+**별도 등급으로 표시한다.** 22%(98/451)를 감추면 사용자가 존재를 모른다.
+
+```
+켜진다          A 62
+N/M 충족        B 291
+편성으로는 모름   C 98
+```
+
+C 는 점수에 넣지 않되 목록에는 남긴다 — 「이 팩엔 편성으로 판단 못 하는 기프트가 N개」로.
+
+### 결정 5 · `pack_tag` 을 1차 신호에서 뺀다
+
+측정이 결정적이다.
+
+```
+pack_tag 축 태그          hard 14/116 · normal  0/51   ← 노멀 런에서 아무것도 못 낸다
+gift_pack → trigger → 축   hard 116/116 · normal 51/51  ← 전 팩 커버
+```
+
+**팩→축 신호는 `gift_pack` 을 경유해 유도한다.** 「이 팩의 드랍 풀에 어떤 축 트리거를 쓰는
+기프트가 몇 개 있나」가 실질이고, 전 팩을 덮는다.
+
+`pack_tag` 은 **화면 라벨**로만 쓴다(「화상 팩」 표기). 점수화 근거가 아니다.
+
+### 결정 6 · 연쇄는 visited 집합 + 깊이 2
+
+```
+종료      visited 집합으로 사이클을 막는다.  자기 루프 21 · 상호 쌍 37 이 실재한다
+깊이      2 홉.  「내 기프트가 A 를 켜고, A 가 B 를 켠다」까지
+누적      기대 효용은 visited 기준으로 한 번만 더한다.  중복 합산 금지
+```
+
+**깊이 2 인 이유** — 3홉 이상은 사용자가 검증할 수 없는 근거가 된다. 「나침반 → 침잠 →
+서릿발 발자국 → 합위력 감소」가 2홉이고, 이것이 사람이 납득하는 사슬의 길이다.
+도달 집합이 281 노드로 유한하므로 깊이를 늘리는 것은 언제든 가능하다 — **지금 상한을
+두는 것은 성능이 아니라 설명 가능성 때문이다.**
+
+## 15. 결정에 따른 구조 — canonical 5테이블
+
+결정 1·3·5 로 테이블이 7개에서 5개로 줄었다.
+
+```prisma
+/// 트리거가 판정하는 축. 8행
+model Axis { id String @id  kind String  note String? }
+
+/// 인격이 가진 축. keyword | special_status 는 유도, ego_granted 는 저작 2행
+model IdentityAxis { identityId String  axisId String  source String
+                     @@id([identityId, axisId, source]) }
+
+/// 트리거가 무엇을 참조하나 + 판정 가능성
+/// refKind: axis | association | unit_keyword | sin | resonance | attack_type
+///        | skill_kind | coin | deployment | none        ← 반증으로 4종 추가
+model TriggerRef { triggerId String  refKind String  refId String?
+                   resonanceMode String?  threshold Int?
+                   evaluability String
+                   @@id([triggerId, refKind, refId]) }
+
+/// 효과가 무엇을 다루나. refKind 에 attack_type 추가
+model EffectRef { effectId String  refKind String  refId String?  mode String
+                  @@id([effectId, refKind, refId]) }
+
+/// 정량자. 유일하게 「값」이 저작이다. slot 은 다중값이므로 Int[]
+model GiftTriggerParam { giftId String  triggerId String  kind String
+                         value String  slots Int[]  source String
+                         @@id([giftId, triggerId, kind]) }
+```
+
+**빠진 것** — `PackAxis`(결정 5 로 `gift_pack` 유도로 대체) · `IdentityRewrite`(결정 3 으로
+`field_gap` 기록으로 대체).
+
+**고친 것** — `TriggerRef` 에 `skill_kind`·`coin` refKind 와 `resonanceMode`·`threshold` 추가,
+`EffectRef` 에 `attack_type` 추가, `GiftTriggerParam.slots` 를 배열로(슬롯 공간 8).
+
+## 16. 결정에 따른 평가 흐름
+
+```
+1  축 프로파일     identity_axis(keyword|special_status)
+                  + ego_granted 저작 2행 (장착 E.G.O 가 그 둘일 때만)
+                  입력은 (identityId, egoId[]) — 등급 슬롯별 다중 장착
+                  ego.sinner_id = identity.sinner_id 검사
+
+2  갈래별 집계     축 · 소속 · unit_keyword · 죄악 · 공명 · 공격타입 · skill_kind · 배치
+                  분모가 roster 면 편성 전체, field 면 출전만
+                  배치 슬롯 공간은 8
+
+3  트리거 판정     trigger_ref 로 갈래를 찾고 gift_trigger_param 으로 임계값 비교
+
+4  기프트 등급     A 전부 충족 · B N/M 충족 · C 판정 불가.  결합을 접지 않는다
+
+5  팩 점수화      floor_pack(난이도, 층) → 후보 팩
+                  gift_pack 을 1차 소스로 축 신호 유도 (117/117 커버)
+                  gift_exclusive_pack 은 「이 기프트가 나오는 팩」으로 읽는다 — 배타 아님
+                  A 는 점수에, B 는 비율 가중, C 는 목록에만
+
+6  연쇄          effect_ref → 축 → trigger_ref.  visited 집합 · 깊이 2 · 중복 합산 금지
+
+7  근거          충족한 트리거와 그 갈래를 그대로 낸다.  사슬은 2홉까지
+```
+
+## 17. 무너지지 않은 것
 
 반증에 견딘 것도 명확히 적는다.
 
@@ -449,7 +574,7 @@ pack_tag · floor_pack 유일성  중복 0
 VIBRATION_CONVERTED 공존      9건 · MERGED 1건이 항상 VIBRATION 과 함께 온다
 ```
 
-## 16. 범위 밖
+## 18. 범위 밖
 
 ```
 런 기록 수집과 가중치 학습     app.run 에 편성·E.G.O 열이 아예 없다. 스키마 확장이 선행
