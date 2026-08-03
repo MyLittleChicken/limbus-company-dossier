@@ -99,3 +99,6 @@ src/v2/generated/
 
 # Subagent-Driven Development 작업 디렉터리 (생성물)
 .superpowers/
+
+# SDD 임시 산출물
+build/tmp/

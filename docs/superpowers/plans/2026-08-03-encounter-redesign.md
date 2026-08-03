@@ -21,9 +21,9 @@
   ```bash
   set -a; . ./.env; set +a
   npx prisma migrate diff --from-url "$DATABASE_URL" \
-    --to-schema-datamodel prisma/v2/schema.prisma --script > /tmp/delta.sql
-  grep -nE 'DROP (SCHEMA|TABLE)|TRUNCATE' /tmp/delta.sql   # 나오면 멈추고 사람에게 묻는다
-  docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1 -q < /tmp/delta.sql
+    --to-schema-datamodel prisma/v2/schema.prisma --script > build/tmp/delta.sql
+  grep -nE 'DROP (SCHEMA|TABLE)|TRUNCATE' build/tmp/delta.sql   # 나오면 멈추고 사람에게 묻는다
+  docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1 -q < build/tmp/delta.sql
   ```
 - **검사 기준값을 내릴 때는 사유를 주석으로 남긴다.** 앞선 작업에서 「리터럴 꺾쇠 41 → 35」를 회귀로 오인할 뻔했다.
 - DB 질의는 이렇게 한다.
@@ -344,15 +344,9 @@ Expected: PASS (기존 테스트 포함 전부)
 
 - [ ] **Step 5: 키 충돌이 실제로 있는지 실측한다**
 
-임시 스크립트로 변환기를 raw 에 물려 돌리고 중복 키를 센다.
+한 `battle` 이 `targets` 와 `phases`(또는 `waves`)를 **둘 다** 가지면 `(kind, groupIndex, index)` 가 겹친다. 겹치는지를 **테스트로 판별한다** — DB 를 돌릴 필요 없다.
 
-```bash
-cat > /tmp/probe.ts <<'TS'
-import { PrismaClient } from '../Users/sungil/toy/limbus-company-dossier/src/v2/generated/client.js';
-TS
-```
-
-간단히 하려면 대신 `npm run v2:canonical` 을 Task 3 이후에 돌려 확인해도 된다. 여기서는 **테스트로 충돌 사례를 고정**한다. 위 `md__battles` 표본은 `battles[1]` 이 `phases` 만 갖고 `targets` 가 없어 충돌하지 않는다. `targets` 와 `phases` 를 **둘 다** 가진 표본을 더해 확인한다.
+앞 Step 의 `md__battles` 표본은 `battles[1]` 이 `phases` 만 갖고 `targets` 가 없어 충돌하지 않는다. 둘 다 가진 표본을 더해 확인한다.
 
 `input()` 의 `encounters` 에 추가:
 
@@ -701,13 +695,13 @@ Expected: 타입 오류 0 · 테스트 전부 통과
 ```bash
 set -a; . ./.env; set +a
 npx prisma migrate diff --from-url "$DATABASE_URL" \
-  --to-schema-datamodel prisma/v2/schema.prisma --script > /tmp/delta.sql
-grep -nE 'DROP (SCHEMA|TABLE)|TRUNCATE' /tmp/delta.sql
+  --to-schema-datamodel prisma/v2/schema.prisma --script > build/tmp/delta.sql
+grep -nE 'DROP (SCHEMA|TABLE)|TRUNCATE' build/tmp/delta.sql
 ```
 Expected: 파괴적 구문이 **없어야** 한다. 나오면 멈추고 사람에게 묻는다.
 
 ```bash
-docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1 -q < /tmp/delta.sql
+docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1 -q < build/tmp/delta.sql
 ```
 
 - [ ] **Step 6: 재적재하고 실측한다**
