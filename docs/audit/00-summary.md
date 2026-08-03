@@ -212,6 +212,20 @@ rather than ... floor rewards」다. 드랍 풀 항목이 아니다.
 원본이 `data/entities/` 에 다 있으므로 **재적재 없이 ETL 수정만으로 복구 가능**하다.
 고치면 답 가능한 팩이 31 → 최대 75, 저항값이 3,540 → 최대 14,850 이 된다.
 
+> **해소됨 (2026-08-03).** `encounter_target` 을 `(encounter_id, kind, group_index, index)`
+> 4키로 넓혀 배타적인 네 갈래(top·wave·phase·battle)를 전부 담았다. 타깃 398 → **1,371**
+> (top 398 · wave 461 · phase 67 · battle 445) · 부위 저항 3,540 → **11,800**(1,180부위 ×
+> 10축. 122부위는 원본에 `resists` 키 자체가 없어 결손으로만 남겼다) · 보스 이름을 낼 수
+> 있는 팩 31 → **75**. 위 예상치 14,850 은 실측과 달랐다 — 「최대 14,850」은 갈래가 다 채워질
+> 것으로 어림한 사전 추정이었고, 실측은 부위 122개가 원본 자체에 저항을 안 가진 것까지 반영한
+> 값이다. 설계는
+> [`docs/superpowers/specs/2026-08-03-encounter-redesign-design.md`](../superpowers/specs/2026-08-03-encounter-redesign-design.md).
+> `battles` 를 감사 제안대로 「986건을 그대로 펼친다」로 시행하지 않았다 — 위키 조사(13.1절 #6)로
+> `battles` 가 연속 전투가 아니라 서로 배타적인 보스 후보임이 드러나, 그대로 펼치면 같은 보스전의
+> 적이 최대 4배로 부풀었을 것이다. 대신 네 갈래를 각각 배타적인 `kind` 로 담았다.
+> 남은 42팩(보스 크로스워크 미확보)과 122부위(저항 결측)는 원본에 크로스워크·값이 없어
+> `field_gap` 에 기록만 했다(973 → 1,137).
+
 ### 6.3 효과 토큰 1건이 PK 에 흡수됐다
 
 `canonical.gift_effect` 가 `(gift_id, effect_id)` 2컬럼뿐이라 중복 효과 토큰이 합쳐진다.
@@ -249,11 +263,17 @@ canonical.gift_effect       1,122     기프트 9429 「Gain Speed / Haste」 2�
 | `identity_unit_keyword` | 36종에 표시명 없음 | `SMALL`·`FIXER` 코드가 그대로 노출된다. **한국어명은 우리 raw 에 있다** — `identities/loc-ko/UnitKeyword*.json` 에서 25/36 이 즉시 나온다(13절) |
 | `gift.keyword_id` | NULL 대신 `'None'` 센티넬 (mirror 120종) | 현행 `keywordId: null` 필터·분기를 그대로 옮기면 오작동 |
 | `canonical.keyword` | `order` 컬럼 없음 | 필터 칩 순서 근거 소실. **위키 Starting Gift 표 순서로 채울 수 있다** |
-| `canonical.enemy` | 1,342행 중 **472행(35%)이 적이 아니라 부위** | loc `Enemies*.json` 이 적 행(4~5자리)과 부위 행(6자리 = 적id×100+n)을 한 표에 섞는데 그대로 담았다. 「적 1,342종」은 **870종**으로 정정 |
+| ~~`canonical.enemy`~~ | ~~1,342행 중 **472행(35%)이 적이 아니라 부위**~~ | ~~loc `Enemies*.json` 이 적 행(4~5자리)과 부위 행(6자리 = 적id×100+n)을 한 표에 섞는데 그대로 담았다. 「적 1,342종」은 **870종**으로 정정~~ **해소됨(2026-08-03)** — 아래 참고 |
 | `identity.season` | 10311·10708 이 NULL (public 0) | **public 이 맞다.** 「원본에 season 키가 없다」는 mj 한정 오진 — assets·shared-library 둘 다 `season: 0` 을 갖는다. `hp`·`stagger`·`speed` 와 동형의 출처 오선택 |
 | `skill_stage` 앞채우기 | 동기화 3부터 시작하는 스킬 216건의 1·2 단계를 지어냈다 | **canonical 이 틀렸다.** 216 중 206이 슬롯 3이고 게임은 Tier III 에서 해금한다 |
 | `gift_requirement` | `kind='resonance'` 23행 중 6건이 `absolute` 누락 | 9001·9043·9049·9052·9053·9066. 원본 `mj` 가 같은 객체 안에서 `desc` 와 `requires` 를 모순되게 준다. 강화 단계 축이 없는 것이 더 큰 문제 |
 | `gift.hard_only` | canonical 122 · public 116 | **둘 다 틀렸다. 정답 117**(13절) |
+
+> **해소됨 (2026-08-03).** `enemy` 를 적 전용 테이블로 남기고 부위는 `enemy_part` 로
+> 분리했다. `enemy` **870행**, `enemy_part` **466행**. loc 원본의 6자리(부위) id 는
+> 472개지만 그중 6개는 부모 적 id(4~5자리)가 `loc` 어디에도 없는 고아라 — 지어내지
+> 않는다는 원칙에 따라 행을 만들지 않고 `field_gap` 에 결손만 남겼다(472 − 6 = 466).
+> 상세는 [`docs/audit/06-encounter.md`](06-encounter.md).
 
 ## 8. 검증이 왜 이걸 못 잡았나
 
