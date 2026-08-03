@@ -44,13 +44,17 @@ export interface EncounterInput {
 	packs: RawIndex;
 }
 
+// 원본은 타깃을 네 갈래로 담는다 — top(targets 최상위) · wave · phase · battle.
+// 스키마(0060c49)의 TargetKind 와 짝을 맞춘다.
+export type TargetKind = 'top' | 'wave' | 'phase' | 'battle';
+
 export interface EncounterTables {
 	encounter: Array<{ id: string; group: string | null; name: string; siteId: string; waves?: unknown; phases?: unknown; battles?: unknown }>;
-	encounterTarget: Array<{ encounterId: string; index: number; name: string }>;
-	encounterTargetPart: Array<{ encounterId: string; targetIndex: number; partId: string; name: string; hpBase: number | null; hpLevel: number | null; defCorrection: number | null; speedMin: number | null; speedMax: number | null }>;
-	encounterPartResist: Array<{ encounterId: string; targetIndex: number; partId: string; axis: string; value: number }>;
+	encounterTarget: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; index: number; name: string; portrait: number | null; num: number | null }>;
+	encounterTargetPart: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; targetIndex: number; partId: string; name: string; hpBase: number | null; hpLevel: number | null; defCorrection: number | null; speedMin: number | null; speedMax: number | null }>;
+	encounterPartResist: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; targetIndex: number; partId: string; axis: string; value: number }>;
 	enemy: Array<{ id: string }>;
-	enemyText: Array<{ enemyId: string; locale: Loc; name: string; part: string | null }>;
+	enemyText: Array<{ enemyId: string; locale: Loc; name: string; roleLabel: string | null }>;
 	packBossEncounter: Array<{ packId: string; encounterId: string }>;
 }
 
@@ -81,45 +85,67 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		t.encounter.push(row);
 		meta.source('encounter', id, 'core', 'assets-only', [ASSETS]);
 
-		arr(e, 'targets').forEach((rawTarget, index) => {
-			const target = obj(rawTarget);
-			// **이름이 비어도 버리지 않는다.** 실측 1건(story__9-5-24 targets[3])이
-			// 빈 문자열이며, 버리면 부위와 저항까지 통째로 사라진다.
-			const targetName = str(target, 'name');
-			if (targetName === null) {
-				meta.gap(
-					'encounter_target', `${id}#${index}`, 'name',
-					'적 이름이 비어 있다 (원본 결함)', EVIDENCE,
-				);
-			}
-			t.encounterTarget.push({ encounterId: id, index, name: targetName ?? '' });
-
-			for (const rawPart of arr(target, 'parts')) {
-				const part = obj(rawPart);
-				const partId = part['partId'] === undefined ? null : String(part['partId']);
-				const partName = str(part, 'name');
-				if (partId === null || partName === null) continue;
-				// hp 는 {base, level} 이 보통이지만 숫자만 있는 경우도 있다
-				const hpRaw = part['hp'];
-				const hp = obj(hpRaw);
-				const hpFlat = typeof hpRaw === 'number' ? hpRaw : null;
-				const speed = arr(part, 'speed');
-				t.encounterTargetPart.push({
-					encounterId: id, targetIndex: index, partId, name: partName,
-					hpBase: num(hp, 'base') ?? hpFlat, hpLevel: num(hp, 'level'),
-					defCorrection: num(part, 'defCorrection'),
-					speedMin: speed.length === 2 ? Number(speed[0]) : null,
-					speedMax: speed.length === 2 ? Number(speed[1]) : null,
-				});
-				const resists = obj(part['resists']);
-				for (const axis of AXES) {
-					const value = num(resists, axis);
-					if (value === null) continue;
-					t.encounterPartResist.push({
-						encounterId: id, targetIndex: index, partId, axis, value,
-					});
+		// 원본은 타깃을 네 갈래로 담는다. **뜻이 서로 달라 한 축으로 뭉개면 안 된다** —
+		// battle 은 서로 배타적인 보스 후보고, wave·phase 는 같은 보스전의 내용이다.
+		// 초판은 top 만 읽어 보스 데이터가 있는 44팩을 통째로 잃었다.
+		const pushTargets = (kind: TargetKind, groupIndex: number, rawTargets: unknown[]) => {
+			rawTargets.forEach((rawTarget, index) => {
+				const target = obj(rawTarget);
+				// **이름이 비어도 버리지 않는다.** 실측 1건(story__9-5-24)이 빈 문자열이며
+				// 버리면 부위와 저항까지 통째로 사라진다.
+				const targetName = str(target, 'name');
+				if (targetName === null) {
+					meta.gap(
+						'encounter_target', `${id}#${kind}#${groupIndex}#${index}`, 'name',
+						'적 이름이 비어 있다 (원본 결함)', EVIDENCE,
+					);
 				}
-			}
+				t.encounterTarget.push({
+					encounterId: id, kind, groupIndex, index, name: targetName ?? '',
+					portrait: num(target, 'portrait'),
+					num: num(target, 'num'),
+				});
+
+				for (const rawPart of arr(target, 'parts')) {
+					const part = obj(rawPart);
+					const partId = part['partId'] === undefined ? null : String(part['partId']);
+					const partName = str(part, 'name');
+					if (partId === null || partName === null) continue;
+					// hp 는 {base, level} 이 보통이지만 숫자만 있는 경우도 있다
+					const hpRaw = part['hp'];
+					const hp = obj(hpRaw);
+					const hpFlat = typeof hpRaw === 'number' ? hpRaw : null;
+					const speed = arr(part, 'speed');
+					t.encounterTargetPart.push({
+						encounterId: id, kind, groupIndex, targetIndex: index, partId, name: partName,
+						hpBase: num(hp, 'base') ?? hpFlat, hpLevel: num(hp, 'level'),
+						defCorrection: num(part, 'defCorrection'),
+						speedMin: speed.length === 2 ? Number(speed[0]) : null,
+						speedMax: speed.length === 2 ? Number(speed[1]) : null,
+					});
+					const resists = obj(part['resists']);
+					for (const axis of AXES) {
+						const value = num(resists, axis);
+						if (value === null) continue;
+						t.encounterPartResist.push({
+							encounterId: id, kind, groupIndex, targetIndex: index, partId, axis, value,
+						});
+					}
+				}
+			});
+		};
+
+		pushTargets('top', 0, arr(e, 'targets'));
+		arr(e, 'waves').forEach((w, i) => pushTargets('wave', i, arr(obj(w), 'targets')));
+		arr(e, 'phases').forEach((p, i) => pushTargets('phase', i, arr(obj(p), 'targets')));
+		// **battle 안에 다시 waves·phases 가 들어간다**(md__canto-1-2 의 Golden Apple).
+		// 중첩된 것도 같은 battle 의 내용이므로 groupIndex 를 그대로 이어 쓴다 —
+		// 그래야 「이 보스 후보의 전체 등장 적」이 한 groupIndex 로 모인다.
+		arr(e, 'battles').forEach((b, i) => {
+			const battle = obj(b);
+			pushTargets('battle', i, arr(battle, 'targets'));
+			for (const w of arr(battle, 'waves')) pushTargets('battle', i, arr(obj(w), 'targets'));
+			for (const p of arr(battle, 'phases')) pushTargets('battle', i, arr(obj(p), 'targets'));
 		});
 	}
 
@@ -158,7 +184,7 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 				meta.gap('enemy', id, 'name', `${locale} 표시명이 없다`, EVIDENCE, locale);
 				continue;
 			}
-			t.enemyText.push({ enemyId: id, locale, name, part: str(o ?? {}, 'desc') });
+			t.enemyText.push({ enemyId: id, locale, name, roleLabel: str(o ?? {}, 'desc') });
 		}
 		meta.source('enemy', id, 'name', 'loc-only', [LOC]);
 	}
