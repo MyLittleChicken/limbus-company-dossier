@@ -527,20 +527,57 @@ body::after {
 	margin-bottom: var(--sp-8);
 }
 
+/*
+	칩이 두 줄을 넘을 때 라벨 자리를 침범하지 않게 한다.
+
+	라벨을 흐름에 두면 그것도 flex 항목이라 **둘째 줄부터 칩이 라벨 아래로 흘러든다.**
+	소속 93 · 수감자 12 처럼 칩이 많은 축에서 라벨과 칩이 한 덩이로 뭉쳐 어느 것이 축 이름인지
+	보이지 않았다. 라벨을 흐름에서 빼고 그만큼 왼쪽을 비워 두면 칩은 몇 줄이 되든 같은
+	세로선에서 시작한다.
+
+	라벨이 없는 축도 있다(팩의 중첩·극한, 상태 카탈로그). 그런 축은 비워 둘 이유가 없다.
+*/
 .filter-axis {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: var(--sp-2);
 	flex-wrap: wrap;
+	padding-left: calc(62px + var(--sp-4));
+}
+
+.filter-axis:not(:has(> .filter-axis-label)) {
+	padding-left: 0;
 }
 
 .filter-axis-label {
-	min-width: 62px;
+	position: absolute;
+	left: 0;
+	/* 칩의 세로 패딩과 같다 — 첫 줄 칩의 글자와 눈이 맞는다. */
+	top: var(--sp-3);
+	width: 62px;
 	font-family: var(--font-display);
 	font-size: var(--fs-xs);
 	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
 	color: var(--ink-muted);
+}
+
+/*
+	좁은 화면에서는 라벨을 흐름으로 되돌린다.
+
+	390px 에서 왼쪽 62px 을 비워 두면 칩이 쓸 폭이 16% 줄고, 소속 93 처럼 칩이 많은 축은
+	그만큼 세로로 길어진다. 폭이 귀한 쪽이 정렬보다 앞선다 — 라벨을 제 줄에 얹는다.
+*/
+@media (max-width: 480px) {
+	.filter-axis {
+		padding-left: 0;
+	}
+
+	.filter-axis-label {
+		position: static;
+		width: 100%;
+	}
 }
 
 /* 초기화는 조건이 걸려 있을 때만 나온다. 레드를 쓰는 두 자리 중 나머지 하나다. */
