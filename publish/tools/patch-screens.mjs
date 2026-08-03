@@ -126,6 +126,16 @@ const chip = (label, src) =>
 	`<button type="button" class="chip" aria-pressed="false">` +
 	`<img src="${src}" alt="">${label}</button>`;
 
+/**
+ * 그림이 곧 글자인 축은 글자를 두지 않는다.
+ *
+ * 인격 등급이 그렇다 — 고리 그림과 `0` · `00` · `000` 이 **같은 것을 센다.** 이름은
+ * `aria-label` 이 잇는다.
+ */
+const bareChip = (label, src) =>
+	`<button type="button" class="chip" aria-pressed="false" aria-label="${label}">` +
+	`<img src="${src}" alt=""></button>`;
+
 const iconChip = (label, file) => chip(label, `${ICON}/${file}.webp`);
 const statusChip = (label, file) => chip(label, `${STATUS}/${file}.webp`);
 
@@ -188,7 +198,7 @@ function dropUnlabeledAxis(src, ...texts) {
 
 const iconChips = (rows) => rows.map(([ko, file]) => iconChip(ko, file)).join('');
 
-const RARITY_CHIPS = iconChips(RARITY);
+const RARITY_CHIPS = RARITY.map(([ko, file]) => bareChip(ko, `${ICON}/${file}.webp`)).join('');
 const EGO_RANK_CHIPS = iconChips(EGO_RANK);
 const SIN_CHIPS = iconChips(SIN);
 const KEYWORD_CHIPS = iconChips(KEYWORD);
