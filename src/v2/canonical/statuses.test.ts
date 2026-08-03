@@ -8,6 +8,7 @@ function input(): StatusInput {
 		assets: new Map<string, Record<string, unknown>>([
 			['Sinking', { buffType: 'Negative', name: 'Sinking', desc: 'sink', srcPath: 'Sinking', categoryKeywordList: ['Gimmick'] }],
 			['Orphan', { buffType: 'Neutral', name: 'Orphan' }],
+			['MD6Limit101', { buffType: 'Negative', name: 'Level Boost', desc: 'All Enemy Levels +3' }],
 		]),
 		bufsKo: new Map<string, Record<string, unknown>>([
 			['Sinking', { id: 'Sinking', name: '침잠(Bufs)', desc: '설명', summary: '요약' }],
@@ -26,6 +27,13 @@ function input(): StatusInput {
 			['Sinking', { name: 'Sinking', nameKo: '침잠(terms)' }],
 			['AccelBullet', { name: 'Acceleration Round', nameKo: '가속탄' }],
 		]),
+		mirrorKo: new Map<string, Record<string, unknown>>([
+			['MD6Limit101', { id: 'MD6Limit101', name: '레벨 강화', desc: '모든 적 레벨 3 증가' }],
+		]),
+		mirrorEn: new Map<string, Record<string, unknown>>(),
+		mirrorJa: new Map<string, Record<string, unknown>>([
+			['MD6Limit101', { id: 'MD6Limit101', name: 'レベル強化', desc: '全ての敵のレベルが3増加' }],
+		]),
 		sins: new Map<string, Record<string, unknown>>([
 			['wrath', { name: 'Wrath', nameKo: '분노', attribute: 'CRIMSON', order: 0 }],
 		]),
@@ -35,9 +43,35 @@ function input(): StatusInput {
 test('status 본체가 assets 에서 나온다', () => {
 	const t = buildStatuses(input(), new Meta());
 	assert.deepEqual(t.status.map((s) => [s.id, s.buffType, s.sprite]).sort(), [
+		['MD6Limit101', 'Negative', null],
 		['Orphan', 'Neutral', null],
 		['Sinking', 'Negative', 'Sinking'],
 	]);
+});
+
+test('거울 던전 상태는 mirror-dungeon/loc-* 에서 온다', () => {
+	// **mechanics/loc-* 에는 없다.** MD*Limit·MDHM* 계열 245종의 한국어가
+	// 「어느 출처에도 없다」로 기록돼 있었는데 mirror-dungeon 쪽 Bufs_Mirror* ·
+	// BattleKeywords_Mirror* 를 안 읽은 탓이었다(감사 6.2 연쇄 관측).
+	const meta = new Meta();
+	const t = buildStatuses(input(), meta);
+	const md = t.statusText.filter((x) => x.statusId === 'MD6Limit101');
+	assert.deepEqual(
+		md.map((x) => [x.locale, x.name, x.desc]),
+		[
+			['ko', '레벨 강화', '모든 적 레벨 3 증가'],
+			['en', 'Level Boost', 'All Enemy Levels +3'],
+			['ja', 'レベル強化', '全ての敵のレベルが3増加'],
+		],
+	);
+	assert.ok(!meta.gaps.some((g) => g.entityId === 'MD6Limit101'));
+});
+
+test('mechanics 가 mirror-dungeon 보다 앞선다', () => {
+	const i = input();
+	i.mirrorKo.set('Sinking', { name: '침잠(mirror)' });
+	const t = buildStatuses(i, new Meta());
+	assert.equal(t.statusText.find((x) => x.statusId === 'Sinking' && x.locale === 'ko')?.name, '침잠(Bufs)');
 });
 
 test('한국어는 Bufs 가 이긴다', () => {

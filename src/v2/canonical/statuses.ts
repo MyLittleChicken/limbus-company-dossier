@@ -28,6 +28,17 @@ export interface StatusInput {
 	bkKo: RawIndex;
 	bkEn: RawIndex;
 	bkJa: RawIndex;
+	/**
+	 * `mirror-dungeon/loc-*` 의 `Bufs_Mirror*` · `BattleKeywords_Mirror*` 를 합친 것.
+	 *
+	 * **거울 던전 상태는 `mechanics/loc-*` 에 없다.** MD*Limit(역경) · MDHM* · MD5* 등
+	 * 245종의 한국어가 「어느 출처에도 없다」로 기록돼 있었는데 이 파일들을 안 읽은
+	 * 탓이다. 같은 id 가 양쪽에 있으면 mechanics 가 이긴다 — 거울 던전 판본이
+	 * 임시 표기를 담는 경우가 있다.
+	 */
+	mirrorKo: RawIndex;
+	mirrorEn: RawIndex;
+	mirrorJa: RawIndex;
 	terms: RawIndex;
 	sins: RawIndex;
 }
@@ -97,6 +108,7 @@ export function buildStatuses(input: StatusInput, meta: Meta): StatusTables {
 
 	const bufs: Record<Loc, RawIndex> = { ko: input.bufsKo, en: input.bufsEn, ja: input.bufsJa };
 	const bk: Record<Loc, RawIndex> = { ko: input.bkKo, en: input.bkEn, ja: input.bkJa };
+	const md: Record<Loc, RawIndex> = { ko: input.mirrorKo, en: input.mirrorEn, ja: input.mirrorJa };
 
 	for (const [id, a] of input.assets) {
 		const buffType = str(a, 'buffType');
@@ -112,21 +124,23 @@ export function buildStatuses(input: StatusInput, meta: Meta): StatusTables {
 		}
 
 		for (const locale of LOCALES) {
-			// Bufs → BattleKeywords → (ko 만) terms.json → (en 만) assets name
+			// mechanics Bufs → mechanics BattleKeywords → mirror-dungeon(Bufs·BK 합본)
+			//   → (ko·en 만) terms.json → (en 만) assets name
 			const b = bufs[locale].get(id) ?? {};
 			const k = bk[locale].get(id) ?? {};
+			const m = md[locale].get(id) ?? {};
 			const termName =
 				locale === 'ko' ? str(input.terms.get(id) ?? {}, 'nameKo')
 				: locale === 'en' ? str(input.terms.get(id) ?? {}, 'name')
 				: null;
 			const assetsName = locale === 'en' ? str(a, 'name') : null;
-			const name = str(b, 'name') ?? str(k, 'name') ?? termName ?? assetsName;
+			const name = str(b, 'name') ?? str(k, 'name') ?? str(m, 'name') ?? termName ?? assetsName;
 			if (name === null) {
 				meta.gap(
 					'status',
 					id,
 					'name',
-					`${locale} 표시명이 어느 출처에도 없다 (Bufs · BattleKeywords · terms 전부)`,
+					`${locale} 표시명이 어느 출처에도 없다 (Bufs · BattleKeywords · 거울 던전 · terms 전부)`,
 					EVIDENCE,
 					locale,
 				);
@@ -136,8 +150,11 @@ export function buildStatuses(input: StatusInput, meta: Meta): StatusTables {
 				statusId: id,
 				locale,
 				name,
-				...descOf(str(b, 'desc') ?? str(k, 'desc') ?? (locale === 'en' ? str(a, 'desc') : null)),
-				summary: str(b, 'summary') ?? str(k, 'summary'),
+				...descOf(
+					str(b, 'desc') ?? str(k, 'desc') ?? str(m, 'desc')
+					?? (locale === 'en' ? str(a, 'desc') : null),
+				),
+				summary: str(b, 'summary') ?? str(k, 'summary') ?? str(m, 'summary'),
 			});
 		}
 	}

@@ -183,6 +183,7 @@ CREATE TABLE "canonical"."floor_pack" (
 -- CreateTable
 CREATE TABLE "canonical"."keyword" (
     "id" TEXT NOT NULL,
+    "order" INTEGER,
 
     CONSTRAINT "keyword_pkey" PRIMARY KEY ("id")
 );
@@ -220,6 +221,7 @@ CREATE TABLE "canonical"."gift" (
     "cost" INTEGER,
     "keyword_id" TEXT,
     "hard_only" BOOLEAN NOT NULL DEFAULT false,
+    "sprite" TEXT,
     "enhanceable" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "gift_pkey" PRIMARY KEY ("id")
@@ -248,17 +250,19 @@ CREATE TABLE "canonical"."gift_stage_text" (
 -- CreateTable
 CREATE TABLE "canonical"."gift_effect" (
     "gift_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
     "effect_id" TEXT NOT NULL,
 
-    CONSTRAINT "gift_effect_pkey" PRIMARY KEY ("gift_id","effect_id")
+    CONSTRAINT "gift_effect_pkey" PRIMARY KEY ("gift_id","index")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."gift_trigger" (
     "gift_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
     "trigger_id" TEXT NOT NULL,
 
-    CONSTRAINT "gift_trigger_pkey" PRIMARY KEY ("gift_id","trigger_id")
+    CONSTRAINT "gift_trigger_pkey" PRIMARY KEY ("gift_id","index")
 );
 
 -- CreateTable
@@ -372,6 +376,11 @@ CREATE TABLE "canonical"."skill_stage" (
     "skill_id" TEXT NOT NULL,
     "uptie" INTEGER NOT NULL,
     "changed_here" BOOLEAN NOT NULL,
+    "base_value" INTEGER,
+    "coin_value" INTEGER,
+    "atk_weight" INTEGER,
+    "level_correction" INTEGER,
+    "clashable" BOOLEAN,
 
     CONSTRAINT "skill_stage_pkey" PRIMARY KEY ("skill_id","uptie")
 );
@@ -393,17 +402,30 @@ CREATE TABLE "canonical"."skill_coin" (
     "skill_id" TEXT NOT NULL,
     "uptie" INTEGER NOT NULL,
     "index" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
     "effects" TEXT[],
+    "type" TEXT,
 
-    CONSTRAINT "skill_coin_pkey" PRIMARY KEY ("skill_id","uptie","index")
+    CONSTRAINT "skill_coin_pkey" PRIMARY KEY ("skill_id","uptie","index","locale")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."passive" (
     "id" TEXT NOT NULL,
     "conditions" TEXT[],
+    "cond_type" TEXT,
 
     CONSTRAINT "passive_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."passive_requirement" (
+    "passive_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "sin" "canonical"."Sin" NOT NULL,
+    "value" INTEGER NOT NULL,
+
+    CONSTRAINT "passive_requirement_pkey" PRIMARY KEY ("passive_id","index")
 );
 
 -- CreateTable
@@ -425,6 +447,7 @@ CREATE TABLE "canonical"."identity" (
     "team_code_eligible" BOOLEAN NOT NULL DEFAULT true,
     "season" INTEGER,
     "hp" INTEGER,
+    "hp_level" DOUBLE PRECISION,
     "stagger" INTEGER[],
     "def_correction" INTEGER,
     "release_date" TEXT,
@@ -454,10 +477,11 @@ CREATE TABLE "canonical"."identity_resist" (
 -- CreateTable
 CREATE TABLE "canonical"."identity_speed" (
     "identity_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
     "min" INTEGER NOT NULL,
     "max" INTEGER NOT NULL,
 
-    CONSTRAINT "identity_speed_pkey" PRIMARY KEY ("identity_id")
+    CONSTRAINT "identity_speed_pkey" PRIMARY KEY ("identity_id","uptie")
 );
 
 -- CreateTable
@@ -585,6 +609,11 @@ CREATE TABLE "canonical"."ego_skill" (
 CREATE TABLE "canonical"."ego_skill_stage" (
     "skill_id" TEXT NOT NULL,
     "uptie" INTEGER NOT NULL,
+    "sp_cost" INTEGER,
+    "base_value" INTEGER,
+    "coin_value" INTEGER,
+    "atk_weight" INTEGER,
+    "level_correction" INTEGER,
 
     CONSTRAINT "ego_skill_stage_pkey" PRIMARY KEY ("skill_id","uptie")
 );
@@ -788,6 +817,7 @@ CREATE TABLE "canonical"."achievement" (
     "category" TEXT NOT NULL,
     "points" INTEGER[],
     "hard_only" BOOLEAN[],
+    "thresholds" JSONB,
 
     CONSTRAINT "achievement_pkey" PRIMARY KEY ("id","category","season")
 );
@@ -1200,6 +1230,9 @@ ALTER TABLE "canonical"."skill_stage_text" ADD CONSTRAINT "skill_stage_text_skil
 
 -- AddForeignKey
 ALTER TABLE "canonical"."skill_coin" ADD CONSTRAINT "skill_coin_skill_id_uptie_fkey" FOREIGN KEY ("skill_id", "uptie") REFERENCES "canonical"."skill_stage"("skill_id", "uptie") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."passive_requirement" ADD CONSTRAINT "passive_requirement_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."passive_text" ADD CONSTRAINT "passive_text_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;

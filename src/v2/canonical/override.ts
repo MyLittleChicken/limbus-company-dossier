@@ -36,6 +36,14 @@ export interface TextSpec {
 export interface ColumnSpec {
 	entity: string;
 	idKey: string;
+	/**
+	 * 덮을 컬럼 이름 목록. 주지 않으면 그 계열의 보정 전부를 덮는다.
+	 *
+	 * **한 계열이 본체 컬럼과 텍스트를 함께 보정할 때 필요하다.** 기프트는
+	 * `hardOnly`(본체)와 `name`(로케일 텍스트)을 같은 `entity='gift'` 로 적는데,
+	 * 거르지 않으면 `name` 보정이 gift 행에 없는 컬럼으로 들어가 적재가 깨진다.
+	 */
+	fields?: string[];
 }
 
 /** 이 보정이 이 계열·이 필드를 가리키나. */
@@ -107,6 +115,7 @@ export function applyColumnOverrides<T extends object>(
 
 	for (const o of overrides) {
 		if (!matches(o, spec.entity)) continue;
+		if (spec.fields !== undefined && !spec.fields.includes(o.field)) continue;
 		const at = indexOf.get(o.entityId);
 		if (at === undefined) {
 			meta.gap(

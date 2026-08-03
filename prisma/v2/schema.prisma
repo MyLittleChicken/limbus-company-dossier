@@ -357,6 +357,8 @@ enum GiftDomain {
 /// id 는 사전의 상태명(Combustion)이고 표시명이 ko 화상 · en Burn 이다.
 model Keyword {
   id String @id
+  /// 화면 필터 칩의 순서. 원본 `EgoGiftCategory.json` 의 등장 순서다
+  order Int?
 
   texts      KeywordText[]
   gifts      Gift[]
@@ -418,6 +420,9 @@ model Gift {
   keywordId     String?    @map("keyword_id")
   /// mj ∪ assets = 122. 한쪽만 보면 6건 또는 69건을 놓친다(게임 5건 확인)
   hardOnly      Boolean    @default(false) @map("hard_only")
+  /// 아이콘 파일명. 원본 payload `srcPath` 에서 온다.
+  /// 초판에 컬럼이 없어 기프트 아이콘이 전량 소실됐다 — id 로는 유도되지 않는다
+  sprite        String?
   /// 강화 가능 여부. 단계가 2 이상이면 true
   enhanceable   Boolean    @default(false)
 
@@ -471,27 +476,33 @@ model GiftStageText {
   @@schema("canonical")
 }
 
+/// **순서를 갖는다.** 초판 PK `(giftId, effectId)` 가 같은 효과의 중복 토큰을 삼켰다 —
+/// 9429 작살 의족의 `Gain Speed` 와 `Haste` 가 하나로 접혔고 엔진 점수가 그만큼 낮아졌다.
+/// 원본 토큰 배열의 순서도 함께 잃었다
 model GiftEffect {
   giftId   String @map("gift_id")
+  index    Int
   effectId String @map("effect_id")
 
   gift   Gift   @relation(fields: [giftId], references: [id], onDelete: Cascade)
   effect Effect @relation(fields: [effectId], references: [id], onDelete: Cascade)
 
-  @@id([giftId, effectId])
+  @@id([giftId, index])
   @@index([effectId])
   @@map("gift_effect")
   @@schema("canonical")
 }
 
+/// `GiftEffect` 와 같은 이유로 순서를 갖는다
 model GiftTrigger {
   giftId    String @map("gift_id")
+  index     Int
   triggerId String @map("trigger_id")
 
   gift    Gift    @relation(fields: [giftId], references: [id], onDelete: Cascade)
   trigger Trigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
-  @@id([giftId, triggerId])
+  @@id([giftId, index])
   @@index([triggerId])
   @@map("gift_trigger")
   @@schema("canonical")
@@ -699,6 +710,19 @@ model SkillStage {
   /// 원본 델타가 이 단계에 있었나. false 면 앞 단계 복사본이다
   changedHere Boolean @map("changed_here")
 
+  /// 아래 수치는 `limbus-assets/identity-details/*.json` 의 `skills[].data[]` 에서 온다.
+  /// mj `skills.json` 에는 없다 — 초판이 mj 만 읽어 9,544값을 통째로 잃었다.
+  /// **델타 배열이다** — 뒤 단계는 바뀐 필드만 갖는다. 앞 단계 값을 이어받아 채운다.
+  /// 위력
+  baseValue       Int?     @map("base_value")
+  /// 코인 위력
+  coinValue       Int?     @map("coin_value")
+  /// 공격 가중
+  atkWeight       Int?     @map("atk_weight")
+  levelCorrection Int?     @map("level_correction")
+  /// 합 가능 여부. 원본이 명시할 때만 있다(실측 52건)
+  clashable       Boolean?
+
   skill Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
   texts SkillStageText[]
   coins SkillCoin[]
@@ -730,12 +754,17 @@ model SkillCoin {
   skillId String @map("skill_id")
   uptie   Int
   index   Int
+  /// **로케일 축.** 초판에 없어 코인 설명이 영문 단일이었다 — 한국어 4,305코인·5,519줄을
+  /// 통째로 잃었다. `EgoSkillCoin` 은 처음부터 이 축을 가졌다. 비대칭이 결손의 정체였다
+  locale  Locale
   /// 코인 효과 문자열. 여러 줄일 수 있어 배열로 담는다
   effects String[]
+  /// normal · unbreakable. unbreakable 은 화면에 배지로 뜬다(실측 275건)
+  type    String?
 
   stage SkillStage @relation(fields: [skillId, uptie], references: [skillId, uptie], onDelete: Cascade)
 
-  @@id([skillId, uptie, index])
+  @@id([skillId, uptie, index, locale])
   @@map("skill_coin")
   @@schema("canonical")
 }
@@ -752,11 +781,30 @@ model Passive {
   /// CheckAwakenLevel2 … 5 · CheckAwakenLevelBetween_2_4 — 각성 단계에 따라 켜진다.
   /// 실측 604/709 가 배열을 갖는다
   conditions String[]
+  /// 발동 조건의 종류. `res`(공명) · `owned`(보유). assets `passiveData[].condition.type`.
+  /// 초판이 이 필드를 안 읽어 화면의 「조건 (res): gloom 4」 블록이 통째로 안 떴다
+  condType   String? @map("cond_type")
 
-  texts      PassiveText[]
-  identities IdentityPassive[]
+  texts        PassiveText[]
+  requirements PassiveRequirement[]
+  identities   IdentityPassive[]
 
   @@map("passive")
+  @@schema("canonical")
+}
+
+/// 패시브 발동 조건의 죄악 요구치. assets `passiveData[].condition.requirement[]`.
+/// 「우울 4 공명」처럼 죄악과 개수를 짝으로 갖는다. 실측 requirement 534 · condType 485
+model PassiveRequirement {
+  passiveId String @map("passive_id")
+  index     Int
+  sin       Sin
+  value     Int
+
+  passive Passive @relation(fields: [passiveId], references: [id], onDelete: Cascade)
+
+  @@id([passiveId, index])
+  @@map("passive_requirement")
   @@schema("canonical")
 }
 
@@ -789,6 +837,9 @@ model Identity {
   /// 원본 시즌 정수. 8000 은 명일방주 콜라보다(backlog/11)
   season           Int?
   hp               Int?
+  /// 레벨당 체력 증가치. 원본 `hp.incrementByLevel`(assets `hp.level`).
+  /// 화면은 「체력 72 + 2.48/레벨」로 쓴다. 소수라 Float 다(실측 2.07–3.41)
+  hpLevel          Float?  @map("hp_level")
   /// 흐트러짐 구간 임계값. **배열이다** — [65, 35, 15] 처럼 여러 구간을 갖는다.
   /// 실측 3구간 85 · 2구간 67 · 1구간 32 인격. assets 는 같은 것을 breakSection 으로 담는다
   stagger          Int[]
@@ -799,7 +850,7 @@ model Identity {
   sinner       Sinner                @relation(fields: [sinnerId], references: [id])
   texts        IdentityText[]
   resists      IdentityResist[]
-  speed        IdentitySpeed?
+  speed        IdentitySpeed[]
   skills       IdentitySkill[]
   passives     IdentityPassive[]
   associations IdentityAssociation[]
@@ -841,14 +892,17 @@ model IdentityResist {
   @@schema("canonical")
 }
 
+/// 속도 구간. **동기화 축을 갖는다** — 원본 `speedList` 가 4원소 배열이고
+/// 184 인격 전부가 동기화마다 값이 다르다. 초판은 마지막 원소만 남겨 축을 잃었다.
 model IdentitySpeed {
   identityId String @map("identity_id")
+  uptie      Int
   min        Int
   max        Int
 
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
 
-  @@id([identityId])
+  @@id([identityId, uptie])
   @@map("identity_speed")
   @@schema("canonical")
 }
@@ -1087,6 +1141,15 @@ model EgoSkill {
 model EgoSkillStage {
   skillId String @map("skill_id")
   uptie   Int
+
+  /// `limbus-assets/ego-details/*.json` 의 `awakeningSkills[].data[]` · `corrosionSkills[].data[]`.
+  /// 초판은 이 파일을 입력으로 받지도 않아 수치가 전부 없었다.
+  /// 인격 쪽과 같은 **델타 배열**이다 — 앞 단계 값을 이어받아 채운다
+  spCost          Int? @map("sp_cost")
+  baseValue       Int? @map("base_value")
+  coinValue       Int? @map("coin_value")
+  atkWeight       Int? @map("atk_weight")
+  levelCorrection Int? @map("level_correction")
 
   skill EgoSkill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
   texts EgoSkillStageText[]
@@ -1430,6 +1493,10 @@ model Achievement {
   points   Int[]
   /// 하드 전용 여부. 단계별
   hardOnly Boolean[] @map("hard_only")
+  /// 텍스트의 `[count]` 류 자리표시자에 넣을 단계별 값. `{count: [10,20,30,40,50]}`.
+  /// 키가 `count`·`floor`·`skills` 로 갈려 배열이 아니라 Json 이다. 실측 28건.
+  /// **치환하지 않고 원문을 남긴다** — 소비 측이 `points[i]` 와 짝지어 편다
+  thresholds Json?
 
   texts AchievementText[]
 

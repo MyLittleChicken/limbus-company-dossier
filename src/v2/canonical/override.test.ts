@@ -98,6 +98,23 @@ test('컬럼 덮어쓰기 — 없는 행은 만들지 않고 결손으로 남긴
 	assert.ok(meta.gaps.some((g) => g.entityId === '9999'));
 });
 
+test('fields 를 주면 그 컬럼만 덮는다 — 같은 계열의 텍스트 보정이 새지 않는다', () => {
+	// 기프트는 본체 컬럼(hardOnly)과 텍스트(name)를 같은 entity 이름으로 보정한다.
+	// 거르지 않으면 name 보정이 gift 행에 없는 컬럼으로 들어가 적재가 깨진다.
+	const meta = new Meta();
+	const rows = applyColumnOverrides(
+		[{ id: '9427', hardOnly: true }],
+		[
+			ov({ entity: 'gift', entityId: '9427', field: 'hardOnly', locale: '', value: false }),
+			ov({ entity: 'gift', entityId: '9427', field: 'name', locale: 'ko', value: '마을을 지킬 작살' }),
+		],
+		{ entity: 'gift', idKey: 'id', fields: ['hardOnly'] },
+		meta,
+	);
+	assert.deepEqual(rows, [{ id: '9427', hardOnly: false }]);
+	assert.equal(meta.sources.length, 1);
+});
+
 test('보정으로 채운 결손은 field_gap 에서 사라진다', () => {
 	const meta = new Meta();
 	meta.gap('status', 'FullCharon', 'name', '어느 출처에도 없다', 'e', 'ko');

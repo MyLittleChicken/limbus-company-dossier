@@ -9,7 +9,7 @@ function input(): IdentityInput {
 			[
 				'10101',
 				{
-					id: 10101, sinnerId: 1, star: 1, teamCodeEligible: true, season: 0,
+					id: 10101, sinnerId: 1, star: 1, teamCodeEligible: true,
 					name: 'LCB Sinner', nameKo: 'LCB 수감자', title: 'Yi Sang', titleKo: '이상',
 					hp: 72, stagger: [65, 35, 15], speed: [4, 8],
 					resists: { slash: 2, pierce: 0.5, blunt: 1 },
@@ -35,7 +35,28 @@ function input(): IdentityInput {
 			],
 		]),
 		assets: new Map<string, Record<string, unknown>>([
-			['10101', { date: '2023-02-27', defCorrection: -2, hp: { base: 72, level: 2.48 }, resists: { blunt: 1, pierce: 0.5, slash: 2 } }],
+			[
+				'10101',
+				{
+					date: '2023-02-27', defCorrection: -2, season: 0,
+					hp: { base: 72, level: 2.48 },
+					speedList: [[4, 6], [4, 7], [4, 8], [4, 8]],
+					resists: { blunt: 1, pierce: 0.5, slash: 2 },
+				},
+			],
+		]),
+		details: new Map<string, Record<string, unknown>>([
+			[
+				'10101',
+				{
+					passiveData: {
+						'1010101': {
+							name: 'Information Relay',
+							condition: { type: 'res', requirement: [{ type: 'gloom', value: 4 }] },
+						},
+					},
+				},
+			],
 		]),
 		mjPassives: new Map<string, Record<string, unknown>>([
 			['1010101', { id: 1010101, name: 'Information Relay', nameKo: '정보전달', desc: 'd', descKo: '설명', cost: ['CheckAwakenLevel4'] }],
@@ -64,9 +85,22 @@ test('identity 행이 두 출처를 합쳐 나온다', () => {
 	assert.deepEqual(t.identity, [
 		{
 			id: '10101', sinnerId: 1, star: 1, teamCodeEligible: true, season: 0,
-			hp: 72, stagger: [65, 35, 15], defCorrection: -2, releaseDate: '2023-02-27',
+			hp: 72, hpLevel: 2.48, stagger: [65, 35, 15], defCorrection: -2, releaseDate: '2023-02-27',
 		},
 	]);
+});
+
+test('체력은 기본값과 레벨당 증가치의 쌍이다 — 스칼라로 접지 않는다', () => {
+	const t = buildIdentities(input(), new Meta());
+	assert.equal(t.identity[0]?.hp, 72);
+	assert.equal(t.identity[0]?.hpLevel, 2.48);
+});
+
+test('season 은 mj 에 없으면 assets 를 쓴다 — 결손이 아니라 출처 문제였다', () => {
+	const i = input();
+	// mj 에 season 키가 없는 10311 · 10708 이 실제 사례다
+	assert.equal(i.mj.get('10101')?.['season'], undefined);
+	assert.equal(buildIdentities(i, new Meta()).identity[0]?.season, 0);
 });
 
 test('저항 3축이 행으로 펴진다', () => {
@@ -81,9 +115,23 @@ test('저항 3축이 행으로 펴진다', () => {
 	);
 });
 
-test('속도가 min·max 로 나온다', () => {
+test('속도가 동기화 1–4 네 행으로 펴진다 — 마지막 원소만 남기지 않는다', () => {
 	const t = buildIdentities(input(), new Meta());
-	assert.deepEqual(t.identitySpeed, [{ identityId: '10101', min: 4, max: 8 }]);
+	assert.deepEqual(t.identitySpeed, [
+		{ identityId: '10101', uptie: 1, min: 4, max: 6 },
+		{ identityId: '10101', uptie: 2, min: 4, max: 7 },
+		{ identityId: '10101', uptie: 3, min: 4, max: 8 },
+		{ identityId: '10101', uptie: 4, min: 4, max: 8 },
+	]);
+});
+
+test('speedList 가 없으면 속도를 지어내지 않고 결손으로 남긴다', () => {
+	const i = input();
+	i.assets.set('10101', { ...(i.assets.get('10101') as Record<string, unknown>), speedList: [] });
+	const meta = new Meta();
+	const t = buildIdentities(i, meta);
+	assert.equal(t.identitySpeed.length, 0);
+	assert.ok(meta.gaps.some((g) => g.field === 'speed'));
 });
 
 test('이름·칭호가 loc 우선이다', () => {
@@ -136,6 +184,26 @@ test('패시브 conditions 가 조건 코드 배열로 담긴다 — cost 가 �
 	const t = buildIdentities(input(), new Meta());
 	assert.deepEqual(t.passive.find((p) => p.id === '1010101')?.conditions, ['CheckAwakenLevel4']);
 	assert.deepEqual(t.passive.find((p) => p.id === '1010102')?.conditions, []);
+});
+
+test('패시브 발동 조건이 assets 에서 온다 — mj cost 와 다른 축이다', () => {
+	const t = buildIdentities(input(), new Meta());
+	assert.equal(t.passive.find((p) => p.id === '1010101')?.condType, 'res');
+	assert.equal(t.passive.find((p) => p.id === '1010102')?.condType, null);
+	assert.deepEqual(t.passiveRequirement, [
+		{ passiveId: '1010101', index: 0, sin: 'gloom', value: 4 },
+	]);
+});
+
+test('죄악이 아닌 요구치는 버린다 — 열거형에 없는 값을 넣지 않는다', () => {
+	const i = input();
+	i.details.set('10101', {
+		passiveData: {
+			'1010101': { condition: { type: 'res', requirement: [{ type: 'nonsense', value: 4 }] } },
+		},
+	});
+	const t = buildIdentities(i, new Meta());
+	assert.deepEqual(t.passiveRequirement, []);
 });
 
 test('흐트러짐 구간이 배열로 담긴다 — 스칼라가 아니다', () => {
