@@ -789,6 +789,11 @@ async function main(): Promise<void> {
 		// 없는 고아다(부모 없이는 FK 를 못 세운다). 472 − 6 = 466 이 무결성을 지킨 값이고,
 		// 고아 6건은 field_gap 의 enemy_part.enemy_id 로 기록된다(task-5-report.md)
 		eq('enemy_part', await prisma.enemyPart.count(), 466);
+		// 형제 텍스트 테이블(enemy_text 등)엔 다 있는 행 수 검사가 여기만 없었다.
+		// 466부위 × 3로케일 = 1,398. 로케일 루프가 퇴화해도 enemy_part 466은 그대로
+		// 통과해 아무것도 못 잡는다 — 이번 재설계가 고친 「행 수만 맞고 갈래가
+		// 통째로 없던」 실패와 같은 모양이라 추가한다(최종 검토 Important 3)
+		eq('enemy_part_text', await prisma.enemyPartText.count(), 1_398);
 
 		// 팩 계열에서 미룬 연결이 이어졌다
 		eq('pack_boss_encounter (팩 계열 이월)', await prisma.packBossEncounter.count(), 75);
@@ -885,6 +890,53 @@ async function main(): Promise<void> {
 			name: '적 저항 10축이 아닌 부위 (0이어야 한다)',
 			ok: Number(badAxes[0]?.n ?? 1n) === 0,
 			detail: `${Number(badAxes[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 설계 4절이 회귀 가드로 요구했는데 빠져 있던 셋(최종 검토 Minor 6). 값은
+		// 실측으로 이미 맞았고, 여기서는 그 값을 지키는 가드만 추가한다.
+
+		// 거울 던전 몫 — encounter_target 중 encounter_id 가 'md__'로 시작하는 것
+		eq(
+			'거울 던전 몫 (encounter_id LIKE md__%)',
+			await prisma.encounterTarget.count({ where: { encounterId: { startsWith: 'md__' } } }),
+			575,
+		);
+
+		// kind 교집합 — 한 인카운터가 top·wave·phase·battle 중 두 갈래를 동시에 쓰면
+		// 배타성이 깨진 것이다(top 주석 「네 갈래가 배타적」 참고)
+		const mixedKind = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT encounter_id FROM canonical.encounter_target
+			  GROUP BY encounter_id HAVING count(DISTINCT kind) > 1
+			) x
+		`;
+		checks.push({
+			name: '한 인카운터가 두 갈래를 쓰는 경우 (0이어야 한다)',
+			ok: Number(mixedKind[0]?.n ?? 1n) === 0,
+			detail: `${Number(mixedKind[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 보스 후보 총 — 팩마다 낼 수 있는 보스 후보 수를 다 더한 값. kind='battle'
+		// 인 팩은 (encounter_id, group_index) 유일 조합 수(후보 슬롯 수)만큼, 그 밖의
+		// 단일 보스 팩은 1씩 센다. 59팩(단일) + 16팩(복수, 합 41후보) = 100
+		const bossCandidates = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			WITH pack_enc AS (
+			  SELECT DISTINCT pack_id, encounter_id FROM canonical.pack_boss_encounter
+			),
+			kinds AS (
+			  SELECT pe.pack_id, pe.encounter_id, et.kind,
+			         count(DISTINCT et.group_index) AS n_groups
+			  FROM pack_enc pe
+			  JOIN canonical.encounter_target et ON et.encounter_id = pe.encounter_id
+			  GROUP BY pe.pack_id, pe.encounter_id, et.kind
+			)
+			SELECT sum(CASE WHEN kind = 'battle' THEN n_groups ELSE 1 END)::bigint AS n
+			FROM kinds
+		`;
+		checks.push({
+			name: '보스 후보 총 (59팩 단일 + 16팩 복수 = 100)',
+			ok: Number(bossCandidates[0]?.n ?? 0n) === 100,
+			detail: `${Number(bossCandidates[0]?.n ?? 0n)} / 100`,
 		});
 
 		// 업적은 두 시즌 판본으로 갈린다. **번호는 원본 `__Season__` 이 정한다** —

@@ -1632,7 +1632,11 @@ model Encounter {
   group  String?
   name   String
   siteId String @map("site_id")
-  /// targets 와 배타적인 다른 모양들. 구조가 갈려 원문을 남긴다
+  /// targets 와 배타적인 다른 원본 모양 셋. `encounter_target.kind` 로 네 갈래
+  /// (top·wave·phase·battle) 모두 행으로도 펼쳐지고, 관계 필드 `targets` 가
+  /// 네 갈래를 전부 담는다 — 여기 남기는 것은 조회용이 아니라 **원문 보존용**이다.
+  /// 갈래마다 구조(증원·페이즈 전환·배타적 후보)가 달라 행으로 옮기며 뜻이
+  /// 손실될 수 있으므로 JSONB 원문을 같이 둔다
   waves    Json?
   phases   Json?
   battles  Json?
@@ -1727,9 +1731,16 @@ model Enemy {
   @@schema("canonical")
 }
 
-/// 적의 부위 472종. `id // 100` 이 부모 적이다.
+/// 적의 부위 466종. `id // 100` 이 부모 적이다.
 ///
-/// `encounter_target_part.part_id` 가 같은 번호 공간이라 곧바로 조인된다.
+/// 원본 loc 부위는 472종이지만, 그중 부모 적 id 가 loc 어디에도 없는 고아 6종은
+/// 지어내지 않고 결손으로 뺐다(472 − 6 = 466). 고아 6건은 field_gap 의
+/// `enemy_part.enemy_id` 로 기록된다.
+///
+/// `encounter_target_part.part_id` 가 같은 번호 공간이라 곧바로 조인된다 —
+/// 다만 도달률은 낮다. assets 쪽 부위(`encounter_target_part.part_id`) 927종 중
+/// 실제로 이 표와 맞아떨어지는 것은 270종(29%)뿐이다. loc 부위 472종이
+/// assets 부위 927종을 다 못 덮기 때문이다.
 model EnemyPart {
   id      String @id
   enemyId String @map("enemy_id")
