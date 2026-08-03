@@ -73,13 +73,35 @@ async function main(): Promise<void> {
 		// status.name.ja 258 · status.name.ko 245 · pack.textColor 61 · skill.levels 9
 		// · passive.name 6 · gift.name.ko 6 · association.name.ja 2 · pack.unlockCode 2
 // name 598 · text 478 · item 400 · textColor 61 · levels 9 · unlockCode 2 · battlePool 1
-		// 수동 보정이 채운 만큼 줄어든다. 지금 1건 채워져 1,548 이다
+		// 수동 보정이 채운 만큼 줄어든다.
+		// **기프트 hardOnly 보정은 세지 않는다** — 결손을 채우는 것이 아니라 값이 있는데
+		// 틀린 것을 고치는 것이라 결손 수가 줄지 않는다(docs/audit/wiki/03-gift.md §2).
+		//
+		// 기준이 1,549 에서 966 으로 내려갔다. **거짓 결손 583건을 걷어낸 것**이다 —
+		// 원본에 값이 있는데 「어느 출처에도 없다」고 적혀 있던 것들이다(docs/audit/00-summary.md 4절).
+		//   status.name  ko 245 · ja 258   mirror-dungeon/loc-* 의 Bufs_Mirror*·BattleKeywords_Mirror* 를 안 읽었다
+		//   grace.name   ko  10 · ja  10   MirrorDungeonUI_5.json 에 3언어가 다 있다
+		//   adversity.name ko 30 · ja 30   BattleKeywords_Mirror{6,7} 에 있다
+		// 셋 다 영문명 대조 관문을 통과한 것만 채웠다 — 규칙으로 키를 조합해 찾을 때의 안전장치다
 		const gapTotal = await prisma.fieldGap.count();
-		const overrideCount = await prisma.fieldOverride.count();
+		const overrideCount = await prisma.fieldOverride.count({
+			where: { NOT: { entity: 'gift', field: 'hardOnly' } },
+		});
+		// 966 → 1,137 로 늘었지만 **결손을 새로 만든 게 아니라 몰랐던 것을 기록한 것**이다
+		// (인카운터 재설계, 2026-08-03). 966 은 인카운터 값 검사를 넣기 전 숫자다.
+		//   +7    Task 4·5 적·부위 분리 — enemy_part 고아 6건 + encounter_target.name
+		//         결손이 1 → 2 로(원본 1,371건 전수를 담으며 진짜 빈 이름 1건이 더 드러났다)
+		//         966 + 7 = 973 (task-5-report.md)
+		//   +42   보스 후보를 모르는 42팩 (encounter.bossPool) — 위키에서 긁지 않기로 한
+		//         42팩을 결손으로 명시했다(설계 6절)
+		//   +122  encounter_target_part.resists — `resists` 키 자체가 없는 부위 122건.
+		//         이전에는 축 루프가 조용히 continue 해 아무 기록도 안 남겼다. 「말없이
+		//         버리지 않는다」규칙에 따라 이번에 처음 기록한다
+		//   973 + 42 + 122 = 1,137
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_549,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,549`,
+			ok: gapTotal + overrideCount === 1_137,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,137`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -178,6 +200,13 @@ async function main(): Promise<void> {
 		// ══ 기프트 계열 ══════════════════════════════════════════════
 		eq('keyword', await prisma.keyword.count(), 12);
 		eq('keyword_text', await prisma.keywordText.count(), 36);
+		// 필터 칩 순서. 12종 전부 원본 등장 순서를 갖고 「범용」(None)이 맨 뒤다
+		eq('keyword order 보유', await prisma.keyword.count({ where: { order: { not: null } } }), 12);
+		checks.push({
+			name: 'keyword order 는 None 이 맨 뒤다',
+			ok: (await prisma.keyword.findUnique({ where: { id: 'None' } }))?.order === 11,
+			detail: String((await prisma.keyword.findUnique({ where: { id: 'None' } }))?.order),
+		});
 		eq('trigger', await prisma.trigger.count(), 150);
 		eq('effect', await prisma.effect.count(), 55);
 
@@ -186,9 +215,11 @@ async function main(): Promise<void> {
 		eq('gift (story_dungeon)', await prisma.gift.count({ where: { domain: 'story_dungeon' } }), 126);
 		eq('gift_stage', await prisma.giftStage.count(), 799);
 		eq('gift_stage_text', await prisma.giftStageText.count(), 2_391);
-		eq('gift_effect', await prisma.giftEffect.count(), 1_122);
+		// 원본 effects 배열 총합이 1,123 이다. 초판 PK 가 9429 의 중복 1건을 삼켜 1,122 였다
+		eq('gift_effect', await prisma.giftEffect.count(), 1_123);
 		eq('gift_trigger', await prisma.giftTrigger.count(), 1_081);
-		eq('gift_pack', await prisma.giftPack.count(), 10_115);
+		// mj 10,115 + 위키가 판정한 결손 1행 (1124 × 9241)
+		eq('gift_pack', await prisma.giftPack.count(), 10_116);
 		eq('gift_exclusive_pack', await prisma.giftExclusivePack.count(), 321);
 		eq('gift_requirement', await prisma.giftRequirement.count(), 142);
 		eq('fusion_recipe', await prisma.fusionRecipe.count(), 68);
@@ -196,8 +227,47 @@ async function main(): Promise<void> {
 		eq('fusion_slot_option', await prisma.fusionSlotOption.count(), 7);
 		eq('gift_locked_desc', await prisma.giftLockedDesc.count(), 192);
 
-		// hardOnly 는 합집합이어야 한다 — 백로그 08 이 여기서 해소된다
-		eq('hardOnly true (합집합 122)', await prisma.gift.count({ where: { hardOnly: true } }), 122);
+		// hardOnly — 합집합 122 도 assets 단독 116 도 틀렸다. 위키 테마팩의 normal= 로
+		// 9212·9249·9427·9428·9431 다섯이 false 로 내려가 117 이 정답이다(wiki/03-gift.md §2)
+		eq('hardOnly true (위키 판정 117)', await prisma.gift.count({ where: { hardOnly: true } }), 117);
+		const hardFixed = await prisma.gift.findMany({
+			where: { id: { in: ['9212', '9249', '9427', '9428', '9431', '9841'] } },
+			select: { id: true, hardOnly: true },
+			orderBy: { id: 'asc' },
+		});
+		checks.push({
+			name: '하드 전용 보정 5건 + 유지 1건 (9841)',
+			ok:
+				hardFixed.length === 6 &&
+				hardFixed.filter((g) => !g.hardOnly).map((g) => g.id).join(',') ===
+					'9212,9249,9427,9428,9431' &&
+				hardFixed.find((g) => g.id === '9841')?.hardOnly === true,
+			detail: hardFixed.map((g) => `${g.id}:${g.hardOnly ? 't' : 'f'}`).join(' '),
+		});
+
+		// 아이콘 파일명 — 거울 던전 456종이 전부 유일값을 갖는다. id 로는 유도되지 않는다
+		const sprites = await prisma.gift.findMany({
+			where: { sprite: { not: null } },
+			select: { sprite: true },
+		});
+		checks.push({
+			name: 'gift.sprite 456종 · 전부 유일',
+			ok: sprites.length === 456 && new Set(sprites.map((s) => s.sprite)).size === 456,
+			detail: `${sprites.length}행 · 유일 ${new Set(sprites.map((s) => s.sprite)).size} / 456`,
+		});
+
+		// 완전 공명 — mj 가 desc 와 requires 를 모순되게 준 6건을 desc 기준으로 세웠다
+		const resonance = await prisma.$queryRaw<Array<{ total: bigint; abs: bigint }>>`
+			SELECT count(*)::bigint AS total,
+			       count(*) FILTER (WHERE value::text LIKE '%absolute%')::bigint AS abs
+			FROM canonical.gift_requirement WHERE kind = 'resonance'
+		`;
+		checks.push({
+			name: '완전 공명 23행 중 18행 (보정 전 12행)',
+			ok:
+				Number(resonance[0]?.total ?? 0n) === 23 && Number(resonance[0]?.abs ?? 0n) === 18,
+			detail: `${Number(resonance[0]?.abs ?? 0n)} / ${Number(resonance[0]?.total ?? 0n)}`,
+		});
 
 		const bySin = await prisma.gift.groupBy({ by: ['sin'], _count: { _all: true } });
 		const sinMap = Object.fromEntries(bySin.filter((r) => r.sin !== null).map((r) => [String(r.sin), r._count._all]));
@@ -225,6 +295,34 @@ async function main(): Promise<void> {
 				koGaps.length === 6 &&
 				koGaps.map((g) => g.entityId).sort().join(',') === '1017,1031,1035,1036,1045,1047',
 			detail: koGaps.map((g) => g.entityId).sort().join(' '),
+		});
+
+		// ── 전용 팩 쌍은 네 갈래 중 하나여야 한다 (감사 05 §9 · wiki/05 §5) ──
+		// ① 팩 풀에 있다(드랍) ② 합성 결과물이다 ③ 팩이 Extreme·Hidden 이다
+		// ④ 팩이 삭제된 콜라보다. 어디에도 안 걸리면 팩 풀 결손이다.
+		// `canonical.pack` 에 retired 컬럼이 없어 ④ 는 pack_tag 'Collab'(=1122 선의의 순례)로 읽는다.
+		const orphanExclusive = await prisma.$queryRaw<
+			Array<{ gift_id: string; pack_id: string }>
+		>`
+			SELECT e.gift_id, e.pack_id
+			FROM canonical.gift_exclusive_pack e
+			WHERE NOT EXISTS (
+			        SELECT 1 FROM canonical.gift_pack g
+			        WHERE g.gift_id = e.gift_id AND g.pack_id = e.pack_id)
+			  AND NOT EXISTS (
+			        SELECT 1 FROM canonical.fusion_recipe f WHERE f.gift_id = e.gift_id)
+			  AND NOT EXISTS (
+			        SELECT 1 FROM canonical.pack_tag t
+			        WHERE t.pack_id = e.pack_id AND t.tag IN ('Extreme', 'Hidden', 'Collab'))
+			ORDER BY e.pack_id, e.gift_id
+		`;
+		checks.push({
+			name: '전용 팩인데 어느 경로도 없는 쌍 (0이어야 한다)',
+			ok: orphanExclusive.length === 0,
+			detail:
+				orphanExclusive.length === 0
+					? '0 / 0'
+					: orphanExclusive.map((r) => `${r.pack_id}×${r.gift_id}`).join(' '),
 		});
 
 		// ── 마스터북 완전 일치 쌍 재현 ① 기프트 ↔ 팩 역참조 441/441 ──
@@ -293,17 +391,21 @@ async function main(): Promise<void> {
 		eq('association_text', await prisma.associationText.count(), 185);
 
 		eq('skill', await prisma.skill.count(), 1_045);
-		eq('skill_stage', await prisma.skillStage.count(), 5_180);
-		eq('skill_stage_text', await prisma.skillStageText.count(), 12_316);
-		eq('skill_coin', await prisma.skillCoin.count(), 10_419);
+		// 1,036스킬 × 5단계 = 5,180 에서 슬롯 3 해금분 206×2 를 뺀다
+		eq('skill_stage', await prisma.skillStage.count(), 4_768);
+		eq('skill_stage_text', await prisma.skillStageText.count(), 13_264);
+		// 로케일 축이 생겨 ko 7,634 · en 9,214 · ja 7,634 이다
+		eq('skill_coin', await prisma.skillCoin.count(), 24_482);
 
 		eq('passive', await prisma.passive.count(), 709);
-		eq('passive_text', await prisma.passiveText.count(), 1_701);
+		eq('passive_text', await prisma.passiveText.count(), 1_981);
+		eq('passive_requirement', await prisma.passiveRequirement.count(), 534);
 
 		eq('identity', await prisma.identity.count(), 184);
 		eq('identity_text', await prisma.identityText.count(), 552);
 		eq('identity_resist', await prisma.identityResist.count(), 552);
-		eq('identity_speed', await prisma.identitySpeed.count(), 184);
+		// 동기화 축을 갖는다 — 184인격 × 4단계
+		eq('identity_speed', await prisma.identitySpeed.count(), 736);
 		eq('identity_skill', await prisma.identitySkill.count(), 1_020);
 		eq('identity_passive', await prisma.identityPassive.count(), 768);
 		eq('identity_association', await prisma.identityAssociation.count(), 241);
@@ -322,17 +424,88 @@ async function main(): Promise<void> {
 
 		eq('star=1 인격 (LCB 기본)', await prisma.identity.count({ where: { star: 1 } }), 12);
 
-		// 단계가 있는 스킬은 전부 5단계다 — 전량 전개의 정의
-		const badStage = await prisma.$queryRaw<Array<{ n: bigint }>>`
-			SELECT count(*)::bigint AS n FROM (
-			  SELECT skill_id FROM canonical.skill_stage GROUP BY skill_id HAVING count(*) <> 5
+		// 단계가 있는 스킬은 5단계다 — 전량 전개의 정의.
+		// 예외는 동기화 III 에서 해금되는 슬롯 3 스킬 206건이며 3·4·5 만 갖는다.
+		const stageShape = await prisma.$queryRaw<Array<{ n: bigint; from3: bigint }>>`
+			SELECT count(*)::bigint                                    AS n,
+			       count(*) FILTER (WHERE lo = 3 AND cnt = 3)::bigint  AS from3
+			FROM (
+			  SELECT skill_id, count(*) AS cnt, min(uptie) AS lo
+			  FROM canonical.skill_stage GROUP BY skill_id HAVING count(*) <> 5
 			) x
 		`;
 		checks.push({
-			name: '5단계가 아닌 스킬 (0이어야 한다)',
-			ok: Number(badStage[0]?.n ?? 1n) === 0,
-			detail: `${Number(badStage[0]?.n ?? 0n)} / 0`,
+			name: '5단계가 아닌 스킬은 해금분 206건뿐',
+			ok:
+				Number(stageShape[0]?.n ?? 0n) === 206 && Number(stageShape[0]?.from3 ?? 0n) === 206,
+			detail: `${Number(stageShape[0]?.n ?? 0n)}건 중 3–5단계 ${Number(stageShape[0]?.from3 ?? 0n)} / 206`,
 		});
+
+		// 잘라낸 206건이 전부 슬롯 3 이어야 한다 — 위키의 Skill 3 해금 규칙과 겹친다
+		const lockedSlot = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n
+			FROM (
+			  SELECT skill_id FROM canonical.skill_stage
+			  GROUP BY skill_id HAVING count(*) = 3 AND min(uptie) = 3
+			) x
+			JOIN canonical.identity_skill i ON i.skill_id = x.skill_id AND i.slot = 3
+		`;
+		checks.push({
+			name: '잘라낸 206건이 전부 슬롯 3 이다',
+			ok: Number(lockedSlot[0]?.n ?? 0n) === 206,
+			detail: `${Number(lockedSlot[0]?.n ?? 0n)} / 206`,
+		});
+
+		// 단계 수치 — identity-details 에만 있다. mj 만 읽으면 전량 NULL 이 된다
+		const stageValues = await prisma.$queryRaw<
+			Array<{ bv: bigint; cv: bigint; aw: bigint; lc: bigint; cl: bigint }>
+		>`
+			SELECT count(base_value)::bigint       AS bv,
+			       count(coin_value)::bigint       AS cv,
+			       count(atk_weight)::bigint       AS aw,
+			       count(level_correction)::bigint AS lc,
+			       count(clashable)::bigint        AS cl
+			FROM canonical.skill_stage
+		`;
+		const sv = stageValues[0];
+		checks.push({
+			name: '단계 수치 4종 각 3,708 · clashable 260',
+			ok:
+				Number(sv?.bv ?? 0n) === 3_708 &&
+				Number(sv?.cv ?? 0n) === 3_708 &&
+				Number(sv?.aw ?? 0n) === 3_708 &&
+				Number(sv?.lc ?? 0n) === 3_708 &&
+				Number(sv?.cl ?? 0n) === 260,
+			detail: `위력 ${Number(sv?.bv ?? 0n)} · 코인 ${Number(sv?.cv ?? 0n)} · 가중 ${Number(sv?.aw ?? 0n)} · 보정 ${Number(sv?.lc ?? 0n)} · 합 ${Number(sv?.cl ?? 0n)}`,
+		});
+
+		// 코인 한국어 — 초판은 영문 단일이라 한글이 0행이었다
+		const coinKo = await prisma.$queryRaw<Array<{ n: bigint; ko: bigint; ub: bigint }>>`
+			SELECT count(*) FILTER (WHERE locale = 'ko')::bigint AS n,
+			       count(*) FILTER (
+			         WHERE locale = 'ko' AND array_to_string(effects, ' ') ~ '[가-힣]'
+			       )::bigint AS ko,
+			       count(*) FILTER (WHERE type = 'unbreakable')::bigint AS ub
+			FROM canonical.skill_coin
+		`;
+		checks.push({
+			name: '코인 한국어 7,634행 중 5,936행에 한글 · 파괴불가 1,500',
+			ok:
+				Number(coinKo[0]?.n ?? 0n) === 7_634 &&
+				Number(coinKo[0]?.ko ?? 0n) === 5_936 &&
+				Number(coinKo[0]?.ub ?? 0n) === 1_500,
+			detail: `ko ${Number(coinKo[0]?.n ?? 0n)} · 한글 ${Number(coinKo[0]?.ko ?? 0n)} · unbreakable ${Number(coinKo[0]?.ub ?? 0n)}`,
+		});
+
+		// 패시브 발동 조건 — assets passiveData 에만 있다
+		eq('패시브 condType', await prisma.passive.count({ where: { condType: { not: null } } }), 485);
+		eq('패시브 condType res', await prisma.passive.count({ where: { condType: 'res' } }), 146);
+		eq('패시브 condType owned', await prisma.passive.count({ where: { condType: 'owned' } }), 339);
+
+		// 체력은 기본값과 레벨당 증가치의 쌍이다
+		eq('hp_level 보유', await prisma.identity.count({ where: { hpLevel: { not: null } } }), 184);
+		// mj 에 season 키가 없는 2건을 assets 가 갖고 있다 — 위키 확인으로 0 이 맞다
+		eq('season NULL (0이어야 한다)', await prisma.identity.count({ where: { season: null } }), 0);
 
 		// changedHere 가 원본 델타 수와 같아야 한다 — 실측 2,561
 		eq(
@@ -388,10 +561,14 @@ async function main(): Promise<void> {
 		eq('ego_cost', await prisma.egoCost.count(), 314);
 		eq('ego_corrosion', await prisma.egoCorrosion.count(), 330);
 		eq('ego_requirement', await prisma.egoRequirement.count(), 314);
-		eq('ego_skill', await prisma.egoSkill.count(), 215);
-		eq('ego_skill_stage', await prisma.egoSkillStage.count(), 616);
-		eq('ego_skill_stage_text', await prisma.egoSkillStageText.count(), 1_848);
-		eq('ego_skill_coin', await prisma.egoSkillCoin.count(), 2_745);
+		// 스킬은 ego-details 가 정본이다. 초판의 loc 접두 스캔이 연출 전용 E.G.O 의
+		// 스킬 5건을 기본 E.G.O 로 끌어와 215였다(감사 §4.3)
+		eq('ego_skill', await prisma.egoSkill.count(), 210);
+		// loc ∪ ego-details. loc 만 보면 616 이고, loc 이 안 싣는 단계가 29건 있다
+		eq('ego_skill_stage', await prisma.egoSkillStage.count(), 640);
+		eq('ego_skill_stage_text', await prisma.egoSkillStageText.count(), 1_833);
+		// 효과 문구 없는 코인을 버리던 초판이 2,745 였다(감사 §3.5)
+		eq('ego_skill_coin', await prisma.egoSkillCoin.count(), 2_832);
 		eq('ego_passive', await prisma.egoPassive.count(), 113);
 		eq('ego_passive_text', await prisma.egoPassiveText.count(), 339);
 		eq('ego_passive_link', await prisma.egoPassiveLink.count(), 113);
@@ -428,18 +605,77 @@ async function main(): Promise<void> {
 			110,
 		);
 
-		// **두 번째 각성 스킬** — mj 만으로는 못 얻는다
+		// **두 번째 각성 스킬은 2건뿐이다** — mj 의 awakeningSkill 은 스칼라라 못 담고,
+		// loc 접두 스캔은 연출 전용 E.G.O 의 스킬 5건까지 끌어와 7건이 됐었다.
+		// 위키 대조로 20608 오혈읍루-종 · 21209 눈부시지 않은 영광-광휘 둘만이 진짜다
 		const second = await prisma.egoSkill.findMany({
 			where: { role: 'awakening', ordinal: { gt: 0 } },
 			select: { id: true },
 		});
 		checks.push({
-			name: '두 번째 각성 스킬 7건 (loc 단독)',
+			name: '두 번째 각성 스킬 2건 (ego-details 단독)',
 			ok:
-				second.length === 7 &&
-				second.map((s) => s.id).sort().join(',') ===
-					'2010112,2030112,2050112,2060112,2060812,2110112,2120912',
+				second.length === 2 &&
+				second.map((s) => s.id).sort().join(',') === '2060812,2120912',
 			detail: second.map((s) => s.id).sort().join(' '),
+		});
+
+		// 연출 전용 E.G.O 의 스킬이 기본 E.G.O 로 새지 않는다
+		const strayAwaken = await prisma.egoSkill.count({
+			where: { id: { in: ['2010112', '2030112', '2050112', '2060112', '2110112'] } },
+		});
+		checks.push({
+			name: '연출 전용 스킬 오귀속 (0이어야 한다)',
+			ok: strayAwaken === 0,
+			detail: `${strayAwaken} / 0`,
+		});
+
+		// **스킬 수치** — ego-details 에만 있다. 델타 배열이라 전개해야 전 단계가 찬다
+		eq(
+			'E.G.O 스킬 수치 채움 (spCost)',
+			await prisma.egoSkillStage.count({ where: { spCost: { not: null } } }),
+			640,
+		);
+		eq(
+			'E.G.O 스킬 수치 채움 (baseValue)',
+			await prisma.egoSkillStage.count({ where: { baseValue: { not: null } } }),
+			640,
+		);
+
+		// 골든 표본 — 위키 {{EGPage}} 와 전 필드 대조해 불일치 0건이었다(위키 조사 §4).
+		// 20101 오감도: uptie 1 위력 14 → uptie 3 에서 18 로 오르고 4 는 그대로(델타 상속)
+		const crow = await prisma.egoSkillStage.findMany({
+			where: { skillId: '2010111' },
+			orderBy: { uptie: 'asc' },
+		});
+		checks.push({
+			name: '골든 표본 20101 오감도 (위키 대조값)',
+			ok:
+				crow.length === 3 &&
+				crow.every((s) => s.spCost === 10 && s.coinValue === 6 && s.atkWeight === 1 && s.levelCorrection === -4) &&
+				crow.map((s) => s.baseValue).join(',') === '14,18,18',
+			detail: crow.map((s) => `u${s.uptie} base ${s.baseValue}`).join(' · '),
+		});
+
+		// **효과 문구가 없는 코인도 남아야 한다.** 초판은 이것을 버려 코인 수를 잃었다.
+		// 위키 확인 — 2120611 Bygone Days · 2120911 Unbrilliant Glory-Flowing 둘 다 coin=1
+		const emptyCoins = await prisma.egoSkillCoin.count({ where: { effects: { isEmpty: true } } });
+		checks.push({
+			name: '효과 문구 없는 코인 보존 102건 (0이면 되레 버그다)',
+			ok: emptyCoins === 102,
+			detail: `${emptyCoins} / 102`,
+		});
+		const noCoinStage = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n
+			FROM canonical.ego_skill_stage s
+			WHERE NOT EXISTS (SELECT 1 FROM canonical.ego_skill_coin c
+			                  WHERE c.skill_id = s.skill_id AND c.uptie = s.uptie)
+		`;
+		checks.push({
+			// 남는 29건은 loc 에 아예 없고 ego-details 에만 있는 단계다 — 문구도 코인도 loc 소관이라 없다
+			name: '코인 0개 단계 29건 (loc 에 없는 단계뿐)',
+			ok: Number(noCoinStage[0]?.n ?? 0n) === 29,
+			detail: `${Number(noCoinStage[0]?.n ?? 0n)} / 29`,
 		});
 
 		// 침식 확률표는 E.G.O 마다 3행이다
@@ -456,15 +692,10 @@ async function main(): Promise<void> {
 
 		// ══ 상태·어휘 계열 ═════════════════════════════════════════
 		eq('status', await prisma.status.count(), 1_472);
-		// 수동 보정이 결손을 채우면 행이 늘어난다. 보정 수를 빼고 본다
-		const statusTextBase =
-			(await prisma.statusText.count()) -
-			(await prisma.fieldOverride.count({ where: { entity: 'status', field: 'name' } }));
-		checks.push({
-			name: 'status_text (보정 제외)',
-			ok: statusTextBase === 3_913,
-			detail: `${statusTextBase.toLocaleString()} / 3,913`,
-		});
+		// 1,472종 × 3언어 = 4,416. **거울 던전 로케일을 읽고 나서 전량이 찼다** —
+		// 예전 3,913 은 `mirror-dungeon/loc-*` 를 안 읽어 생긴 거짓 결손 503건만큼 적었다.
+		// 결손이 0이라 수동 보정은 행을 더하지 못하고 덮기만 한다 — 되더할 것이 없다
+		eq('status_text (1,472 × 3언어)', await prisma.statusText.count(), 4_416);
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);
@@ -480,18 +711,19 @@ async function main(): Promise<void> {
 			detail: JSON.stringify(buffMap),
 		});
 
-		// **한국어 결손 245종 (16.6 %)** — 마스터북 상태 편 회차 3 과 같다.
-		// 보정으로 채운 만큼 줄어들므로 되더한다.
+		// **한국어 결손 245종은 거짓 결손이었다.** 전부 거울 던전 상태(MD*)이고
+		// 로케일이 `mechanics/loc-*` 가 아니라 `mirror-dungeon/loc-*` 에 있었다.
+		// 이제 ko·ja 모두 0 이어야 한다 — 다시 늘면 그 출처를 놓친 것이다.
 		const statusKoGap = await prisma.fieldGap.count({
 			where: { entity: 'status', field: 'name', locale: 'ko' },
 		});
-		const statusKoFixed = await prisma.fieldOverride.count({
-			where: { entity: 'status', field: 'name', locale: 'ko' },
+		const statusJaGap = await prisma.fieldGap.count({
+			where: { entity: 'status', field: 'name', locale: 'ja' },
 		});
 		checks.push({
-			name: '한국어 결손 245종 (마스터북 일치, 보정 되더함)',
-			ok: statusKoGap + statusKoFixed === 245,
-			detail: `결손 ${statusKoGap} + 보정 ${statusKoFixed} = ${statusKoGap + statusKoFixed} / 245`,
+			name: '상태 표시명 결손 (ko·ja 0이어야 한다)',
+			ok: statusKoGap === 0 && statusJaGap === 0,
+			detail: `ko ${statusKoGap} · ja ${statusJaGap} / 0`,
 		});
 
 		// ── 스펙 6절 — 코인 토큰이 그래프 투영 준비를 끝냈나 ──────────
@@ -511,8 +743,8 @@ async function main(): Promise<void> {
 		const tokenStatus = await prisma.coinToken.count({ where: { kind: 'status' } });
 		checks.push({
 			name: 'status 토큰 전건이 FK 를 갖는다',
-			ok: tokenFk === tokenStatus && tokenFk === 14_389,
-			detail: `${tokenFk} / ${tokenStatus} (14,389 기대)`,
+			ok: tokenFk === tokenStatus && tokenFk === 12_521,
+			detail: `${tokenFk} / ${tokenStatus} (12,521 기대)`,
 		});
 
 		// E.G.O·인격의 상태 연결이 100 % 걸렸다 — 결손이 0이어야 한다
@@ -529,27 +761,129 @@ async function main(): Promise<void> {
 		eq('achievement (마스터북 183)', await prisma.achievement.count(), 183);
 		eq('reward', await prisma.reward.count(), 200);
 		eq('adversity', await prisma.adversity.count(), 30);
-		// 표시 문자열을 떼어냈다(ADR-03). 영문만 있고 ko·ja 는 결손으로 남는다
-		eq('adversity_text', await prisma.adversityText.count(), 30);
+		// **30 × 3언어.** 예전 30(en 만)은 거짓 결손이었다 — 역경 표시명이 상태이상 id
+		// `MD6Limit1{층-11}{n}` · `MD7Limit1{층-11}1` 로 Mirror6·7 로케일에 있다
+		eq('adversity_text', await prisma.adversityText.count(), 90);
 		eq('grace', await prisma.grace.count(), 10);
+		// 같은 이유로 은총도 3언어다 — `MirrorDungeonUI_5` 의 `..._title_{99+index}`
+		eq('grace_text', await prisma.graceText.count(), 30);
 		eq('start_gift', await prisma.startGift.count(), 30);
 
 		eq('encounter', await prisma.encounter.count(), 251);
-		eq('encounter_target', await prisma.encounterTarget.count(), 398);
-		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 354);
-		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 3_540);
-		eq('enemy', await prisma.enemy.count(), 1_342);
-		eq('enemy_text', await prisma.enemyText.count(), 4_026);
+		// 초판은 최상위 targets 만 담아 398이었다. waves(26팩)·battles(16팩)·phases(2팩)를
+		// 통째로 건너뛰어 보스 데이터가 있는 44팩이 한 줄도 없었다(설계 3.1). 실측 1,371 —
+		// 감사 문서의 1,384 는 중첩 battle 계수 방식 차이였다(task-5-report.md).
+		eq('encounter_target', await prisma.encounterTarget.count(), 1_371);
+		// 초판(354)은 top 갈래에 딸린 부위만 셌다. 네 갈래를 다 펼치면 1,302다
+		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 1_302);
+		// 부위 저항도 같은 이유로 3,540 이었다. **실측은 감사 문서의 추정(14,850)과도 다르다**
+		// — 1,302부위 중 1,180부위 × 10축 = 11,800. 나머지 122부위는 원본에 `resists` 키
+		// 자체가 없다(장식·비전투 부위로 보인다). 14,850 은 감사가 어림잡은 사전 추정치였다
+		// (task-5-report.md 「수치가 다른 두 건의 해석」).
+		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 11_800);
+		// loc Enemies*.json 이 적 행과 부위 행을 섞는데 초판이 무차별 적재해 1,342 였다.
+		// 4·5자리(적)만 골라내면 870이다
+		eq('enemy', await prisma.enemy.count(), 870);
+		eq('enemy_text', await prisma.enemyText.count(), 2_610);
+		// loc 의 6자리 부위 id 는 472종이지만, 그중 6종은 부모 적 id 가 loc 어디에도
+		// 없는 고아다(부모 없이는 FK 를 못 세운다). 472 − 6 = 466 이 무결성을 지킨 값이고,
+		// 고아 6건은 field_gap 의 enemy_part.enemy_id 로 기록된다(task-5-report.md)
+		eq('enemy_part', await prisma.enemyPart.count(), 466);
+		// 형제 텍스트 테이블(enemy_text 등)엔 다 있는 행 수 검사가 여기만 없었다.
+		// 466부위 × 3로케일 = 1,398. 로케일 루프가 퇴화해도 enemy_part 466은 그대로
+		// 통과해 아무것도 못 잡는다 — 이번 재설계가 고친 「행 수만 맞고 갈래가
+		// 통째로 없던」 실패와 같은 모양이라 추가한다(최종 검토 Important 3)
+		eq('enemy_part_text', await prisma.enemyPartText.count(), 1_398);
 
 		// 팩 계열에서 미룬 연결이 이어졌다
 		eq('pack_boss_encounter (팩 계열 이월)', await prisma.packBossEncounter.count(), 75);
 
-		// **적 저항은 10축이다** — 인격 3축 · E.G.O 7축과 다르다
+		// 네 갈래가 각각 얼마나 담겼나. 한 갈래가 0이면 그 갈래를 다시 잃은 것이다
+		const kindDist = await prisma.$queryRaw<Array<{ kind: string; n: bigint }>>`
+			SELECT kind::text AS kind, count(*)::bigint AS n
+			FROM canonical.encounter_target GROUP BY 1 ORDER BY 1
+		`;
+		const dist = Object.fromEntries(kindDist.map((r) => [r.kind, Number(r.n)]));
+		checks.push({
+			name: '타깃 kind 분포 (한 갈래도 0이면 안 된다)',
+			ok: dist['top'] === 398 && dist['wave'] === 461 && dist['phase'] === 67 && dist['battle'] === 445,
+			detail: `top ${dist['top']} · wave ${dist['wave']} · phase ${dist['phase']} · battle ${dist['battle']}`,
+		});
+
+		// **이 도메인의 소비자 요구다** — 「이 팩의 마지막 보스가 누구인가」에
+		// 답할 수 있는 팩. 초판은 31이었다(설계 3.1)
+		const bossPacks = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(DISTINCT b.pack_id)::bigint AS n
+			FROM canonical.pack_boss_encounter b
+			JOIN canonical.encounter_target t ON t.encounter_id = b.encounter_id
+		`;
+		checks.push({
+			name: '보스 이름을 낼 수 있는 팩 (초판 31)',
+			ok: Number(bossPacks[0]?.n ?? 0n) === 75,
+			detail: `${Number(bossPacks[0]?.n ?? 0n)} / 75`,
+		});
+
+		// 부위는 id // 100 이 부모 적이다. 부모가 없는 부위가 있으면 분리가 틀렸다
+		const orphanPart = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.enemy_part p
+			WHERE NOT EXISTS (SELECT 1 FROM canonical.enemy e WHERE e.id = p.enemy_id)
+		`;
+		checks.push({
+			name: '부모 없는 부위 (0이어야 한다)',
+			ok: Number(orphanPart[0]?.n ?? 1n) === 0,
+			detail: `${Number(orphanPart[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 적 id 는 4·5자리, 부위 id 는 6자리다. 섞이면 분리가 안 된 것이다
+		const badLen = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT (SELECT count(*) FROM canonical.enemy WHERE length(id) > 5)
+			     + (SELECT count(*) FROM canonical.enemy_part WHERE length(id) <> 6) AS n
+		`;
+		checks.push({
+			name: '적·부위 id 자릿수가 섞였다 (0이어야 한다)',
+			ok: Number(badLen[0]?.n ?? 1n) === 0,
+			detail: `${Number(badLen[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 위키 「Possible Bosses」와 대조된 표본이다(docs/audit/wiki/06-encounter.md §2)
+		const canto12 = await prisma.encounterTarget.findMany({
+			where: { encounterId: 'md__canto-1-2', kind: 'battle', index: 0 },
+			orderBy: { groupIndex: 'asc' },
+			select: { name: true },
+		});
+		checks.push({
+			name: 'md__canto-1-2 보스 후보 3종 (위키 Possible Bosses)',
+			ok: canto12.map((r) => r.name).join(' · ')
+				=== "Ebony Queen's Apple · Doomsday Calendar · Golden Apple",
+			detail: canto12.map((r) => r.name).join(' · '),
+		});
+
+		// 봉봉 세 변형. 중복 행이 아니라 Swarm Movement Prep 1/2/3 이다(§6)
+		const walpu8 = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.enemy_part
+			WHERE id IN ('137001','137101','137201')
+		`;
+		checks.push({
+			name: 'md__walpu-8 봉봉 부위 3종이 적 1370·1371·1372 로 갈린다',
+			ok: Number(walpu8[0]?.n ?? 0n) === 3,
+			detail: `${Number(walpu8[0]?.n ?? 0n)} / 3`,
+		});
+
+		// 위키에서 긁지 않기로 했다. 42팩이 결손으로 기록돼 있어야 한다(설계 6절)
+		eq('보스 미확보 팩 결손 기록',
+			await prisma.fieldGap.count({ where: { entity: 'encounter', field: 'bossPool' } }),
+			42);
+
+		// **적 저항은 10축이다** — 인격 3축 · E.G.O 7축과 다르다.
+		// PK 는 (encounter_id, kind, group_index, target_index, part_id, axis) 다.
+		// **kind·group_index 를 빼고 세면 다른 갈래의 같은 target_index·part_id 가
+		// 한 그룹으로 섞여 거짓 위반이 35건 나온다**(4키 확장 전의 3키 질의가 남아 있었다).
+		// 4키를 다 넣으면 위반이 0으로 떨어진다 — 실측 1,180부위 전부 정확히 10축이다.
 		const badAxes = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM (
-			  SELECT encounter_id, target_index, part_id
+			  SELECT encounter_id, kind, group_index, target_index, part_id
 			  FROM canonical.encounter_part_resist
-			  GROUP BY 1,2,3 HAVING count(*) <> 10
+			  GROUP BY 1,2,3,4,5 HAVING count(*) <> 10
 			) x
 		`;
 		checks.push({
@@ -558,12 +892,67 @@ async function main(): Promise<void> {
 			detail: `${Number(badAxes[0]?.n ?? 0n)} / 0`,
 		});
 
-		// 업적은 두 시즌 판본으로 갈린다
-		const bySeason = await prisma.achievement.groupBy({ by: ['season'], _count: { _all: true } });
+		// 설계 4절이 회귀 가드로 요구했는데 빠져 있던 셋(최종 검토 Minor 6). 값은
+		// 실측으로 이미 맞았고, 여기서는 그 값을 지키는 가드만 추가한다.
+
+		// 거울 던전 몫 — encounter_target 중 encounter_id 가 'md__'로 시작하는 것
+		eq(
+			'거울 던전 몫 (encounter_id LIKE md__%)',
+			await prisma.encounterTarget.count({ where: { encounterId: { startsWith: 'md__' } } }),
+			575,
+		);
+
+		// kind 교집합 — 한 인카운터가 top·wave·phase·battle 중 두 갈래를 동시에 쓰면
+		// 배타성이 깨진 것이다(top 주석 「네 갈래가 배타적」 참고)
+		const mixedKind = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+			  SELECT encounter_id FROM canonical.encounter_target
+			  GROUP BY encounter_id HAVING count(DISTINCT kind) > 1
+			) x
+		`;
 		checks.push({
-			name: '업적 시즌 판본 2종',
-			ok: bySeason.length === 2,
+			name: '한 인카운터가 두 갈래를 쓰는 경우 (0이어야 한다)',
+			ok: Number(mixedKind[0]?.n ?? 1n) === 0,
+			detail: `${Number(mixedKind[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 보스 후보 총 — 팩마다 낼 수 있는 보스 후보 수를 다 더한 값. kind='battle'
+		// 인 팩은 (encounter_id, group_index) 유일 조합 수(후보 슬롯 수)만큼, 그 밖의
+		// 단일 보스 팩은 1씩 센다. 59팩(단일) + 16팩(복수, 합 41후보) = 100
+		const bossCandidates = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			WITH pack_enc AS (
+			  SELECT DISTINCT pack_id, encounter_id FROM canonical.pack_boss_encounter
+			),
+			kinds AS (
+			  SELECT pe.pack_id, pe.encounter_id, et.kind,
+			         count(DISTINCT et.group_index) AS n_groups
+			  FROM pack_enc pe
+			  JOIN canonical.encounter_target et ON et.encounter_id = pe.encounter_id
+			  GROUP BY pe.pack_id, pe.encounter_id, et.kind
+			)
+			SELECT sum(CASE WHEN kind = 'battle' THEN n_groups ELSE 1 END)::bigint AS n
+			FROM kinds
+		`;
+		checks.push({
+			name: '보스 후보 총 (59팩 단일 + 16팩 복수 = 100)',
+			ok: Number(bossCandidates[0]?.n ?? 0n) === 100,
+			detail: `${Number(bossCandidates[0]?.n ?? 0n)} / 100`,
+		});
+
+		// 업적은 두 시즌 판본으로 갈린다. **번호는 원본 `__Season__` 이 정한다** —
+		// 예전에는 md__* 를 0 으로 박아 넣었는데 원본이 "7" 이고 아이템명도 `Season 7 …` 이다
+		const bySeason = await prisma.achievement.groupBy({ by: ['season'], _count: { _all: true } });
+		const seasons = bySeason.map((r) => r.season).sort((a, b) => a - b);
+		checks.push({
+			name: '업적 시즌 판본 = 6 · 7 (0 이면 하드코딩 회귀)',
+			ok: seasons.length === 2 && seasons[0] === 6 && seasons[1] === 7,
 			detail: bySeason.map((r) => `${r.season}:${r._count._all}`).join(' '),
+		});
+		const rewardSeasons = await prisma.reward.groupBy({ by: ['season'], _count: { _all: true } });
+		checks.push({
+			name: '보상 트랙 시즌 = 6 · 7',
+			ok: rewardSeasons.map((r) => r.season).sort((a, b) => a - b).join(',') === '6,7',
+			detail: rewardSeasons.map((r) => `${r.season}:${r._count._all}`).join(' '),
 		});
 
 		// **JSON null 이 아니라 SQL NULL 이어야 한다.** 아카이브가 「없음」을 거짓말하면 안 된다
@@ -577,18 +966,21 @@ async function main(): Promise<void> {
 			detail: `${Number(jsonNull[0]?.n ?? 0n)} / 0`,
 		});
 
-		// 이름이 빈 적도 버리지 않는다 — 원본 398건이 그대로 들어와야 한다
+		// 이름이 빈 적도 버리지 않는다. top 만 담던 초판은 1건(story__9-5-24)뿐이었다 —
+		// 네 갈래를 다 펼치니 phase 갈래에서 reflectrial__9-5-2 가 하나 더 나와 2건이다
 		eq(
 			'이름 빈 적 결손 기록',
 			await prisma.fieldGap.count({ where: { entity: 'encounter_target', field: 'name' } }),
-			1,
+			2,
 		);
 
-		// 계획 7 계열의 한국어 결손이 기록됐나
+		// 계획 7 계열의 한국어 결손이 기록됐나.
+		// **`grace` 20 · `adversity` 60 은 거짓 결손이라 0 이 됐다** — 원본에 3언어가 있다.
+		// `achievement` · `reward` 는 진짜 결손이다(loc 파일 자체가 없다)
 		for (const [entity, want] of [
 			['achievement', 366],
-			['grace', 20],
-			['adversity', 60],
+			['grace', 0],
+			['adversity', 0],
 			['reward', 400],
 		] as const) {
 			eq(`${entity} 한국어·일본어 결손`, await prisma.fieldGap.count({ where: { entity } }), want);
@@ -743,15 +1135,21 @@ async function main(): Promise<void> {
 			detail: `${Number(markupLeft[0]?.n ?? 0n)} / 0`,
 		});
 
-		// ⑤ **리터럴 꺾쇠는 지우면 안 된다.** <Bloodfiend> 는 게임 텍스트다
+		// ⑤ **리터럴 꺾쇠는 지우면 안 된다.** <Bloodfiend> 는 게임 텍스트다.
+		//
+		// 기준이 41 에서 35 로 내려갔다. 회귀가 아니라 **지어낸 행이 사라진 것**이다 —
+		// 슬롯 3 스킬 1051303 · 1051305 · 1100503 이 원본에서 동기화 3부터 시작하는데
+		// 초판이 1·2 단계를 앞채우기로 만들어 넣었다(게임은 Tier III 에서 해금한다).
+		// 3종 × 2단계 = 6행이 빠져 정확히 35 가 됐다. 로케일은 en 뿐이다 —
+		// loc-ko·loc-ja 원본에는 이 리터럴이 0건이라 ko·ja 행이 세어지면 그게 폴백 누출이다
 		const literal = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM canonical.skill_stage_text
 			WHERE "desc" ~ '<Bloodfiend|<La |<Mechanical'
 		`;
 		checks.push({
-			name: '리터럴 꺾쇠 보존 41건 (지우면 안 된다)',
-			ok: Number(literal[0]?.n ?? 0n) === 41,
-			detail: `${Number(literal[0]?.n ?? 0n)} / 41`,
+			name: '리터럴 꺾쇠 보존 35건 (지우면 안 된다)',
+			ok: Number(literal[0]?.n ?? 0n) === 35,
+			detail: `${Number(literal[0]?.n ?? 0n)} / 35`,
 		});
 
 		// E.G.O 패시브 설명에 마크업이 있다 — ko 6 · ja 6 · en 3 (원본과 일치).

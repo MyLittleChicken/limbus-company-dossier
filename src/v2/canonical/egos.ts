@@ -7,8 +7,14 @@
  *   두 번째 각성 스킬 2건   mj 의 awakeningSkill 은 값이 하나뿐이다
  *                          2060812 오혈읍루-종 · 2120912 눈부시지 않은 영광-광휘
  *
- * E.G.O 스킬은 인격 스킬과 **구조가 다르다** — levelList[].coinlist[].coindescs[] 이고
- * 단계가 델타가 아니라 실제로 그 단계만 존재한다. 전량 전개하지 않는다.
+ * 스킬의 정본은 **ego-details**(limbus-assets 110파일)다 — 플레이 E.G.O 110종을 다 덮고
+ * 스킬 id 집합이 위키와 완전 일치한다(docs/audit/wiki/02-ego.md §1).
+ * loc 은 표시 문자열만 담당한다.
+ *
+ * E.G.O 스킬은 인격 스킬과 **구조가 다르다**.
+ *   문자열   loc 의 levelList[].coinlist[].coindescs[] · 문구가 안 바뀐 단계는 아예 없다
+ *   수치     ego-details 의 awakeningSkills[].data[] · **델타 배열**이라 전개해야 한다
+ * 그래서 단계 집합은 둘의 합집합이다(실측 loc 에 없고 ego-details 에만 있는 단계 29건).
  */
 import { arr, bool, num, str, type RawIndex } from '../source.js';
 import { descOf } from './markup.js';
@@ -34,6 +40,8 @@ export interface EgoInput {
 	mj: RawIndex;
 	mjDetail: RawIndex;
 	assets: RawIndex;
+	/** ego-details/limbus-assets — E.G.O id 로 열린다. 스킬 id 집합과 단계별 수치의 정본 */
+	details: RawIndex;
 	locEgoKo: RawIndex;
 	locEgoEn: RawIndex;
 	locEgoJa: RawIndex;
@@ -101,7 +109,16 @@ export interface EgoSkillRow {
 	ordinal: number;
 }
 
-export interface EgoSkillStageRow {
+/** 단계별 수치 5종. ego-details 만이 갖는다 — loc 에도 mj 에도 없다 */
+export interface StageNumbers {
+	spCost: number | null;
+	baseValue: number | null;
+	coinValue: number | null;
+	atkWeight: number | null;
+	levelCorrection: number | null;
+}
+
+export interface EgoSkillStageRow extends StageNumbers {
 	skillId: string;
 	uptie: number;
 }
@@ -177,6 +194,69 @@ function obj(v: unknown): Record<string, unknown> {
 	return typeof v === 'object' && v !== null && !Array.isArray(v)
 		? (v as Record<string, unknown>)
 		: {};
+}
+
+/** ego-details 의 스킬 묶음 두 갈래. 배열 순서가 곧 ordinal 이다 */
+const SKILL_GROUPS = [
+	['awakeningSkills', 'awakening'],
+	['corrosionSkills', 'corrosion'],
+] as const;
+
+const NUMBER_FIELDS = [
+	'spCost',
+	'baseValue',
+	'coinValue',
+	'atkWeight',
+	'levelCorrection',
+] as const;
+
+const NO_NUMBERS: StageNumbers = {
+	spCost: null,
+	baseValue: null,
+	coinValue: null,
+	atkWeight: null,
+	levelCorrection: null,
+};
+
+/**
+ * ego-details 의 data[] 를 단계별 전량으로 편다.
+ *
+ * **델타 배열이다** — 뒤 단계는 바뀐 필드만 갖는다(실측 640항목 중 spCost 는 210개,
+ * 즉 uptie 1 에만 온다). 앞 단계 값을 이어받고 그 단계에 온 필드만 덮는다.
+ */
+function expandStageNumbers(data: unknown[]): Map<number, StageNumbers> {
+	const out = new Map<number, StageNumbers>();
+	let carried: StageNumbers = NO_NUMBERS;
+	const rows = data
+		.map((raw) => obj(raw))
+		.filter((d) => num(d, 'uptie') !== null)
+		.sort((a, b) => (num(a, 'uptie') ?? 0) - (num(b, 'uptie') ?? 0));
+	for (const d of rows) {
+		const next: StageNumbers = { ...carried };
+		for (const f of NUMBER_FIELDS) {
+			const v = num(d, f);
+			if (v !== null) next[f] = v;
+		}
+		carried = next;
+		out.set(num(d, 'uptie') as number, next);
+	}
+	return out;
+}
+
+/**
+ * 그 단계의 수치. ego-details 에 그 단계가 없으면 **바로 앞 단계 값**을 쓴다 —
+ * 델타이므로 없는 단계는 곧 "바뀐 것이 없다"는 뜻이다.
+ */
+function numbersAt(m: Map<number, StageNumbers>, uptie: number): StageNumbers {
+	let best = NO_NUMBERS;
+	let bestKey = Number.NEGATIVE_INFINITY;
+	for (const [k, v] of m) {
+		if (k <= uptie && k > bestKey) {
+			bestKey = k;
+			best = v;
+		}
+	}
+	return best;
 }
 
 export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
@@ -322,32 +402,26 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 			t.egoRequirement.push({ egoId: id, attributeType, num: n });
 		}
 
-		// ── 스킬 — mj ∪ loc ────────────────────────────────────
-		// mj 의 awakeningSkill 은 값이 하나뿐이라 두 번째 각성 스킬을 못 담는다.
-		// loc 에서 이 E.G.O 로 시작하는 스킬 id 를 전부 찾아 보완한다.
-		const mjAwaken = detail['awakeningSkill'];
-		const mjCorrosion = detail['corrosionSkill'];
-		const awakenIds = new Set<string>();
-		if (mjAwaken !== null && mjAwaken !== undefined) awakenIds.add(String(mjAwaken));
-		for (const locale of LOCALES) {
-			for (const skillId of skillLoc[locale].keys()) {
-				if (skillId.startsWith(id) && skillId.length === id.length + 2) awakenIds.add(skillId);
+		// ── 스킬 — ego-details 가 정본 ──────────────────────────
+		// mj 의 awakeningSkill 은 **스칼라**라 두 번째 각성 스킬(20608 · 21209)을 못 담는다.
+		// 초판은 그것을 loc 접두 스캔(`length === id.length + 2`)으로 메웠는데, 연출 전용
+		// E.G.O 의 스킬(2010112 등 5건)이 길이 규칙에 걸려 기본 E.G.O 로 끌려왔다(감사 §4.3).
+		// ego-details 의 awakeningSkills[].data[].id 집합은 위키와 완전 일치하므로 그것을 쓴다.
+		const details = input.details.get(id);
+		if (details === undefined) {
+			meta.gap('ego', id, 'skills', 'ego-details 가 없어 스킬을 특정할 수 없다', EVIDENCE);
+		} else {
+			for (const [key, role] of SKILL_GROUPS) {
+				arr(details, key).forEach((raw, ordinal) => {
+					// 한 그룹의 data[] 는 한 스킬의 단계들이다. id 는 전부 같다
+					const data = arr(obj(raw), 'data');
+					const skillId = str(obj(data[0] ?? {}), 'id');
+					if (skillId === null) return;
+					t.egoSkill.push({ id: skillId, egoId: id, role, ordinal });
+					pushSkillStages(t, skillLoc, skillId, expandStageNumbers(data));
+				});
 			}
-		}
-		const corrosionId =
-			mjCorrosion === null || mjCorrosion === undefined ? null : String(mjCorrosion);
-		if (corrosionId !== null) awakenIds.delete(corrosionId);
-
-		[...awakenIds].sort().forEach((skillId, ordinal) => {
-			t.egoSkill.push({ id: skillId, egoId: id, role: 'awakening', ordinal });
-			pushSkillStages(t, skillLoc, skillId);
-		});
-		if (awakenIds.size > 1) {
-			meta.source('ego', id, 'awakeningSkills', 'mj+loc', [MJ, LOC]);
-		}
-		if (corrosionId !== null) {
-			t.egoSkill.push({ id: corrosionId, egoId: id, role: 'corrosion', ordinal: 0 });
-			pushSkillStages(t, skillLoc, corrosionId);
+			meta.source('ego', id, 'skills', 'assets-only', [ASSETS]);
 		}
 
 		// ── 다루는 상태 — 계획 6에서 이어진 연결. 실측 100 % 걸린다 ──
@@ -387,11 +461,20 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 }
 
 /**
- * 스킬 단계와 코인. **전량 전개하지 않는다** — E.G.O 스킬은 델타가 아니라
- * 실제로 그 단계만 존재한다(실측 1·3·4 가 주력이고 2·5 는 드물다).
+ * 스킬 단계와 코인.
+ *
+ * 단계 집합은 **loc ∪ ego-details** 다. 둘이 담는 범위가 다르다 —
+ * loc 은 문구가 안 바뀐 단계를 아예 싣지 않고(실측 2010311 은 1·3 뿐), ego-details 는
+ * 수치가 바뀐 단계를 싣는다(같은 스킬의 uptie 4 에 atkWeight 3 이 온다).
+ * 어느 한쪽만 보면 그 단계가 통째로 사라진다.
  */
-function pushSkillStages(t: EgoTables, skillLoc: Record<Loc, RawIndex>, skillId: string): void {
-	const seen = new Set<number>();
+function pushSkillStages(
+	t: EgoTables,
+	skillLoc: Record<Loc, RawIndex>,
+	skillId: string,
+	numbers: Map<number, StageNumbers>,
+): void {
+	const upties = new Set<number>(numbers.keys());
 	for (const locale of LOCALES) {
 		const entry = skillLoc[locale].get(skillId);
 		if (entry === undefined) continue;
@@ -399,10 +482,7 @@ function pushSkillStages(t: EgoTables, skillLoc: Record<Loc, RawIndex>, skillId:
 			const l = obj(raw);
 			const uptie = num(l, 'level');
 			if (uptie === null) continue;
-			if (!seen.has(uptie)) {
-				seen.add(uptie);
-				t.egoSkillStage.push({ skillId, uptie });
-			}
+			upties.add(uptie);
 			const name = str(l, 'name');
 			if (name !== null) {
 				t.egoSkillStageText.push({
@@ -415,12 +495,17 @@ function pushSkillStages(t: EgoTables, skillLoc: Record<Loc, RawIndex>, skillId:
 				});
 			}
 			arr(l, 'coinlist').forEach((coinRaw, index) => {
+				// **효과 문구가 없어도 코인 행은 남긴다.** 원본이 coindescs 를 [{}] 로 두는
+				// 스킬이 있는데(2120611 · 2120911 — 위키 coin=1), 초판은 그것을 코인 0개로
+				// 만들어 버렸다. 코인 수는 클래시 계산의 입력이라 잃으면 안 된다(감사 §3.5)
 				const effects = arr(obj(coinRaw), 'coindescs')
 					.map((d) => str(obj(d), 'desc'))
 					.filter((d): d is string => d !== null);
-				if (effects.length === 0) return;
 				t.egoSkillCoin.push({ skillId, uptie, index, locale, effects });
 			});
 		}
+	}
+	for (const uptie of [...upties].sort((a, b) => a - b)) {
+		t.egoSkillStage.push({ skillId, uptie, ...numbersAt(numbers, uptie) });
 	}
 }

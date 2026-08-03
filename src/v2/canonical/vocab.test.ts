@@ -29,6 +29,25 @@ test('키워드가 사전에서 나온다', () => {
 	assert.deepEqual(v.keyword.map((k) => k.id).sort(), ['Combustion', 'None']);
 });
 
+test('keyword.order 가 원본 EgoGiftCategory 등장 순서를 담는다', () => {
+	const i = input();
+	// 원본 순서는 사전 순이 아니다 — None 이 맨 뒤다
+	i.categoryEn = new Map<string, Record<string, unknown>>([
+		['Combustion', { id: 'Combustion', name: 'Burn' }],
+		['Laceration', { id: 'Laceration', name: 'Bleed' }],
+		['None', { id: 'None', name: 'Keywordless' }],
+	]);
+	const v = buildVocab(i, new Meta());
+	assert.deepEqual(
+		v.keyword.map((k) => [k.id, k.order]).sort((a, b) => Number(a[1]) - Number(b[1])),
+		[
+			['Combustion', 0],
+			['Laceration', 1],
+			['None', 2],
+		],
+	);
+});
+
 test('키워드 표시명이 3로케일로 나온다', () => {
 	const v = buildVocab(input(), new Meta());
 	assert.deepEqual(

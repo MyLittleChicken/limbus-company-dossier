@@ -24,6 +24,14 @@ export interface VocabInput {
 
 export interface KeywordRow {
 	id: string;
+	/**
+	 * 원본 `EgoGiftCategory.json` 의 등장 순서. 화면 필터 칩이 이 순서로 선다.
+	 *
+	 * 사전 순이 아니다 — 게임은 화상·출혈·진동·파열·침잠·호흡·충전·무작위·참격·관통·타격·범용
+	 * 순으로 적고 「범용」이 맨 뒤다. raw_object 는 파일 순서대로 적재되고 뒤에 갱신되지
+	 * 않으므로 질의가 돌려주는 행 순서가 곧 파일 순서다.
+	 */
+	order: number | null;
 }
 
 export interface KeywordTextRow {
@@ -73,8 +81,12 @@ export function buildVocab(input: VocabInput, meta: Meta): VocabTables {
 	const keyword: KeywordRow[] = [];
 	const keywordText: KeywordTextRow[] = [];
 
+	// 행은 id 순으로 내되 순서 값은 원본 등장 순서에서 가져온다
+	const orderOf = new Map<string, number>();
+	[...input.categoryEn.keys()].forEach((id, i) => orderOf.set(id, i));
+
 	for (const id of [...input.categoryEn.keys()].sort()) {
-		keyword.push({ id });
+		keyword.push({ id, order: orderOf.get(id) ?? null });
 		for (const [locale, index] of [
 			['ko', input.categoryKo],
 			['en', input.categoryEn],

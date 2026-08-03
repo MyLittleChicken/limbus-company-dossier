@@ -18,6 +18,35 @@ function input(): EncounterInput {
 				}],
 			}],
 			['story__waves-only', { name: 'Wave Battle', siteId: 'uuid-2', waves: [{ a: 1 }] }],
+			['md__waves', {
+				name: 'Wave Boss', siteId: 'uuid-w',
+				waves: [
+					{ targets: [{ name: 'Neighbor', portrait: 1101 }] },
+					{ targets: [{ name: 'Neighbor', portrait: 1101 }, { name: 'Miner', portrait: 1102, num: 2 }] },
+				],
+			}],
+			['md__phases', {
+				name: 'Phase Boss', siteId: 'uuid-p',
+				phases: [
+					{ targets: [{ name: 'Golden Apple', portrait: 8008 }] },
+					{ targets: [{ name: 'False Apple', portrait: 8009 }] },
+				],
+			}],
+			['md__battles', {
+				name: 'Boss Options', siteId: 'uuid-b',
+				battles: [
+					{ targets: [{ name: 'Ebony Queen', portrait: 8001,
+							parts: [{ partId: 800101, name: 'Fruit', resists: { blunt: 2 } }] }] },
+					{ phases: [{ targets: [{ name: 'Golden Apple', portrait: 8008 }] }] },
+				],
+			}],
+			['md__battle-mixed', {
+				name: 'Mixed', siteId: 'uuid-m',
+				battles: [{
+					targets: [{ name: 'Front', portrait: 1 }],
+					phases: [{ targets: [{ name: 'Second Form', portrait: 2 }] }],
+				}],
+			}],
 		]),
 		groups: new Map<string, Record<string, unknown>>([
 			['md', { 'canto-1-1': 'The Forgotten' }],
@@ -25,9 +54,11 @@ function input(): EncounterInput {
 		]),
 		enemyKo: new Map<string, Record<string, unknown>>([
 			['8605', { id: 8605, name: '굴절된 어느 날의 초상', desc: '본체' }],
+			['860501', { id: 860501, name: '몸통', desc: '굴절된 어느 날의 초상' }],
 		]),
 		enemyEn: new Map<string, Record<string, unknown>>([
-			['8605', { id: 8605, name: 'Portrait', desc: 'Body' }],
+			['8605', { id: 8605, name: 'Portrait', desc: 'Core' }],
+			['860501', { id: 860501, name: 'Body', desc: 'Portrait' }],
 		]),
 		enemyJa: new Map<string, Record<string, unknown>>(),
 		knownPacks: new Set(['1001']),
@@ -42,7 +73,11 @@ test('조우가 그룹과 함께 나온다', () => {
 	assert.deepEqual(
 		t.encounter.map((e) => [e.id, e.group, e.name]).sort(),
 		[
+			['md__battle-mixed', 'md', 'Mixed'],
+			['md__battles', 'md', 'Boss Options'],
 			['md__canto-1-1', 'md', 'The Forgotten'],
+			['md__phases', 'md', 'Phase Boss'],
+			['md__waves', 'md', 'Wave Boss'],
 			['story__waves-only', 'story', 'Wave Battle'],
 		],
 	);
@@ -58,14 +93,20 @@ test('targets 가 없으면 waves 를 원문으로 남기고 나머지는 SQL NU
 
 test('적 부위와 저항 10축이 나온다', () => {
 	const t = buildEncounters(input(), new Meta());
-	assert.deepEqual(t.encounterTarget, [
-		{ encounterId: 'md__canto-1-1', index: 0, name: 'Ebony Queen' },
-	]);
-	const part = t.encounterTargetPart[0];
+	assert.deepEqual(
+		t.encounterTarget.filter((r) => r.encounterId === 'md__canto-1-1'),
+		[
+			{ encounterId: 'md__canto-1-1', kind: 'top', groupIndex: 0, index: 0, name: 'Ebony Queen', portrait: null, num: null },
+		],
+	);
+	const part = t.encounterTargetPart.find((p) => p.encounterId === 'md__canto-1-1');
 	assert.equal(part?.partId, '872101');
 	assert.equal(part?.hpBase, 18);
 	assert.equal(part?.speedMin, 2);
-	assert.equal(t.encounterPartResist.length, 10, '물리 3축 + 죄악 7축');
+	assert.equal(
+		t.encounterPartResist.filter((r) => r.encounterId === 'md__canto-1-1').length,
+		10, '물리 3축 + 죄악 7축',
+	);
 });
 
 test('이름이 빈 적도 담고 결손으로 남긴다 — 버리지 않는다', () => {
@@ -106,7 +147,24 @@ test('적 표시명이 나오고 desc 가 부위 이름이다', () => {
 	assert.deepEqual(t.enemy, [{ id: '8605' }]);
 	const ko = t.enemyText.find((x) => x.locale === 'ko');
 	assert.equal(ko?.name, '굴절된 어느 날의 초상');
-	assert.equal(ko?.part, '본체');
+	assert.equal(ko?.roleLabel, '본체');
+});
+
+test('6자리 id 는 적이 아니라 부위다 — id // 100 이 부모다', () => {
+	const t = buildEncounters(input(), new Meta());
+	assert.deepEqual(t.enemy.map((e) => e.id), ['8605']);
+	assert.deepEqual(t.enemyPart, [{ id: '860501', enemyId: '8605' }]);
+});
+
+test('부위 이름은 enemy_part_text 로 가고 적의 desc 는 역할 라벨이다', () => {
+	const t = buildEncounters(input(), new Meta());
+	assert.deepEqual(
+		t.enemyPartText.filter((x) => x.locale === 'en'),
+		[{ partId: '860501', locale: 'en', name: 'Body' }],
+	);
+	const en = t.enemyText.find((x) => x.enemyId === '8605' && x.locale === 'en');
+	assert.equal(en?.name, 'Portrait');
+	assert.equal(en?.roleLabel, 'Core');
 });
 
 test('일본어가 없으면 결손으로 남긴다', () => {
@@ -119,4 +177,48 @@ test('전투 풀 미해결이 기록된다', () => {
 	const meta = new Meta();
 	buildEncounters(input(), meta);
 	assert.ok(meta.gaps.some((g) => g.field === 'battlePool'));
+});
+
+test('waves 는 groupIndex 로 갈려 담긴다 — 같은 적이 반복 등장한다', () => {
+	const t = buildEncounters(input(), new Meta());
+	const rows = t.encounterTarget
+		.filter((r) => r.encounterId === 'md__waves')
+		.map((r) => [r.kind, r.groupIndex, r.index, r.name]);
+	assert.deepEqual(rows, [
+		['wave', 0, 0, 'Neighbor'],
+		['wave', 1, 0, 'Neighbor'],
+		['wave', 1, 1, 'Miner'],
+	]);
+});
+
+test('battles 안의 phases 도 battle 로 담기고 groupIndex 가 보존된다', () => {
+	const t = buildEncounters(input(), new Meta());
+	const rows = t.encounterTarget
+		.filter((r) => r.encounterId === 'md__battles')
+		.map((r) => [r.kind, r.groupIndex, r.index, r.name]);
+	assert.deepEqual(rows, [
+		['battle', 0, 0, 'Ebony Queen'],
+		['battle', 1, 0, 'Golden Apple'],
+	]);
+});
+
+test('portrait 와 num 을 담는다 — portrait 는 FK 가 아니다', () => {
+	const t = buildEncounters(input(), new Meta());
+	const miner = t.encounterTarget.find((r) => r.name === 'Miner');
+	assert.equal(miner?.portrait, 1102);
+	assert.equal(miner?.num, 2);
+	const neighbor = t.encounterTarget.find((r) => r.name === 'Neighbor');
+	assert.equal(neighbor?.num, null);
+});
+
+// Task 2 Step 5 실측: 실제로 겹친다 (battle/0/0 이 두 번 나온다) — FAIL 로 확인됨.
+// Task 3 에서 pushTargets 가 base(시작 index)를 받아 이어 붙이도록 고쳐 해소됨 —
+// 이 test 는 그 회귀를 막기 위해 남긴다.
+test('한 battle 이 targets 와 phases 를 둘 다 가지면 index 가 겹친다 — 키 설계를 확인한다', () => {
+	const t = buildEncounters(input(), new Meta());
+	const rows = t.encounterTarget
+		.filter((r) => r.encounterId === 'md__battle-mixed')
+		.map((r) => `${r.kind}/${r.groupIndex}/${r.index}`);
+	// 겹치면 같은 문자열이 두 번 나온다
+	assert.equal(new Set(rows).size, rows.length, `키 충돌: ${rows.join(', ')}`);
 });

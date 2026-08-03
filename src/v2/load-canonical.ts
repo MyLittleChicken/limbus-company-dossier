@@ -7,7 +7,7 @@
  * 실행: npm run v2:canonical
  */
 import { PrismaClient } from './generated/client.js';
-import { latestSnapshotId, readSource, readSourceGroup } from './source.js';
+import { latestSnapshotId, mergeIndexes, readSource, readSourceGroup } from './source.js';
 import { Meta } from './canonical/meta.js';
 import { buildPacks, type FloorTable } from './canonical/packs.js';
 import { buildVocab, buildKeywordLookup } from './canonical/vocab.js';
@@ -107,6 +107,17 @@ async function main(): Promise<void> {
 		// 인격·E.G.O 보다 먼저 만든다 — 둘이 상태로 외래 키를 건다.
 		const mech = (locale: string, prefix: string) =>
 			readSourceGroup(prisma, snapshotId, 'mechanics', `loc-${locale}`, { startsWith: [prefix] });
+		// **거울 던전 상태의 로케일은 mechanics 가 아니라 mirror-dungeon 에 있다.**
+		// BattleKeywords 를 먼저, Bufs 를 뒤에 합쳐 Bufs 가 이기게 한다(mechanics 와 같은 우선순위).
+		const mdLoc = async (locale: string) =>
+			mergeIndexes([
+				await readSourceGroup(prisma, snapshotId, 'mirror-dungeon', `loc-${locale}`, {
+					startsWith: ['BattleKeywords_Mirror'],
+				}),
+				await readSourceGroup(prisma, snapshotId, 'mirror-dungeon', `loc-${locale}`, {
+					startsWith: ['Bufs_Mirror'],
+				}),
+			]);
 
 		const statuses = buildStatuses(
 			{
@@ -117,6 +128,9 @@ async function main(): Promise<void> {
 				bkKo: await mech('ko', 'BattleKeywords'),
 				bkEn: await mech('en', 'BattleKeywords'),
 				bkJa: await mech('ja', 'BattleKeywords'),
+				mirrorKo: await mdLoc('ko'),
+				mirrorEn: await mdLoc('en'),
+				mirrorJa: await mdLoc('ja'),
 				terms: await readSource(prisma, snapshotId, 'mechanics/limbus-data-mj/terms.json'),
 				sins: await readSource(prisma, snapshotId, 'mechanics/limbus-data-mj/sins.json'),
 			},
@@ -129,7 +143,26 @@ async function main(): Promise<void> {
 		const idEn = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-en');
 		const idJa = await readSourceGroup(prisma, snapshotId, 'identities', 'loc-ja');
 
+		// **스킬과 패시브는 파일로 갈라야 한다.** 인격도 E.G.O 와 같은 번호 공간
+		// 충돌을 갖는다 — 1010101 이 스킬(쳐내기)이자 패시브(정보전달)다. 실측 289건.
+		// 합쳐 읽으면 Passives.json 이 이겨 코인 문장이 통째로 사라진다.
+		const idLoc = (locale: string, prefix: string) =>
+			readSourceGroup(prisma, snapshotId, 'identities', `loc-${locale}`, { startsWith: [prefix] });
+
+		// 인격 하나가 파일 하나다(184). 스킬 단계 수치와 패시브 발동 조건은 여기에만 있다
+		const identityDetails = await readSourceGroup(
+			prisma,
+			snapshotId,
+			'identity-details',
+			'limbus-assets',
+		);
+
 		const mjIdentities = await readSource(prisma, snapshotId, 'identities/limbus-data-mj/identities.json');
+		const mjIdentityDetail = await readSource(
+			prisma,
+			snapshotId,
+			'identities/limbus-data-mj/identities_detail.json',
+		);
 		const sinners = buildSinners(
 			{
 				mjIdentities,
@@ -142,9 +175,11 @@ async function main(): Promise<void> {
 		const skills = buildSkills(
 			{
 				mjSkills: await readSource(prisma, snapshotId, 'identities/limbus-data-mj/skills.json'),
-				locKo: idKo,
-				locEn: idEn,
-				locJa: idJa,
+				details: identityDetails,
+				mjIdentityDetail,
+				locKo: await idLoc('ko', 'Skills'),
+				locEn: await idLoc('en', 'Skills'),
+				locJa: await idLoc('ja', 'Skills'),
 			},
 			meta,
 		);
@@ -153,15 +188,16 @@ async function main(): Promise<void> {
 		const identities = buildIdentities(
 			{
 				mj: mjIdentities,
-				mjDetail: await readSource(prisma, snapshotId, 'identities/limbus-data-mj/identities_detail.json'),
+				mjDetail: mjIdentityDetail,
 				assets: await readSource(prisma, snapshotId, 'identities/limbus-assets/identities.json'),
+				details: identityDetails,
 				mjPassives,
 				locKo: idKo,
 				locEn: idEn,
 				locJa: idJa,
-				passiveKo: idKo,
-				passiveEn: idEn,
-				passiveJa: idJa,
+				passiveKo: await idLoc('ko', 'Passive'),
+				passiveEn: await idLoc('en', 'Passive'),
+				passiveJa: await idLoc('ja', 'Passive'),
 				knownSkills: new Set(skills.skill.map((s) => s.id)),
 				knownAssociations: new Set(sinners.association.map((a) => a.id)),
 				knownKeywords: new Set(vocab.keyword.map((k) => k.id)),
@@ -182,6 +218,8 @@ async function main(): Promise<void> {
 				mj: await readSource(prisma, snapshotId, 'egos/limbus-data-mj/egos.json'),
 				mjDetail: await readSource(prisma, snapshotId, 'egos/limbus-data-mj/egos_detail.json'),
 				assets: await readSource(prisma, snapshotId, 'egos/limbus-assets/egos.json'),
+				// E.G.O 하나가 한 파일이다(110). 스킬 id 집합과 단계별 수치는 여기에만 있다
+				details: await readSourceGroup(prisma, snapshotId, 'ego-details', 'limbus-assets'),
 				locEgoKo: await egoLoc('ko', 'Egos'),
 				locEgoEn: await egoLoc('en', 'Egos'),
 				locEgoJa: await egoLoc('ja', 'Egos'),
@@ -204,6 +242,22 @@ async function main(): Promise<void> {
 			readSourceGroup(prisma, snapshotId, 'mirror-dungeon', `loc-${locale}`, {
 				startsWith: ['ActionEvents_Mirror', 'AbEvents_Mirror'],
 			});
+		// 은총 표시명 — `MirrorDungeonUI_5.json` 이 3언어를 갖는다(감사 6.1)
+		const graceLoc = (locale: string) =>
+			readSource(prisma, snapshotId, `mirror-dungeon/loc-${locale}/MirrorDungeonUI_5.json`);
+		// 역경 표시명 — 상태이상 id 로 Mirror6·7 로케일에 있다(감사 6.2).
+		// **BattleKeywords 를 뒤에 둬 이기게 한다** — MD7Limit141 의 영문이 Bufs 는
+		// 「Inflict Status Effect」, BattleKeywords 는 「Status Infliction」이고
+		// `md__details` 가 후자와 같다. 영문 대조 30/30 이 성립하는 쪽이다.
+		const advLoc = async (locale: string) =>
+			mergeIndexes([
+				await readSourceGroup(prisma, snapshotId, 'mirror-dungeon', `loc-${locale}`, {
+					startsWith: ['Bufs_Mirror6', 'Bufs_Mirror7'],
+				}),
+				await readSourceGroup(prisma, snapshotId, 'mirror-dungeon', `loc-${locale}`, {
+					startsWith: ['BattleKeywords_Mirror6', 'BattleKeywords_Mirror7'],
+				}),
+			]);
 		const knownGifts = new Set(gifts.gift.map((g) => g.id));
 		const mirror = buildMirror(
 			{
@@ -216,6 +270,12 @@ async function main(): Promise<void> {
 				eventLocKo: await evLoc('ko'),
 				eventLocEn: await evLoc('en'),
 				eventLocJa: await evLoc('ja'),
+				graceLocKo: await graceLoc('ko'),
+				graceLocEn: await graceLoc('en'),
+				graceLocJa: await graceLoc('ja'),
+				adversityLocKo: await advLoc('ko'),
+				adversityLocEn: await advLoc('en'),
+				adversityLocJa: await advLoc('ja'),
 				knownGifts,
 				knownKeywords: new Set(vocab.keyword.map((k) => k.id)),
 				keywordDict: buildKeywordLookup(categoryEn),
@@ -245,7 +305,10 @@ async function main(): Promise<void> {
 			skillId: string; uptie: number; coinIdx: number; ordinal: number;
 			token: string; kind: string; amount: number | null; statusId: string | null;
 		}> = [];
-		for (const coin of skills.skillCoin) {
+		// **영문 코인만 분해한다.** skill_coin 이 로케일 축을 얻어 같은 코인이 3행이
+		// 됐지만 coin_token 의 키에는 로케일이 없다. 토큰은 어느 로케일이든 같은
+		// 영문 대괄호이므로 en 한 벌만 읽으면 된다.
+		for (const coin of skills.skillCoin.filter((c) => c.locale === 'en')) {
 			let ordinal = 0;
 			for (const effect of coin.effects) {
 				for (const parsed of parseCoinTokens(effect)) {
@@ -294,6 +357,13 @@ async function main(): Promise<void> {
 		tables.pack = applyColumnOverrides(
 			tables.pack, overrides, { entity: 'pack', idKey: 'id' }, meta,
 		);
+		// 기프트 hardOnly — 두 출처의 합집합 122 도 assets 단독 116 도 틀렸다.
+		// 위키 테마팩의 normal= 로 5건이 갈려 정답은 117 이다(docs/audit/wiki/03-gift.md §2).
+		// 변환기에 예외 표를 박지 않고 보정으로 둔다 — 재적재에 살아남고 근거가 note 에 남는다.
+		// `fields` 로 좁히지 않으면 위의 gift.name 텍스트 보정이 여기로 새어 들어온다.
+		gifts.gift = applyColumnOverrides(
+			gifts.gift, overrides, { entity: 'gift', idKey: 'id', fields: ['hardOnly'] }, meta,
+		);
 
 		// canonical 만 비운다. **raw 도 app 도 건드리지 않는다.**
 		await prisma.$executeRaw`
@@ -304,6 +374,7 @@ async function main(): Promise<void> {
 			         canonical.status, canonical.sin_info, canonical.term,
 			         canonical.choice_event, canonical.achievement, canonical.reward,
 			         canonical.adversity, canonical.grace, canonical.encounter, canonical.enemy,
+			         canonical.enemy_part,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -420,9 +491,10 @@ async function main(): Promise<void> {
 		counts.push(['skill', await chunked(skills.skill, (d) => prisma.skill.createMany({ data: d as never }))]);
 		counts.push(['skill_stage', await chunked(skills.skillStage, (d) => prisma.skillStage.createMany({ data: d }))]);
 		counts.push(['skill_stage_text', await chunked(skills.skillStageText, (d) => prisma.skillStageText.createMany({ data: d as never }))]);
-		counts.push(['skill_coin', await chunked(skills.skillCoin, (d) => prisma.skillCoin.createMany({ data: d }))]);
+		counts.push(['skill_coin', await chunked(skills.skillCoin, (d) => prisma.skillCoin.createMany({ data: d as never }))]);
 
 		counts.push(['passive', await chunked(identities.passive, (d) => prisma.passive.createMany({ data: d }))]);
+		counts.push(['passive_requirement', await chunked(identities.passiveRequirement, (d) => prisma.passiveRequirement.createMany({ data: d as never }))]);
 		counts.push(['passive_text', await chunked(identities.passiveText, (d) => prisma.passiveText.createMany({ data: d as never }))]);
 
 		counts.push(['identity', await chunked(identities.identity, (d) => prisma.identity.createMany({ data: d }))]);
@@ -460,7 +532,11 @@ async function main(): Promise<void> {
 		counts.push(['choice_event_gift', await chunked(mirror.choiceEventGift, (d) => prisma.choiceEventGift.createMany({ data: d }))]);
 		counts.push(['choice_option', await chunked(mirror.choiceOption, (d) => prisma.choiceOption.createMany({ data: d as never }))]);
 		counts.push(['choice_option_text', await chunked(mirror.choiceOptionText, (d) => prisma.choiceOptionText.createMany({ data: d as never }))]);
-		counts.push(['achievement', await chunked(mirror.achievement, (d) => prisma.achievement.createMany({ data: d }))]);
+		// **`thresholds` 는 아직 담을 자리가 없다.** `canonical.achievement` 에 컬럼이 없어
+		// 여기서 떨군다 — 28건의 `[count]`·`[floor]`·`[skills]` 치환값이다.
+		// 스키마에 `thresholds Json?` 이 생기면 이 map 을 지우면 된다(스키마는 중앙 관리).
+		const achievementRows = mirror.achievement.map(({ thresholds: _t, ...a }) => a);
+		counts.push(['achievement', await chunked(achievementRows, (d) => prisma.achievement.createMany({ data: d }))]);
 		counts.push(['achievement_text', await chunked(mirror.achievementText, (d) => prisma.achievementText.createMany({ data: d as never }))]);
 		counts.push(['reward', await chunked(mirror.reward, (d) => prisma.reward.createMany({ data: d }))]);
 		counts.push(['adversity', await chunked(mirror.adversity, (d) => prisma.adversity.createMany({ data: d }))]);
@@ -474,7 +550,10 @@ async function main(): Promise<void> {
 		counts.push(['encounter_target_part', await chunked(encounters.encounterTargetPart, (d) => prisma.encounterTargetPart.createMany({ data: d }))]);
 		counts.push(['encounter_part_resist', await chunked(encounters.encounterPartResist, (d) => prisma.encounterPartResist.createMany({ data: d }))]);
 		counts.push(['enemy', await chunked(encounters.enemy, (d) => prisma.enemy.createMany({ data: d }))]);
+		// enemy_part 는 enemy 를 참조하므로 enemy 다음 · enemy_text 앞이어야 FK 가 안 깨진다.
+		counts.push(['enemy_part', await chunked(encounters.enemyPart, (d) => prisma.enemyPart.createMany({ data: d }))]);
 		counts.push(['enemy_text', await chunked(encounters.enemyText, (d) => prisma.enemyText.createMany({ data: d as never }))]);
+		counts.push(['enemy_part_text', await chunked(encounters.enemyPartText, (d) => prisma.enemyPartText.createMany({ data: d as never }))]);
 		counts.push(['pack_boss_encounter', await chunked(encounters.packBossEncounter, (d) => prisma.packBossEncounter.createMany({ data: d }))]);
 
 		counts.push([

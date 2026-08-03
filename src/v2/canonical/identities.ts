@@ -20,10 +20,39 @@ type Loc = (typeof LOCALES)[number];
 
 const ATK_TYPES = ['slash', 'pierce', 'blunt'] as const;
 
+/** 죄악 7종. 패시브 공명 요구치의 축이다 */
+const SINS = new Set(['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy']);
+
+/** 객체인가. 배열과 null 을 제외한다. */
+function obj(v: unknown): Record<string, unknown> {
+	return typeof v === 'object' && v !== null && !Array.isArray(v)
+		? (v as Record<string, unknown>)
+		: {};
+}
+
+/**
+ * `identity-details` 를 **패시브 id** 로 다시 색인한다.
+ *
+ * 원본은 인격 하나가 파일 하나이고 그 안에 `passiveData: {패시브id: {…, condition}}`
+ * 이 들어 있다. 발동 조건(공명 요구치)은 이 경로에만 있다 — mj `passives.json` 의
+ * `cost` 는 각성 단계 코드일 뿐 죄악 요구치가 아니다.
+ */
+export function indexPassiveData(details: RawIndex): Map<string, Record<string, unknown>> {
+	const out = new Map<string, Record<string, unknown>>();
+	for (const payload of details.values()) {
+		for (const [passiveId, raw] of Object.entries(obj(payload['passiveData']))) {
+			out.set(passiveId, obj(raw));
+		}
+	}
+	return out;
+}
+
 export interface IdentityInput {
 	mj: RawIndex;
 	mjDetail: RawIndex;
 	assets: RawIndex;
+	/** identity-details/limbus-assets. 패시브 발동 조건이 여기에만 있다 */
+	details: RawIndex;
 	mjPassives: RawIndex;
 	locKo: RawIndex;
 	locEn: RawIndex;
@@ -46,6 +75,8 @@ export interface IdentityRow {
 	teamCodeEligible: boolean;
 	season: number | null;
 	hp: number | null;
+	/** 레벨당 체력 증가치. 소수다(실측 2.07–3.41) */
+	hpLevel: number | null;
 	stagger: number[];
 	defCorrection: number | null;
 	releaseDate: string | null;
@@ -66,6 +97,8 @@ export interface IdentityResistRow {
 
 export interface IdentitySpeedRow {
 	identityId: string;
+	/** 동기화 1–4. 184 인격 전부가 단계마다 값이 다르다 */
+	uptie: number;
 	min: number;
 	max: number;
 }
@@ -110,6 +143,15 @@ export interface IdentityStatusRow {
 export interface PassiveRow {
 	id: string;
 	conditions: string[];
+	/** 발동 조건의 종류. res(공명) · owned(보유) */
+	condType: string | null;
+}
+
+export interface PassiveRequirementRow {
+	passiveId: string;
+	index: number;
+	sin: string;
+	value: number;
 }
 
 export interface PassiveTextRow {
@@ -132,6 +174,7 @@ export interface IdentityTables {
 	identityUnitKeyword: IdentityUnitKeywordRow[];
 	identityStatus: IdentityStatusRow[];
 	passive: PassiveRow[];
+	passiveRequirement: PassiveRequirementRow[];
 	passiveText: PassiveTextRow[];
 }
 
@@ -148,6 +191,7 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 		identityUnitKeyword: [],
 		identityStatus: [],
 		passive: [],
+		passiveRequirement: [],
 		passiveText: [],
 	};
 
@@ -160,9 +204,23 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 
 	// ── 패시브 ───────────────────────────────────────────────────
 	// 이름이 전부 null 인 6건이 마스터북의 「유령」이다. 적재하되 결손으로 남긴다.
+	const passiveData = indexPassiveData(input.details);
 	for (const [id, p] of input.mjPassives) {
-		// 원본 필드명은 cost 이지만 발동 조건 코드 배열이다 (CheckAwakenLevel4 등)
-		t.passive.push({ id, conditions: strArr(p, 'cost') });
+		// 발동 조건은 두 출처가 서로 다른 것을 안다.
+		//   mj cost        각성 단계 코드 (CheckAwakenLevel4 …). 필드명이 cost 일 뿐 비용이 아니다
+		//   assets condition  죄악 공명 요구치 (res: gloom 4) — mj 에 아예 없다
+		const condition = obj(passiveData.get(id)?.['condition']);
+		const condType = str(condition, 'type');
+		t.passive.push({ id, conditions: strArr(p, 'cost'), condType });
+		if (condType !== null) meta.source('passive', id, 'condition', 'assets-only', [ASSETS]);
+		arr(condition, 'requirement').forEach((raw, index) => {
+			const r = obj(raw);
+			// 원본 필드명은 type 이지만 값은 죄악 이름이다
+			const sin = str(r, 'type');
+			const value = num(r, 'value');
+			if (sin === null || value === null || !SINS.has(sin)) return;
+			t.passiveRequirement.push({ passiveId: id, index, sin, value });
+		});
 		let any = false;
 		for (const locale of LOCALES) {
 			const loc = passiveLoc[locale].get(id) ?? {};
@@ -203,21 +261,23 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 			continue;
 		}
 
-		// hp 는 mj 가 정수, assets 는 {base, level} 이다. mj 를 쓴다.
-		const hpAssets = a['hp'];
-		const hpBase =
-			typeof hpAssets === 'object' && hpAssets !== null && !Array.isArray(hpAssets)
-				? num(hpAssets as Record<string, unknown>, 'base')
-				: null;
-		const hp = num(mj, 'hp') ?? hpBase;
+		// hp 는 mj 가 정수, assets 는 {base, level} 이다. 기본값은 mj 를 쓰되
+		// **레벨당 증가치는 assets 에만 있다** — 스칼라로 접으면 통째로 사라진다.
+		const hpAssets = obj(a['hp']);
+		const hp = num(mj, 'hp') ?? num(hpAssets, 'base');
+		const hpLevel = num(hpAssets, 'level');
+		if (hpLevel !== null) meta.source('identity', id, 'hpLevel', 'assets-only', [ASSETS]);
 
 		t.identity.push({
 			id,
 			sinnerId,
 			star,
 			teamCodeEligible: bool(mj, 'teamCodeEligible'),
-			season: num(mj, 'season'),
+			// mj 에 season 키가 없는 2건(10311 · 10708)을 assets 가 0 으로 갖고 있다.
+			// 위키 확인 결과 0(Standard Fare)이 맞다 — 결손이 아니라 출처 오선택이었다
+			season: num(mj, 'season') ?? num(a, 'season'),
 			hp,
+			hpLevel,
 			// 흐트러짐 구간 임계값 배열이다 — [65, 35, 15]. 스칼라가 아니다
 			stagger: arr(mj, 'stagger')
 				.map((v) => Number(v))
@@ -257,14 +317,21 @@ export function buildIdentities(input: IdentityInput, meta: Meta): IdentityTable
 			meta.source('identity', id, 'resists', 'mj-only', [MJ]);
 		}
 
-		// ── 속도 ───────────────────────────────────────────────
-		const speed = arr(mj, 'speed');
-		if (speed.length === 2) {
-			const min = Number(speed[0]);
-			const max = Number(speed[1]);
-			if (Number.isFinite(min) && Number.isFinite(max)) {
-				t.identitySpeed.push({ identityId: id, min, max });
-			}
+		// ── 속도 — **동기화 축을 갖는다** ────────────────────────
+		// assets `speedList` 가 [min,max] 4쌍이고 184 인격 전부가 단계마다 다르다.
+		// mj `speed` 는 쌍 하나뿐이라 초판이 마지막 단계만 남기고 축을 잃었다.
+		const speedList = arr(a, 'speedList');
+		if (speedList.length === 0) {
+			meta.gap('identity', id, 'speed', 'assets 에 speedList 가 없다', EVIDENCE);
+		} else {
+			speedList.forEach((raw, i) => {
+				if (!Array.isArray(raw) || raw.length !== 2) return;
+				const min = Number(raw[0]);
+				const max = Number(raw[1]);
+				if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+				t.identitySpeed.push({ identityId: id, uptie: i + 1, min, max });
+			});
+			meta.source('identity', id, 'speed', 'assets-only', [ASSETS]);
 		}
 
 		// ── 스킬 연결 ───────────────────────────────────────────

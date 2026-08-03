@@ -93,3 +93,12 @@ data/*
 
 # Prisma v2 생성 클라이언트
 src/v2/generated/
+
+# Claude Code 작업 디렉터리
+.claude/
+
+# Subagent-Driven Development 작업 디렉터리 (생성물)
+.superpowers/
+
+# SDD 임시 산출물
+build/tmp/

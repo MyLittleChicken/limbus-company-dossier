@@ -40,6 +40,7 @@ function input(): GiftInput {
 					enhanceable: true,
 					exclusiveTo: ['1001', '1003'],
 					hardonly: true,
+					srcPath: 'Hellterfly’s Dream',
 					search_desc: '도구용',
 				},
 			],
@@ -84,8 +85,25 @@ test('gift 행이 판정 결과를 담는다', () => {
 		cost: 100,
 		keywordId: 'Combustion',
 		hardOnly: true,
+		sprite: 'Hellterfly’s Dream',
 		enhanceable: true,
 	});
+});
+
+test('sprite 가 assets srcPath 에서 온다 — id 로는 유도되지 않는다', () => {
+	const meta = new Meta();
+	const t = buildGifts(input(), meta);
+	assert.equal(t.gift[0]?.sprite, 'Hellterfly’s Dream');
+	assert.equal(meta.sources.find((s) => s.field === 'sprite')?.rule, 'assets-only');
+	// 본체 컬럼이 됐으므로 도구 필드로 격리하지 않는다
+	assert.equal(t.toolAnnotation.filter((a) => a.field === 'srcPath').length, 0);
+});
+
+test('srcPath 가 없으면 sprite 는 null 이다', () => {
+	const i = input();
+	delete i.assets.get('9001')!['srcPath'];
+	const t = buildGifts(i, new Meta());
+	assert.equal(t.gift[0]?.sprite, null);
 });
 
 test('hardOnly 는 합집합이다 — mj false · assets true 면 true', () => {
@@ -234,14 +252,117 @@ test('합성 레시피가 assets recipes 에서 나온다', () => {
 	]);
 });
 
-test('중복 효과를 접는다 — 9429 가 같은 효과를 두 번 담는 원본 결함', () => {
+test('효과 토큰이 원본 순서 그대로 남는다 — 중복도 접지 않는다', () => {
+	// 9429 작살 의족의 실제 모양. 「Gain Speed / Haste」 가 서로 다른 두 문장에서
+	// 한 번씩 나오므로 두 행이 맞다(docs/audit/wiki/05-pack-gift.md §4).
 	const i = input();
-	i.assets.get('9001')!['effects'] = ['Gain Buff', 'Gain Buff', 'Deal More Damage'];
+	i.assets.get('9001')!['effects'] = [
+		'Gain Speed / Haste',
+		'Gain Offense Level Up',
+		'Gain Buff',
+		'Gain Speed / Haste',
+	];
 	const meta = new Meta();
 	const t = buildGifts(i, meta);
 	assert.deepEqual(t.giftEffect, [
-		{ giftId: '9001', effectId: 'Gain Buff' },
-		{ giftId: '9001', effectId: 'Deal More Damage' },
+		{ giftId: '9001', index: 0, effectId: 'Gain Speed / Haste' },
+		{ giftId: '9001', index: 1, effectId: 'Gain Offense Level Up' },
+		{ giftId: '9001', index: 2, effectId: 'Gain Buff' },
+		{ giftId: '9001', index: 3, effectId: 'Gain Speed / Haste' },
 	]);
-	assert.equal(meta.sources.find((s) => s.field === 'effects')?.rule, 'assets-only-deduped');
+	assert.equal(meta.sources.find((s) => s.field === 'effects')?.rule, 'assets-only');
+});
+
+test('발동 토큰도 원본 순서를 갖는다', () => {
+	const i = input();
+	i.assets.get('9001')!['triggers'] = ['Allies have Poise', 'The Pequod Identities'];
+	const t = buildGifts(i, new Meta());
+	assert.deepEqual(t.giftTrigger, [
+		{ giftId: '9001', index: 0, triggerId: 'Allies have Poise' },
+		{ giftId: '9001', index: 1, triggerId: 'The Pequod Identities' },
+	]);
+});
+
+test('9241 은 1124 팩 풀에 보정으로 들어간다 — 위키가 unique 로 적은 것을 mj 가 빠뜨렸다', () => {
+	const i = input();
+	i.assets.set('9241', { names: ['Still-warm Coffee'], exclusiveTo: ['1124'] });
+	i.knownPacks.add('1124');
+	const meta = new Meta();
+	const t = buildGifts(i, meta);
+	assert.ok(
+		t.giftPack.some((r) => r.giftId === '9241' && r.packId === '1124'),
+		'풀 결손 1행이 채워져야 한다',
+	);
+	assert.equal(
+		t.giftPack.filter((r) => r.giftId === '9241' && r.packId === '1124').length,
+		1,
+		'중복 적재하지 않는다',
+	);
+	assert.equal(
+		meta.sources.find((s) => s.entityId === '9241' && s.field === 'packs')?.rule,
+		'wiki-verified',
+	);
+});
+
+test('보정 팩이 팩 목록에 없으면 넣지 않는다', () => {
+	const i = input();
+	i.assets.set('9241', { names: ['Still-warm Coffee'] });
+	const t = buildGifts(i, new Meta());
+	assert.equal(t.giftPack.filter((r) => r.giftId === '9241').length, 0);
+});
+
+test('완전 공명 요건을 en 0단계 설명문으로 보정한다', () => {
+	const i = input();
+	i.mj.get('9001')!['requires'] = { resonance: [{ mode: 'activate', sins: ['wrath'] }] };
+	i.locEn.set('9001', {
+		id: 9001,
+		name: 'Hellterfly’s Dream',
+		desc: 'When activating Wrath Absolute Resonance, inflict Burn.',
+	});
+	const meta = new Meta();
+	const t = buildGifts(i, meta);
+	assert.deepEqual(t.giftRequirement, [
+		{
+			giftId: '9001',
+			kind: 'resonance',
+			value: [{ mode: 'activate', sins: ['wrath'], absolute: true }],
+		},
+	]);
+	assert.equal(meta.sources.find((s) => s.field === 'requires')?.rule, 'desc-corrected');
+});
+
+test('설명문이 일반 공명이면 요건을 건드리지 않는다', () => {
+	const i = input();
+	i.mj.get('9001')!['requires'] = { resonance: [{ mode: 'threshold', count: 3 }] };
+	i.locEn.set('9001', { id: 9001, name: 'x', desc: 'At 3+ Wrath Resonance, deal more damage.' });
+	const meta = new Meta();
+	const t = buildGifts(i, meta);
+	assert.deepEqual(t.giftRequirement, [
+		{ giftId: '9001', kind: 'resonance', value: [{ mode: 'threshold', count: 3 }] },
+	]);
+	assert.equal(meta.sources.find((s) => s.field === 'requires')?.rule, 'mj-only');
+});
+
+test('이미 absolute 를 가진 요건은 덮지 않는다 — 일반·완전이 섞인 값이 있다', () => {
+	// 9104 의 모양. 문턱 3(일반) · 문턱 3(완전) · 문턱 6(일반)이 한 값에 들어 있다.
+	const i = input();
+	i.mj.get('9001')!['requires'] = {
+		resonance: [
+			{ mode: 'threshold', count: 3 },
+			{ mode: 'threshold', count: 3, absolute: true },
+		],
+	};
+	i.locEn.set('9001', { id: 9001, name: 'x', desc: 'At 3+ A-Reson., gain Final Power +5.' });
+	const t = buildGifts(i, new Meta());
+	assert.deepEqual(t.giftRequirement[0]?.value, [
+		{ mode: 'threshold', count: 3 },
+		{ mode: 'threshold', count: 3, absolute: true },
+	]);
+});
+
+test('resonance 가 아닌 갈래는 보정 대상이 아니다', () => {
+	const i = input();
+	i.locEn.set('9001', { id: 9001, name: 'x', desc: 'When activating Wrath Absolute Resonance.' });
+	const t = buildGifts(i, new Meta());
+	assert.deepEqual(t.giftRequirement, [{ giftId: '9001', kind: 'slots', value: [6] }]);
 });

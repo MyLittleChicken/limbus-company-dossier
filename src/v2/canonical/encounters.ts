@@ -44,20 +44,27 @@ export interface EncounterInput {
 	packs: RawIndex;
 }
 
+// 원본은 타깃을 네 갈래로 담는다 — top(targets 최상위) · wave · phase · battle.
+// 스키마(0060c49)의 TargetKind 와 짝을 맞춘다.
+export type TargetKind = 'top' | 'wave' | 'phase' | 'battle';
+
 export interface EncounterTables {
 	encounter: Array<{ id: string; group: string | null; name: string; siteId: string; waves?: unknown; phases?: unknown; battles?: unknown }>;
-	encounterTarget: Array<{ encounterId: string; index: number; name: string }>;
-	encounterTargetPart: Array<{ encounterId: string; targetIndex: number; partId: string; name: string; hpBase: number | null; hpLevel: number | null; defCorrection: number | null; speedMin: number | null; speedMax: number | null }>;
-	encounterPartResist: Array<{ encounterId: string; targetIndex: number; partId: string; axis: string; value: number }>;
+	encounterTarget: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; index: number; name: string; portrait: number | null; num: number | null }>;
+	encounterTargetPart: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; targetIndex: number; partId: string; name: string; hpBase: number | null; hpLevel: number | null; defCorrection: number | null; speedMin: number | null; speedMax: number | null }>;
+	encounterPartResist: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; targetIndex: number; partId: string; axis: string; value: number }>;
 	enemy: Array<{ id: string }>;
-	enemyText: Array<{ enemyId: string; locale: Loc; name: string; part: string | null }>;
+	enemyPart: Array<{ id: string; enemyId: string }>;
+	enemyText: Array<{ enemyId: string; locale: Loc; name: string; roleLabel: string | null }>;
+	enemyPartText: Array<{ partId: string; locale: Loc; name: string }>;
 	packBossEncounter: Array<{ packId: string; encounterId: string }>;
 }
 
 export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTables {
 	const t: EncounterTables = {
 		encounter: [], encounterTarget: [], encounterTargetPart: [],
-		encounterPartResist: [], enemy: [], enemyText: [], packBossEncounter: [],
+		encounterPartResist: [], enemy: [], enemyPart: [], enemyText: [],
+		enemyPartText: [], packBossEncounter: [],
 	};
 
 	// 그룹 이름표 — {luxcavation: {...}, md: {"canto-1-1": "The Forgotten"}, …}
@@ -81,45 +88,85 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		t.encounter.push(row);
 		meta.source('encounter', id, 'core', 'assets-only', [ASSETS]);
 
-		arr(e, 'targets').forEach((rawTarget, index) => {
-			const target = obj(rawTarget);
-			// **이름이 비어도 버리지 않는다.** 실측 1건(story__9-5-24 targets[3])이
-			// 빈 문자열이며, 버리면 부위와 저항까지 통째로 사라진다.
-			const targetName = str(target, 'name');
-			if (targetName === null) {
-				meta.gap(
-					'encounter_target', `${id}#${index}`, 'name',
-					'적 이름이 비어 있다 (원본 결함)', EVIDENCE,
-				);
-			}
-			t.encounterTarget.push({ encounterId: id, index, name: targetName ?? '' });
-
-			for (const rawPart of arr(target, 'parts')) {
-				const part = obj(rawPart);
-				const partId = part['partId'] === undefined ? null : String(part['partId']);
-				const partName = str(part, 'name');
-				if (partId === null || partName === null) continue;
-				// hp 는 {base, level} 이 보통이지만 숫자만 있는 경우도 있다
-				const hpRaw = part['hp'];
-				const hp = obj(hpRaw);
-				const hpFlat = typeof hpRaw === 'number' ? hpRaw : null;
-				const speed = arr(part, 'speed');
-				t.encounterTargetPart.push({
-					encounterId: id, targetIndex: index, partId, name: partName,
-					hpBase: num(hp, 'base') ?? hpFlat, hpLevel: num(hp, 'level'),
-					defCorrection: num(part, 'defCorrection'),
-					speedMin: speed.length === 2 ? Number(speed[0]) : null,
-					speedMax: speed.length === 2 ? Number(speed[1]) : null,
-				});
-				const resists = obj(part['resists']);
-				for (const axis of AXES) {
-					const value = num(resists, axis);
-					if (value === null) continue;
-					t.encounterPartResist.push({
-						encounterId: id, targetIndex: index, partId, axis, value,
-					});
+		// 원본은 타깃을 네 갈래로 담는다. **뜻이 서로 달라 한 축으로 뭉개면 안 된다** —
+		// battle 은 서로 배타적인 보스 후보고, wave·phase 는 같은 보스전의 내용이다.
+		// 초판은 top 만 읽어 보스 데이터가 있는 44팩을 통째로 잃었다.
+		/** 같은 (kind, groupIndex) 안에서 index 를 이어 붙인다. 넣은 개수를 돌려준다 */
+		const pushTargets = (kind: TargetKind, groupIndex: number, rawTargets: unknown[], base = 0): number => {
+			rawTargets.forEach((rawTarget, offset) => {
+				const index = base + offset;
+				const target = obj(rawTarget);
+				// **이름이 비어도 버리지 않는다.** top 만 보면 1건(story__9-5-24)이지만
+				// 네 갈래를 다 펼치면 2건(+ reflectrial__9-5-2 의 phase 갈래)이다 —
+				// 버리면 부위와 저항까지 통째로 사라진다.
+				const targetName = str(target, 'name');
+				if (targetName === null) {
+					meta.gap(
+						'encounter_target', `${id}#${kind}#${groupIndex}#${index}`, 'name',
+						'적 이름이 비어 있다 (원본 결함)', EVIDENCE,
+					);
 				}
-			}
+				t.encounterTarget.push({
+					encounterId: id, kind, groupIndex, index, name: targetName ?? '',
+					portrait: num(target, 'portrait'),
+					num: num(target, 'num'),
+				});
+
+				for (const rawPart of arr(target, 'parts')) {
+					const part = obj(rawPart);
+					const partId = part['partId'] === undefined ? null : String(part['partId']);
+					const partName = str(part, 'name');
+					if (partId === null || partName === null) continue;
+					// hp 는 {base, level} 이 보통이지만 숫자만 있는 경우도 있다
+					const hpRaw = part['hp'];
+					const hp = obj(hpRaw);
+					const hpFlat = typeof hpRaw === 'number' ? hpRaw : null;
+					const speed = arr(part, 'speed');
+					t.encounterTargetPart.push({
+						encounterId: id, kind, groupIndex, targetIndex: index, partId, name: partName,
+						hpBase: num(hp, 'base') ?? hpFlat, hpLevel: num(hp, 'level'),
+						defCorrection: num(part, 'defCorrection'),
+						speedMin: speed.length === 2 ? Number(speed[0]) : null,
+						speedMax: speed.length === 2 ? Number(speed[1]) : null,
+					});
+					// **`resists` 키 자체가 없는 부위 122건이 있다** — 축 하나가 빠진 게
+					// 아니라 저항이라는 개념 자체가 원본에 없다(장식·비전투 부위로 보인다).
+					// 「지어내지 않는다」만큼 「말없이 버리지 않는다」도 규칙이라 결손으로
+					// 남긴다 — 축 단위 결손(있는데 일부만 빔)과는 뜻이 달라 필드를 나눈다.
+					if (part['resists'] === undefined) {
+						meta.gap(
+							'encounter_target_part', `${id}#${kind}#${groupIndex}#${index}#${partId}`,
+							'resists', '원본에 resists 키 자체가 없다 (부위 저항 결측)', EVIDENCE,
+						);
+					} else {
+						const resists = obj(part['resists']);
+						for (const axis of AXES) {
+							const value = num(resists, axis);
+							if (value === null) continue;
+							t.encounterPartResist.push({
+								encounterId: id, kind, groupIndex, targetIndex: index, partId, axis, value,
+							});
+						}
+					}
+				}
+			});
+			return rawTargets.length;
+		};
+
+		pushTargets('top', 0, arr(e, 'targets'));
+		arr(e, 'waves').forEach((w, i) => pushTargets('wave', i, arr(obj(w), 'targets')));
+		arr(e, 'phases').forEach((p, i) => pushTargets('phase', i, arr(obj(p), 'targets')));
+		// **battle 안에 다시 waves·phases 가 들어간다**(md__canto-1-2 의 Golden Apple).
+		// 중첩된 것도 같은 battle 의 내용이므로 groupIndex 를 그대로 이어 쓴다 —
+		// 그래야 「이 보스 후보의 전체 등장 적」이 한 groupIndex 로 모인다.
+		// 한 battle 이 targets 와 waves(또는 phases)를 함께 가지면 둘 다 index 0부터
+		// 시작해 (kind, groupIndex, index) 가 겹친다(실측: battle/0/0 이 두 번 나옴).
+		// base 로 앞서 넣은 개수를 넘겨 같은 groupIndex 안에서 index 를 이어 붙인다.
+		arr(e, 'battles').forEach((b, i) => {
+			const battle = obj(b);
+			let n = pushTargets('battle', i, arr(battle, 'targets'));
+			for (const w of arr(battle, 'waves')) n += pushTargets('battle', i, arr(obj(w), 'targets'), n);
+			for (const p of arr(battle, 'phases')) n += pushTargets('battle', i, arr(obj(p), 'targets'), n);
 		});
 	}
 
@@ -143,13 +190,35 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		}
 	}
 
-	// ── 적 표시명 — loc 단독. desc 가 부위 이름이다 ──────────────
+	// **보스 후보를 모르는 42팩.** mj bossPool 은 117팩 전부에 보스를 주는데
+	// id 가 숫자(2060122)고 canonical.encounter 는 문자열 키다. 크로스워크 표가
+	// 원본에 없다. 위키가 이름을 주지만 위키 값을 canonical 에 담는 것은
+	// 새로운 출처 개념이라 별도 판단이 필요하다(설계 6절).
+	const bossPacks = new Set(t.packBossEncounter.map((b) => b.packId));
+	for (const packId of [...input.knownPacks].sort()) {
+		if (bossPacks.has(packId)) continue;
+		meta.gap(
+			'encounter', packId, 'bossPool',
+			'mj bossPool 의 숫자 id 와 assets 조우 이름표를 잇는 표가 원본에 없다',
+			'docs/superpowers/specs/2026-08-03-encounter-redesign-design.md',
+		);
+	}
+
+	// ── 적 표시명 ────────────────────────────────────────────────
+	// **loc Enemies*.json 은 적 행과 부위 행을 한 표에 섞는다.**
+	// 4·5자리가 적(870), 6자리가 부위(472 = 적id × 100 + n)다.
+	// 초판이 둘을 무차별 적재해 「적 1,342종」이라는 잘못된 수가 나왔다.
 	const enemyLoc: Record<Loc, RawIndex> = {
 		ko: input.enemyKo, en: input.enemyEn, ja: input.enemyJa,
 	};
-	const enemyIds = new Set<string>();
-	for (const locale of LOCALES) for (const id of enemyLoc[locale].keys()) enemyIds.add(id);
-	for (const id of [...enemyIds].sort()) {
+	const allIds = new Set<string>();
+	for (const locale of LOCALES) for (const id of enemyLoc[locale].keys()) allIds.add(id);
+
+	const enemyIds = [...allIds].filter((id) => id.length <= 5).sort();
+	const partIds = [...allIds].filter((id) => id.length === 6).sort();
+	const enemyIdSet = new Set(enemyIds);
+
+	for (const id of enemyIds) {
 		t.enemy.push({ id });
 		for (const locale of LOCALES) {
 			const o = enemyLoc[locale].get(id);
@@ -158,9 +227,30 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 				meta.gap('enemy', id, 'name', `${locale} 표시명이 없다`, EVIDENCE, locale);
 				continue;
 			}
-			t.enemyText.push({ enemyId: id, locale, name, part: str(o ?? {}, 'desc') });
+			// desc 는 **부위 이름이 아니라 역할 라벨**이다(Core · Enemy Unit · Boss)
+			t.enemyText.push({ enemyId: id, locale, name, roleLabel: str(o ?? {}, 'desc') });
 		}
 		meta.source('enemy', id, 'name', 'loc-only', [LOC]);
+	}
+
+	for (const id of partIds) {
+		const enemyId = id.slice(0, -2);
+		if (!enemyIdSet.has(enemyId)) {
+			// 부모 적이 loc 에 없다. 부위만 담을 수 없으므로 결손으로 남긴다
+			meta.gap('enemy_part', id, 'enemy_id', `부모 적 ${enemyId} 가 loc 에 없다`, EVIDENCE);
+			continue;
+		}
+		t.enemyPart.push({ id, enemyId });
+		for (const locale of LOCALES) {
+			const o = enemyLoc[locale].get(id);
+			const name = str(o ?? {}, 'name');
+			if (name === null) {
+				meta.gap('enemy_part', id, 'name', `${locale} 부위 이름이 없다`, EVIDENCE, locale);
+				continue;
+			}
+			t.enemyPartText.push({ partId: id, locale, name });
+		}
+		meta.source('enemy_part', id, 'name', 'loc-only', [LOC]);
 	}
 
 	// 전투 풀 2,525종은 여전히 못 잇는다 — backlog/10

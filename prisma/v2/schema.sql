@@ -37,6 +37,9 @@ CREATE TYPE "canonical"."EgoRank" AS ENUM ('ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'
 -- CreateEnum
 CREATE TYPE "canonical"."BuffType" AS ENUM ('Positive', 'Neutral', 'Negative');
 
+-- CreateEnum
+CREATE TYPE "canonical"."TargetKind" AS ENUM ('top', 'wave', 'phase', 'battle');
+
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
     "id" TEXT NOT NULL,
@@ -183,6 +186,7 @@ CREATE TABLE "canonical"."floor_pack" (
 -- CreateTable
 CREATE TABLE "canonical"."keyword" (
     "id" TEXT NOT NULL,
+    "order" INTEGER,
 
     CONSTRAINT "keyword_pkey" PRIMARY KEY ("id")
 );
@@ -220,6 +224,7 @@ CREATE TABLE "canonical"."gift" (
     "cost" INTEGER,
     "keyword_id" TEXT,
     "hard_only" BOOLEAN NOT NULL DEFAULT false,
+    "sprite" TEXT,
     "enhanceable" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "gift_pkey" PRIMARY KEY ("id")
@@ -248,17 +253,19 @@ CREATE TABLE "canonical"."gift_stage_text" (
 -- CreateTable
 CREATE TABLE "canonical"."gift_effect" (
     "gift_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
     "effect_id" TEXT NOT NULL,
 
-    CONSTRAINT "gift_effect_pkey" PRIMARY KEY ("gift_id","effect_id")
+    CONSTRAINT "gift_effect_pkey" PRIMARY KEY ("gift_id","index")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."gift_trigger" (
     "gift_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
     "trigger_id" TEXT NOT NULL,
 
-    CONSTRAINT "gift_trigger_pkey" PRIMARY KEY ("gift_id","trigger_id")
+    CONSTRAINT "gift_trigger_pkey" PRIMARY KEY ("gift_id","index")
 );
 
 -- CreateTable
@@ -372,6 +379,11 @@ CREATE TABLE "canonical"."skill_stage" (
     "skill_id" TEXT NOT NULL,
     "uptie" INTEGER NOT NULL,
     "changed_here" BOOLEAN NOT NULL,
+    "base_value" INTEGER,
+    "coin_value" INTEGER,
+    "atk_weight" INTEGER,
+    "level_correction" INTEGER,
+    "clashable" BOOLEAN,
 
     CONSTRAINT "skill_stage_pkey" PRIMARY KEY ("skill_id","uptie")
 );
@@ -393,17 +405,30 @@ CREATE TABLE "canonical"."skill_coin" (
     "skill_id" TEXT NOT NULL,
     "uptie" INTEGER NOT NULL,
     "index" INTEGER NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
     "effects" TEXT[],
+    "type" TEXT,
 
-    CONSTRAINT "skill_coin_pkey" PRIMARY KEY ("skill_id","uptie","index")
+    CONSTRAINT "skill_coin_pkey" PRIMARY KEY ("skill_id","uptie","index","locale")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."passive" (
     "id" TEXT NOT NULL,
     "conditions" TEXT[],
+    "cond_type" TEXT,
 
     CONSTRAINT "passive_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."passive_requirement" (
+    "passive_id" TEXT NOT NULL,
+    "index" INTEGER NOT NULL,
+    "sin" "canonical"."Sin" NOT NULL,
+    "value" INTEGER NOT NULL,
+
+    CONSTRAINT "passive_requirement_pkey" PRIMARY KEY ("passive_id","index")
 );
 
 -- CreateTable
@@ -425,6 +450,7 @@ CREATE TABLE "canonical"."identity" (
     "team_code_eligible" BOOLEAN NOT NULL DEFAULT true,
     "season" INTEGER,
     "hp" INTEGER,
+    "hp_level" DOUBLE PRECISION,
     "stagger" INTEGER[],
     "def_correction" INTEGER,
     "release_date" TEXT,
@@ -454,10 +480,11 @@ CREATE TABLE "canonical"."identity_resist" (
 -- CreateTable
 CREATE TABLE "canonical"."identity_speed" (
     "identity_id" TEXT NOT NULL,
+    "uptie" INTEGER NOT NULL,
     "min" INTEGER NOT NULL,
     "max" INTEGER NOT NULL,
 
-    CONSTRAINT "identity_speed_pkey" PRIMARY KEY ("identity_id")
+    CONSTRAINT "identity_speed_pkey" PRIMARY KEY ("identity_id","uptie")
 );
 
 -- CreateTable
@@ -585,6 +612,11 @@ CREATE TABLE "canonical"."ego_skill" (
 CREATE TABLE "canonical"."ego_skill_stage" (
     "skill_id" TEXT NOT NULL,
     "uptie" INTEGER NOT NULL,
+    "sp_cost" INTEGER,
+    "base_value" INTEGER,
+    "coin_value" INTEGER,
+    "atk_weight" INTEGER,
+    "level_correction" INTEGER,
 
     CONSTRAINT "ego_skill_stage_pkey" PRIMARY KEY ("skill_id","uptie")
 );
@@ -788,6 +820,7 @@ CREATE TABLE "canonical"."achievement" (
     "category" TEXT NOT NULL,
     "points" INTEGER[],
     "hard_only" BOOLEAN[],
+    "thresholds" JSONB,
 
     CONSTRAINT "achievement_pkey" PRIMARY KEY ("id","category","season")
 );
@@ -876,15 +909,21 @@ CREATE TABLE "canonical"."encounter" (
 -- CreateTable
 CREATE TABLE "canonical"."encounter_target" (
     "encounter_id" TEXT NOT NULL,
+    "kind" "canonical"."TargetKind" NOT NULL,
+    "group_index" INTEGER NOT NULL,
     "index" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
+    "portrait" INTEGER,
+    "num" INTEGER,
 
-    CONSTRAINT "encounter_target_pkey" PRIMARY KEY ("encounter_id","index")
+    CONSTRAINT "encounter_target_pkey" PRIMARY KEY ("encounter_id","kind","group_index","index")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."encounter_target_part" (
     "encounter_id" TEXT NOT NULL,
+    "kind" "canonical"."TargetKind" NOT NULL,
+    "group_index" INTEGER NOT NULL,
     "target_index" INTEGER NOT NULL,
     "part_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -894,18 +933,20 @@ CREATE TABLE "canonical"."encounter_target_part" (
     "speed_min" INTEGER,
     "speed_max" INTEGER,
 
-    CONSTRAINT "encounter_target_part_pkey" PRIMARY KEY ("encounter_id","target_index","part_id")
+    CONSTRAINT "encounter_target_part_pkey" PRIMARY KEY ("encounter_id","kind","group_index","target_index","part_id")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."encounter_part_resist" (
     "encounter_id" TEXT NOT NULL,
+    "kind" "canonical"."TargetKind" NOT NULL,
+    "group_index" INTEGER NOT NULL,
     "target_index" INTEGER NOT NULL,
     "part_id" TEXT NOT NULL,
     "axis" TEXT NOT NULL,
     "value" DOUBLE PRECISION NOT NULL,
 
-    CONSTRAINT "encounter_part_resist_pkey" PRIMARY KEY ("encounter_id","target_index","part_id","axis")
+    CONSTRAINT "encounter_part_resist_pkey" PRIMARY KEY ("encounter_id","kind","group_index","target_index","part_id","axis")
 );
 
 -- CreateTable
@@ -916,13 +957,30 @@ CREATE TABLE "canonical"."enemy" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."enemy_part" (
+    "id" TEXT NOT NULL,
+    "enemy_id" TEXT NOT NULL,
+
+    CONSTRAINT "enemy_part_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."enemy_text" (
     "enemy_id" TEXT NOT NULL,
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
-    "part" TEXT,
+    "role_label" TEXT,
 
     CONSTRAINT "enemy_text_pkey" PRIMARY KEY ("enemy_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."enemy_part_text" (
+    "part_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "enemy_part_text_pkey" PRIMARY KEY ("part_id","locale")
 );
 
 -- CreateTable
@@ -1097,6 +1155,9 @@ CREATE INDEX "start_gift_gift_id_idx" ON "canonical"."start_gift"("gift_id");
 CREATE INDEX "encounter_group_idx" ON "canonical"."encounter"("group");
 
 -- CreateIndex
+CREATE INDEX "enemy_part_enemy_id_idx" ON "canonical"."enemy_part"("enemy_id");
+
+-- CreateIndex
 CREATE INDEX "field_override_entity_field_idx" ON "app"."field_override"("entity", "field");
 
 -- CreateIndex
@@ -1200,6 +1261,9 @@ ALTER TABLE "canonical"."skill_stage_text" ADD CONSTRAINT "skill_stage_text_skil
 
 -- AddForeignKey
 ALTER TABLE "canonical"."skill_coin" ADD CONSTRAINT "skill_coin_skill_id_uptie_fkey" FOREIGN KEY ("skill_id", "uptie") REFERENCES "canonical"."skill_stage"("skill_id", "uptie") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."passive_requirement" ADD CONSTRAINT "passive_requirement_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."passive_text" ADD CONSTRAINT "passive_text_passive_id_fkey" FOREIGN KEY ("passive_id") REFERENCES "canonical"."passive"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1340,13 +1404,19 @@ ALTER TABLE "canonical"."start_gift" ADD CONSTRAINT "start_gift_gift_id_fkey" FO
 ALTER TABLE "canonical"."encounter_target" ADD CONSTRAINT "encounter_target_encounter_id_fkey" FOREIGN KEY ("encounter_id") REFERENCES "canonical"."encounter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "canonical"."encounter_target_part" ADD CONSTRAINT "encounter_target_part_encounter_id_target_index_fkey" FOREIGN KEY ("encounter_id", "target_index") REFERENCES "canonical"."encounter_target"("encounter_id", "index") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "canonical"."encounter_target_part" ADD CONSTRAINT "encounter_target_part_encounter_id_kind_group_index_target_fkey" FOREIGN KEY ("encounter_id", "kind", "group_index", "target_index") REFERENCES "canonical"."encounter_target"("encounter_id", "kind", "group_index", "index") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_resist_encounter_id_target_index_part_id_fkey" FOREIGN KEY ("encounter_id", "target_index", "part_id") REFERENCES "canonical"."encounter_target_part"("encounter_id", "target_index", "part_id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_resist_encounter_id_kind_group_index_target_fkey" FOREIGN KEY ("encounter_id", "kind", "group_index", "target_index", "part_id") REFERENCES "canonical"."encounter_target_part"("encounter_id", "kind", "group_index", "target_index", "part_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."enemy_part" ADD CONSTRAINT "enemy_part_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."enemy_text" ADD CONSTRAINT "enemy_text_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."enemy_part_text" ADD CONSTRAINT "enemy_part_text_part_id_fkey" FOREIGN KEY ("part_id") REFERENCES "canonical"."enemy_part"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "app"."setting" ADD CONSTRAINT "setting_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "app"."account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
