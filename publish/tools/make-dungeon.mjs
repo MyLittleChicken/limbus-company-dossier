@@ -124,6 +124,15 @@ const ownedFor = (mode) => histFor(mode).flatMap((h) => h.gifts.map((g) => ({ ..
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/*
+	기프트 등급은 로마자로 낸다.
+
+	애셋이 없어 글자로 렌더하며, 대응은 데이터가 아니라 게임 표기를 근거로 한다 —
+	DB 는 `1`~`5` 와 `EX` 를 담는다. 목록·상세 화면과 같은 표기를 쓴다.
+*/
+const TIER_ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', EX: 'EX' };
+const tier = (t) => TIER_ROMAN[t] ?? t;
+
 function head(title) {
 	return `<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -179,7 +188,7 @@ const ownedItem = (g, where) =>
 		: `							<li>
 								<img class="icon" src="${g.img}" alt="" width="24" height="24" loading="lazy" />
 								<span class="owned-name">${esc(g.name)}</span>
-								<span class="tag">${esc(g.tier)}</span>
+								<span class="tag">${esc(tier(g.tier))}</span>
 								<span class="hint">${g.floor}층</span>
 							</li>`;
 
@@ -549,7 +558,7 @@ function giftModal() {
 							</span>
 							<span class="pickcard-body">
 								<strong>${esc(g.name)}</strong>
-								<span class="card-meta"><span class="tag">${esc(g.tier)}</span>${
+								<span class="card-meta"><span class="tag">${esc(tier(g.tier))}</span>${
 									has ? '<span class="tag tag-mark">보유</span>' : ''
 								}</span>
 							</span>

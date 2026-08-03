@@ -79,6 +79,18 @@ const EGO_RANK = [
 	['ALEPH', 'aleph'],
 ];
 
+/**
+ * 기프트 등급.
+ *
+ * **애셋이 없다.** 애셋 4,710 장을 전수로 훑었고 `icons/` 54 종 가운데 등급 계열은
+ * 인격 3 · E.G.O 10 뿐이다. 그래서 글자로 렌더한다.
+ *
+ * **로마자 대응은 데이터가 아니라 게임 표기를 근거로 한다.** DB 는 `1`~`5` 와 `EX` 를
+ * 담고 있고 어느 출처도 로마자를 담지 않는다. 게임 화면이 로마자로 낸다는 것이 근거이며,
+ * 확인하는 자리는 게임이다. 대응이 틀렸다면 여기 표만 고치면 된다.
+ */
+const GIFT_TIER = ['I', 'II', 'III', 'IV', 'V', 'EX'];
+
 const SIN = [
 	['분노', 'wrath'],
 	['색욕', 'lust'],
@@ -227,9 +239,50 @@ const PATCHES = {
 		s = dropUnlabeledAxis(s, '침식 있음', '추출 가능');
 		return s;
 	},
-	'gifts.html': (s) => dropUnlabeledAxis(s, '강화 가능', 'hard 전용'),
-	'gifts-empty.html': (s) => dropUnlabeledAxis(s, '강화 가능', 'hard 전용'),
+	'gifts.html': (s) => patchGifts(s),
+	'gifts-empty.html': (s) => patchGifts(s),
+	'gift-detail.html': romanTier,
+	'gift-material.html': romanTier,
+	'gift-recipe.html': romanTier,
+	'pack-detail.html': romanTier,
+	'pack-boss.html': romanTier,
+	'pack-dense.html': romanTier,
 };
+
+/**
+ * 기프트 등급 숫자를 로마자로 바꾼다.
+ *
+ * 필터만 바꾸면 칩은 `III` 인데 그 아래 카드는 `3` 이 되어 같은 화면이 두 표기를 쓴다.
+ * 기프트 등급이 나오는 자리를 전부 함께 옮긴다 — 카드 메타 · 팩의 등장 기프트 목록 ·
+ * 상세의 사실 표.
+ *
+ * **기프트 화면과 팩 화면에만 건다.** 인격 등급도 `<dt>등급</dt>` 을 쓰는데 그 값은
+ * `0` · `00` · `000` 이라 같은 규칙에 걸리면 안 된다.
+ */
+const TIER_ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', EX: 'EX' };
+const toRoman = (t) => TIER_ROMAN[t] ?? t;
+
+function romanTier(src) {
+	return src
+		.replace(
+			/(<span class="card-meta"><span class="tag">)(\d|EX)(<\/span>)/g,
+			(_, a, t, c) => a + toRoman(t) + c,
+		)
+		.replace(
+			/(<a class="inline-gift" href="gift-detail\.html">(?:(?!<\/a>).)*?<span class="tag">)(\d|EX)(<\/span>)/g,
+			(_, a, t, c) => a + toRoman(t) + c,
+		)
+		.replace(/(<dt>등급<\/dt><dd>)(\d|EX)(<\/dd>)/g, (_, a, t, c) => a + toRoman(t) + c);
+}
+
+/** 기프트 두 화면이 같다 — 등급을 로마자로 세우고 축이 아닌 둘을 내린다. */
+function patchGifts(s) {
+	const chips = GIFT_TIER.map(
+		(t) => `<button type="button" class="chip" aria-pressed="false">${t}</button>`,
+	).join('');
+	s = setAxis(s, '등급', '등급', chips);
+	return romanTier(dropUnlabeledAxis(s, '강화 가능', 'hard 전용'));
+}
 
 /* ── 돌린다 ──────────────────────────────────────────────── */
 
