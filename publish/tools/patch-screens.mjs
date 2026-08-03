@@ -232,6 +232,7 @@ const PATCHES = {
 		return s;
 	},
 	'egos.html': (s) => {
+		s = dropEgoCost(s);
 		s = setAxis(s, '수감자', '등급', EGO_RANK_CHIPS);
 		s = setAxis(s, '등급', '각성 죄악', SIN_CHIPS);
 		s = setAxis(s, '각성 죄악', '키워드', KEYWORD_CHIPS);
@@ -273,6 +274,27 @@ function romanTier(src) {
 			(_, a, t, c) => a + toRoman(t) + c,
 		)
 		.replace(/(<dt>등급<\/dt><dd>)(\d|EX)(<\/dd>)/g, (_, a, t, c) => a + toRoman(t) + c);
+}
+
+/**
+ * E.G.O 카드에서 죄악 자원 비용 태그를 뺀다.
+ *
+ * E.G.O 마다 쓰는 죄악이 하나에서 넷까지라 태그 수가 달랐고, 카드 메타가 한 줄에서 두 줄로
+ * 넘나들며 **카드 높이가 들쭉날쭉했다.** 목록에서 카드가 하는 일은 고르는 것이고 자원
+ * 수급은 상세와 편성 프로필이 맡는다.
+ *
+ * 남는 것은 등급 · 각성 죄악 · 공격 타입 셋이며 **어느 E.G.O 나 정확히 셋**이다.
+ * 비용 태그만 골라내려고 아이콘이 죄악이고 글자가 숫자인 것을 조건으로 잡는다 — 각성 죄악
+ * 태그는 같은 아이콘을 쓰지만 글자가 없다.
+ */
+const SIN_FILE = 'wrath|lust|sloth|gluttony|gloom|pride|envy';
+
+function dropEgoCost(src) {
+	const re = new RegExp(
+		`<span class="tag tag-icon"><img src="[^"]*/(?:${SIN_FILE})\\.webp" alt="" width="16" height="16">\\d+</span>`,
+		'g',
+	);
+	return src.replace(re, '');
 }
 
 /** 기프트 두 화면이 같다 — 등급을 로마자로 세우고 축이 아닌 둘을 내린다. */
