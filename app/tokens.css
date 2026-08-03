@@ -1,0 +1,244 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Bebas+Neue&display=swap');
+/*
+	Pretendard 는 Google Fonts 에 없다. SIL OFL 이라 CDN 도 자체 호스팅도 걸리는 것이 없다.
+
+	**게임이 본문에 쓰는 서체가 이것이다.** 네 슬롯 중 본문과 숫자는 합법적으로 같은 것을
+	쓸 수 있고(Pretendard · Bebas Neue), 타이틀만 대체가 필요하다(KOTRA Bold 재배포 금지).
+*/
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
+
+/*
+	폰트 주의 — Black Han Sans 를 쓰지 않는다.
+
+	이전 단계의 후보였고 실제로 넣어 봤으나 두 가지로 물러섰다.
+	  1. Google 이 unicode-range 로 잘게 쪼개 서빙하는데 해당 서브셋이 도착하지 않으면
+	     브라우저가 다음 서체로 넘어가지 않고 **두부(tofu)를 그린다.** 캡처로 확인했다.
+	  2. 굵기가 400 하나뿐이라 제목의 700 을 합성에 맡겨야 한다.
+
+	국문은 제목과 본문 모두 **Pretendard** 로 간다. 원작의 각진 톤은 라틴(Chakra Petch)과
+	대문자 자간에서 나오고, 국문은 가독성을 지킨다. `'Noto Sans KR'` 는 스택에 이름만 남겨
+	Pretendard 를 받지 못한 환경의 물러날 자리로 둔다 — 따로 받아 오지는 않는다.
+
+	**배포 시에는 자체 호스팅으로 바꾼다.** 지금 위 두 `@import` 는 네트워크에 의존하며,
+	오프라인에서 열면 시스템 서체로 물러선다. 셋 다 OFL 이라 옮기는 데 걸리는 것은 없다.
+*/
+
+/*
+	토큰 정본.
+	=========
+
+	화면은 이 파일의 역할 토큰만 쓴다. 원자 토큰(--lcb-* · --sin-* · --kw-*)을 화면에서
+	직접 부르지 않는다 — 그러면 값이 바뀔 때 갈 곳이 흩어진다.
+
+	색은 게임 애셋 픽셀 실측값이다. 죄악 7종과 상태 키워드 12종은 **다른 축**이며
+	섞지 않는다(실측에서 같은 이름이 서로 다른 색으로 나온다).
+
+	제약
+	  · 색만으로 구분하지 않는다 — 죄악·키워드는 항상 아이콘 또는 글자를 동반한다.
+	  · 밀도가 장식보다 우선한다 — 치수 토큰은 기존 구현의 실측값을 그대로 계승한다.
+	    이름을 붙였을 뿐이며 한 화면에 담기는 항목 수를 줄이지 않는다.
+	  · 다크 단일이다. 라이트 테마를 두지 않는다.
+*/
+
+:root {
+	/* ── 원자 · 중립 ─────────────────────────────────────────
+	   게임의 near-black + 크래프트/크림. 이전 구현의 #14141a 는 차가운 청회색이라
+	   원작과 반대 방향이었다. 여기부터 웜 차콜이다. */
+	--lcb-void: #000;
+	--lcb-black: #0c0a08;
+	--lcb-panel: #141210;
+	--lcb-panel-2: #1f1b17;
+	--lcb-panel-3: #2a241d;
+	--lcb-inset: #080706;
+	--lcb-kraft: #7e5a3b;
+	--lcb-kraft-dark: #5c4128;
+	--lcb-cream: #e3c49b;
+	--lcb-ivory: #e7e6d6;
+	--lcb-text: #e8e4dc;
+
+	/* ── 원자 · 액센트 ───────────────────────────────────────
+	   브릭레드는 경보와 활성에만 쓴다. 골드/브라스가 기업 럭셔리 보조 액센트다. */
+	--lcb-red: #b23a2e;
+	--lcb-red-bright: #bc4535;
+	--lcb-crimson: #8b3227;
+	--lcb-gold-deep: #ce7a12;
+	--lcb-gold: #c9a84c;
+	--lcb-gold-light: #e0c060;
+
+	/* ── 원자 · 죄악 7종 ─────────────────────────────────────
+	   게임 엠블럼 실측. **채도가 낮다.** 나이브한 무지개로 바꾸지 않는다. */
+	--sin-wrath: #8b3227; /* 분노 */
+	--sin-lust: #b45f2c; /* 색욕 */
+	--sin-sloth: #e28a0c; /* 나태 */
+	--sin-gluttony: #64832f; /* 탐식 */
+	--sin-gloom: #336570; /* 우울 */
+	--sin-pride: #225182; /* 오만 */
+	--sin-envy: #7f5093; /* 질투 */
+	--sin-none: #6b5a45; /* 죄악 없음 — 스킬 131건이 여기 걸린다 */
+
+	/* ── 원자 · 상태 키워드 ──────────────────────────────────
+	   아이콘 PNG 실측. 죄악 색과 다른 축이다. */
+	--kw-bleed: #cd2522; /* 출혈 */
+	--kw-burn: #e62644; /* 화상 */
+	--kw-tremor: #ff9000; /* 진동 */
+	--kw-rupture: #18edc0; /* 파열 */
+	--kw-sinking: #0096ff; /* 침잠 */
+	--kw-charge: #19ecea; /* 충전 */
+	--kw-poise: #a9c4c4; /* 호흡 */
+	--kw-haste: #ff6400;
+	--kw-bind: #fe6900;
+	--kw-fragile: #ad14c8;
+	--kw-poison: #3bed1a;
+
+	/* 공격 타입 3종. 게임은 공용 브론즈 코인 계열로 다룬다 — 죄악처럼 색을 나누지 않는다. */
+	--atk-slash: #a56939;
+	--atk-pierce: #a56939;
+	--atk-blunt: #a56939;
+
+	/* ── 역할 · 표면 ─────────────────────────────────────────
+	   위계 네 단. 이전 구현은 두 단(--bg · --bg-raised)뿐이어서 패널이 전부
+	   같은 무게로 보였다. */
+	--surface-page: var(--lcb-black); /* 문서 바닥 */
+	--surface-1: var(--lcb-panel); /* 패널 · 카드 기본 */
+	--surface-2: var(--lcb-panel-2); /* 한 단 올라간 것 — 모달 시트 · 카드 안의 카드 */
+	--surface-3: var(--lcb-panel-3); /* 호버 · 눌린 상태 */
+	--surface-inset: var(--lcb-inset); /* 파인 자리 — 초상 뒤 · 트랙 바닥 */
+
+	/* ── 역할 · 선 ───────────────────────────────────────────
+	   얇은 이중 외곽선이 게임의 "관공서 서식" 프레이밍이다.
+	   --line-inner 가 그 두 번째 선이며 inset box-shadow 로 넣는다. */
+	--line: #2f2820; /* 기본 경계 */
+	--line-strong: #453a2c; /* 도드라진 경계 */
+	--line-faint: #1e1a15; /* 구분선 */
+	--line-inner: #221d18; /* 이중선의 안쪽 */
+	--line-active: var(--lcb-gold); /* 선택 · 활성 */
+
+	/* ── 역할 · 글자 ─────────────────────────────────────────
+	   --ink-dim 까지가 본문에 쓸 수 있는 명도다(표면 1 위에서 4.5:1 이상).
+	   --ink-faint 는 장식과 자리표시자 전용이며 뜻을 지닌 글자에 쓰지 않는다. */
+	--ink: var(--lcb-text);
+	--ink-dim: #9b8f7d;
+	--ink-muted: #7d7263;
+	--ink-faint: #574f45;
+	--ink-gold: var(--lcb-gold-light);
+	--ink-cream: var(--lcb-cream);
+
+	/* ── 역할 · 강조 ─────────────────────────────────────────── */
+	--accent: var(--lcb-gold); /* 선택 · 활성 · 강조 태그 */
+	--accent-soft: #8a7434; /* 채워진 막대 — 글자 뒤에 깔릴 때 */
+	--alert: var(--lcb-red); /* 경보 · 주요 동작. 절제해 쓴다 */
+
+	/* ── 역할 · 상태 표기 ────────────────────────────────────
+	   결손과 부재는 성격이 다르므로 같은 기호를 쓰지 않는다.
+	   폴백은 표시할 문자열이 있고 언어만 다른 경우이고, 결손은 값 자체가 없는 경우다. */
+	--state-missing: #d98f6a; /* 결손 — 있어야 하는데 없다 */
+	--state-absent: var(--ink-muted); /* 부재 — 없는 것이 정상이다 */
+	--state-fallback: var(--ink-dim); /* 한국어가 없어 영문이 나왔다 */
+	--state-short: #d98080; /* 공급이 수요에 못 미친다 */
+
+	/* ── 타이포 ──────────────────────────────────────────────
+	   라틴 디스플레이(각진 HUD)와 한글 본문을 분리한다.
+	   숫자는 자리가 흔들리지 않아야 해서 별도 스택과 tabular-nums 를 쓴다.
+
+	   게임의 네 슬롯 중 우리가 쓸 수 있는 것과 없는 것이 갈린다.
+
+	     KOTRA Bold   국문 타이틀 · UI   **불가** — 공공누리 1유형이나 재배포 금지
+	     Mikodacs     라틴 디스플레이     미확인
+	     Pretendard   본문               가능 — SIL OFL. **게임과 같은 것을 쓴다**
+	     BebasKai     숫자               사실상 가능 — Bebas Neue(OFL)의 파생
+
+	   게임 1.74.0 이 타이틀 폰트와 본문 폰트를 따로 설정하는 기능을 넣었다. 게임 자체가 둘을
+	   가른다는 뜻이고 아래 분리가 그것을 따른다.
+
+	   스택 셋의 역할
+	     `--font-body`    본문. 국문이 Pretendard 로 온다
+	     `--font-display` 라벨·탭·태그처럼 **작은 글자**. 라틴만 Chakra Petch 로 갈리고
+	                      국문은 본문과 같은 얼굴을 쓴다 — 12px 대에서 무거운 국문 서체는 뭉개진다
+	     `--font-title`   화면 제목처럼 **큰 글자**
+
+	   Black Han Sans 를 국문 제목에 썼다가 물러섰다(아래 주의 참조). 국문 얼굴을 본문과
+	   같은 것으로 통일하는 편이 낫다 — 제목의 무게는 굵기와 자간이 만든다. */
+	--font-display: 'Chakra Petch', 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+	--font-title: 'Chakra Petch', 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+	--font-body: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, 'Segoe UI', sans-serif;
+	--font-num: 'Bebas Neue', 'Chakra Petch', ui-monospace, monospace;
+	--font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+	/*
+		일곱 단. 이전 구현은 소수점 px 아홉 종이 흩어져 있었다(9 · 9.5 · 10.5 · 11 ·
+		11.5 · 12 · 12.5 · 14 · 15). 9→9.5 · 11→11.5 로 접어 일곱 단으로 줄였고
+		**어느 값도 키우지 않았다** — 밀도를 지키기 위해서다.
+		--fs-xl 만 새로 생겼다. 화면 제목에 위계가 전혀 없었기 때문이다.
+	*/
+	--fs-micro: 9.5px; /* 코인 번호 · 속성 첨자 */
+	--fs-tiny: 10.5px; /* 태그 · 미세 라벨 */
+	--fs-xs: 11.5px; /* 메타 · 흐린 라벨 */
+	--fs-sm: 12.5px; /* 보조 본문 · 패널 제목 */
+	--fs-base: 14px; /* 본문 */
+	--fs-lg: 15px; /* 구획 제목 */
+	--fs-xl: 19px; /* 화면 제목 */
+
+	--fw-normal: 400;
+	--fw-medium: 500;
+	--fw-bold: 700;
+
+	--lh-tight: 1.3;
+	--lh-base: 1.6;
+
+	--ls-normal: 0.02em;
+	--ls-wide: 0.08em;
+	--ls-wider: 0.1em;
+
+	/* ── 간격 ────────────────────────────────────────────────
+	   기존 구현이 실제로 쓰던 값을 그대로 계단으로 세웠다. 임의로 늘리지 않는다. */
+	--sp-1: 2px;
+	--sp-2: 4px;
+	--sp-3: 6px;
+	--sp-4: 8px;
+	--sp-5: 10px;
+	--sp-6: 12px;
+	--sp-7: 14px;
+	--sp-8: 18px;
+	--sp-9: 22px;
+	--sp-10: 26px;
+	--sp-11: 32px;
+
+	/* 셸 치수. 이전 구현 값을 유지한다. */
+	--shell-max: 1360px;
+	--shell-pad: 24px;
+	/*
+		사이트 머리 높이. 목록의 필터 덩이가 이 아래에 붙는다.
+		머리 구조가 바뀌면 이 값도 함께 움직여야 한다 — 실측 110px.
+	*/
+	--head-h: 110px;
+
+	--gap: var(--sp-8);
+	--gap-sm: var(--sp-4);
+
+	/*
+		중단점.
+
+		CSS 는 미디어 쿼리에서 변수를 못 쓰므로 여기 적어 두고 규칙에서는 같은 리터럴을
+		쓴다. 이전 구현은 430 · 700 · 760 · 900 · 1020 · 1180 여섯 개가 필요할 때마다
+		개별로 붙어 체계가 없었다. 넷으로 접었다.
+
+		  --bp-sm  480   한 손 폭. 격자가 2열까지 내려간다
+		  --bp-md  760   태블릿 세로. 3열 · 편성 프로필이 아래로 내려간다
+		  --bp-lg  1020  좁은 노트북. 2단 레이아웃이 1단이 된다
+		  --bp-xl  1180  편성 3열이 2열이 되는 지점
+	*/
+	--bp-sm: 480px;
+	--bp-md: 760px;
+	--bp-lg: 1020px;
+	--bp-xl: 1180px;
+
+	/* ── 프레이밍 ────────────────────────────────────────────
+	   각진 컷코너가 게임의 시그니처 지오메트리다. 패널 우상단을 자른다. */
+	--cut: 12px;
+	--cut-sm: 7px;
+
+	/* ── 질감 ────────────────────────────────────────────────
+	   인쇄·방송 노이즈. 0 으로 두면 완전히 꺼진다. */
+	--fx-scanline: 0.3;
+	--fx-grain: 0.035;
+}
