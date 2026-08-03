@@ -32,9 +32,13 @@
 **기프트가 기프트를 켠다.** 나침반이 적에게 침잠을 쌓으면 「적이 침잠 보유」가 트리거인
 다른 기프트가 켜진다.
 
-## 3. 핵심 발견 — 이 구조는 이미 데이터에 있다
+## 3. 핵심 발견 — 상태 취급은 이미 데이터에 있다
 
-설계에 앞서 `canonical` 과 `raw` 를 전수로 뒤졌다. **「취급됨」 메카닉이 구조화돼 있었다.**
+설계에 앞서 `canonical` 과 `raw` 를 전수로 뒤졌다.
+**「상태를 부여하는 인격으로 취급됨」 메카닉이 구조화돼 있었다.**
+
+> **범위를 밝힌다.** 아래는 **상태 축** 취급에 한정된 발견이다.
+> **소속** 취급은 구조화돼 있지 않다 — 11절 ①이 그 반례다.
 
 ```
 status_category   163행   특수 상태 → 부모 축
@@ -52,7 +56,10 @@ identity_keyword    Laceration · Breath          ← mj 가 이미 해소해 �
 identity_status     RedApricotBlossom → LACERATION
 ```
 
-두 경로가 서로를 교차 검증한다. **「~로만 취급됨」(제거 모드)도 이미 반영돼 있다** —
+두 경로가 같은 답을 낸다. 다만 **둘 다 `limbus-data-mj` 계열에서 파생되므로 독립 검증은 아니다** —
+출처가 스스로와 일치한다는 뜻이다. 독립 확인은 게임·위키로 해야 한다.
+
+**「~로만 취급됨」(제거 모드)도 이미 반영돼 있다** —
 10109 약지 점묘파 스튜던트 이상은 화상·출혈·진동·파열·침잠을 랜덤 부여하는데
 `identity_keyword` 에는 `Laceration` 하나만 있다.
 
@@ -64,8 +71,9 @@ E.G.O 도 같다. `ego_status → status_category` 로 **94종의 E.G.O 가 축�
 ```
 
 > **초판 판단을 정정한다.** 설계 초안은 「파생 규칙 13건을 저작해야 한다」고 적었다.
-> 산문에서 「취급됨」 문구를 세고 그것이 저작 대상이라 단정했는데 틀렸다.
+> 산문에서 「취급됨」 문구를 세고 그것이 저작 대상이라 단정했는데, **상태 축에 대해서는** 틀렸다.
 > `status_category` + `ego_status` 로 이미 구조화돼 있다.
+> 다만 **소속 취급 3건은 여전히 저작 대상**이다(11절 ①). 초판의 정정이 과했다.
 
 ## 4. 축 — 8개
 
@@ -93,39 +101,51 @@ VIBRATION_CONVERTED 9 · VIBRATION_MERGED 1  항상 VIBRATION 과 공존한다 �
 IGNORE_CHECED_CORRECTION_EXCLUSION 32       내부 플래그
 ```
 
-## 5. 다섯 축이 아니라 여섯 갈래
+## 5. 여섯 갈래
 
-트리거 150종을 무엇으로 판정하는지로 가르면 이렇다.
+트리거 150종을 무엇으로 판정하는지로 가르면 이렇다. **축 8개와는 다른 층위다** —
+축은 「상태 계열」이고, 갈래는 「트리거가 무엇을 보는가」다.
 
 | 갈래 | 근거 | 실측 | 편성으로 판정 |
 | --- | --- | --- | --- |
 | 축 | `identity_keyword` + `identity_status`→`status_category` | 266 + 163 | ✅ |
-| 소속 | `identity_association` (+ `unit_keyword` 예외) | 241 · 64종 | ✅ |
-| 죄악 | `identity_skill` → `skill.sin` | 563쌍 · 1044/1045 채움 | ✅ |
-| 공격 타입 | `identity_skill` → `skill.attack_type` | 261쌍 · 907/1045 | ✅ |
+| 소속 | `identity_association` · `identity_unit_keyword` | 241 · 391 | ✅ |
+| 죄악 | `gift_requirement.sinAffinity` · `resonance` (보조: `skill.sin`) | 46 · 23 · 563쌍 | ✅ |
+| 공격 타입 | `gift_requirement.skills` (보조: `skill.attack_type`) | 10 · 261쌍 | ✅ |
 | 편성 구조 | 배치 슬롯 · 후열 여부 | 입력에서 온다 | ✅ |
 | 전장 상태 | 없음 | — | ❌ 런 상태 |
 
-## 6. `evaluability` 는 저작이 아니라 유도다
+`unit_keyword` 는 예외가 아니라 **1급 갈래**다 — `Bloodfiend Identities` 가 여기로만 풀린다.
 
-`limbus-assets` 의 트리거 어휘가 **편성과 런 상태를 이미 구분한다.**
+## 6. `evaluability` — 이진이 아니라 3단이다
 
-```
-Allies have Burn Skill    화상 스킬을 가진 아군    → roster
-Allies have Burn          지금 화상을 보유한 아군   → runtime
-```
-
-`Bleed·Burn·Charge·Poise·Tremor` 는 쌍으로 있고, `Ammo·Sinking·Rupture·죄악 7·공격타입 3` 은
-`Skill` 형만 있다. 규칙으로 유도한다.
+초안은 「`… Skill` 이면 roster, 아니면 runtime」이라는 이진 규칙을 세웠다. **틀렸다.**
+실측하면 규칙 밖으로 떨어지는 것이 너무 많다.
 
 ```
-'… Skill' 로 끝난다           → roster
-'Allies have X' (Skill 없음)  → runtime
-'… Identities'               → roster
-'Always'                     → always
-'Other Uncommon Triggers'    → unclassified
-그 밖                         → runtime
+… Identities    28   roster
+… Skill         17   roster
+X Skill Used    41   ← 초안이 runtime 으로 보냈다
+그 밖           64
 ```
+
+`Wrath Skill Used` 는 **편성이 가능성을 정하고 런타임이 발생을 정한다.** 분노 스킬이 없는
+편성에서는 영원히 안 켜지고, 있으면 언젠가 켜진다. roster 도 runtime 도 아니다.
+
+```
+roster        편성만으로 확정된다              … Identities · Allies have X Skill
+roster_gated  편성이 가능성을 정하고            X Skill Used · X Resonance
+              런타임이 발생을 정한다            E.G.O Skill Used · Deployment Position
+runtime       편성과 무관하다                  Clash Win · Critical Hit · Enemies with HP Condition
+always        항상                            Always
+unclassified  원본이 분류를 포기했다             Other Uncommon Triggers
+```
+
+**이 3단이 출력의 신뢰도를 가른다.** `roster` 는 「켜진다」, `roster_gated` 는 「켜질 수 있다」,
+`runtime` 은 「편성으로는 모른다」로 화면에 다르게 표기해야 한다.
+
+> 규칙만으로는 `그 밖 64` 가 안 갈린다. **`trigger_ref.evaluability` 는 유도로 초안을 만들되
+> 사람이 검토해 확정하는 값이다.** 저작이 아니라고 한 초판 주장을 철회한다.
 
 ## 7. 유도 규칙과 그 함정
 
@@ -133,7 +153,7 @@ Allies have Burn          지금 화상을 보유한 아군   → runtime
 이름으로 유도하되 **오매칭이 실재한다.**
 
 ```
-trigger → 축            47/150   status_text.en 매칭 (Combustion→Burn · Vibration→Tremor)
+trigger → 축            43/150   status_text.en 매칭 (Combustion→Burn · Vibration→Tremor)
 trigger → 소속          26/28    'Assoc.' ↔ 'Association' 변형 포함
 trigger → 죄악          33
 trigger → 공격 타입      6
@@ -144,7 +164,7 @@ trigger → 공격 타입      6
 
 ```
 Dawn Office Identities      → DawnTeam(Dawn Office) 상태에 매칭됨
-N Corp. Fanatic Identities  → AssemblePersonality(Fanatic) 상태에 매칭됨
+N Corp. Fanatic Identities  → Assemble · AssemblePersonality(Fanatic) 두 상태에 매칭됨
 ```
 
 **소속 우선 · 최장일치** 규칙으로 막는다. `Trigger Tremor Burst` 는 `Tremor`(Vibration)와
@@ -174,7 +194,10 @@ teamWide      3   true
 
 트리거가 `Wrath Skill Used` 라 말하는 것을 requirement 는 구조로 준다.
 `sinAffinity`·`resonance` 는 관련 트리거를 100% 함께 갖는다(46/46 · 23/23) — **중복이 아니라 상세**다.
-**죄악·공명 판정은 이름 파싱이 아니라 이 테이블을 쓴다.**
+
+**공명은 죄악과 다른 갈래다.** `{"mode":"activate","absolute":true}` 가
+`Wrath Resonance` 와 `Wrath Absolute Resonance` 를 가른다. `refKind='sin'` 으로 뭉개면
+이 정보가 사라지므로 `resonance` 를 별도 `refKind` 로 둔다.
 
 ## 9. 팩 → 축도 구조화돼 있다
 
@@ -190,18 +213,38 @@ attack_type 6팩     → Blunt · Pierce · Slash
 
 팩이 어떤 축의 덱에 좋은지를 데이터가 말한다. 팩 점수화의 1차 근거다.
 
-## 10. 저작해야 하는 것 — 정량자뿐
+**층·난이도로 팩 후보를 추리는 경로는 `floor_pack` 288행**이다(`difficulty` × `floor_range` × `pack_id`).
+1절 입력의 「난이도 · 현재 층」이 여기로 들어간다.
 
-**어느 출처에도 구조화돼 있지 않다.** `limbus-assets` 가 트리거 어휘를 저작할 때
-정량자를 의도적으로 버렸다.
+**팩 안에는 배타 그룹이 있다.** `gift_exclusive_pack` 321행 · 71팩. 팩 1002 는 9403·9404 중
+하나만 준다. 배타를 무시하고 기대 효용을 합산하면 **과대평가된다** — 점수화가 배타 그룹을
+단위로 다뤄야 한다.
+
+## 10. 저작해야 하는 것
+
+초판은 「저작은 정량자뿐」이라 적었다. **틀렸다.** 저작물이 넷이다.
 
 ```
-임계값 「N인 이상」    72 기프트
-분모 편성 vs 출전     명시 27 · 미명시 45
-배치 슬롯            Deployment Position 63기프트의 「1번 편성 전용」
-                    ─────
-                    ~90행
+① 정량자                 ~90행   임계값 72 · 분모 · 배치 슬롯          유일하게 「값」이 저작이다
+② trigger_ref            ~150   유도 초안 + 사람 검토. evaluability 3단 판정
+③ 이름 매칭 예외·우선순위     4~6   Bloodfiend · Yurodivy · 소속 우선 · 최장일치
+④ identity_rewrite          3   9280 · 9841 · 1041302
 ```
+
+②③은 코드에 규칙으로 담고 결과를 테이블로 굳힌다. `lib/engine/vocab.ts` 가 토큰→어휘를
+저작한 것과 같은 계열이다.
+
+### 정량자 실측
+
+```
+「N인 이상」 기프트        72
+  ㄴ ko 「편성 인원」 명시   11        ko 「출격 인원」 명시   20
+  ㄴ en 'counts Backup'    1        en 'on the field'    27
+배치 슬롯                 Deployment Position 63기프트의 「1번 편성 전용」
+```
+
+**분모를 명시한 것이 ko·en 합쳐 31건 안팎이고 나머지 40여 건은 표기가 없다.**
+초판이 적은 「명시 27」은 재현되지 않는 수치라 위 실측으로 대체한다.
 
 같은 「3인 이상」인데 분모가 다르다는 것이 결정적이다.
 
@@ -210,92 +253,180 @@ attack_type 6팩     → Blunt · Pierce · Slash
 9283 상납된 시가      3인 이상 · 출격 인원 기준 (only counts Identities on the field)
 ```
 
-## 11. 남은 구멍 넷 — 정직하게
+## 11. 남은 구멍
 
-**① 9280 본국검보 — 기프트가 소속을 재작성한다**
+**① 소속 재작성 3건** — 초판은 1건이라 했으나 「소속으로 **간주**」 표현을 안 봐서 놓쳤다.
 
 ```
-「검계 소속 인격을 제외한 편성 순서가 가장 빠른 S사 소속 인격 1인을 검계 소속으로 취급」
+gift 9280 본국검보   「검계 소속 인격을 제외한 편성 순서가 가장 빠른 S사 소속 인격 1인을 검계 소속으로 취급」
+gift 9841 C형 정리 요원 장비 세트   「편성 순서가 가장 빠른 W사 소속이 아닌 인격 1인을 W사 소속으로 취급」
+passive 1041302     「일방공격 명령 받을 때 흑수 또는 가씨 가문 소속으로 간주」
 ```
 
-단순 축 추가가 아니라 **선택 규칙**(제외 · 필터 · 정렬 · 개수)이다. 정형 데이터에 전혀 없다.
-**패시브 0건 · E.G.O 0건 · 기프트 1건**으로 구멍이 좁다.
+셋 다 **선택 규칙**(제외 · 필터 · 정렬 · 개수)이며 정형 데이터에 전혀 없다. E.G.O 는 0건이다.
+대상이 **축이 아니라 소속**이라는 점이 중요하다 — 초판의 `axis_rewrite` 는 타입이 틀렸다.
 
 **② 완전 불투명 3건** — `Other Uncommon Triggers` 만 가진 기프트. 44건 중 41건은 다른
 트리거도 가져 판정된다.
 
-**③ 런 상태 39종** — `Clash Win` · `Critical Hit` · `Enemies with HP Condition`. 편성으로
-원리적 판정 불가. 「켜질 수 있음」까지만 말한다. 확률 가중은 데이터가 아니라 모델링 선택이다.
+**③ 런 상태** — `Clash Win` · `Critical Hit` · `Enemies with HP Condition`. 편성으로
+원리적 판정 불가. 확률 가중은 데이터가 아니라 모델링 선택이므로 이 설계의 범위 밖이다.
 
-**④ 마탄 7종** — `FREISHUTZ_OUTIS_EGO_BULLET` 이 `BULLET` 태그를 안 갖는다. 탄환 계열로
-보이지만 게임이 그렇게 묶지 않았다. **판정 보류** — 보유 인격이 0이라 지금은 영향 없다.
+**④ 마탄 7종** — `FREISHUTZ_OUTIS_EGO_BULLET` 이 `BULLET` 태그를 안 갖는다. 보유 인격 0이라
+지금은 영향 없다. `axis` 테이블에 `note` 로 판정 보류를 기록해 재적재에도 남긴다.
 
-## 12. 추가할 구조 — canonical 6테이블
+**⑤ 무기록 드롭** — raw `cursedPair`/`blessedPair` 3쌍(9227↔9228 · 9229↔9230 · 9231↔9232)이
+canonical 에 없고 `field_gap` 에도 안 잡혔다. 저주↔축복 대응이라 획득 경로 판정에 쓰일 수 있다.
+이 설계의 범위 밖이지만 **결손으로 기록해야 한다.**
+
+## 12. 추가할 구조 — canonical 7테이블
 
 **RDB 조인만으로 전부 풀리게 만든다.** 파싱도 하드코딩도 없이. 그래야 다른 저장소로
 옮기는 것이 말이 된다.
 
 ```prisma
 /// 트리거가 판정하는 축. status_category 중 트리거가 참조하는 것만.
-/// BULLET 은 keyword 테이블에 없지만 키워드처럼 동작하므로 여기서 1급이다
-model Axis { id String @id  kind String }                              // 8행
+/// BULLET 은 keyword 에 없지만 키워드처럼 동작하므로 여기서 1급이다
+model Axis {
+  id   String  @id                    // COMBUSTION … BULLET
+  kind String                         // status_keyword | bullet
+  note String?                        // 판정 보류 기록 (마탄 등)
+}                                                                      // 8행
 
-/// 인격이 가진 축. 세 경로를 한 관계로 통일한다
-/// keyword        identity_keyword → axis            (mj 저작. 「~로만」 반영됨)
-/// special_status identity_status → status_category → axis  (홍매화 → LACERATION)
-/// ego_granted    평가 시점에 더한다 — 편성 의존이라 적재 불가
-model IdentityAxis { identityId String  axisId String  source String } // 유도
+/// 인격이 가진 축. 두 경로를 적재한다.
+/// **ego_granted 는 여기 없다** — 편성 의존이라 저장할 수 없고 평가 시점에 UNION 한다
+model IdentityAxis {
+  identityId String
+  axisId     String
+  source     String                   // keyword | special_status
+  @@id([identityId, axisId, source])
+}                                                                      // 유도
 
 /// 트리거가 무엇을 참조하나. 이름 유도 결과를 못박는다
-/// refKind: axis | association | unit_keyword | sin | attack_type | deployment | none
-/// evaluability: roster | runtime | always | unclassified   ← 이름 규칙으로 유도
-model TriggerRef { triggerId String  refKind String  refId String?  evaluability String }  // ~150
+model TriggerRef {
+  triggerId    String
+  refKind      String                 // axis | association | unit_keyword | sin
+                                      // | resonance | attack_type | deployment | none
+  refId        String?
+  /// 공명 전용. absolute 인가
+  absolute     Boolean?
+  evaluability String                 // roster | roster_gated | runtime | always | unclassified
+  @@id([triggerId, refKind, refId])
+}                                                                      // ~150
 
 /// 효과가 무엇을 다루나. 연쇄 엣지의 출발점
-/// mode: inflict | gain | consume | trigger
-model EffectRef { effectId String  refKind String  refId String?  mode String }            // ~55
+model EffectRef {
+  effectId String
+  refKind  String                     // axis | sin | none
+  refId    String?
+  mode     String                     // inflict | gain | consume | trigger
+  @@id([effectId, refKind, refId])
+}                                                                      // ~55
 
 /// 팩이 어떤 축·죄악·공격타입 덱에 좋은가. pack_tag 유도
-model PackAxis { packId String  refKind String  refId String }                             // 유도
+model PackAxis {
+  packId  String
+  refKind String                      // axis | sin | attack_type
+  refId   String
+  @@id([packId, refKind, refId])
+}                                                                      // 유도
 
-/// **유일한 저작.** kind: min_count | denominator | slot
-model GiftTriggerParam { giftId String  triggerId String  kind String  value String  source String }  // ~90
+/// **정량자. 유일하게 「값」이 저작이다**
+model GiftTriggerParam {
+  giftId    String
+  triggerId String
+  kind      String                    // min_count | denominator | slot
+  value     String                    // 3 | roster | field | 1
+  source    String                    // wiki | game-verified
+  @@id([giftId, triggerId, kind])
+}                                                                      // ~90
 
-/// 축 재작성 규칙. 지금은 9280 하나다
-model AxisRewrite { id String  targetAxis String  excludeAxis String?  filterAxis String?
-                    orderBy String  take Int  mode String }                                 // 1행
+/// 소속을 재작성하는 규칙. 축이 아니라 **소속**이 대상이다
+model IdentityRewrite {
+  id            String  @id
+  sourceKind    String                // gift | passive
+  sourceId      String                // 9280 · 9841 · 1041302
+  targetKind    String                // association
+  targetId      String                // BLADE_LINEAGE · W_CORP · …
+  excludeId     String?               // 이미 대상 소속인 인격은 제외
+  filterId      String?               // 이 소속 중에서만 고른다 (S_CORP 등)
+  orderBy       String                // roster_order
+  take          Int                   // 1
+  mode          String                // add
+}                                                                      // 3행
 ```
 
-## 13. 이걸로 답이 나온다
+## 13. 평가 흐름 — 6갈래를 모두 소비한다
+
+초판은 축 하나만 조인하는 SQL 을 실었다. **그것으로는 답이 안 나온다.** 전체 흐름은 이렇다.
+
+**단계 1 — 축 프로파일을 만든다 (E.G.O 를 UNION 한다)**
 
 ```sql
--- 「이 편성으로 켜지는 기프트」
-select g.id
-from canonical.gift g
-join canonical.gift_trigger gt on gt.gift_id = g.id
-join canonical.trigger_ref tr on tr.trigger_id = gt.trigger_id
-join canonical.identity_axis ia on ia.axis_id = tr.ref_id
-where ia.identity_id = any($편성)
-  and tr.evaluability = 'roster'
-group by g.id, gt.trigger_id
-having count(distinct ia.identity_id)
-       >= coalesce((select value::int from canonical.gift_trigger_param p
-                    where p.gift_id=g.id and p.trigger_id=gt.trigger_id and p.kind='min_count'), 1)
+WITH squad AS (SELECT identity_id, ego_id, slot, on_field FROM $입력),
+axis_of AS (
+  SELECT s.identity_id, ia.axis_id, s.on_field
+    FROM squad s JOIN canonical.identity_axis ia USING (identity_id)
+  UNION                                   -- ← ego_granted. 저장 불가, 평가 시점에만 존재
+  SELECT s.identity_id, sc.category, s.on_field
+    FROM squad s
+    JOIN canonical.ego_status es ON es.ego_id = s.ego_id
+    JOIN canonical.status_category sc ON sc.status_id = es.status_id
+    JOIN canonical.axis a ON a.id = sc.category
+)
 ```
 
-연쇄는 `gift → effect_ref → axis → trigger_ref → gift` 로 이어진다. 실측 6,259엣지 · 281노드 ·
-평균 out-degree 35.6 · 양방향 쌍 1,762.
+**단계 2 — 소속 재작성을 적용한다** (`identity_rewrite` · 보유 기프트와 패시브 기준)
+
+**단계 3 — 갈래별로 충족 수를 센다.** 분모가 `roster` 면 편성 12 전체, `field` 면 `on_field` 만
+센다. **이 분기가 없으면 9282 와 9283 이 같은 답을 낸다.**
+
+**단계 4 — 트리거별 충족을 판정하고 기프트로 접는다.** 한 기프트가 트리거를 여럿 갖는다
+(451 중 **339 기프트가 2개 이상**, 최대 8개).
+
+> **다중 트리거는 OR 로 본다.** 게임 설명문이 트리거를 「또는」으로 나열하고, `limbus-assets`
+> 가 이를 배열로 담았다. 다만 **AND 인 사례가 있는지 표본으로 확인해야 한다** — 확인 전까지
+> OR 로 두되 이 가정을 문서에 남긴다.
+
+**단계 5 — 신뢰도를 붙인다.** 기프트의 트리거들이 어떤 `evaluability` 인지로 갈린다.
+
+```
+roster 트리거를 충족          → 「켜진다」
+roster_gated 만 충족          → 「켜질 수 있다」
+runtime 만 있다               → 「편성으로는 모른다」
+```
+
+**단계 6 — 팩을 점수화한다.**
+
+```
+floor_pack(난이도, 층)  →  후보 팩
+  각 팩의 gift_pack ∩ 위에서 켜지는 기프트  →  기대 효용
+  gift_exclusive_pack 배타 그룹은 그룹당 1개만 계산   ← 없으면 과대평가
+  pack_axis 와 내 축 프로파일의 겹침         →  1차 근거
+```
+
+**단계 7 — 연쇄.** 켜진 기프트의 `effect_ref` 가 주는 축이 다시 `trigger_ref` 를 켠다.
+실측 6,259엣지 · 281노드 · 평균 out-degree 35.6 · 양방향 쌍 1,762.
 
 ## 14. 저장소 판단
 
 **PostgreSQL 에 구조를 먼저 세운다.** 관계형이 관계로 전부 설명하지 못하는 채로 다른
 저장소에 옮기면 문제를 이사시키는 것뿐이다.
 
-Neo4j 는 그 다음이다. 근거는 측정에 있다 — 연쇄 그래프가 out-degree 35.6 에 사이클
-1,762쌍이라 깊이별 경로가 `35.6^n` 으로 터진다(3홉 4.5만 · 4홉 160만). **OLTP DB 에
-조합 탐색 부하를 걸면 안 된다.** 탐색은 OLTP 밖에서 한다.
+연쇄 그래프는 **281노드로 유한하다.** 도달 집합은 아무리 커도 281이다. 폭발하는 것은
+「경로 열거」라는 선택의 결과이지 저장소의 성질이 아니다 — 깊이 상한 없이 열거하면
+Neo4j 에서도 똑같이 발산한다. **따라서 `35.6^n` 은 저장소 전환의 근거가 아니다.**
 
-투영은 `raw → canonical` 과 같은 규율로 둔다 — 재생성 가능 · 검사로 지킴 · 계보 유지.
+Neo4j 를 볼 실제 시점은 이렇다.
+
+```
+근거 사슬이 산출물이 될 때        「왜 켜지나」를 경로로 보여줘야 하고 SQL 로 쓰기 어려워질 때
+깊이를 미리 못 정할 때            지금은 2–3홉이고 상한을 정할 수 있다
+탐색 UI 가 저작을 도울 때          trigger_ref · 정량자 저작에 그래프 브라우저가 값을 낼 때
+```
+
+전환을 싸게 만들어 두는 편이 낫다 — **투영 정의를 코드로 분리하고, 평가기를 저장소와
+분리한다.** `loadFacts()` 구현 하나만 갈아끼우면 되게.
 
 ## 15. 범위 밖
 
@@ -304,4 +435,8 @@ Neo4j 는 그 다음이다. 근거는 측정에 있다 — 연쇄 그래프가 o
 Neo4j 적재                  이 설계가 RDB 에서 검증된 뒤
 화면과 트래커 흐름            디자인 작업과 겹친다
 정량자 ~90행을 채우는 방법     위키·게임 확인. 파이프라인 밖의 일
+런 상태 트리거의 확률 가중      데이터가 아니라 모델링 선택
+기대 효용의 저울추             gift.tier · cost · enhanceable. 가중치 학습 설계로 미룬다
+적 저항 프로파일               encounter_part_resist 11,800행. 「얼마나 유용한가」의 다음 단계
+패닉 스킬 · cursedPair        raw 에 있고 canonical 에 없다. 결손 기록만 남긴다
 ```
