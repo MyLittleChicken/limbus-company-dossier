@@ -1,6 +1,7 @@
 # 메카닉 축 그래프 — 추천 엔진의 근간
 
-> 설계 2026-08-03 · 상태 WIP
+> 설계 2026-08-03 · 상태 WIP — **반증 통과 전이다**
+> 12절이 초판의 기둥 여섯을 무너뜨렸다. 구현 계획으로 가기 전에 14절의 판단 여섯을 닫아야 한다
 > 선행 [ADR-06 3스키마 데이터베이스](../../adr/06-three-schema-database.md) · [소비자 관점 감사](../../audit/00-summary.md)
 > 이 문서의 모든 수치는 `canonical` 실측이다. 스냅샷 `2026-07-25`(MD7).
 
@@ -63,7 +64,10 @@ identity_status     RedApricotBlossom → LACERATION
 10109 약지 점묘파 스튜던트 이상은 화상·출혈·진동·파열·침잠을 랜덤 부여하는데
 `identity_keyword` 에는 `Laceration` 하나만 있다.
 
-E.G.O 도 같다. `ego_status → status_category` 로 **94종의 E.G.O 가 축을 준다**(159엣지).
+~~E.G.O 도 같다. `ego_status → status_category` 로 94종의 E.G.O 가 축을 준다(159엣지).~~
+
+> **이 주장은 12절 ①에서 반증됐다.** `ego_status` 는 「다루는 상태」지 「주는 축」이 아니다.
+> 「인격으로 취급」 명시가 있는 E.G.O 는 **2종뿐**이고 나머지 155엣지는 근거가 없다.
 
 ```
 20509 착영휘도       → Laceration(LACERATION) · Breath(BREATH)
@@ -279,164 +283,181 @@ passive 1041302     「일방공격 명령 받을 때 흑수 또는 가씨 가�
 canonical 에 없고 `field_gap` 에도 안 잡혔다. 저주↔축복 대응이라 획득 경로 판정에 쓰일 수 있다.
 이 설계의 범위 밖이지만 **결손으로 기록해야 한다.**
 
-## 12. 추가할 구조 — canonical 7테이블
+## 12. 반증으로 무너진 가정 여섯
 
-**RDB 조인만으로 전부 풀리게 만든다.** 파싱도 하드코딩도 없이. 그래야 다른 저장소로
-옮기는 것이 말이 된다.
+병렬 반증(완전성 · 건전성 · 흐름 반례 · 불변식) 결과다. **설계의 기둥 여섯이 무너졌다.**
+아래는 전부 실측 반례가 있다.
 
-```prisma
-/// 트리거가 판정하는 축. status_category 중 트리거가 참조하는 것만.
-/// BULLET 은 keyword 에 없지만 키워드처럼 동작하므로 여기서 1급이다
-model Axis {
-  id   String  @id                    // COMBUSTION … BULLET
-  kind String                         // status_keyword | bullet
-  note String?                        // 판정 보류 기록 (마탄 등)
-}                                                                      // 8행
+### ① `ego_status` 는 「E.G.O 가 주는 축」이 아니다 — 치명적
 
-/// 인격이 가진 축. 두 경로를 적재한다.
-/// **ego_granted 는 여기 없다** — 편성 의존이라 저장할 수 없고 평가 시점에 UNION 한다
-model IdentityAxis {
-  identityId String
-  axisId     String
-  source     String                   // keyword | special_status
-  @@id([identityId, axisId, source])
-}                                                                      // 유도
-
-/// 트리거가 무엇을 참조하나. 이름 유도 결과를 못박는다
-model TriggerRef {
-  triggerId    String
-  refKind      String                 // axis | association | unit_keyword | sin
-                                      // | resonance | attack_type | deployment | none
-  refId        String?
-  /// 공명 전용. absolute 인가
-  absolute     Boolean?
-  evaluability String                 // roster | roster_gated | runtime | always | unclassified
-  @@id([triggerId, refKind, refId])
-}                                                                      // ~150
-
-/// 효과가 무엇을 다루나. 연쇄 엣지의 출발점
-model EffectRef {
-  effectId String
-  refKind  String                     // axis | sin | none
-  refId    String?
-  mode     String                     // inflict | gain | consume | trigger
-  @@id([effectId, refKind, refId])
-}                                                                      // ~55
-
-/// 팩이 어떤 축·죄악·공격타입 덱에 좋은가. pack_tag 유도
-model PackAxis {
-  packId  String
-  refKind String                      // axis | sin | attack_type
-  refId   String
-  @@id([packId, refKind, refId])
-}                                                                      // 유도
-
-/// **정량자. 유일하게 「값」이 저작이다**
-model GiftTriggerParam {
-  giftId    String
-  triggerId String
-  kind      String                    // min_count | denominator | slot
-  value     String                    // 3 | roster | field | 1
-  source    String                    // wiki | game-verified
-  @@id([giftId, triggerId, kind])
-}                                                                      // ~90
-
-/// 소속을 재작성하는 규칙. 축이 아니라 **소속**이 대상이다
-model IdentityRewrite {
-  id            String  @id
-  sourceKind    String                // gift | passive
-  sourceId      String                // 9280 · 9841 · 1041302
-  targetKind    String                // association
-  targetId      String                // BLADE_LINEAGE · W_CORP · …
-  excludeId     String?               // 이미 대상 소속인 인격은 제외
-  filterId      String?               // 이 소속 중에서만 고른다 (S_CORP 등)
-  orderBy       String                // roster_order
-  take          Int                   // 1
-  mode          String                // add
-}                                                                      // 3행
-```
-
-## 13. 평가 흐름 — 6갈래를 모두 소비한다
-
-초판은 축 하나만 조인하는 SQL 을 실었다. **그것으로는 답이 안 나온다.** 전체 흐름은 이렇다.
-
-**단계 1 — 축 프로파일을 만든다 (E.G.O 를 UNION 한다)**
-
-```sql
-WITH squad AS (SELECT identity_id, ego_id, slot, on_field FROM $입력),
-axis_of AS (
-  SELECT s.identity_id, ia.axis_id, s.on_field
-    FROM squad s JOIN canonical.identity_axis ia USING (identity_id)
-  UNION                                   -- ← ego_granted. 저장 불가, 평가 시점에만 존재
-  SELECT s.identity_id, sc.category, s.on_field
-    FROM squad s
-    JOIN canonical.ego_status es ON es.ego_id = s.ego_id
-    JOIN canonical.status_category sc ON sc.status_id = es.status_id
-    JOIN canonical.axis a ON a.id = sc.category
-)
-```
-
-**단계 2 — 소속 재작성을 적용한다** (`identity_rewrite` · 보유 기프트와 패시브 기준)
-
-**단계 3 — 갈래별로 충족 수를 센다.** 분모가 `roster` 면 편성 12 전체, `field` 면 `on_field` 만
-센다. **이 분기가 없으면 9282 와 9283 이 같은 답을 낸다.**
-
-**단계 4 — 트리거별 충족을 판정하고 기프트로 접는다.** 한 기프트가 트리거를 여럿 갖는다
-(451 중 **339 기프트가 2개 이상**, 최대 8개).
-
-> **다중 트리거는 OR 로 본다.** 게임 설명문이 트리거를 「또는」으로 나열하고, `limbus-assets`
-> 가 이를 배열로 담았다. 다만 **AND 인 사례가 있는지 표본으로 확인해야 한다** — 확인 전까지
-> OR 로 두되 이 가정을 문서에 남긴다.
-
-**단계 5 — 신뢰도를 붙인다.** 기프트의 트리거들이 어떤 `evaluability` 인지로 갈린다.
+초판 §3·§13 은 `ego_status → status_category` 로 장착 파생을 얻는다고 했다. **틀렸다.**
 
 ```
-roster 트리거를 충족          → 「켜진다」
-roster_gated 만 충족          → 「켜질 수 있다」
-runtime 만 있다               → 「편성으로는 모른다」
+「인격으로 취급」 명시가 있는 E.G.O    2종 (20509 착영휘도 · 20109 엄숙한 애도)
+ego_status 로 축을 주는 E.G.O        94종 · 159엣지
+                                     → 155엣지(97.5%)가 근거 없다
 ```
 
-**단계 6 — 팩을 점수화한다.**
+반례 — **20705 홀리데이**는 `ego_status` 로 축 7개를 전부 주는데, 패시브 원문은
+「부여하는 화상·출혈·진동·파열·침잠 위력 **+1**」이다. **증폭기지 부여자가 아니다.**
+21105 는 「5축 중 **무작위 1개**」인데 5축을 전부 준다 — §3 이 `identity_keyword` 의
+미덕으로 든 10109 와 같은 메카닉인데 E.G.O 쪽만 안 접힌다.
+
+`ego_status` 는 limbus-assets 의 `statuses`(= 「다루는 상태」)이고 참조·소모·자원을 포함한다.
+20109 는 `Discard`·`ReloadLament`·`SuperCoin`·`AzureResistDown` 까지 담는다.
+
+**대안 경로** — `ego_skill → coin_token(kind='status')` 이 「이 E.G.O 스킬이 실제로 부여하는
+상태」다. E.G.O 스킬 205개가 `coin_token` 에 있고, 20509 는 `Laceration` 만 나온다(정확).
+다만 **「부여한다」와 「그 인격으로 취급된다」는 여전히 다르다.** 후자는 2종만 명시돼 있다.
+
+> **결론** — 장착 파생은 **저작 2행**이다. 유도가 아니다.
+> `coin_token` 경로는 「이 E.G.O 로 무엇을 부여하게 되나」라는 **다른 질문**에 쓴다.
+
+### ② E.G.O 는 등급 슬롯별로 동시 장착된다
+
+초판 `squad.ego_id` 가 인격당 1개를 가정했다. **틀렸다.**
 
 ```
-floor_pack(난이도, 층)  →  후보 팩
-  각 팩의 gift_pack ∩ 위에서 켜지는 기프트  →  기대 효용
-  gift_exclusive_pack 배타 그룹은 그룹당 1개만 계산   ← 없으면 과대평가
-  pack_axis 와 내 축 프로파일의 겹침         →  1차 근거
+뫼르소(sinner 5)   ZAYIN 1 · TETH 3 · HE 3 · WAW 2
 ```
 
-**단계 7 — 연쇄.** 켜진 기프트의 `effect_ref` 가 주는 축이 다시 `trigger_ref` 를 켠다.
-실측 6,259엣지 · 281노드 · 평균 out-degree 35.6 · 양방향 쌍 1,762.
+20509(HE)와 20507(WAW)을 **함께** 낀다. 입력은 `(identityId, egoId[])` 여야 한다.
 
-## 14. 저장소 판단
+부수 — `rank` NULL 동명 중복 5건(201011·203011·205011·206011·211011)은 `ego_status` 가
+0행이라 조용히 축을 안 준다. `ego.sinner_id = identity.sinner_id` 검사도 없으면
+파우스트 인격에 뫼르소 E.G.O 가 붙는다.
 
-**PostgreSQL 에 구조를 먼저 세운다.** 관계형이 관계로 전부 설명하지 못하는 채로 다른
-저장소에 옮기면 문제를 이사시키는 것뿐이다.
+### ③ 다중 트리거는 OR 가 아니다 — AND 사례가 실재한다
 
-연쇄 그래프는 **281노드로 유한하다.** 도달 집합은 아무리 커도 281이다. 폭발하는 것은
-「경로 열거」라는 선택의 결과이지 저장소의 성질이 아니다 — 깊이 상한 없이 열거하면
-Neo4j 에서도 똑같이 발산한다. **따라서 `35.6^n` 은 저장소 전환의 근거가 아니다.**
+초판은 「OR 로 보되 확인 필요」로 남겼다. **확인 결과 AND 다.**
 
-Neo4j 를 볼 실제 시점은 이렇다.
+반례 — **9179** 는 트리거가 `Allies have Poise Skill` · `Allies have Gloom Skill` 둘뿐인데
+ko 원문은 「[Breath] … 공격 스킬 보유 인격이 **5인 이상이면** 이번 전투 동안 발동
+(대기 인원 제외)」이고 우울 절은 그 안쪽 조건이다. OR 로 접으면 우울 스킬만 있는 편성에서
+「켜진다」로 표기되지만 **실제로는 한 번도 안 켜진다.**
+
+같은 「5인 이상 게이트」 기프트가 **39개**다. 배치 스코프 59개의 `Deployment Position` 도
+OR 가 아니라 AND 스코프다.
+
+> **결론** — 트리거 결합은 기프트마다 다르다. **`gift_trigger` 에 결합 의미를 저작해야 한다.**
+
+### ④ `gift_exclusive_pack` 은 배타 그룹이 아니다
+
+초판 §9 는 「팩당 배타 그룹이라 그룹당 1개만 계산」이라 했다. **정반대로 틀렸다.**
+
+원본 필드명이 `exclusiveTo` 이고 방향이 **기프트 → 팩**이다 — 「이 기프트는 이 팩에서만
+나온다」. 택일이 아니다.
 
 ```
-근거 사슬이 산출물이 될 때        「왜 켜지나」를 경로로 보여줘야 하고 SQL 로 쓰기 어려워질 때
-깊이를 미리 못 정할 때            지금은 2–3홉이고 상한을 정할 수 있다
-탐색 UI 가 저작을 도울 때          trigger_ref · 정량자 저작에 그래프 브라우저가 값을 낼 때
+9208 인연 얽힘        exclusiveTo 가 7개 팩       ← 팩당 택일이면 성립 불가
+배타 원소 1개뿐인 팩    19개                      ← 택일이면 무의미
+gift_pack 에도 있는 쌍  237 / 321
 ```
 
-전환을 싸게 만들어 두는 편이 낫다 — **투영 정의를 코드로 분리하고, 평가기를 저장소와
-분리한다.** `loadFacts()` 구현 하나만 갈아끼우면 되게.
+초판대로 「그룹당 1개」를 적용하면 최대 17개짜리 팩이 1/17 만 계산돼 **대규모 과소평가**가
+난다(71팩 · 230기프트 영향).
 
-## 15. 범위 밖
+**반대 방향 결함도 있다** — `gift_exclusive_pack` 84행(58기프트 · 44팩)이 `gift_pack` 에
+없다. 9212 는 1014 의 전용인데 어느 팩의 드랍 풀에도 없다. `gift_pack` 을 1차 소스로 삼고
+`exclusive` 는 서브셋으로만 쓰며, 나머지는 결손으로 기록해야 한다.
+
+### ⑤ `identity_rewrite` 3행이 전부 모델과 안 맞는다
 
 ```
-런 기록 수집과 가중치 학습     app.run 스키마 확장이 선행돼야 한다. 별도 설계
+9280    자기참조 순환.  같은 기프트가 「검계 3인 이상일 때 발동」이면서 3번째 검계를 만든다
+        게다가 S_CORP 소속 인격은 10615 홍루 1인뿐이라 orderBy·take 가 무의미하다
+9841    필터가 소속이 아니다.  「자신의 기본 스킬로 [DimensionRift]을 부여하는 인격 중」
+        — 스킬-상태 술어다.  filterId(소속) 타입으로는 표현 불가
+1041302 targetId 가 다값이다.  「흑수 또는 가씨 가문」
+        흑수=unit_keyword BLACK_BEAST · 가씨=association FAMILY_GA — targetKind 도 단일이 아니다
+        발동 조건이 「홍원 군주 홍루의 패시브로 일방공격 명령 받을 때」 — 런타임 조건인데 자리가 없다
+```
+
+**3행짜리 테이블을 위해 스키마를 일반화하는 것이 옳은지 재검토해야 한다.**
+
+### ⑥ 최장일치 규칙이 정답을 파괴한다
+
+초판 §7 이 근거로 든 예시가 규칙을 깬다.
+
+```
+Trigger Tremor Burst   최장일치 → VibrationExplosion(Tremor Burst)  → status_category 0행 → 축 NULL
+                       짧은 매칭 → Vibration(Tremor)               → VIBRATION  ← 정답
+```
+
+`Trigger Amplitude Conversion/Entanglement` 도 같은 사유로 축을 잃는다. **이름 매칭 실패는
+2건이 아니라 최소 4건**이고, `effect` 쪽에서도 같은 이름으로 재발한다.
+
+> 다만 **거짓 양성은 0건**이다. 전수 50쌍 중 축을 낳는 오매칭이 없고, `Bind`·`Charge` 류
+> 부분 문자열 사고도 없다. 43/150 도 재현된다. **문제는 거짓 음성뿐이다.**
+
+## 13. 그 밖에 드러난 정량적 사실
+
+```
+83 / 451 기프트(18.4%)   트리거가 전부 runtime·unclassified.  편성으로 영원히 판정 불가
+                         9020 · 9024 · 9045 · 9091 · 9812 (Trigger Tremor Burst 단독 계열)
+5 인격                    identity_keyword 가 0개.  10201·10205·10305·10903·11206
+                         특수 상태 경로로도 축이 없다. E.G.O 없으면 축 공백
+36 기프트                 배치 슬롯이 다중값.  9761 은 #1·#2·#7·#8
+                         **슬롯 공간이 8이다** — 「출전 7」이라는 초판 전제가 틀렸다
+7 기프트                  gift_requirement 가 어느 트리거의 상세인지 모른다
+                         9043 은 Wrath Resonance 와 Wrath Absolute Resonance 를 둘 다 갖는데
+                         requirement 는 absolute:true 하나뿐
+1 인격                    identity_keyword.skill_slots 가 빈 배열 (10312 · Sinking)
+normal 51팩 중 0팩         축 태그가 없다.  hard 도 14/116
+                         → pack_axis 로는 노멀 런에서 아무것도 못 낸다
+자기 루프 21 · 상호 쌍 37   연쇄 종료 조건이 없다.  9003 재에서 재로는 Always 로 스스로 씨를 뿌린다
+association 64 중 37       트리거가 참조하지 않는다 (실사용률 42%)
+```
+
+## 14. 그래서 설계를 어떻게 고치나
+
+**바로 고칠 수 있는 것**
+
+```
+E.G.O 입력          (identityId, egoId[]) 로 바꾸고 sinner 일치 검사를 넣는다
+최장일치            「최장일치하되 축이 없으면 짧은 매칭으로 내려간다」로 바꾼다
+exclusiveTo         「이 기프트가 나오는 팩」으로 읽는다. gift_pack 을 1차 소스로
+배치 슬롯           다중값을 담는 구조로. 슬롯 공간은 8
+EffectRef.refKind   attack_type 추가
+TriggerRef.refKind  skill_kind(counter·guard·evade) · coin(부호·개수) 추가
+                    resonance mode 를 Boolean 이 아니라 enum + threshold 로
+```
+
+**설계 판단이 필요한 것**
+
+```
+장착 파생          저작 2행으로 갈지, coin_token 경로를 「부여 능력」이라는 다른 축으로 둘지
+트리거 결합         AND/OR 를 기프트마다 저작할지(451행), 아니면 보수적으로 AND 로 통일할지
+identity_rewrite   3행을 위해 일반 스키마를 만들지, 예외 처리로 둘지
+판정 불가 83건      화면에서 어떻게 다룰지 — 후보에서 빼나, 「모름」으로 표시하나
+pack_axis          노멀 런에서 못 쓰는데 유지할지, 다른 팩→덱 적합도 신호를 찾을지
+연쇄 종료          visited 집합 + 깊이 상한. 상한을 몇으로 할지
+```
+
+## 15. 무너지지 않은 것
+
+반증에 견딘 것도 명확히 적는다.
+
+```
+identity_keyword 정본 가정   특수 상태의 부모 축이 빠진 인격 0건 · 역방향도 0건.  §3 의 핵심은 옳다
+상태당 축 최대 1개            8축 기준 위반 0
+FK 정합                     identity_association · ego_status · gift_trigger · gift_effect 고아 0
+sinner 정합                 ego·identity 의 sinner_id 전부 canonical.sinner 에 있다
+pack_tag · floor_pack 유일성  중복 0
+분모 roster/field 분기        9282·9283·9179 전부 절대수. 비율 해석이 필요 없다
+거짓 양성                    이름 매칭이 만드는 잘못된 축 0건
+VIBRATION_CONVERTED 공존      9건 · MERGED 1건이 항상 VIBRATION 과 함께 온다
+```
+
+## 16. 범위 밖
+
+```
+런 기록 수집과 가중치 학습     app.run 에 편성·E.G.O 열이 아예 없다. 스키마 확장이 선행
 Neo4j 적재                  이 설계가 RDB 에서 검증된 뒤
 화면과 트래커 흐름            디자인 작업과 겹친다
-정량자 ~90행을 채우는 방법     위키·게임 확인. 파이프라인 밖의 일
+정량자를 채우는 방법           위키·게임 확인. 파이프라인 밖
 런 상태 트리거의 확률 가중      데이터가 아니라 모델링 선택
-기대 효용의 저울추             gift.tier · cost · enhanceable. 가중치 학습 설계로 미룬다
-적 저항 프로파일               encounter_part_resist 11,800행. 「얼마나 유용한가」의 다음 단계
-패닉 스킬 · cursedPair        raw 에 있고 canonical 에 없다. 결손 기록만 남긴다
+기대 효용의 저울추             gift.tier · cost · enhanceable
+적 저항 프로파일               encounter_part_resist 11,800행
+패닉 스킬 · cursedPair 3쌍     raw 에 있고 canonical 에 없다. 결손 기록만
 ```
