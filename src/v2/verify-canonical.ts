@@ -87,10 +87,21 @@ async function main(): Promise<void> {
 		const overrideCount = await prisma.fieldOverride.count({
 			where: { NOT: { entity: 'gift', field: 'hardOnly' } },
 		});
+		// 966 → 1,137 로 늘었지만 **결손을 새로 만든 게 아니라 몰랐던 것을 기록한 것**이다
+		// (인카운터 재설계, 2026-08-03). 966 은 인카운터 값 검사를 넣기 전 숫자다.
+		//   +7    Task 4·5 적·부위 분리 — enemy_part 고아 6건 + encounter_target.name
+		//         결손이 1 → 2 로(원본 1,371건 전수를 담으며 진짜 빈 이름 1건이 더 드러났다)
+		//         966 + 7 = 973 (task-5-report.md)
+		//   +42   보스 후보를 모르는 42팩 (encounter.bossPool) — 위키에서 긁지 않기로 한
+		//         42팩을 결손으로 명시했다(설계 6절)
+		//   +122  encounter_target_part.resists — `resists` 키 자체가 없는 부위 122건.
+		//         이전에는 축 루프가 조용히 continue 해 아무 기록도 안 남겼다. 「말없이
+		//         버리지 않는다」규칙에 따라 이번에 처음 기록한다
+		//   973 + 42 + 122 = 1,137
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 966,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 966`,
+			ok: gapTotal + overrideCount === 1_137,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,137`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -759,21 +770,115 @@ async function main(): Promise<void> {
 		eq('start_gift', await prisma.startGift.count(), 30);
 
 		eq('encounter', await prisma.encounter.count(), 251);
-		eq('encounter_target', await prisma.encounterTarget.count(), 398);
-		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 354);
-		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 3_540);
-		eq('enemy', await prisma.enemy.count(), 1_342);
-		eq('enemy_text', await prisma.enemyText.count(), 4_026);
+		// 초판은 최상위 targets 만 담아 398이었다. waves(26팩)·battles(16팩)·phases(2팩)를
+		// 통째로 건너뛰어 보스 데이터가 있는 44팩이 한 줄도 없었다(설계 3.1). 실측 1,371 —
+		// 감사 문서의 1,384 는 중첩 battle 계수 방식 차이였다(task-5-report.md).
+		eq('encounter_target', await prisma.encounterTarget.count(), 1_371);
+		// 초판(354)은 top 갈래에 딸린 부위만 셌다. 네 갈래를 다 펼치면 1,302다
+		eq('encounter_target_part', await prisma.encounterTargetPart.count(), 1_302);
+		// 부위 저항도 같은 이유로 3,540 이었다. **실측은 감사 문서의 추정(14,850)과도 다르다**
+		// — 1,302부위 중 1,180부위 × 10축 = 11,800. 나머지 122부위는 원본에 `resists` 키
+		// 자체가 없다(장식·비전투 부위로 보인다). 14,850 은 감사가 어림잡은 사전 추정치였다
+		// (task-5-report.md 「수치가 다른 두 건의 해석」).
+		eq('encounter_part_resist', await prisma.encounterPartResist.count(), 11_800);
+		// loc Enemies*.json 이 적 행과 부위 행을 섞는데 초판이 무차별 적재해 1,342 였다.
+		// 4·5자리(적)만 골라내면 870이다
+		eq('enemy', await prisma.enemy.count(), 870);
+		eq('enemy_text', await prisma.enemyText.count(), 2_610);
+		// loc 의 6자리 부위 id 는 472종이지만, 그중 6종은 부모 적 id 가 loc 어디에도
+		// 없는 고아다(부모 없이는 FK 를 못 세운다). 472 − 6 = 466 이 무결성을 지킨 값이고,
+		// 고아 6건은 field_gap 의 enemy_part.enemy_id 로 기록된다(task-5-report.md)
+		eq('enemy_part', await prisma.enemyPart.count(), 466);
 
 		// 팩 계열에서 미룬 연결이 이어졌다
 		eq('pack_boss_encounter (팩 계열 이월)', await prisma.packBossEncounter.count(), 75);
 
-		// **적 저항은 10축이다** — 인격 3축 · E.G.O 7축과 다르다
+		// 네 갈래가 각각 얼마나 담겼나. 한 갈래가 0이면 그 갈래를 다시 잃은 것이다
+		const kindDist = await prisma.$queryRaw<Array<{ kind: string; n: bigint }>>`
+			SELECT kind::text AS kind, count(*)::bigint AS n
+			FROM canonical.encounter_target GROUP BY 1 ORDER BY 1
+		`;
+		const dist = Object.fromEntries(kindDist.map((r) => [r.kind, Number(r.n)]));
+		checks.push({
+			name: '타깃 kind 분포 (한 갈래도 0이면 안 된다)',
+			ok: dist['top'] === 398 && dist['wave'] === 461 && dist['phase'] === 67 && dist['battle'] === 445,
+			detail: `top ${dist['top']} · wave ${dist['wave']} · phase ${dist['phase']} · battle ${dist['battle']}`,
+		});
+
+		// **이 도메인의 소비자 요구다** — 「이 팩의 마지막 보스가 누구인가」에
+		// 답할 수 있는 팩. 초판은 31이었다(설계 3.1)
+		const bossPacks = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(DISTINCT b.pack_id)::bigint AS n
+			FROM canonical.pack_boss_encounter b
+			JOIN canonical.encounter_target t ON t.encounter_id = b.encounter_id
+		`;
+		checks.push({
+			name: '보스 이름을 낼 수 있는 팩 (초판 31)',
+			ok: Number(bossPacks[0]?.n ?? 0n) === 75,
+			detail: `${Number(bossPacks[0]?.n ?? 0n)} / 75`,
+		});
+
+		// 부위는 id // 100 이 부모 적이다. 부모가 없는 부위가 있으면 분리가 틀렸다
+		const orphanPart = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.enemy_part p
+			WHERE NOT EXISTS (SELECT 1 FROM canonical.enemy e WHERE e.id = p.enemy_id)
+		`;
+		checks.push({
+			name: '부모 없는 부위 (0이어야 한다)',
+			ok: Number(orphanPart[0]?.n ?? 1n) === 0,
+			detail: `${Number(orphanPart[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 적 id 는 4·5자리, 부위 id 는 6자리다. 섞이면 분리가 안 된 것이다
+		const badLen = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT (SELECT count(*) FROM canonical.enemy WHERE length(id) > 5)
+			     + (SELECT count(*) FROM canonical.enemy_part WHERE length(id) <> 6) AS n
+		`;
+		checks.push({
+			name: '적·부위 id 자릿수가 섞였다 (0이어야 한다)',
+			ok: Number(badLen[0]?.n ?? 1n) === 0,
+			detail: `${Number(badLen[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 위키 「Possible Bosses」와 대조된 표본이다(docs/audit/wiki/06-encounter.md §2)
+		const canto12 = await prisma.encounterTarget.findMany({
+			where: { encounterId: 'md__canto-1-2', kind: 'battle', index: 0 },
+			orderBy: { groupIndex: 'asc' },
+			select: { name: true },
+		});
+		checks.push({
+			name: 'md__canto-1-2 보스 후보 3종 (위키 Possible Bosses)',
+			ok: canto12.map((r) => r.name).join(' · ')
+				=== "Ebony Queen's Apple · Doomsday Calendar · Golden Apple",
+			detail: canto12.map((r) => r.name).join(' · '),
+		});
+
+		// 봉봉 세 변형. 중복 행이 아니라 Swarm Movement Prep 1/2/3 이다(§6)
+		const walpu8 = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.enemy_part
+			WHERE id IN ('137001','137101','137201')
+		`;
+		checks.push({
+			name: 'md__walpu-8 봉봉 부위 3종이 적 1370·1371·1372 로 갈린다',
+			ok: Number(walpu8[0]?.n ?? 0n) === 3,
+			detail: `${Number(walpu8[0]?.n ?? 0n)} / 3`,
+		});
+
+		// 위키에서 긁지 않기로 했다. 42팩이 결손으로 기록돼 있어야 한다(설계 6절)
+		eq('보스 미확보 팩 결손 기록',
+			await prisma.fieldGap.count({ where: { entity: 'encounter', field: 'bossPool' } }),
+			42);
+
+		// **적 저항은 10축이다** — 인격 3축 · E.G.O 7축과 다르다.
+		// PK 는 (encounter_id, kind, group_index, target_index, part_id, axis) 다.
+		// **kind·group_index 를 빼고 세면 다른 갈래의 같은 target_index·part_id 가
+		// 한 그룹으로 섞여 거짓 위반이 35건 나온다**(4키 확장 전의 3키 질의가 남아 있었다).
+		// 4키를 다 넣으면 위반이 0으로 떨어진다 — 실측 1,180부위 전부 정확히 10축이다.
 		const badAxes = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM (
-			  SELECT encounter_id, target_index, part_id
+			  SELECT encounter_id, kind, group_index, target_index, part_id
 			  FROM canonical.encounter_part_resist
-			  GROUP BY 1,2,3 HAVING count(*) <> 10
+			  GROUP BY 1,2,3,4,5 HAVING count(*) <> 10
 			) x
 		`;
 		checks.push({
@@ -809,11 +914,12 @@ async function main(): Promise<void> {
 			detail: `${Number(jsonNull[0]?.n ?? 0n)} / 0`,
 		});
 
-		// 이름이 빈 적도 버리지 않는다 — 원본 398건이 그대로 들어와야 한다
+		// 이름이 빈 적도 버리지 않는다. top 만 담던 초판은 1건(story__9-5-24)뿐이었다 —
+		// 네 갈래를 다 펼치니 phase 갈래에서 reflectrial__9-5-2 가 하나 더 나와 2건이다
 		eq(
 			'이름 빈 적 결손 기록',
 			await prisma.fieldGap.count({ where: { entity: 'encounter_target', field: 'name' } }),
-			1,
+			2,
 		);
 
 		// 계획 7 계열의 한국어 결손이 기록됐나.

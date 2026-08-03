@@ -96,7 +96,8 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 			rawTargets.forEach((rawTarget, offset) => {
 				const index = base + offset;
 				const target = obj(rawTarget);
-				// **이름이 비어도 버리지 않는다.** 실측 1건(story__9-5-24)이 빈 문자열이며
+				// **이름이 비어도 버리지 않는다.** top 만 보면 1건(story__9-5-24)이지만
+				// 네 갈래를 다 펼치면 2건(+ reflectrial__9-5-2 의 phase 갈래)이다 —
 				// 버리면 부위와 저항까지 통째로 사라진다.
 				const targetName = str(target, 'name');
 				if (targetName === null) {
@@ -128,13 +129,24 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 						speedMin: speed.length === 2 ? Number(speed[0]) : null,
 						speedMax: speed.length === 2 ? Number(speed[1]) : null,
 					});
-					const resists = obj(part['resists']);
-					for (const axis of AXES) {
-						const value = num(resists, axis);
-						if (value === null) continue;
-						t.encounterPartResist.push({
-							encounterId: id, kind, groupIndex, targetIndex: index, partId, axis, value,
-						});
+					// **`resists` 키 자체가 없는 부위 122건이 있다** — 축 하나가 빠진 게
+					// 아니라 저항이라는 개념 자체가 원본에 없다(장식·비전투 부위로 보인다).
+					// 「지어내지 않는다」만큼 「말없이 버리지 않는다」도 규칙이라 결손으로
+					// 남긴다 — 축 단위 결손(있는데 일부만 빔)과는 뜻이 달라 필드를 나눈다.
+					if (part['resists'] === undefined) {
+						meta.gap(
+							'encounter_target_part', `${id}#${kind}#${groupIndex}#${index}#${partId}`,
+							'resists', '원본에 resists 키 자체가 없다 (부위 저항 결측)', EVIDENCE,
+						);
+					} else {
+						const resists = obj(part['resists']);
+						for (const axis of AXES) {
+							const value = num(resists, axis);
+							if (value === null) continue;
+							t.encounterPartResist.push({
+								encounterId: id, kind, groupIndex, targetIndex: index, partId, axis, value,
+							});
+						}
 					}
 				}
 			});
@@ -176,6 +188,20 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		if (dropped > 0) {
 			meta.gap('pack', packId, 'bossEncounters', `조우 목록에 없는 이름표 ${dropped}건`, EVIDENCE);
 		}
+	}
+
+	// **보스 후보를 모르는 42팩.** mj bossPool 은 117팩 전부에 보스를 주는데
+	// id 가 숫자(2060122)고 canonical.encounter 는 문자열 키다. 크로스워크 표가
+	// 원본에 없다. 위키가 이름을 주지만 위키 값을 canonical 에 담는 것은
+	// 새로운 출처 개념이라 별도 판단이 필요하다(설계 6절).
+	const bossPacks = new Set(t.packBossEncounter.map((b) => b.packId));
+	for (const packId of [...input.knownPacks].sort()) {
+		if (bossPacks.has(packId)) continue;
+		meta.gap(
+			'encounter', packId, 'bossPool',
+			'mj bossPool 의 숫자 id 와 assets 조우 이름표를 잇는 표가 원본에 없다',
+			'docs/superpowers/specs/2026-08-03-encounter-redesign-design.md',
+		);
 	}
 
 	// ── 적 표시명 ────────────────────────────────────────────────
