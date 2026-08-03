@@ -366,18 +366,6 @@ body::after {
 	gap: var(--gap-sm);
 }
 
-/* 레드 인덱스탭. 서류 색인처럼 패널 머리 왼쪽에 붙는다. 브릭레드를 쓰는 두 자리 중 하나다. */
-.panel-h::before {
-	content: '';
-	position: absolute;
-	left: 0;
-	top: 50%;
-	transform: translateY(-50%);
-	width: 3px;
-	height: 60%;
-	background: var(--alert);
-}
-
 .panel-h h3 {
 	margin: 0;
 	font-family: var(--font-display);
@@ -449,8 +437,6 @@ body::after {
 	appearance: none;
 	background: var(--surface-1);
 	border: 1px solid var(--line);
-	/* 좌측 액센트 바가 눌린 상태의 두 번째 신호다 — 색만으로 구분하지 않는다. */
-	border-left: 3px solid var(--line);
 	color: var(--ink-dim);
 	padding: var(--sp-3) var(--sp-5);
 	font-family: var(--font-display);
@@ -468,13 +454,6 @@ body::after {
 	color: var(--ink-gold);
 	background: var(--surface-2);
 	border-color: var(--line-active);
-	border-left-color: var(--accent);
-}
-
-/* 축 색을 가진 칩은 눌렸을 때 그 축의 색으로 바를 세운다. */
-.chip[aria-pressed='true'][data-kw],
-.chip[aria-pressed='true'][data-sin] {
-	border-left-color: var(--axis-color);
 }
 
 .cardgrid {
@@ -583,7 +562,6 @@ body::after {
 /* 초기화는 조건이 걸려 있을 때만 나온다. 레드를 쓰는 두 자리 중 나머지 하나다. */
 .chip-clear {
 	flex: none;
-	border-left-color: var(--alert);
 	color: var(--ink-dim);
 }
 
@@ -1665,7 +1643,6 @@ body::after {
 	padding: var(--sp-3) 9px;
 	background: none;
 	border: 1px solid var(--line);
-	border-left-width: 3px;
 	color: var(--ink-dim);
 	font: inherit;
 	font-size: var(--fs-xs);
@@ -1681,7 +1658,6 @@ body::after {
 .rail-slot[aria-pressed='true'] {
 	background: var(--surface-2);
 	border-color: var(--line-active);
-	border-left-color: var(--accent);
 	color: var(--ink-gold);
 }
 
@@ -2344,7 +2320,6 @@ body::after {
 .notice {
 	padding: var(--sp-4) var(--sp-6);
 	border: 1px solid var(--line-strong);
-	border-left: 3px solid var(--state-missing);
 	background: var(--surface-1);
 	color: var(--ink-dim);
 	font-size: var(--fs-sm);
@@ -2429,19 +2404,16 @@ body::after {
 	이름 자리가 비어 있어 셋이 글자만으로도 구분된다.
 */
 .runstep[data-state='done'] {
-	border-left-color: var(--ink-muted);
 	color: var(--ink-dim);
 }
 
 .runstep[data-state='current'] {
 	border-color: var(--line-active);
-	border-left-color: var(--accent);
 	background: var(--surface-2);
 	color: var(--ink-gold);
 }
 
 .runstep[data-state='todo'] {
-	border-left-color: var(--line-faint);
 	color: var(--ink-muted);
 	cursor: default;
 }
@@ -2495,7 +2467,6 @@ body::after {
 .owned-inrail {
 	margin: var(--sp-2) 0 var(--sp-3) var(--sp-5);
 	padding: var(--sp-3) 9px;
-	border-left: 1px solid var(--line-faint);
 }
 
 .owned-inrail .owned-name {
