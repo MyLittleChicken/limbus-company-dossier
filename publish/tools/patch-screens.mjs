@@ -63,6 +63,22 @@ function patchNav(src) {
 
 /* ── 2. 필터 축 ──────────────────────────────────────────── */
 
+/** 인격 등급. 게임 표기 0 · 00 · 000 이 그대로 파일명이다. */
+const RARITY = [
+	['0', '0'],
+	['00', '00'],
+	['000', '000'],
+];
+
+/** E.G.O 등급. 애셋이 가로 배너이며 그 안에 이름이 그려져 있다. */
+const EGO_RANK = [
+	['ZAYIN', 'zayin'],
+	['TETH', 'teth'],
+	['HE', 'he'],
+	['WAW', 'waw'],
+	['ALEPH', 'aleph'],
+];
+
 const SIN = [
 	['분노', 'wrath'],
 	['색욕', 'lust'],
@@ -99,9 +115,16 @@ const MECHANIC = [
 	['보호', 'Protection'],
 ];
 
+/*
+	칩은 **좌측 애셋 + 우측 글자**다. 기프트 화면의 키워드 축이 원래 그 모양이고 모든 축을
+	거기에 맞춘다.
+
+	치수 속성(`width` · `height`)을 달지 않는다 — 등급 애셋이 정사각이 아니라 16×16 이
+	거짓이기 때문이다. 크기는 `globals.css` 의 `.chip img` 가 높이로 정한다.
+*/
 const chip = (label, src) =>
-	`<button type="button" class="chip" aria-pressed="false" aria-label="${label}">` +
-	`<img src="${src}" alt=""></button>`;
+	`<button type="button" class="chip" aria-pressed="false">` +
+	`<img src="${src}" alt="">${label}</button>`;
 
 const iconChip = (label, file) => chip(label, `${ICON}/${file}.webp`);
 const statusChip = (label, file) => chip(label, `${STATUS}/${file}.webp`);
@@ -123,36 +146,7 @@ function axisRange(src, label) {
 	return null;
 }
 
-/**
- * 아이콘을 이미 가진 칩에서 글자를 뗀다. 이름은 `aria-label` 이 잇는다.
- *
- * **치수 속성도 지운다.** 덤프는 `width="16" height="16"` 을 달고 오는데 등급 애셋은
- * 정사각이 아니어서 그 값이 틀렸다(`globals.css` 의 `.chip img` 주석 참조). 높이는
- * 스타일시트가 정하므로 속성으로 가짜 비율을 예약하지 않는다.
- */
-function iconOnly(src, label) {
-	const r = axisRange(src, label);
-	if (!r) return src;
-	const seg = src
-		.slice(r.start, r.end)
-		.replace(
-			/<button type="button" class="chip" aria-pressed="false"><img src="([^"]+)" alt="" width="16" height="16">([^<]+)<\/button>/g,
-			(_, icon, text) =>
-				`<button type="button" class="chip" aria-pressed="false" aria-label="${text}">` +
-				`<img src="${icon}" alt=""></button>`,
-		)
-		// 이미 아이콘만으로 바뀐 칩에 치수가 남아 있으면 떼어 낸다.
-		.replace(/(<img src="[^"]+" alt="") width="16" height="16"(><\/button>)/g, '$1$2');
-	return src.slice(0, r.start) + seg + src.slice(r.end);
-}
 
-/** 글자뿐인 죄악 칩을 죄악 엠블럼으로 바꾼다. */
-function sinIcons(src, label) {
-	const r = axisRange(src, label);
-	if (!r) return src;
-	const chips = SIN.map(([ko, key]) => iconChip(ko, key)).join('');
-	return src.slice(0, r.start) + axis(label, chips) + src.slice(r.end);
-}
 
 /**
  * 축을 지정한 자리에 둔다. 이미 있으면 내용을 갈아 끼운다.
@@ -192,31 +186,32 @@ function dropUnlabeledAxis(src, ...texts) {
 
 /* ── 화면별 적용 ─────────────────────────────────────────── */
 
-const KEYWORD_CHIPS = KEYWORD.map(([ko, file]) => iconChip(ko, file)).join('');
+const iconChips = (rows) => rows.map(([ko, file]) => iconChip(ko, file)).join('');
+
+const RARITY_CHIPS = iconChips(RARITY);
+const EGO_RANK_CHIPS = iconChips(EGO_RANK);
+const SIN_CHIPS = iconChips(SIN);
+const KEYWORD_CHIPS = iconChips(KEYWORD);
 const MECHANIC_CHIPS = MECHANIC.map(([ko, file]) => statusChip(ko, file)).join('');
 
 /**
  * 화면마다 무엇을 고치는가.
  *
- * 죄악·등급·키워드를 **글자에서 엠블럼으로** 옮기는 것이 공통 줄기다. 게임이 그 축들을
- * 그림으로 다루고, 칩 여덟아홉 개가 글자로 늘어서면 목록보다 필터가 무거워진다.
- * 이름은 버리지 않고 `aria-label` 로 남긴다 — 읽어 주는 쪽에는 그대로 들린다.
+ * 축마다 **엠블럼을 붙이고 이름을 남긴다.** 게임이 죄악·등급·키워드를 그림으로 다루므로
+ * 글자만 있는 축은 화면과 어긋났고, 그림만 두면 이름을 눈으로 확인할 수 없었다.
+ * 기프트 화면의 키워드 축이 원래 「애셋 + 글자」였고 모든 축을 거기에 맞춘다.
  */
 const PATCHES = {
 	'identities.html': (s) => {
-		s = iconOnly(s, '등급');
-		s = sinIcons(s, '스킬 죄악');
+		s = setAxis(s, '수감자', '등급', RARITY_CHIPS);
+		s = setAxis(s, '등급', '스킬 죄악', SIN_CHIPS);
 		s = setAxis(s, '스킬 죄악', '키워드', KEYWORD_CHIPS);
 		s = setAxis(s, '키워드', '특수', MECHANIC_CHIPS);
 		return s;
 	},
-	'identity-detail.html': (s) => s,
 	'egos.html': (s) => {
-		// E.G.O 등급도 아이콘만이다. 애셋이 가로 배너이고 **그 안에 이름이 그려져 있어서**
-		// 칩 글자를 함께 두면 「ZAYIN ZAYIN」이 된다. 글자를 버리는 것이 아니라 그림이
-		// 이미 갖고 있는 것이다.
-		s = iconOnly(s, '등급');
-		s = sinIcons(s, '각성 죄악');
+		s = setAxis(s, '수감자', '등급', EGO_RANK_CHIPS);
+		s = setAxis(s, '등급', '각성 죄악', SIN_CHIPS);
 		s = setAxis(s, '각성 죄악', '키워드', KEYWORD_CHIPS);
 		// 침식과 추출은 인격·E.G.O 를 고르는 축이 아니라 소지 상태다. 필터에서 내린다.
 		s = dropUnlabeledAxis(s, '침식 있음', '추출 가능');
