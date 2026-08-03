@@ -96,3 +96,6 @@ src/v2/generated/
 
 # Claude Code 작업 디렉터리
 .claude/
+
+# Subagent-Driven Development 작업 디렉터리 (생성물)
+.superpowers/
