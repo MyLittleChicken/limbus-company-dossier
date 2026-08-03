@@ -37,6 +37,9 @@ CREATE TYPE "canonical"."EgoRank" AS ENUM ('ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'
 -- CreateEnum
 CREATE TYPE "canonical"."BuffType" AS ENUM ('Positive', 'Neutral', 'Negative');
 
+-- CreateEnum
+CREATE TYPE "canonical"."TargetKind" AS ENUM ('top', 'wave', 'phase', 'battle');
+
 -- CreateTable
 CREATE TABLE "raw"."snapshot" (
     "id" TEXT NOT NULL,
@@ -906,15 +909,21 @@ CREATE TABLE "canonical"."encounter" (
 -- CreateTable
 CREATE TABLE "canonical"."encounter_target" (
     "encounter_id" TEXT NOT NULL,
+    "kind" "canonical"."TargetKind" NOT NULL,
+    "group_index" INTEGER NOT NULL,
     "index" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
+    "portrait" INTEGER,
+    "num" INTEGER,
 
-    CONSTRAINT "encounter_target_pkey" PRIMARY KEY ("encounter_id","index")
+    CONSTRAINT "encounter_target_pkey" PRIMARY KEY ("encounter_id","kind","group_index","index")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."encounter_target_part" (
     "encounter_id" TEXT NOT NULL,
+    "kind" "canonical"."TargetKind" NOT NULL,
+    "group_index" INTEGER NOT NULL,
     "target_index" INTEGER NOT NULL,
     "part_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -924,18 +933,20 @@ CREATE TABLE "canonical"."encounter_target_part" (
     "speed_min" INTEGER,
     "speed_max" INTEGER,
 
-    CONSTRAINT "encounter_target_part_pkey" PRIMARY KEY ("encounter_id","target_index","part_id")
+    CONSTRAINT "encounter_target_part_pkey" PRIMARY KEY ("encounter_id","kind","group_index","target_index","part_id")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."encounter_part_resist" (
     "encounter_id" TEXT NOT NULL,
+    "kind" "canonical"."TargetKind" NOT NULL,
+    "group_index" INTEGER NOT NULL,
     "target_index" INTEGER NOT NULL,
     "part_id" TEXT NOT NULL,
     "axis" TEXT NOT NULL,
     "value" DOUBLE PRECISION NOT NULL,
 
-    CONSTRAINT "encounter_part_resist_pkey" PRIMARY KEY ("encounter_id","target_index","part_id","axis")
+    CONSTRAINT "encounter_part_resist_pkey" PRIMARY KEY ("encounter_id","kind","group_index","target_index","part_id","axis")
 );
 
 -- CreateTable
@@ -1373,10 +1384,10 @@ ALTER TABLE "canonical"."start_gift" ADD CONSTRAINT "start_gift_gift_id_fkey" FO
 ALTER TABLE "canonical"."encounter_target" ADD CONSTRAINT "encounter_target_encounter_id_fkey" FOREIGN KEY ("encounter_id") REFERENCES "canonical"."encounter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "canonical"."encounter_target_part" ADD CONSTRAINT "encounter_target_part_encounter_id_target_index_fkey" FOREIGN KEY ("encounter_id", "target_index") REFERENCES "canonical"."encounter_target"("encounter_id", "index") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "canonical"."encounter_target_part" ADD CONSTRAINT "encounter_target_part_encounter_id_kind_group_index_target_fkey" FOREIGN KEY ("encounter_id", "kind", "group_index", "target_index") REFERENCES "canonical"."encounter_target"("encounter_id", "kind", "group_index", "index") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_resist_encounter_id_target_index_part_id_fkey" FOREIGN KEY ("encounter_id", "target_index", "part_id") REFERENCES "canonical"."encounter_target_part"("encounter_id", "target_index", "part_id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_resist_encounter_id_kind_group_index_target_fkey" FOREIGN KEY ("encounter_id", "kind", "group_index", "target_index", "part_id") REFERENCES "canonical"."encounter_target_part"("encounter_id", "kind", "group_index", "target_index", "part_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."enemy_text" ADD CONSTRAINT "enemy_text_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;

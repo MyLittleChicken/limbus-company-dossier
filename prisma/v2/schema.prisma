@@ -1607,6 +1607,24 @@ model StartGift {
 // canonical — 인카운터
 // ─────────────────────────────────────────────────────────────
 
+/// 원본이 타깃을 담는 네 갈래. **뜻이 서로 다르므로 한 축으로 뭉개면 안 된다.**
+///
+/// `wave` 와 `phase` 는 별개 전투가 아니라 **한 보스전의 내용**이다 —
+/// 증원과 페이즈 전환이다. `battle` 만이 대안 관계이며
+/// 게임이 그중 하나를 뽑는다(위키의 「Possible Bosses」).
+enum TargetKind {
+  /// 최상위 targets[]
+  top
+  /// waves[i].targets[] — 같은 전투 안의 증원. 같은 적이 반복 등장한다
+  wave
+  /// phases[i].targets[] — 페이즈 전환. Golden Apple → False Apple
+  phase
+  /// battles[i].targets[] — 서로 배타적인 보스 후보
+  battle
+
+  @@schema("canonical")
+}
+
 /// 전투 조우 251종. 파일 하나가 조우 하나다.
 model Encounter {
   id     String @id
@@ -1627,16 +1645,28 @@ model Encounter {
   @@schema("canonical")
 }
 
-/// 조우에 나오는 적.
+/// 전투에 나오는 적.
+///
+/// 초판은 최상위 `targets` 만 담아 398행이었다. `waves`(26팩) · `battles`(16팩) ·
+/// `phases`(2팩) 를 통째로 건너뛰어 **보스 데이터가 있는 44팩이 한 줄도 없었다.**
 model EncounterTarget {
-  encounterId String @map("encounter_id")
+  encounterId String     @map("encounter_id")
+  kind        TargetKind
+  /// battles[i] · waves[i] · phases[i] 의 i. top 은 0
+  groupIndex  Int        @map("group_index")
+  /// 그룹 안의 순서
   index       Int
+  /// 정본은 asset `targets[].name` 이다. loc 이름으로 덮지 않는다
   name        String
+  /// 초상화 이미지 id. **FK 가 아니다** — 적 id 와 번호 공간이 겹치지만 37건이 어긋난다
+  portrait    Int?
+  /// 원본 `num`. 동시 등장 수인지 확정되지 않았다(합 22 · 다른 곳엔 77). 담되 해석하지 않는다
+  num         Int?
 
-  encounter Encounter            @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  encounter Encounter             @relation(fields: [encounterId], references: [id], onDelete: Cascade)
   parts     EncounterTargetPart[]
 
-  @@id([encounterId, index])
+  @@id([encounterId, kind, groupIndex, index])
   @@map("encounter_target")
   @@schema("canonical")
 }
@@ -1644,36 +1674,40 @@ model EncounterTarget {
 /// 적의 부위. **저항이 부위마다 따로 있고 10축이다** —
 /// 물리 3축 + 죄악 7축. 인격 3축 · E.G.O 7축과 다르다.
 model EncounterTargetPart {
-  encounterId   String @map("encounter_id")
-  targetIndex   Int    @map("target_index")
-  partId        String @map("part_id")
+  encounterId   String     @map("encounter_id")
+  kind          TargetKind
+  groupIndex    Int        @map("group_index")
+  targetIndex   Int        @map("target_index")
+  partId        String     @map("part_id")
   name          String
-  hpBase        Float? @map("hp_base")
-  hpLevel       Float? @map("hp_level")
-  defCorrection Int?   @map("def_correction")
-  speedMin      Int?   @map("speed_min")
-  speedMax      Int?   @map("speed_max")
+  hpBase        Float?     @map("hp_base")
+  hpLevel       Float?     @map("hp_level")
+  defCorrection Int?       @map("def_correction")
+  speedMin      Int?       @map("speed_min")
+  speedMax      Int?       @map("speed_max")
 
-  target  EncounterTarget       @relation(fields: [encounterId, targetIndex], references: [encounterId, index], onDelete: Cascade)
+  target  EncounterTarget       @relation(fields: [encounterId, kind, groupIndex, targetIndex], references: [encounterId, kind, groupIndex, index], onDelete: Cascade)
   resists EncounterPartResist[]
 
-  @@id([encounterId, targetIndex, partId])
+  @@id([encounterId, kind, groupIndex, targetIndex, partId])
   @@map("encounter_target_part")
   @@schema("canonical")
 }
 
 /// 부위별 저항 10축.
 model EncounterPartResist {
-  encounterId String @map("encounter_id")
-  targetIndex Int    @map("target_index")
-  partId      String @map("part_id")
+  encounterId String     @map("encounter_id")
+  kind        TargetKind
+  groupIndex  Int        @map("group_index")
+  targetIndex Int        @map("target_index")
+  partId      String     @map("part_id")
   /// slash · pierce · blunt · 죄악 7종
   axis        String
   value       Float
 
-  part EncounterTargetPart @relation(fields: [encounterId, targetIndex, partId], references: [encounterId, targetIndex, partId], onDelete: Cascade)
+  part EncounterTargetPart @relation(fields: [encounterId, kind, groupIndex, targetIndex, partId], references: [encounterId, kind, groupIndex, targetIndex, partId], onDelete: Cascade)
 
-  @@id([encounterId, targetIndex, partId, axis])
+  @@id([encounterId, kind, groupIndex, targetIndex, partId, axis])
   @@map("encounter_part_resist")
   @@schema("canonical")
 }
