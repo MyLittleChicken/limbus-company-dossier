@@ -54,14 +54,17 @@ export interface EncounterTables {
 	encounterTargetPart: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; targetIndex: number; partId: string; name: string; hpBase: number | null; hpLevel: number | null; defCorrection: number | null; speedMin: number | null; speedMax: number | null }>;
 	encounterPartResist: Array<{ encounterId: string; kind: TargetKind; groupIndex: number; targetIndex: number; partId: string; axis: string; value: number }>;
 	enemy: Array<{ id: string }>;
+	enemyPart: Array<{ id: string; enemyId: string }>;
 	enemyText: Array<{ enemyId: string; locale: Loc; name: string; roleLabel: string | null }>;
+	enemyPartText: Array<{ partId: string; locale: Loc; name: string }>;
 	packBossEncounter: Array<{ packId: string; encounterId: string }>;
 }
 
 export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTables {
 	const t: EncounterTables = {
 		encounter: [], encounterTarget: [], encounterTargetPart: [],
-		encounterPartResist: [], enemy: [], enemyText: [], packBossEncounter: [],
+		encounterPartResist: [], enemy: [], enemyPart: [], enemyText: [],
+		enemyPartText: [], packBossEncounter: [],
 	};
 
 	// 그룹 이름표 — {luxcavation: {...}, md: {"canto-1-1": "The Forgotten"}, …}
@@ -175,13 +178,21 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 		}
 	}
 
-	// ── 적 표시명 — loc 단독. desc 가 부위 이름이다 ──────────────
+	// ── 적 표시명 ────────────────────────────────────────────────
+	// **loc Enemies*.json 은 적 행과 부위 행을 한 표에 섞는다.**
+	// 4·5자리가 적(870), 6자리가 부위(472 = 적id × 100 + n)다.
+	// 초판이 둘을 무차별 적재해 「적 1,342종」이라는 잘못된 수가 나왔다.
 	const enemyLoc: Record<Loc, RawIndex> = {
 		ko: input.enemyKo, en: input.enemyEn, ja: input.enemyJa,
 	};
-	const enemyIds = new Set<string>();
-	for (const locale of LOCALES) for (const id of enemyLoc[locale].keys()) enemyIds.add(id);
-	for (const id of [...enemyIds].sort()) {
+	const allIds = new Set<string>();
+	for (const locale of LOCALES) for (const id of enemyLoc[locale].keys()) allIds.add(id);
+
+	const enemyIds = [...allIds].filter((id) => id.length <= 5).sort();
+	const partIds = [...allIds].filter((id) => id.length === 6).sort();
+	const enemyIdSet = new Set(enemyIds);
+
+	for (const id of enemyIds) {
 		t.enemy.push({ id });
 		for (const locale of LOCALES) {
 			const o = enemyLoc[locale].get(id);
@@ -190,9 +201,30 @@ export function buildEncounters(input: EncounterInput, meta: Meta): EncounterTab
 				meta.gap('enemy', id, 'name', `${locale} 표시명이 없다`, EVIDENCE, locale);
 				continue;
 			}
+			// desc 는 **부위 이름이 아니라 역할 라벨**이다(Core · Enemy Unit · Boss)
 			t.enemyText.push({ enemyId: id, locale, name, roleLabel: str(o ?? {}, 'desc') });
 		}
 		meta.source('enemy', id, 'name', 'loc-only', [LOC]);
+	}
+
+	for (const id of partIds) {
+		const enemyId = id.slice(0, -2);
+		if (!enemyIdSet.has(enemyId)) {
+			// 부모 적이 loc 에 없다. 부위만 담을 수 없으므로 결손으로 남긴다
+			meta.gap('enemy_part', id, 'enemy_id', `부모 적 ${enemyId} 가 loc 에 없다`, EVIDENCE);
+			continue;
+		}
+		t.enemyPart.push({ id, enemyId });
+		for (const locale of LOCALES) {
+			const o = enemyLoc[locale].get(id);
+			const name = str(o ?? {}, 'name');
+			if (name === null) {
+				meta.gap('enemy_part', id, 'name', `${locale} 부위 이름이 없다`, EVIDENCE, locale);
+				continue;
+			}
+			t.enemyPartText.push({ partId: id, locale, name });
+		}
+		meta.source('enemy_part', id, 'name', 'loc-only', [LOC]);
 	}
 
 	// 전투 풀 2,525종은 여전히 못 잇는다 — backlog/10

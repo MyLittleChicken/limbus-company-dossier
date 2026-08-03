@@ -54,9 +54,11 @@ function input(): EncounterInput {
 		]),
 		enemyKo: new Map<string, Record<string, unknown>>([
 			['8605', { id: 8605, name: '굴절된 어느 날의 초상', desc: '본체' }],
+			['860501', { id: 860501, name: '몸통', desc: '굴절된 어느 날의 초상' }],
 		]),
 		enemyEn: new Map<string, Record<string, unknown>>([
-			['8605', { id: 8605, name: 'Portrait', desc: 'Body' }],
+			['8605', { id: 8605, name: 'Portrait', desc: 'Core' }],
+			['860501', { id: 860501, name: 'Body', desc: 'Portrait' }],
 		]),
 		enemyJa: new Map<string, Record<string, unknown>>(),
 		knownPacks: new Set(['1001']),
@@ -146,6 +148,23 @@ test('적 표시명이 나오고 desc 가 부위 이름이다', () => {
 	const ko = t.enemyText.find((x) => x.locale === 'ko');
 	assert.equal(ko?.name, '굴절된 어느 날의 초상');
 	assert.equal(ko?.roleLabel, '본체');
+});
+
+test('6자리 id 는 적이 아니라 부위다 — id // 100 이 부모다', () => {
+	const t = buildEncounters(input(), new Meta());
+	assert.deepEqual(t.enemy.map((e) => e.id), ['8605']);
+	assert.deepEqual(t.enemyPart, [{ id: '860501', enemyId: '8605' }]);
+});
+
+test('부위 이름은 enemy_part_text 로 가고 적의 desc 는 역할 라벨이다', () => {
+	const t = buildEncounters(input(), new Meta());
+	assert.deepEqual(
+		t.enemyPartText.filter((x) => x.locale === 'en'),
+		[{ partId: '860501', locale: 'en', name: 'Body' }],
+	);
+	const en = t.enemyText.find((x) => x.enemyId === '8605' && x.locale === 'en');
+	assert.equal(en?.name, 'Portrait');
+	assert.equal(en?.roleLabel, 'Core');
 });
 
 test('일본어가 없으면 결손으로 남긴다', () => {

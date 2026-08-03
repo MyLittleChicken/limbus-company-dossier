@@ -1712,13 +1712,33 @@ model EncounterPartResist {
   @@schema("canonical")
 }
 
-/// 적 표시명 1,342종. loc 단독이며 desc 가 부위 이름이다.
+/// 적 870종.
+///
+/// **초판은 1,342행이었다.** loc `Enemies*.json` 이 적 행과 부위 행을 한 표에 섞는데
+/// ETL 이 무차별 적재했다 — 472행(35%)이 적이 아니라 부위였다.
+/// 4·5자리가 적, 6자리가 부위(= 적id × 100 + n)다.
 model Enemy {
   id String @id
 
   texts EnemyText[]
+  parts EnemyPart[]
 
   @@map("enemy")
+  @@schema("canonical")
+}
+
+/// 적의 부위 472종. `id // 100` 이 부모 적이다.
+///
+/// `encounter_target_part.part_id` 가 같은 번호 공간이라 곧바로 조인된다.
+model EnemyPart {
+  id      String @id
+  enemyId String @map("enemy_id")
+
+  enemy Enemy          @relation(fields: [enemyId], references: [id], onDelete: Cascade)
+  texts EnemyPartText[]
+
+  @@index([enemyId])
+  @@map("enemy_part")
   @@schema("canonical")
 }
 
@@ -1726,13 +1746,28 @@ model EnemyText {
   enemyId String @map("enemy_id")
   locale  Locale
   name    String
-  /// 부위 이름. "본체" 등
-  part    String?
+  /// 원본 `desc`. **부위 이름이 아니다** — 적의 역할 라벨이다
+  /// (Core 463 · Enemy Unit 173 · Boss 3 …). 초판의 컬럼명 `part` 는 거짓말이었다
+  roleLabel String? @map("role_label")
 
   enemy Enemy @relation(fields: [enemyId], references: [id], onDelete: Cascade)
 
   @@id([enemyId, locale])
   @@map("enemy_text")
+  @@schema("canonical")
+}
+
+/// 부위 표시명. 부위 행에서는 `name` 이 실제 부위 이름이다
+/// (Body 260 · Head 36 · Left Arm 27 …).
+model EnemyPartText {
+  partId String @map("part_id")
+  locale Locale
+  name   String
+
+  part EnemyPart @relation(fields: [partId], references: [id], onDelete: Cascade)
+
+  @@id([partId, locale])
+  @@map("enemy_part_text")
   @@schema("canonical")
 }
 

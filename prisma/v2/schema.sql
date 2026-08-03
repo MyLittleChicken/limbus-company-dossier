@@ -957,13 +957,30 @@ CREATE TABLE "canonical"."enemy" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."enemy_part" (
+    "id" TEXT NOT NULL,
+    "enemy_id" TEXT NOT NULL,
+
+    CONSTRAINT "enemy_part_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."enemy_text" (
     "enemy_id" TEXT NOT NULL,
     "locale" "canonical"."Locale" NOT NULL,
     "name" TEXT NOT NULL,
-    "part" TEXT,
+    "role_label" TEXT,
 
     CONSTRAINT "enemy_text_pkey" PRIMARY KEY ("enemy_id","locale")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."enemy_part_text" (
+    "part_id" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "enemy_part_text_pkey" PRIMARY KEY ("part_id","locale")
 );
 
 -- CreateTable
@@ -1136,6 +1153,9 @@ CREATE INDEX "start_gift_gift_id_idx" ON "canonical"."start_gift"("gift_id");
 
 -- CreateIndex
 CREATE INDEX "encounter_group_idx" ON "canonical"."encounter"("group");
+
+-- CreateIndex
+CREATE INDEX "enemy_part_enemy_id_idx" ON "canonical"."enemy_part"("enemy_id");
 
 -- CreateIndex
 CREATE INDEX "field_override_entity_field_idx" ON "app"."field_override"("entity", "field");
@@ -1390,7 +1410,13 @@ ALTER TABLE "canonical"."encounter_target_part" ADD CONSTRAINT "encounter_target
 ALTER TABLE "canonical"."encounter_part_resist" ADD CONSTRAINT "encounter_part_resist_encounter_id_kind_group_index_target_fkey" FOREIGN KEY ("encounter_id", "kind", "group_index", "target_index", "part_id") REFERENCES "canonical"."encounter_target_part"("encounter_id", "kind", "group_index", "target_index", "part_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "canonical"."enemy_part" ADD CONSTRAINT "enemy_part_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "canonical"."enemy_text" ADD CONSTRAINT "enemy_text_enemy_id_fkey" FOREIGN KEY ("enemy_id") REFERENCES "canonical"."enemy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."enemy_part_text" ADD CONSTRAINT "enemy_part_text_part_id_fkey" FOREIGN KEY ("part_id") REFERENCES "canonical"."enemy_part"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "app"."setting" ADD CONSTRAINT "setting_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "app"."account"("id") ON DELETE CASCADE ON UPDATE CASCADE;
