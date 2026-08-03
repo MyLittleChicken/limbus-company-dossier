@@ -374,6 +374,7 @@ async function main(): Promise<void> {
 			         canonical.status, canonical.sin_info, canonical.term,
 			         canonical.choice_event, canonical.achievement, canonical.reward,
 			         canonical.adversity, canonical.grace, canonical.encounter, canonical.enemy,
+			         canonical.enemy_part,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -549,7 +550,10 @@ async function main(): Promise<void> {
 		counts.push(['encounter_target_part', await chunked(encounters.encounterTargetPart, (d) => prisma.encounterTargetPart.createMany({ data: d }))]);
 		counts.push(['encounter_part_resist', await chunked(encounters.encounterPartResist, (d) => prisma.encounterPartResist.createMany({ data: d }))]);
 		counts.push(['enemy', await chunked(encounters.enemy, (d) => prisma.enemy.createMany({ data: d }))]);
+		// enemy_part 는 enemy 를 참조하므로 enemy 다음 · enemy_text 앞이어야 FK 가 안 깨진다.
+		counts.push(['enemy_part', await chunked(encounters.enemyPart, (d) => prisma.enemyPart.createMany({ data: d }))]);
 		counts.push(['enemy_text', await chunked(encounters.enemyText, (d) => prisma.enemyText.createMany({ data: d as never }))]);
+		counts.push(['enemy_part_text', await chunked(encounters.enemyPartText, (d) => prisma.enemyPartText.createMany({ data: d as never }))]);
 		counts.push(['pack_boss_encounter', await chunked(encounters.packBossEncounter, (d) => prisma.packBossEncounter.createMany({ data: d }))]);
 
 		counts.push([
