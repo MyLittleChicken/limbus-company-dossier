@@ -71,6 +71,32 @@ export default async function EgosPage({ params }: { params: Promise<{ locale: s
 		},
 	];
 
+	/**
+	 * 어떻게 얻는가.
+	 *
+	 * **인격과 달리 가릴 값이 없다.** 인격은 원본에 `eventReward` 가 있어 이벤트 보상을
+	 * 가려낼 수 있었지만, E.G.O 쪽 원본(`limbus-assets` · `limbus-data-mj` · `shared-library`)
+	 * 어디에도 그런 열쇠가 없다. `extractable` 이 있으나 그것은 **거울 던전에서 추출
+	 * 가능한가**라 뜻이 다르다.
+	 *
+	 * 그래서 시즌으로 갈 수 있는 데까지만 간다.
+	 *
+	 *   기본 12   각 수감자의 첫 ZAYIN(`2NN01`, 시즌 0). 처음부터 갖고 있는 E.G.O 다
+	 *   콜라보 4  시즌 8000. 명일방주 「선의의 순례」
+	 *   추출 94   나머지
+	 *
+	 * **「기본」은 데이터 필드가 아니라 관찰이다** — 조건에 맞는 것이 정확히 열둘이고
+	 * 수감자마다 하나씩이다. 발푸르기스 것은 따로 가르지 않는다. 특별한 회차의 추출일 뿐
+	 * 경로가 다르지 않고, 회차는 시즌 표가 이미 말한다.
+	 */
+	// id 는 `2` + 수감자 두 자리 + 순번 두 자리다. 20101 · 21201 처럼 다섯 자리다.
+	const BASE_EGO = /^2\d{2}01$/;
+	const acquisition = (id: string, season: number | null) => {
+		if (season === 8000) return ko ? '콜라보 한정' : 'Collab only';
+		if (season === 0 && BASE_EGO.test(id)) return ko ? '기본' : 'Starting';
+		return ko ? '추출' : 'Extraction';
+	};
+
 	const units: Unit[] = rows.map((e) => ({
 		id: e.id,
 		sectionId: String(e.sinnerId),
@@ -82,6 +108,7 @@ export default async function EgosPage({ params }: { params: Promise<{ locale: s
 		image: e.image,
 		name: e.text?.name ?? e.id,
 		fellBack: e.text?.fellBack ?? false,
+		note: acquisition(e.id, e.season),
 		tags: {
 			sinner: [String(e.sinnerId)],
 			grade: e.rank ? [e.rank] : [],
