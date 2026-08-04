@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
-import { UI } from '@/lib/ui-text';
+import { PACK_CATEGORY, PACK_DIFFICULTY, UI } from '@/lib/ui-text';
 import { listPackCategories, listPacks, readPackFilter } from '@/lib/queries/packs';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox, TriFilter } from '@/components/filters';
@@ -25,6 +25,10 @@ export default async function PacksPage({
 	const filter = readPackFilter(sp);
 	const [packs, categories] = await Promise.all([listPacks(locale, filter), listPackCategories()]);
 
+	// 데이터의 내부 값을 게임이 쓰는 말로 옮긴다. 모르는 값이 오면 그대로 낸다 — 숨기지 않는다.
+	const categoryLabel = (id: string) => PACK_CATEGORY[locale][id] ?? id;
+	const difficultyLabel = (id: string) => PACK_DIFFICULTY[locale][id] ?? id;
+
 	return (
 		<>
 			<SecLabel
@@ -42,7 +46,10 @@ export default async function PacksPage({
 					<ChipFilter
 						param="category"
 						label={ko ? '분류' : 'Category'}
-						options={categories.map((c) => ({ value: c.id, label: `${c.id} ${c.count}` }))}
+						options={categories.map((c) => ({
+								value: c.id,
+								label: `${categoryLabel(c.id)} ${c.count}`,
+							}))}
 					/>
 					<div className="filter-axis">
 						<TriFilter param="superposition" label={ko ? '중첩' : 'Superposition'} />
@@ -69,7 +76,11 @@ export default async function PacksPage({
 										<Name value={p.text} notice={t.fallbackNotice} />
 									</strong>
 									<span className="card-meta">
-										<span className="tag">{p.category}</span>
+										{/* 장 팩은 몇 장인지가 분류만큼 중요하다 — 데이터가 `chapter` 로 갖고 있다. */}
+										<span className="tag">
+											{categoryLabel(p.category)}
+											{p.category === 'canto' && p.chapter ? ` ${p.chapter}` : ''}
+										</span>
 										{p.superposition ? <span className="tag">{ko ? '중첩' : 'Super'}</span> : null}
 										{p.extreme ? <span className="tag">{ko ? '극한' : 'Extreme'}</span> : null}
 										<span className="tag">
@@ -89,7 +100,8 @@ export default async function PacksPage({
 										) : (
 											p.floors.map((f) => (
 												<span key={`${f.difficulty}${f.range}`} className="tag">
-													{f.difficulty} {f.range}
+													{difficultyLabel(f.difficulty)} {f.range}
+													{ko ? '층' : 'F'}
 												</span>
 											))
 										)}

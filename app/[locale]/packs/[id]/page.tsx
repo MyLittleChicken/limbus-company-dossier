@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
-import { UI } from '@/lib/ui-text';
+import { PACK_CATEGORY, PACK_DIFFICULTY, UI } from '@/lib/ui-text';
 import { getPack } from '@/lib/queries/packs';
 import { Facts, Icon, Name, Nothing, Panel, SecLabel } from '@/components/ui';
 import { PackArt } from '@/components/pack-art';
@@ -25,6 +25,10 @@ export default async function PackDetailPage({
 
 	const t = UI[locale];
 	const ko = locale === 'ko';
+
+	// 목록과 같은 말을 쓴다. 모르는 값이 오면 그대로 낸다.
+	const categoryLabel = PACK_CATEGORY[locale][pack.category] ?? pack.category;
+	const difficultyLabel = (id: string) => PACK_DIFFICULTY[locale][id] ?? id;
 
 	const giftLink = (g: (typeof pack.gifts)[number]) => (
 		<li key={g.id}>
@@ -128,7 +132,7 @@ export default async function PackDetailPage({
 						</div>
 						<Facts
 							rows={[
-								[ko ? '분류' : 'Category', pack.category],
+								[ko ? '분류' : 'Category', categoryLabel],
 								[
 									ko ? '변형' : 'Variant',
 									pack.variant ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
@@ -157,7 +161,8 @@ export default async function PackDetailPage({
 							<ul className="inline-list">
 								{pack.floors.map((f) => (
 									<li key={`${f.difficulty}${f.range}`} className="tag">
-										{f.difficulty} {f.range}
+										{difficultyLabel(f.difficulty)} {f.range}
+										{ko ? '층' : 'F'}
 									</li>
 								))}
 							</ul>
