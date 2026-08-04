@@ -602,8 +602,12 @@ trigger_ref       150행     refKind: axis 43 · none 31 · association 27 · si
                             evaluability: roster_gated 57 · runtime 46 · roster 45
                             always 1 · unclassified 1
 effect_ref         55행
-identity_axis     566행     keyword 266 + special_status 300
+identity_axis     628행     keyword 266 + special_status 300 + ego_granted 62
 gift_trigger_param   0행    저작 전. 검사가 0 을 고정한다
+
+v_identity_capability      인격 성질을 trigger_ref 와 같은 어휘로 정규화한 뷰
+                           axis · association · unit_keyword · sin · attack_type
+                           skill_kind · coin · resonance 8갈래
 ```
 
 **검사는 9건이다.** 계획 브리프는 「7건」이라 적었으나 실장은 행 수 4 · 소속 트리거
@@ -664,5 +668,124 @@ GiftTriggerParam.value  String → String?
                              nullable 이 맞다.
 ```
 
-**남은 것은 정량자다.** 임계값 72 · 분모 · 배치 슬롯 ~90행이며 위키·게임 확인으로
-채운다. 파이프라인 밖의 일이다.
+## 20. 2단계 — 조건부 축과 파생 뷰 (2026-08-04)
+
+19절 시점에 `identity_axis` 는 `keyword`·`special_status` 두 경로뿐이었다. **결정 1이
+말한 `ego_granted` 가 데이터에 0행이었다** — `EGO_GRANTED` 상수는 export 됐으나
+`buildIdentityAxis` 가 쓰지 않았고, 테스트는 그 상수를 자기 자신과 비교하는 항등식이라
+아무것도 못 잡았다. 계획 자기검토표의 「결정 1 → Task 3 `EGO_GRANTED`」는 상수가
+존재한다는 뜻이었지 행이 생긴다는 뜻이 아니었다.
+
+### ① ego_granted 62행 — 조건부 축이다
+
+E.G.O 는 인격이 아니라 **수감자**에 딸린다. 그 수감자의 인격 전부가 장착 후보이므로
+행도 그만큼 선다.
+
+```
+20509 착영휘도  수감자 5 · 인격 15 × (LACERATION · BREATH)  = 30행
+20109 엄숙한 애도 수감자 1 · 인격 16 × (VIBRATION · SINKING)  = 32행
+```
+
+**조건은 `egoId` 가 진다.** 소비자는 `ego_id = ''`(무조건) 또는
+`ego_id IN (장착분)` 으로 거른다. 안 거르면 착영휘도를 안 낀 이상까지 출혈 인격이
+된다 — 골든 편성의 10512 가 실제로 그 자리다.
+
+### ② PK 가 egoId 를 안 담아 행이 사라질 수 있었다
+
+```
+@@id([identityId, axisId, source])          → @@id([identityId, axisId, source, egoId])
+egoId String?                               → egoId String @default("")
+```
+
+E.G.O 둘이 같은 인격에 같은 축을 주면 뒤엣것이 조용히 사라진다. 지금 저작 2행은
+수감자가 달라 안 부딪히지만, 「새 메카닉이 나오면 행이 는다」가 결정 1의 전제다.
+`TriggerRef.refId` 와 같은 처리이며 이유도 같다 — NULL 은 PK 에 못 들어가고
+`@@unique` 로 우회하면 NULLS DISTINCT 가 중복을 통과시킨다.
+
+### ③ 축 결손 판정이 인격 전수를 본다
+
+기존 `allIds` 는 `identityKeyword`·`identityStatus` 에 나온 인격만 봤다. **둘 다 없는
+인격이 검사에서 빠진다** — 축이 없다는 사실을 가장 확실히 아는 쪽이 그쪽인데도.
+`input.identity` 전수로 바꿨다. 실측 결손은 5건 그대로다(13절 값과 일치).
+
+`ego_granted` 는 결손 판정에서 뺀다. 결손의 뜻이 「E.G.O 없이는 트리거에 안 걸린다」다.
+
+### ④ `v_identity_capability` — 「구조만으로 푼다」의 증거물
+
+인격의 성질을 `trigger_ref(ref_kind, ref_id)` 와 **같은 어휘**로 정규화하는 뷰다.
+그러면 편성 판정이 **분기 없는 조인 하나**가 된다.
+
+```sql
+SELECT tr.trigger_id,
+       (SELECT count(DISTINCT ic.identity_id)
+          FROM canonical.v_identity_capability ic
+         WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id
+           AND ic.ego_id = '' AND ic.identity_id = ANY($1))
+  FROM canonical.trigger_ref tr
+```
+
+CASE 도 `ref_kind` 별 특례도 없다. 실측 — 편성 6인:
+
+```
+ref_kind      트리거  편성보유  편성없음  근거없음
+association      27       2       25        0
+axis             43      21       22        0
+sin              20      20        0        0
+resonance        15      13        0        2
+attack_type       6       6        0        0
+coin              3       2        1        0
+skill_kind        3       3        0        0
+unit_keyword      1       0        1        0
+deployment        1       0        0        1
+none             31       0        0       31
+──────────────────────────────────────────────
+합계            150      67       49       34
+```
+
+**150 중 116 이 어휘로 닿는다.** 못 닿는 34의 성격:
+
+```
+none         31   참조 대상 자체가 없다. 어떤 저장소로 옮겨도 없다
+deployment    1   편성 순서는 사용자 입력이지 데이터가 아니다
+Any 공명       2   죄악별 수의 **최댓값**을 봐야 해 이 조인으로는 안 닿는다. 평가기 몫
+```
+
+**모델링 결손이 하나도 없다.** 이로써 18절이 Neo4j 적재에 건 조건 —「이 설계가 RDB 에서
+검증된 뒤」— 의 절반이 선다. 나머지 절반은 정량자다.
+
+`schema.sql` 은 `prisma migrate diff --from-empty` 산물이라 손으로 못 고친다. 그래서
+뷰는 `prisma/v2/views.sql` 에 두고 적재기가 마지막에 `CREATE OR REPLACE` 로 건다.
+
+### ⑤ 공명은 공격 스킬만 센다
+
+`resonance` 능력은 죄악과 같은 근거(`skill.sin`)를 쓰지만 `role='attack'` 으로 좁힌다.
+방어·패닉 스킬은 공명 합에 안 들어간다. 트리거가 다르고(`Wrath Skill Used` vs
+`Wrath Resonance`) 임계값도 다르므로 별도 종류로 둔다.
+
+### ⑥ 검사 191 → 196
+
+```
+identity_axis 628 · ego_granted 62
+ego_id 는 ego_granted 에만 있다 (0이어야 한다)
+10501 이상 + 착영휘도 = BREATH · LACERATION (조건부)
+v_identity_capability 종류 8갈래
+편성으로 근거를 못 대는 trigger_ref 34
+```
+
+골든 테스트도 `ego_id = ''` 를 명시하도록 고쳤다. 안 하면 조건부 축이 무조건 축으로
+세어진다 — 편성의 10512 가 수감자 5 라 실제로 새고 있었다.
+
+---
+
+**남은 것은 정량자다.** `raw` 를 전수로 확인했다 — `limbus-assets` 의 `triggers` 는
+라벨 배열뿐이고 `limbus-data-mj` 에도 수치가 없다. 숫자는 `gift_stage_text.desc`
+산문에만 있다.
+
+```
+「인격이 N인 이상」 게이트    70건   9088 진혼 「화상 스킬 보유 인격 5인 이상」
+그중 「대기 인원 제외」       40건   분모가 편성 12 가 아니라 출전이다
+「편성 N번 인격 전용」        98행   gift_requirement.slots 60 이 이미 받고 있다
+```
+
+18절은 이를 「위키·게임 확인」이라 적었으나 틀렸다 — **확인처는 우리 `desc` 다.**
+저작인 것은 맞다.

@@ -205,9 +205,9 @@ CREATE TABLE "canonical"."identity_axis" (
     "identity_id" TEXT NOT NULL,
     "axis_id" TEXT NOT NULL,
     "source" TEXT NOT NULL,
-    "ego_id" TEXT,
+    "ego_id" TEXT NOT NULL DEFAULT '',
 
-    CONSTRAINT "identity_axis_pkey" PRIMARY KEY ("identity_id","axis_id","source")
+    CONSTRAINT "identity_axis_pkey" PRIMARY KEY ("identity_id","axis_id","source","ego_id")
 );
 
 -- CreateTable

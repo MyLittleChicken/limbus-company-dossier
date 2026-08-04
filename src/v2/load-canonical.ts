@@ -6,6 +6,7 @@
  *
  * 실행: npm run v2:canonical
  */
+import { readFile } from 'node:fs/promises';
 import { PrismaClient } from './generated/client.js';
 import { latestSnapshotId, mergeIndexes, readSource, readSourceGroup } from './source.js';
 import { Meta } from './canonical/meta.js';
@@ -225,13 +226,6 @@ async function main(): Promise<void> {
 			sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
 		}, meta);
 
-		const identityAxis = buildIdentityAxis({
-			identityKeyword: identities.identityKeyword.map((k) => ({ identityId: k.identityId, keywordId: k.keywordId })),
-			identityStatus: identities.identityStatus,
-			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
-			axisIds: axisTables.axis.map((a) => a.id),
-		}, meta);
-
 		// ── E.G.O 계열 ─────────────────────────────────────────────
 		// **파일명으로 가른다.** E.G.O 는 각성 스킬과 패시브가 같은 번호를 쓴다
 		// (실측 교집합 110건) — id 자릿수로 가르면 한쪽이 다른 쪽을 덮어쓴다.
@@ -259,6 +253,17 @@ async function main(): Promise<void> {
 			},
 			meta,
 		);
+
+		// 인격 축 프로파일. **egos 뒤여야 한다** — ego_granted 경로가 E.G.O 의
+		// 수감자를 보고 장착 후보 인격을 편다
+		const identityAxis = buildIdentityAxis({
+			identityKeyword: identities.identityKeyword.map((k) => ({ identityId: k.identityId, keywordId: k.keywordId })),
+			identityStatus: identities.identityStatus,
+			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
+			axisIds: axisTables.axis.map((a) => a.id),
+			identity: identities.identity.map((i) => ({ id: i.id, sinnerId: i.sinnerId })),
+			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
+		}, meta);
 
 		// ── 거울 던전 구성 ─────────────────────────────────────────
 		const mdAsset = (f: string) =>
@@ -599,6 +604,12 @@ async function main(): Promise<void> {
 			'field_source',
 			await chunked(meta.sources, (d) => prisma.fieldSource.createMany({ data: d })),
 		]);
+
+		// 파생 뷰. 테이블이 다 선 뒤에 건다 — 뷰가 컬럼을 참조하므로 순서가 있다.
+		// CREATE OR REPLACE 라 재적재에 안전하고, TRUNCATE 는 뷰를 안 지운다.
+		await prisma.$executeRawUnsafe(
+			await readFile(new URL('../../prisma/v2/views.sql', import.meta.url), 'utf8'),
+		);
 
 		console.log('');
 		for (const [t, n] of counts) console.log(`  ${t.padEnd(22)} ${String(n).padStart(6)}`);

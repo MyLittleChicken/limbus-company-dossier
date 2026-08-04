@@ -763,7 +763,23 @@ async function main(): Promise<void> {
 		eq('axis', await prisma.axis.count(), 8);
 		eq('trigger_ref', await prisma.triggerRef.count(), 150);
 		eq('effect_ref', await prisma.effectRef.count(), 55);
-		eq('identity_axis', await prisma.identityAxis.count(), 566);
+		// 566 = keyword 266 + special_status 300. 여기에 ego_granted 62 가 더해진다 —
+		// 착영휘도(20509)·엄숙한 애도(20109) 가 수감자 5(15인)·1(16인) 소속이라 (15+16)×2
+		eq('identity_axis', await prisma.identityAxis.count(), 628);
+		eq('identity_axis (ego_granted)',
+			await prisma.identityAxis.count({ where: { source: 'ego_granted' } }), 62);
+
+		// ego_granted 만 ego_id 를 갖는다. 반대로 새면 무조건 축이 되어
+		// 착영휘도를 안 낀 이상까지 출혈 인격이 된다
+		const egoIdLeak = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.identity_axis
+			WHERE (source = 'ego_granted') <> (ego_id <> '')
+		`;
+		checks.push({
+			name: 'ego_id 는 ego_granted 에만 있다 (0이어야 한다)',
+			ok: Number(egoIdLeak[0]?.n ?? 1n) === 0,
+			detail: `${Number(egoIdLeak[0]?.n ?? 0n)} / 0`,
+		});
 
 		// **소속 트리거가 상태에 걸리면 안 된다.** 이름 매칭에서 실재하는 오매칭이다 —
 		// 'Dawn Office Identities' 가 DawnTeam(Dawn Office) 상태에,
@@ -809,7 +825,9 @@ async function main(): Promise<void> {
 		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. 홍매화(특수 출혈)가
 		// status_category 로 LACERATION 에 닿는 것이 이 설계의 핵심 발견이다
 		const faust = await prisma.identityAxis.findMany({
-			where: { identityId: '10208' }, select: { axisId: true },
+			// ego_granted 를 뺀다 — 이 골든은 **무조건** 축을 재는 것이다
+			where: { identityId: '10208', NOT: { source: 'ego_granted' } },
+			select: { axisId: true },
 		});
 		const faustAxes = [...new Set(faust.map((r) => r.axisId))].sort().join(' · ');
 		checks.push({
@@ -818,9 +836,53 @@ async function main(): Promise<void> {
 			detail: faustAxes,
 		});
 
-		// **정량자는 아직 저작 전이다.** 임계값 72 · 분모 · 배치 슬롯 ~90행이며
-		// 어느 출처에도 구조화돼 있지 않다. 0 이 아니게 되면 이 검사가 깨지고,
-		// 그때 기준값을 올리면서 「무엇을 얼마나 저작했나」가 기록에 남는다
+		// 골든 — 착영휘도(20509)를 낀 이상은 「출혈·호흡을 부여하는 인격으로 취급됨」이다.
+		// 수감자 5 인격 전부가 후보이며, 실제 축 여부는 편성의 E.G.O 선택이 가른다
+		const yisang = await prisma.identityAxis.findMany({
+			where: { identityId: '10501', source: 'ego_granted' },
+			select: { axisId: true, egoId: true },
+		});
+		const yisangAxes = yisang.map((r) => `${r.axisId}:${r.egoId}`).sort().join(' · ');
+		checks.push({
+			name: '10501 이상 + 착영휘도 = BREATH · LACERATION (조건부)',
+			ok: yisangAxes === 'BREATH:20509 · LACERATION:20509',
+			detail: yisangAxes,
+		});
+
+		// ── 파생 뷰 ─────────────────────────────────────────────────
+		// **이 뷰가 「구조만으로 푼다」의 증거물이다.** 인격 성질을 trigger_ref 와
+		// 같은 어휘로 정규화하므로 판정이 분기 없는 조인 하나가 된다
+		const capKinds = await prisma.$queryRaw<Array<{ ref_kind: string; n: bigint }>>`
+			SELECT ref_kind, count(*)::bigint AS n
+			FROM canonical.v_identity_capability GROUP BY 1
+		`;
+		const wantKinds = ['association', 'attack_type', 'axis', 'coin',
+			'resonance', 'sin', 'skill_kind', 'unit_keyword'];
+		checks.push({
+			name: 'v_identity_capability 종류 8갈래',
+			ok: capKinds.map((r) => r.ref_kind).sort().join(',') === wantKinds.join(','),
+			detail: capKinds.map((r) => `${r.ref_kind} ${Number(r.n)}`).sort().join(' · '),
+		});
+
+		// 어휘가 어긋나면 조인이 조용히 0을 낸다. **근거 없는 참조를 세어 고정한다** —
+		// none 31(참조 대상 없음) + deployment 1(사용자 입력)
+		// + Any/Any Absolute Resonance 2(죄악별 최댓값이라 이 조인으로는 안 닿는다)
+		const unbacked = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.trigger_ref tr
+			WHERE NOT EXISTS (SELECT 1 FROM canonical.v_identity_capability ic
+			                  WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id)
+		`;
+		checks.push({
+			name: '편성으로 근거를 못 대는 trigger_ref 34 (150 중 116 이 닿는다)',
+			ok: Number(unbacked[0]?.n ?? 0n) === 34,
+			detail: `${Number(unbacked[0]?.n ?? 0n)} / 34`,
+		});
+
+		// **정량자는 아직 저작 전이다.** 실측 — 「인격이 N인 이상」 게이트가 70건,
+		// 그중 40건이 「대기 인원 제외」라 분모가 편성 12 가 아니라 출전이다.
+		// raw 를 전수로 확인했다: assets `triggers` 는 라벨뿐이고 mj 에도 수치가 없다.
+		// 숫자는 `gift_stage_text.desc` 산문에만 있다. 0 이 아니게 되면 이 검사가
+		// 깨지고, 그때 기준값을 올리면서 「무엇을 얼마나 저작했나」가 기록에 남는다
 		eq('gift_trigger_param (저작 전이므로 0)', await prisma.giftTriggerParam.count(), 0);
 
 		// ══ 거울 던전·인카운터 계열 ═════════════════════════════════

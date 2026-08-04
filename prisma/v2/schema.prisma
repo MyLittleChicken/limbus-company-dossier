@@ -401,13 +401,15 @@ model IdentityAxis {
   identityId String @map("identity_id")
   axisId     String @map("axis_id")
   source     String
-  /// ego_granted 일 때 어느 E.G.O 가 주는가
-  egoId      String? @map("ego_id")
+  /// ego_granted 일 때 어느 E.G.O 가 주는가. 그 외 경로는 빈 문자열이다.
+  /// NULL 로 두면 PK 에 못 들어가고, E.G.O 둘이 같은 인격에 같은 축을 줄 때
+  /// 뒤엣것이 조용히 사라진다. `TriggerRef.refId` 와 같은 처리다
+  egoId      String @default("") @map("ego_id")
 
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
   axis     Axis     @relation(fields: [axisId], references: [id], onDelete: Cascade)
 
-  @@id([identityId, axisId, source])
+  @@id([identityId, axisId, source, egoId])
   @@index([axisId])
   @@map("identity_axis")
   @@schema("canonical")

@@ -24,20 +24,58 @@ after(async () => {
 });
 
 test('편성의 축 프로파일 — 화상 6 · 진동 5', async () => {
+	// **ego_granted 를 뺀다.** 이 편성의 10512 는 수감자 5 라 착영휘도 후보 행을 갖는다.
+	// 안 거르면 E.G.O 를 안 낀 편성이 출혈·호흡을 가진 것으로 세어진다
 	const rows = await prisma.$queryRaw<Array<{ axis_id: string; n: bigint }>>`
 		SELECT axis_id, count(DISTINCT identity_id)::bigint AS n
 		FROM canonical.identity_axis
-		WHERE identity_id = ANY(${SQUAD})
+		WHERE identity_id = ANY(${SQUAD}) AND ego_id = ''
 		GROUP BY 1 ORDER BY 2 DESC
 	`;
 	const m = Object.fromEntries(rows.map((r) => [r.axis_id, Number(r.n)]));
 	assert.equal(m['COMBUSTION'], 6);
 	assert.equal(m['VIBRATION'], 5);
+	assert.equal(m['LACERATION'], undefined);
+});
+
+test('착영휘도를 끼면 그 편성에 출혈·호흡이 선다 — 조건부 축', async () => {
+	const rows = await prisma.$queryRaw<Array<{ axis_id: string; n: bigint }>>`
+		SELECT axis_id, count(DISTINCT identity_id)::bigint AS n
+		FROM canonical.identity_axis
+		WHERE identity_id = ANY(${SQUAD}) AND (ego_id = '' OR ego_id = '20509')
+		GROUP BY 1
+	`;
+	const m = Object.fromEntries(rows.map((r) => [r.axis_id, Number(r.n)]));
+	// 10512 하나가 착영휘도로 두 축을 얻는다. 출혈은 편성에서 처음 생기고,
+	// 호흡은 10916 이 무조건으로 이미 갖고 있어 1 → 2 가 된다
+	assert.equal(m['LACERATION'], 1);
+	assert.equal(m['BREATH'], 2);
+	assert.equal(m['COMBUSTION'], 6);
+});
+
+test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_capability', async () => {
+	// 이 뷰가 「RDB 구조만으로 푼다」의 증거물이다. CASE 도 ref_kind 별 특례도 없다
+	const rows = await prisma.$queryRaw<Array<{ backed: bigint; hit: bigint }>>`
+		SELECT count(*) FILTER (WHERE n IS NOT NULL)::bigint AS backed,
+		       count(*) FILTER (WHERE n > 0)::bigint AS hit
+		FROM (
+			SELECT (SELECT count(DISTINCT ic.identity_id)
+			          FROM canonical.v_identity_capability ic
+			         WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id
+			           AND ic.ego_id = '' AND ic.identity_id = ANY(${SQUAD})) AS n
+			  FROM canonical.trigger_ref tr
+			 WHERE EXISTS (SELECT 1 FROM canonical.v_identity_capability ic
+			                WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id)
+		) x
+	`;
+	// 150 중 116 이 어휘로 닿는다. 나머지 34 는 none 31 · deployment 1 · Any 공명 2
+	assert.equal(Number(rows[0]?.backed ?? 0n), 116);
+	assert.equal(Number(rows[0]?.hit ?? 0n), 67);
 });
 
 test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가 LACERATION 으로 닿는다', async () => {
 	const rows = await prisma.identityAxis.findMany({
-		where: { identityId: '10208' },
+		where: { identityId: '10208', egoId: '' },
 		select: { axisId: true, source: true },
 	});
 	const axes = [...new Set(rows.map((r) => r.axisId))].sort();
