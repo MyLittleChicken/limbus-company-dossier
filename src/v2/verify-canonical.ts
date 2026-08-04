@@ -98,10 +98,13 @@ async function main(): Promise<void> {
 		//         이전에는 축 루프가 조용히 continue 해 아무 기록도 안 남겼다. 「말없이
 		//         버리지 않는다」규칙에 따라 이번에 처음 기록한다
 		//   973 + 42 + 122 = 1,137
+		//   +5    identity.axis — 축이 없는 인격 5건(10201·10205·10305·10903·11206).
+		//         keyword·special_status 어느 경로로도 축을 못 얻는다(task-4-report.md).
+		//         1,137 + 5 = 1,142
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_137,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,137`,
+			ok: gapTotal + overrideCount === 1_142,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,142`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -753,6 +756,72 @@ async function main(): Promise<void> {
 			await prisma.fieldGap.count({ where: { field: 'statuses' } }),
 			0,
 		);
+
+		// ══ 메카닉 축 ═══════════════════════════════════════════════
+		// 축은 8종이다. status_category 의 카테고리 중 트리거가 참조하는 것만이며,
+		// 주살·마탄·원호 방어 등은 트리거가 하나도 참조하지 않아 축이 아니다
+		eq('axis', await prisma.axis.count(), 8);
+		eq('trigger_ref', await prisma.triggerRef.count(), 150);
+		eq('effect_ref', await prisma.effectRef.count(), 55);
+		eq('identity_axis', await prisma.identityAxis.count(), 566);
+
+		// **소속 트리거가 상태에 걸리면 안 된다.** 이름 매칭에서 실재하는 오매칭이다 —
+		// 'Dawn Office Identities' 가 DawnTeam(Dawn Office) 상태에,
+		// 'N Corp. Fanatic Identities' 가 AssemblePersonality(Fanatic) 에 걸린다
+		const misMatched = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.trigger_ref
+			WHERE trigger_id LIKE '% Identities' AND ref_kind = 'axis'
+		`;
+		checks.push({
+			name: '소속 트리거가 축에 잘못 걸렸다 (0이어야 한다)',
+			ok: Number(misMatched[0]?.n ?? 1n) === 0,
+			detail: `${Number(misMatched[0]?.n ?? 0n)} / 0`,
+		});
+
+		// trigger_ref·effect_ref 의 axis 참조가 전부 axis 테이블에 있어야 한다
+		const orphanAxis = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT (SELECT count(*) FROM canonical.trigger_ref r
+			        WHERE r.ref_kind='axis' AND NOT EXISTS
+			          (SELECT 1 FROM canonical.axis a WHERE a.id = r.ref_id))
+			     + (SELECT count(*) FROM canonical.effect_ref r
+			        WHERE r.ref_kind='axis' AND NOT EXISTS
+			          (SELECT 1 FROM canonical.axis a WHERE a.id = r.ref_id)) AS n
+		`;
+		checks.push({
+			name: '축 테이블에 없는 축을 가리킨다 (0이어야 한다)',
+			ok: Number(orphanAxis[0]?.n ?? 1n) === 0,
+			detail: `${Number(orphanAxis[0]?.n ?? 0n)} / 0`,
+		});
+
+		// evaluability 5갈래 — 한 갈래도 0이면 안 된다. 규칙이 퇴화하면 전부 한 값으로 쏠린다
+		const evalDist = await prisma.$queryRaw<Array<{ evaluability: string; n: bigint }>>`
+			SELECT evaluability, count(*)::bigint AS n
+			FROM canonical.trigger_ref GROUP BY 1
+		`;
+		const ed = Object.fromEntries(evalDist.map((r) => [r.evaluability, Number(r.n)]));
+		checks.push({
+			name: 'evaluability 5갈래가 전부 나온다',
+			ok: ['roster', 'roster_gated', 'runtime', 'always', 'unclassified']
+				.every((k) => (ed[k] ?? 0) > 0),
+			detail: Object.entries(ed).map(([k, v]) => `${k} ${v}`).join(' · '),
+		});
+
+		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. 홍매화(특수 출혈)가
+		// status_category 로 LACERATION 에 닿는 것이 이 설계의 핵심 발견이다
+		const faust = await prisma.identityAxis.findMany({
+			where: { identityId: '10208' }, select: { axisId: true },
+		});
+		const faustAxes = [...new Set(faust.map((r) => r.axisId))].sort().join(' · ');
+		checks.push({
+			name: '10208 검계 살수 파우스트 = BREATH · LACERATION',
+			ok: faustAxes === 'BREATH · LACERATION',
+			detail: faustAxes,
+		});
+
+		// **정량자는 아직 저작 전이다.** 임계값 72 · 분모 · 배치 슬롯 ~90행이며
+		// 어느 출처에도 구조화돼 있지 않다. 0 이 아니게 되면 이 검사가 깨지고,
+		// 그때 기준값을 올리면서 「무엇을 얼마나 저작했나」가 기록에 남는다
+		eq('gift_trigger_param (저작 전이므로 0)', await prisma.giftTriggerParam.count(), 0);
 
 		// ══ 거울 던전·인카운터 계열 ═════════════════════════════════
 		eq('choice_event', await prisma.choiceEvent.count(), 159);
