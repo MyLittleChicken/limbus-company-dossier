@@ -17,6 +17,8 @@ import { buildSkills } from './canonical/skills.js';
 import { buildIdentities } from './canonical/identities.js';
 import { buildEgos } from './canonical/egos.js';
 import { buildStatuses } from './canonical/statuses.js';
+import { buildAxis } from './canonical/axis.js';
+import { buildIdentityAxis } from './canonical/identity-axis.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
@@ -207,6 +209,30 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── 축 어휘와 트리거·효과 참조 ─────────────────────────────
+		// 이름 유도를 여기서 한 번 풀어 굳힌다 — 질의마다 다시 하면 오매칭이 되살아난다.
+		// vocab·statuses·sinners·identities 가 모두 만들어진 뒤여야 한다.
+		const axisTables = buildAxis({
+			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
+			statusTextEn: statuses.statusText
+				.filter((s) => s.locale === 'en')
+				.map((s) => ({ statusId: s.statusId, name: s.name })),
+			associationTextEn: sinners.associationText
+				.filter((a) => a.locale === 'en')
+				.map((a) => ({ associationId: a.associationId, name: a.name })),
+			triggerIds: vocab.trigger.map((t) => t.id),
+			effectIds: vocab.effect.map((e) => e.id),
+			unitKeywords: [...new Set(identities.identityUnitKeyword.map((u) => u.keyword))],
+			sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
+		}, meta);
+
+		const identityAxis = buildIdentityAxis({
+			identityKeyword: identities.identityKeyword.map((k) => ({ identityId: k.identityId, keywordId: k.keywordId })),
+			identityStatus: identities.identityStatus,
+			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
+			axisIds: axisTables.axis.map((a) => a.id),
+		}, meta);
+
 		// ── E.G.O 계열 ─────────────────────────────────────────────
 		// **파일명으로 가른다.** E.G.O 는 각성 스킬과 패시브가 같은 번호를 쓴다
 		// (실측 교집합 110건) — id 자릿수로 가르면 한쪽이 다른 쪽을 덮어쓴다.
@@ -375,6 +401,8 @@ async function main(): Promise<void> {
 			         canonical.choice_event, canonical.achievement, canonical.reward,
 			         canonical.adversity, canonical.grace, canonical.encounter, canonical.enemy,
 			         canonical.enemy_part,
+			         canonical.axis, canonical.identity_axis, canonical.trigger_ref,
+			         canonical.effect_ref, canonical.gift_trigger_param,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -407,6 +435,12 @@ async function main(): Promise<void> {
 		]);
 		counts.push(['trigger', (await prisma.trigger.createMany({ data: vocab.trigger })).count]);
 		counts.push(['effect', (await prisma.effect.createMany({ data: vocab.effect })).count]);
+
+		// 축 어휘와 트리거·효과 참조. trigger·effect 다음이어야 FK 가 안 깨진다.
+		// identity_axis 는 identity 가 서야 하므로 뒤에서 적재한다(축이 먼저).
+		counts.push(['axis', (await prisma.axis.createMany({ data: axisTables.axis })).count]);
+		counts.push(['trigger_ref', await chunked(axisTables.triggerRef, (d) => prisma.triggerRef.createMany({ data: d }))]);
+		counts.push(['effect_ref', await chunked(axisTables.effectRef, (d) => prisma.effectRef.createMany({ data: d }))]);
 
 		counts.push([
 			'gift',
@@ -498,6 +532,8 @@ async function main(): Promise<void> {
 		counts.push(['passive_text', await chunked(identities.passiveText, (d) => prisma.passiveText.createMany({ data: d as never }))]);
 
 		counts.push(['identity', await chunked(identities.identity, (d) => prisma.identity.createMany({ data: d }))]);
+		// identity_axis 는 identity·axis 둘 다 FK 로 걸어 여기서 적재한다 — axis 는 이미 위에서 섰다.
+		counts.push(['identity_axis', await chunked(identityAxis, (d) => prisma.identityAxis.createMany({ data: d }))]);
 		counts.push(['identity_text', await chunked(identities.identityText, (d) => prisma.identityText.createMany({ data: d as never }))]);
 		counts.push(['identity_resist', await chunked(identities.identityResist, (d) => prisma.identityResist.createMany({ data: d as never }))]);
 		counts.push(['identity_speed', await chunked(identities.identitySpeed, (d) => prisma.identitySpeed.createMany({ data: d }))]);
