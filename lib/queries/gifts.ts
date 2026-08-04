@@ -13,6 +13,24 @@ import { localeFilter, multi, nameOf, one, PAGE_SIZE, textOf, type SearchParams 
 
 export const GIFT_TIERS = ['1', '2', '3', '4', '5', 'EX'] as const;
 
+/**
+ * 등급 표기.
+ *
+ * 데이터는 `1`~`5` 와 `EX` 로 갖고 있지만 **게임은 카드에 로마자를 인쇄한다.**
+ * 애셋으로는 없다 — 기프트 그림 456 장과 `assets/icons/` 54 종을 다 뒤졌고 숫자·로마자
+ * 아이콘이 없다. 그래서 글자로 낸다. 표기를 새로 만든 것이 아니라 게임 표기를 따른 것이다.
+ *
+ * 실측 분포는 I 58 · II 139 · III 136 · IV 119 · V 2 · EX 2 다.
+ */
+export const GIFT_TIER_LABEL: Record<string, string> = {
+	'1': 'I',
+	'2': 'II',
+	'3': 'III',
+	'4': 'IV',
+	'5': 'V',
+	EX: 'EX',
+};
+
 /** 키워드 축의 "없음". 질의 문자열에 쓰는 예약어다. */
 export const NO_KEYWORD = 'none';
 

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import {
+	GIFT_TIER_LABEL,
 	GIFT_TIERS,
 	NO_KEYWORD,
 	listGifts,
@@ -11,8 +12,8 @@ import {
 	readGiftFilter,
 } from '@/lib/queries/gifts';
 import type { SearchParams } from '@/lib/queries/shared';
-import { ChipFilter, ClearFilters, PickFilter, SearchBox, TriFilter } from '@/components/filters';
-import { Empty, Icon, IconTag, Name, Pager, SecLabel } from '@/components/ui';
+import { ChipFilter, ClearFilters, PickFilter, SearchBox } from '@/components/filters';
+import { Empty, IconTag, Name, Pager, SecLabel } from '@/components/ui';
 import { keywordIcon } from '@/lib/assets';
 
 export default async function GiftsPage({
@@ -54,7 +55,8 @@ export default async function GiftsPage({
 					<ChipFilter
 						param="tier"
 						label={locale === 'ko' ? '등급' : 'Tier'}
-						options={GIFT_TIERS.map((v) => ({ value: v, label: v }))}
+						// 게임이 카드에 로마자를 인쇄한다. 애셋으로는 없어 글자로 낸다.
+						options={GIFT_TIERS.map((v) => ({ value: v, label: GIFT_TIER_LABEL[v] ?? v }))}
 					/>
 					<ChipFilter
 						param="keyword"
@@ -77,44 +79,48 @@ export default async function GiftsPage({
 							{ value: 'general', label: locale === 'ko' ? '범용' : 'General' },
 						]}
 					/>
-					<div className="filter-axis">
-						<TriFilter param="enhanceable" label={locale === 'ko' ? '강화 가능' : 'Enhanceable'} />
-						<TriFilter param="hard" label={locale === 'ko' ? 'hard 전용' : 'Hard only'} />
-					</div>
 				</div>
 			</Suspense>
 
 			{result.items.length === 0 ? (
 				<Empty message={t.empty} />
 			) : (
-				<ul className="cardgrid">
+				<ul className="cardgrid cardgrid-gift">
 					{result.items.map((g) => (
 						<li key={g.id}>
-							<Link href={`/${locale}/gifts/${g.id}`} className="card">
-								<Icon src={g.icon} alt="" size={44} />
-								<div className="card-body">
-									<strong>
-										<Name value={g.text} notice={t.fallbackNotice} />
-									</strong>
-									<span className="card-meta">
-										<span className="tag">{g.tier}</span>
-										{/*
-										 * 죄악 속성은 카드에 내지 않는다. 원본에 있는 값이지만 게임에서
-										 * 무엇을 하는지 확인되지 않았다(docs/backlog/03-gift-affinity.md).
-										 * 확인 전까지 등급·키워드와 같은 무게로 두지 않는다.
-										 */}
-										{g.keyword ? (
-											<IconTag src={g.keywordId ? keywordIcon(g.keywordId) : null}>
-												{g.keyword.name}
-											</IconTag>
-										) : null}
-										{g.exclusiveCount > 0 ? (
-											<span className="tag tag-mark">
-												{locale === 'ko' ? '전용' : 'Exclusive'}
-											</span>
-										) : null}
-									</span>
-								</div>
+							<Link href={`/${locale}/gifts/${g.id}`} className="card unit">
+								{/* 이름을 맨 위 좌측에 한 줄로 — 인격·E.G.O·팩 카드와 같은 골격이다. */}
+								<strong className="unit-name" title={g.text?.name ?? undefined}>
+									<Name value={g.text} notice={t.fallbackNotice} />
+								</strong>
+								<span className="unit-art">
+									{g.icon ? (
+										/* eslint-disable-next-line @next/next/no-img-element -- 로컬 정적 파일이다 */
+										<img src={g.icon} alt="" loading="lazy" />
+									) : null}
+									{/* 등급은 게임처럼 로마자다. 그림 좌측 상단에 얹어 이름 자리를 비운다. */}
+									<span className="gift-tier">{GIFT_TIER_LABEL[g.tier] ?? g.tier}</span>
+								</span>
+								<span className="card-meta">
+									{/*
+									 * 죄악 속성은 카드에 내지 않는다. 원본에 있는 값이지만 게임에서
+									 * 무엇을 하는지 확인되지 않았다(docs/backlog/03-gift-affinity.md).
+									 * 확인 전까지 등급·키워드와 같은 무게로 두지 않는다.
+									 */}
+									{g.keyword ? (
+										<IconTag src={g.keywordId ? keywordIcon(g.keywordId) : null}>
+											{g.keyword.name}
+										</IconTag>
+									) : (
+										// 키워드 없는 기프트 120 종. 결손이 아니라 축의 값이다.
+										<span className="tag absent">{locale === 'ko' ? '키워드 없음' : 'No keyword'}</span>
+									)}
+									{g.exclusiveCount > 0 ? (
+										<span className="tag tag-mark">
+											{locale === 'ko' ? '전용' : 'Exclusive'}
+										</span>
+									) : null}
+								</span>
 							</Link>
 						</li>
 					))}
