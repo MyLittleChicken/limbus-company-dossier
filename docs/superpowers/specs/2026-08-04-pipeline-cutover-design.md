@@ -202,19 +202,56 @@ rollback 후 promote 직전 상태로 돌아온다
 맨손 실행    v2:canonical 을 그냥 돌리면 거부된다
 ```
 
-## 9. 구현에서 확인할 것 하나
+## 9. 구현에서 확인한 것 (Task 2 실측 — 더 이상 미확인이 아니다)
 
-**6.1 의 2단계 DDL 을 무엇으로 만드나.**
+**6.1 의 2단계 DDL 을 무엇으로 만드나 — `--from-url` 은 못 쓴다.**
 
-`prisma/v2/schema.sql` 은 `raw`·`canonical`·`app` 이 섞여 있다(canonical 참조 274 ·
-raw/app 27). 통째로 돌리면 살아있는 `raw`·`app` 을 다시 만들려 든다.
+첫 확인: canonical 이 살아있는 채로 `prisma migrate diff --from-url $DATABASE_URL
+--to-schema-datamodel prisma/v2/schema.prisma --script` 를 떠 보면 빈 마이그레이션이
+나온다(`-- This is an empty migration.`) — 스키마와 DB 가 어긋나지 않았다는 뜻이고,
+이 확인이 비어 있지 않았다면 여기서 멈췄어야 했다.
 
-후보는 `prisma migrate diff --from-url $DATABASE_URL --to-schema-datamodel` 이다.
-1단계 뒤에는 `canonical` 이 없으므로 그 생성 DDL 만 나와야 한다. 다만 `app` → `canonical`
-FK 가 함께 나오는지(그러면 `app` 을 건드린다) 구현 첫 단계에서 확인한다.
+후보로 적었던 `prisma migrate diff --from-url` 은 실측으로 기각한다. `canonical` 을
+`canonical_probe` 로 옆으로 치운 뒤(3.3 절의 그 실측과 같은 방법으로) 같은 명령을
+다시 뜨면 두 갈래로 막힌다.
 
-안 되면 대안은 `pg_dump --schema-only -n canonical_hold` 를 이름만 바꿔 쓰는 것이다 —
-구조가 안 바뀐 경우에만 옳으므로 모델 변경이 있으면 못 쓴다.
+1. `canonical_probe` 를 datasource 의 `schemas` 목록에 안 넣으면 **P4002 로 죽는다**
+   — `app.run_floor` 가 그 이름을 가리키는 FK 때문에("Cross schema references are
+   only allowed when the target schema is listed in the schemas property").
+2. 임시로 목록에 넣어서 통과시키면, 그 이름 밑에 딸려 있는 살아있는 94테이블이
+   "목표 데이터모델에 없는 여분"으로 잡혀 **`DROP TABLE`/`DROP TYPE` 105건**이 나온다
+   (94 테이블 + 11 타입). 그대로 실행하면 옆으로 치운 살아있는 판을 통째로 지운다 —
+   `v2:build` 안에서는 못 쓴다.
+
+`app` 을 건드리는 문장은 딱 하나 섞여 나온다 — `ALTER TABLE "app"."run" DROP COLUMN
+"difficulty", ADD COLUMN "difficulty" ...`(옆으로 치운 뒤에는 `app.run.difficulty` 가
+`canonical_probe."Difficulty"` 를 가리키므로, 목표 스키마의 `canonical."Difficulty"`
+와 다르다고 diff 가 판단한다). `raw` 를 다시 만들려 드는 문장은 없었다.
+
+**채택한 방법:** `--from-url` 대신 `--from-empty` 산물을 쓴다 —
+`npm run v2:schema:ddl`(`prisma migrate diff --from-empty --to-schema-datamodel
+prisma/v2/schema.prisma --script`)이 만드는 `prisma/v2/schema.sql`. 이 명령은
+DB 접속이 필요 없고(재실행해도 바이트 단위로 같은 파일이 나온다), **빈 상태에서
+만드는 것이니 DROP 문이 애초에 없다.**
+
+이 파일은 여전히 `raw`·`canonical`·`app` 이 섞여 있다(주석 헤더로 구분되는 문장
+블록 256개 중 227개가 canonical 전용, 3개는 `app` 문장에 canonical 참조가 섞여
+있다 — 위의 `app.run.difficulty` 문장과 `app.run_floor`/`run_gift` 의
+`REFERENCES "canonical"...` FK 문장 둘). `src/v2/schema-ops.ts` 의
+`extractCanonicalDdl` 이 블록을 "`\"canonical\"` 을 포함하고 `\"app\"`·`\"raw\"` 를
+포함하지 않으면 채택"으로 걸러 227개만 남긴다. `pg_dump --schema-only` 대안은
+안 썼다 — 구조가 안 바뀐 경우에만 옳다는 제약이 있는데, `--from-empty` 걸러 쓰기는
+그 제약이 없고(항상 `schema.prisma` 의 지금 정의를 반영한다) DB 접속도 안 필요해
+더 낫다.
+
+**부수적으로 발견한 것:** `load-canonical.ts` 의 설계 결정 4 가드(Task 1)는
+`information_schema.tables` 의 테이블 개수로 "비었다"를 판정한다. 그런데 위 DDL 을
+`canonical` 이름으로 구우면 그 순간 테이블이 94개가 되므로(행은 0개), `v2:build`
+안에서 적재기를 불러도 가드가 그대로 막는다 — 결정 4 자신이 적어 둔 표("build
+안에서 실행 → 통과")와 어긋난다. `v2:build` 가 적재기를 부를 때만
+`V2_BUILD_FRESH_CANONICAL=1` 환경변수를 실어, 맨손 실행("npm run v2:canonical")은
+가드가 그대로 막고 `v2:build` 안에서만 통과하게 했다(`src/v2/load-canonical.ts`).
+과제 범위 밖 파일이지만, 이걸 고치지 않으면 `v2:build` 가 끝까지 못 돈다.
 
 ## 10. 범위 밖 — 그다음 PR
 

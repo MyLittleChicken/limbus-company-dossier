@@ -46,8 +46,17 @@ async function main(): Promise<void> {
 	try {
 		// **살아있는 canonical 을 지우지 않기 위한 가드다**(설계 결정 4).
 		// 적재기는 빈 canonical 에만 굽는다. v2:build 가 먼저 옆으로 치워 준다.
-		const existing = await tableCount(prisma, 'canonical');
-		if (existing > 0) throw new Error(emptyRequiredMessage(existing));
+		//
+		// v2:build 안에서는 이 가드를 그대로 못 쓴다 — build 가 새 DDL 을 이미
+		// 구운 뒤(테이블 94개, 행 0개) 이 스크립트를 부르므로 tableCount 는
+		// 언제나 94 다. 그래서 build 는 자신이 방금 옆으로 치우고 새로 구운
+		// 것이라는 사실을 환경변수로 넘긴다. 맨손 실행("npm run v2:canonical")은
+		// 이 변수가 없으므로 가드가 그대로 막는다 — 설계 결정 4의 표
+		// (「맨손 실행 → 거부」·「build 안에서 실행 → 통과」) 그대로다.
+		if (process.env.V2_BUILD_FRESH_CANONICAL !== '1') {
+			const existing = await tableCount(prisma, 'canonical');
+			if (existing > 0) throw new Error(emptyRequiredMessage(existing));
+		}
 
 		const snapshotId = await latestSnapshotId(prisma);
 		console.log(`스냅샷 ${snapshotId} 를 읽는다`);
