@@ -86,7 +86,12 @@ export default async function GiftsPage({ params }: { params: Promise<{ locale: 
 		image: g.icon,
 		name: g.text?.name ?? String(g.id),
 		fellBack: g.text?.fellBack ?? false,
-		note: g.exclusiveCount > 0 ? (ko ? '팩 전용' : 'Pack-exclusive') : null,
+		/*
+			**한쪽만 달면 카드 높이가 갈린다.** 전용에만 표를 달았더니 같은 줄에서 태그가
+			있는 카드와 없는 카드의 높이가 달랐다. 없는 쪽도 「없음」이 아니라 제 이름이
+			있으므로 그것을 쓴다 — 전용 팩이 없다는 것은 아무 팩에서나 나온다는 뜻이다.
+		*/
+		note: g.exclusiveCount > 0 ? (ko ? '팩 전용' : 'Pack-exclusive') : ko ? '범용' : 'General',
 		tags: {
 			tier: [g.tier],
 			keyword: [sectionOf(g.id, g.keywordId)],
