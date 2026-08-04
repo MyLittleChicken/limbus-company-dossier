@@ -146,20 +146,34 @@ export function UnitList({
 	}, [units, picked, q]);
 
 	/**
-	 * 등급 오름차순 → 출시일.
+	 * 섹션 차례 → 등급 오름차순 → 출시일.
+	 *
+	 * **섹션을 첫 열쇠로 둔다.** 등급만으로 늘어놓고 앞에서부터 자르면 그린 몫이 「모든
+	 * 섹션의 I 등급」이 되고, 더 그릴 때 이미 지나친 섹션 한가운데에 II 등급이 끼어든다 —
+	 * 읽는 사람에게는 다 본 자리에 없던 것이 생기는 셈이다. 섹션 순으로 늘어놓으면 자란
+	 * 몫이 언제나 뒤에 붙는다.
 	 *
 	 * **날짜에 동률이 있다** — 같은 수감자 안에서 인격 12 건 · E.G.O 13 건이 같은 날짜다.
 	 * 그래서 날짜가 같으면 id 로 가른다. id 가 출시 순서를 담고 있고 전수 검증에서 위반이 없다.
+	 *
+	 * 뒤집기는 **섹션 안에서만** 한다. 섹션 차례는 화면이 정한 것이라 정렬이 건드리지 않는다.
 	 */
+	const sectionRank = useMemo(
+		() => new Map(sections.map((s, i) => [s.id, i])),
+		[sections],
+	);
+
 	const sorted = useMemo(() => {
-		const rows = [...shown].sort(
-			(a, b) =>
-				a.grade - b.grade ||
-				(a.released ?? '').localeCompare(b.released ?? '') ||
-				a.id.localeCompare(b.id),
+		const within = (a: Unit, b: Unit) =>
+			a.grade - b.grade ||
+			(a.released ?? '').localeCompare(b.released ?? '') ||
+			a.id.localeCompare(b.id);
+		// 섹션 목록에 없는 것은 뒤로 보낸다. 그려지지는 않지만 차례를 흔들지도 않는다.
+		const rank = (u: Unit) => sectionRank.get(u.sectionId) ?? sections.length;
+		return [...shown].sort(
+			(a, b) => rank(a) - rank(b) || (desc ? -within(a, b) : within(a, b)),
 		);
-		return desc ? rows.reverse() : rows;
-	}, [shown, desc]);
+	}, [shown, desc, sectionRank, sections.length]);
 
 	/*
 		그리기를 나눈다.
