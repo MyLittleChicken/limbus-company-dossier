@@ -13,6 +13,24 @@ import { localeFilter, multi, nameOf, one, PAGE_SIZE, textOf, type SearchParams 
 
 export const GIFT_TIERS = ['1', '2', '3', '4', '5', 'EX'] as const;
 
+/**
+ * 등급 표기.
+ *
+ * 데이터는 `1`~`5` 와 `EX` 로 갖고 있지만 **게임은 카드에 로마자를 인쇄한다.**
+ * 애셋으로는 없다 — 기프트 그림 456 장과 `assets/icons/` 54 종을 다 뒤졌고 숫자·로마자
+ * 아이콘이 없다. 그래서 글자로 낸다. 표기를 새로 만든 것이 아니라 게임 표기를 따른 것이다.
+ *
+ * 실측 분포는 I 58 · II 139 · III 136 · IV 119 · V 2 · EX 2 다.
+ */
+export const GIFT_TIER_LABEL: Record<string, string> = {
+	'1': 'I',
+	'2': 'II',
+	'3': 'III',
+	'4': 'IV',
+	'5': 'V',
+	EX: 'EX',
+};
+
 /** 키워드 축의 "없음". 질의 문자열에 쓰는 예약어다. */
 export const NO_KEYWORD = 'none';
 
@@ -122,6 +140,78 @@ export async function listGifts(locale: Locale, filter: GiftFilter) {
 }
 
 export type GiftListItem = Awaited<ReturnType<typeof listGifts>>['items'][number];
+
+/**
+ * 저주·축복 기프트.
+ *
+ * 얻을 때는 「저주」로 붙어 아군에게 불리하게 걸리고, 조건을 채우면 「축복」으로 바뀌어
+ * 이로운 효과를 낸다. **데이터가 그것을 플래그로 갖고 있지 않아 설명문으로 가린다** —
+ * 「전투를 6회 승리할 시 해당 E.G.O 기프트가 변경됨」이라는 문장이 있는 것이 그것이고
+ * 실측 3 건이다(9227 귀기 서린 환도 · 9229 빛바랜 건틀릿 · 9231 그날의 기록).
+ *
+ * **한국어 행으로 가린다.** 화면 로케일과 무관하게 같은 셋이 나와야 하기 때문이다.
+ *
+ * 바뀐 뒤의 축복 셋도 함께 돌려준다(9228 신검합일 · 9230 황금빛 시간 · 9232 가능성).
+ * 짝을 잇는 값이 없어 **어느 저주가 어느 축복이 되는지는 말하지 않고** 같은 칸에 넣기만
+ * 한다. 아래 주석에 근거를 적었다.
+ */
+export async function listCursedGiftIds(): Promise<Set<number>> {
+	const cursed = await db.giftText.findMany({
+		where: { locale: 'ko', enhanceLevel: 0, desc: { contains: '기프트가 변경' } },
+		select: { giftId: true },
+	});
+
+	/*
+		바뀐 뒤의 축복 기프트.
+
+		**둘을 잇는 값이 데이터에 없다.** `gift_effect` · `choice_event_gift` · `fusion_recipe`
+		를 다 봤지만 짝을 가리키는 것이 없다 — 저주 셋만 `choice_event_gift` 에 있고 축복
+		셋은 어디에도 걸리지 않는다.
+
+		그래서 **id 하나 뒤**라는 관찰을 쓰되 그대로 믿지 않고 걸러 확인한다. 저주는 전부
+		1 등급이고 축복은 3 등급이며 둘 다 키워드가 없다. 조건에 맞지 않으면 버린다 —
+		규칙이 깨졌는데 엉뚱한 기프트를 특수로 표시하는 것보다 낫다.
+
+		나무위키의 기프트 문서가 축복 기프트가 셋(신검합일 · 황금빛 시간 · 가능성)이라고
+		적고 있어 수는 맞는다. 다만 **어느 저주가 어느 축복이 되는지는 그 문서도 밝히지
+		않는다.** 여기서도 짝으로 잇지 않고 같은 칸에 넣기만 한다.
+	*/
+	const candidates = cursed.map((r) => r.giftId + 1);
+	const blessed = await db.gift.findMany({
+		where: { id: { in: candidates }, tier: '3', keywordId: null },
+		select: { id: true },
+	});
+
+	return new Set([...cursed.map((r) => r.giftId), ...blessed.map((g) => g.id)]);
+}
+
+/**
+ * 기프트 전량.
+ *
+ * **쪽을 나누지 않는다.** 456 장을 한 번에 내려보내고 거르기·정렬·섹션을 화면이 맡는다 —
+ * 인격 184 · E.G.O 110 · 팩 117 과 같은 방식이다. 그리기는 화면이 나눠 한다.
+ */
+export async function listAllGifts(locale: Locale) {
+	const rows = await db.gift.findMany({
+		orderBy: [{ tier: 'asc' }, { id: 'asc' }],
+		include: {
+			// 목록에는 기본 단계(0)의 이름만 쓴다.
+			texts: { where: { locale: { in: [locale, 'en'] }, enhanceLevel: 0 } },
+			keyword: { include: { texts: localeFilter(locale) } },
+			_count: { select: { exclusivePacks: true } },
+		},
+	});
+
+	return rows.map((g) => ({
+		id: g.id,
+		tier: g.tier,
+		icon: giftIcon(g.sprite),
+		text: nameOf(g.texts, locale),
+		keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
+		keywordId: g.keywordId,
+		exclusiveCount: g._count.exclusivePacks,
+	}));
+}
 
 export async function getGift(id: number, locale: Locale) {
 	const gift = await db.gift.findUnique({

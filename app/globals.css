@@ -1,27 +1,19 @@
 /*
- * 레이아웃 골격.
- *
- * 05-ui-foundation 8절이 정한 시각 디자인(게임 세계관 톤)은 아직 반영하지 않았다.
- * 여기 있는 색·타이포는 배치를 보기 위한 중립 값이며 디자인 단계에서 교체한다.
- * 치수와 구조는 이전 프로토타입(limbus-mirror-tracker-v1)의 레이아웃을 따른다.
- */
+	디자인 시스템 — 컴포넌트 계층.
+	==============================
 
-:root {
-	--shell-max: 1360px;
-	--shell-pad: 24px;
+	구획 순서는 `app/globals.css` 와 같다. 되돌려 옮길 때 구획끼리 대응시키면 되도록
+	맞춰 둔 것이며, 클래스명은 하나도 바꾸지 않았다.
 
-	--gap: 18px;
-	--gap-sm: 8px;
+	색·치수는 `tokens.css` 의 역할 토큰만 쓴다. 이 파일에 하드코딩된 색이 있으면 그것은
+	버그다(투명도 계산이 필요한 rgba 와 질감 패턴만 예외다).
 
-	/* 디자인 단계에서 교체할 자리 */
-	--bg: #14141a;
-	--bg-raised: #1c1c24;
-	--border: #32323e;
-	--divider: #26262f;
-	--text: #e6e6ec;
-	--text-dim: #a0a0ae;
-	--accent: #c9a227;
-}
+	시각 언어는 넷이다.
+	  1. 블랙 + 크래프트/크림 + 단일 브릭레드. 밝은 원색을 쓰지 않는다.
+	  2. 각진 컷코너 프레이밍 — 패널·카드 우상단을 자르고 얇은 이중 외곽선을 둔다.
+	  3. 인쇄·방송 노이즈 — 스캔라인과 그레인. 토큰으로 끌 수 있다.
+	  4. 골드가 활성·선택, 레드가 경보·주요 동작.
+*/
 
 * {
 	box-sizing: border-box;
@@ -34,16 +26,177 @@ body {
 }
 
 body {
-	background: var(--bg);
-	color: var(--text);
-	font-family: system-ui, 'Segoe UI', sans-serif;
-	font-size: 14px;
-	line-height: 1.6;
+	background: var(--surface-page);
+	color: var(--ink);
+	font-family: var(--font-body);
+	font-size: var(--fs-base);
+	line-height: var(--lh-base);
+	/* 게임의 숫자 표기는 자리가 흔들리지 않는다. 표·분포·수치가 전부 여기 걸린다. */
+	font-variant-numeric: tabular-nums;
 }
 
 a {
 	color: inherit;
 	text-decoration: none;
+}
+
+/* ── 질감 (시각 언어 3) ─────────────────────────────────────
+   인쇄 그레인과 방송 스캔라인. `--fx-grain` · `--fx-scanline` 을 0 으로 두면 꺼진다.
+   본문 위에 덮이므로 명도를 눌러 글자 판독을 해치지 않는 선까지만 올린다. */
+
+body::before,
+body::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 200;
+	pointer-events: none;
+}
+
+body::before {
+	background-image: radial-gradient(rgba(255, 255, 255, 0.6) 0.5px, transparent 0.5px);
+	background-size: 3px 3px;
+	opacity: var(--fx-grain);
+}
+
+body::after {
+	background-image: repeating-linear-gradient(
+		0deg,
+		rgba(0, 0, 0, 0.35) 0 1px,
+		transparent 1px 3px
+	);
+	opacity: var(--fx-scanline);
+}
+
+/* ── 컷코너 (시각 언어 2) ───────────────────────────────────
+   우상단을 자른다. 자른 변에는 테두리가 남지 않으므로 `::after` 로 대각선을 그린다.
+   `--cut-size` 를 컴포넌트마다 달리 준다 — 큰 면은 12px, 카드는 7px. */
+
+.panel,
+.msheet,
+.deckrail,
+.card,
+.sslot,
+.pickcard {
+	position: relative;
+	clip-path: polygon(
+		0 0,
+		calc(100% - var(--cut-size)) 0,
+		100% var(--cut-size),
+		100% 100%,
+		0 100%
+	);
+}
+
+.panel,
+.msheet,
+.deckrail {
+	--cut-size: var(--cut);
+}
+
+.card,
+.sslot,
+.pickcard {
+	--cut-size: var(--cut-sm);
+}
+
+.panel::after,
+.msheet::after,
+.deckrail::after,
+.card::after,
+.sslot::after,
+.pickcard::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: calc(100% - var(--cut-size));
+	width: calc(var(--cut-size) * 1.4143);
+	height: 1px;
+	background: var(--line);
+	transform-origin: 0 0;
+	transform: rotate(45deg);
+	pointer-events: none;
+	z-index: 3;
+}
+
+/* 활성·선택 상태에서는 대각선도 함께 금색이 된다 — 테두리만 바뀌면 코너가 끊겨 보인다. */
+.card:hover::after,
+.pickcard:hover::after,
+.pickcard[aria-pressed='true']::after,
+.sslot-on::after,
+.msheet::after {
+	background: var(--line-active);
+}
+
+/* ── 축 색 (죄악 · 상태 키워드) ─────────────────────────────
+   `js/proto.js` 가 아이콘 파일명에서 축을 읽어 `data-sin` · `data-kw` 를 붙인다.
+   제품에 옮길 때는 서버 렌더가 같은 속성을 내면 된다 — 구조 변경이 아니라 속성 하나다.
+
+   **죄악 7종과 상태 키워드는 다른 축이다.** 실측에서 서로 다른 색으로 나오며 섞지 않는다.
+   색은 단독으로 뜻을 전하지 않는다 — 이 속성이 붙는 자리에는 항상 아이콘이나 글자가 있다. */
+
+[data-sin='wrath'] {
+	--axis-color: var(--sin-wrath);
+}
+[data-sin='lust'] {
+	--axis-color: var(--sin-lust);
+}
+[data-sin='sloth'] {
+	--axis-color: var(--sin-sloth);
+}
+[data-sin='gluttony'] {
+	--axis-color: var(--sin-gluttony);
+}
+[data-sin='gloom'] {
+	--axis-color: var(--sin-gloom);
+}
+[data-sin='pride'] {
+	--axis-color: var(--sin-pride);
+}
+[data-sin='envy'] {
+	--axis-color: var(--sin-envy);
+}
+[data-sin='none'] {
+	--axis-color: var(--sin-none);
+}
+
+[data-kw='bleed'] {
+	--axis-color: var(--kw-bleed);
+}
+[data-kw='burn'] {
+	--axis-color: var(--kw-burn);
+}
+[data-kw='tremor'] {
+	--axis-color: var(--kw-tremor);
+}
+[data-kw='rupture'] {
+	--axis-color: var(--kw-rupture);
+}
+[data-kw='sinking'] {
+	--axis-color: var(--kw-sinking);
+}
+[data-kw='charge'] {
+	--axis-color: var(--kw-charge);
+}
+[data-kw='poise'] {
+	--axis-color: var(--kw-poise);
+}
+[data-kw='haste'] {
+	--axis-color: var(--kw-haste);
+}
+[data-kw='bind'] {
+	--axis-color: var(--kw-bind);
+}
+[data-kw='fragile'] {
+	--axis-color: var(--kw-fragile);
+}
+[data-kw='poison'] {
+	--axis-color: var(--kw-poison);
+}
+
+/* 공격 타입은 게임이 색을 나누지 않는다 — 공용 브론즈다. 색 체계를 지어내지 않는다. */
+[data-atk] {
+	--axis-color: var(--atk-slash);
 }
 
 /* ── 셸 ────────────────────────────────────────────────── */
@@ -52,8 +205,12 @@ a {
 	position: sticky;
 	top: 0;
 	z-index: 50;
-	background: var(--bg-raised);
-	border-bottom: 1px solid var(--border);
+	background: var(--surface-1);
+	border-bottom: 1px solid var(--line);
+	/* 헤더 아래로 페이지가 스크롤될 때 경계가 죽지 않게 얇은 금선을 하나 더 깐다. */
+	box-shadow:
+		inset 0 -2px 0 var(--line-faint),
+		0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .hbar {
@@ -68,19 +225,22 @@ a {
 .htitle {
 	flex: 1;
 	min-width: 0;
-	font-size: 15px;
-	font-weight: 700;
-	letter-spacing: 0.08em;
+	font-family: var(--font-title);
+	font-size: var(--fs-lg);
+	font-weight: var(--fw-bold);
+	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
+	color: var(--ink-cream);
 }
 
 .htitle .sub {
 	display: block;
-	font-size: 11px;
-	font-weight: 400;
-	letter-spacing: 0.04em;
+	font-family: var(--font-body);
+	font-size: var(--fs-xs);
+	font-weight: var(--fw-normal);
+	letter-spacing: var(--ls-normal);
 	text-transform: none;
-	color: var(--text-dim);
+	color: var(--ink-muted);
 }
 
 .site-nav {
@@ -89,43 +249,61 @@ a {
 	padding: 0 var(--shell-pad);
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--sp-2);
 	flex-wrap: wrap;
 }
 
 .site-nav a {
-	padding: 9px 12px;
-	font-size: 12.5px;
-	letter-spacing: 0.05em;
-	color: var(--text-dim);
+	padding: 9px var(--sp-6);
+	font-family: var(--font-display);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-wide);
+	color: var(--ink-muted);
 	border-bottom: 2px solid transparent;
 }
 
+.site-nav a:hover {
+	color: var(--ink);
+	background: var(--surface-2);
+}
+
+/* 활성 탭은 폴더탭처럼 위쪽이 밝고 아래에 금선이 깔린다. */
 .site-nav a[aria-current='page'] {
-	color: var(--text);
+	color: var(--ink-gold);
+	background: var(--surface-2);
 	border-bottom-color: var(--accent);
 }
 
 .site-nav .nav-sep {
 	width: 1px;
 	height: 16px;
-	margin: 0 6px;
-	background: var(--border);
+	margin: 0 var(--sp-3);
+	background: var(--line-strong);
 }
 
 .site-main {
 	max-width: var(--shell-max);
 	margin: 0 auto;
-	padding: 26px var(--shell-pad) 90px;
+	padding: var(--sp-10) var(--shell-pad) 90px;
 }
 
 .site-footer {
 	max-width: var(--shell-max);
 	margin: 0 auto;
-	padding: 20px var(--shell-pad) 40px;
-	border-top: 1px solid var(--divider);
-	color: var(--text-dim);
-	font-size: 12px;
+	padding: var(--sp-9) var(--shell-pad) 40px;
+	border-top: 1px solid var(--line-faint);
+	color: var(--ink-muted);
+	font-size: var(--fs-xs);
+}
+
+.site-footer a {
+	color: var(--ink-dim);
+	border-bottom: 1px solid var(--line-strong);
+}
+
+.site-footer a:hover {
+	color: var(--ink-gold);
+	border-bottom-color: var(--accent);
 }
 
 /* ── 섹션 라벨 ─────────────────────────────────────────── */
@@ -134,45 +312,54 @@ a {
 	display: flex;
 	align-items: center;
 	gap: 11px;
-	margin: 0 0 18px;
+	margin: 0 0 var(--sp-8);
 }
 
 .seclabel h2 {
 	margin: 0;
-	font-size: 15px;
-	font-weight: 700;
-	letter-spacing: 0.08em;
+	font-family: var(--font-title);
+	font-size: var(--fs-xl);
+	font-weight: var(--fw-bold);
+	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
+	color: var(--ink-cream);
 }
 
 .seclabel .kr {
-	color: var(--text-dim);
-	font-size: 12.5px;
+	color: var(--ink-muted);
+	font-size: var(--fs-sm);
 }
 
+/* 구분선은 금빛으로 시작해 흐려진다 — 서식의 괘선처럼 읽히게 한다. */
 .seclabel .rule {
 	flex: 1;
 	height: 1px;
-	background: var(--divider);
+	background: linear-gradient(90deg, var(--line-strong), var(--line-faint));
 }
 
 .seclabel .hint {
-	color: var(--text-dim);
-	font-size: 12px;
+	color: var(--ink-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-wide);
 	white-space: nowrap;
 }
 
 /* ── 패널 ──────────────────────────────────────────────── */
 
 .panel {
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	/* 얇은 이중 외곽선. 게임의 관공서 서식 프레이밍이다. */
+	box-shadow: inset 0 0 0 1px var(--line-inner);
 	margin-bottom: var(--gap);
 }
 
 .panel-h {
-	padding: 11px 15px;
-	border-bottom: 1px solid var(--divider);
+	position: relative;
+	padding: 11px var(--sp-8) 11px var(--sp-8);
+	border-bottom: 1px solid var(--line-faint);
+	background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -181,14 +368,23 @@ a {
 
 .panel-h h3 {
 	margin: 0;
-	font-size: 12.5px;
-	font-weight: 600;
-	letter-spacing: 0.07em;
+	font-family: var(--font-display);
+	font-size: var(--fs-sm);
+	font-weight: var(--fw-bold);
+	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
+	color: var(--ink-cream);
+}
+
+.panel-h .hint {
+	color: var(--ink-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-wide);
 }
 
 .panel-b {
-	padding: 15px;
+	padding: var(--sp-8);
 }
 
 /* ── 목록 골격 ─────────────────────────────────────────── */
@@ -196,7 +392,7 @@ a {
 .grid2 {
 	display: grid;
 	grid-template-columns: 1fr 360px;
-	gap: 22px;
+	gap: var(--sp-9);
 	align-items: start;
 }
 
@@ -211,45 +407,66 @@ a {
 	gap: var(--gap-sm);
 	flex-wrap: wrap;
 	align-items: center;
-	margin-bottom: 14px;
+	margin-bottom: var(--sp-7);
 }
 
 .srch {
 	flex: 1;
 	min-width: 220px;
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
-	color: var(--text);
-	padding: 11px 13px;
+	background: var(--surface-inset);
+	border: 1px solid var(--line);
+	box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+	color: var(--ink);
+	padding: 11px var(--sp-6);
 	font: inherit;
+}
+
+.srch::placeholder {
+	color: var(--ink-faint);
+}
+
+.srch:focus {
+	outline: none;
+	border-color: var(--line-active);
+	box-shadow:
+		inset 0 1px 3px rgba(0, 0, 0, 0.5),
+		0 0 0 1px var(--accent);
 }
 
 .chip {
 	appearance: none;
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
-	color: var(--text-dim);
-	padding: 6px 10px;
-	font: inherit;
-	font-size: 11.5px;
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	color: var(--ink-dim);
+	padding: var(--sp-3) var(--sp-5);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-normal);
 	cursor: pointer;
 }
 
+.chip:hover {
+	background: var(--surface-3);
+	color: var(--ink);
+}
+
 .chip[aria-pressed='true'] {
-	color: var(--text);
-	border-color: var(--accent);
+	color: var(--ink-gold);
+	background: var(--surface-2);
+	border-color: var(--line-active);
 }
 
 .cardgrid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-	gap: 10px;
+	gap: var(--sp-5);
 }
 
 .emptied {
 	padding: 40px 0;
-	color: var(--text-dim);
+	color: var(--ink-muted);
 	text-align: center;
+	font-size: var(--fs-sm);
 }
 
 /* ── 언어 전환 ─────────────────────────────────────────── */
@@ -258,18 +475,26 @@ a {
 	display: flex;
 	gap: 2px;
 	flex: none;
-	font-size: 12px;
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-normal);
 }
 
 .locale-switch > * {
-	padding: 5px 9px;
-	border: 1px solid var(--border);
-	color: var(--text-dim);
+	padding: var(--sp-5) var(--sp-4);
+	border: 1px solid var(--line);
+	color: var(--ink-muted);
+}
+
+.locale-switch > a:hover {
+	color: var(--ink);
+	background: var(--surface-2);
 }
 
 .locale-switch > [aria-current='true'] {
-	color: var(--text);
-	border-color: var(--accent);
+	color: var(--ink-gold);
+	background: var(--surface-2);
+	border-color: var(--line-active);
 }
 
 /* ── 필터 축 ───────────────────────────────────────────── */
@@ -277,27 +502,72 @@ a {
 .filter-axes {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	margin-bottom: 18px;
+	gap: var(--sp-3);
+	margin-bottom: var(--sp-8);
 }
 
+/*
+	칩이 두 줄을 넘을 때 라벨 자리를 침범하지 않게 한다.
+
+	라벨을 흐름에 두면 그것도 flex 항목이라 **둘째 줄부터 칩이 라벨 아래로 흘러든다.**
+	소속 93 · 수감자 12 처럼 칩이 많은 축에서 라벨과 칩이 한 덩이로 뭉쳐 어느 것이 축 이름인지
+	보이지 않았다. 라벨을 흐름에서 빼고 그만큼 왼쪽을 비워 두면 칩은 몇 줄이 되든 같은
+	세로선에서 시작한다.
+
+	라벨이 없는 축도 있다(팩의 중첩·극한, 상태 카탈로그). 그런 축은 비워 둘 이유가 없다.
+*/
 .filter-axis {
+	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: var(--sp-2);
 	flex-wrap: wrap;
+	padding-left: calc(62px + var(--sp-4));
+}
+
+.filter-axis:not(:has(> .filter-axis-label)) {
+	padding-left: 0;
 }
 
 .filter-axis-label {
-	min-width: 62px;
-	font-size: 11px;
-	letter-spacing: 0.06em;
+	position: absolute;
+	left: 0;
+	/* 칩의 세로 패딩과 같다 — 첫 줄 칩의 글자와 눈이 맞는다. */
+	top: var(--sp-3);
+	width: 62px;
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
-	color: var(--text-dim);
+	color: var(--ink-muted);
 }
 
+/*
+	좁은 화면에서는 라벨을 흐름으로 되돌린다.
+
+	390px 에서 왼쪽 62px 을 비워 두면 칩이 쓸 폭이 16% 줄고, 소속 93 처럼 칩이 많은 축은
+	그만큼 세로로 길어진다. 폭이 귀한 쪽이 정렬보다 앞선다 — 라벨을 제 줄에 얹는다.
+*/
+@media (max-width: 480px) {
+	.filter-axis {
+		padding-left: 0;
+	}
+
+	.filter-axis-label {
+		position: static;
+		width: 100%;
+	}
+}
+
+/* 초기화는 조건이 걸려 있을 때만 나온다. 레드를 쓰는 두 자리 중 나머지 하나다. */
 .chip-clear {
 	flex: none;
+	color: var(--ink-dim);
+}
+
+.chip-clear:hover {
+	border-color: var(--alert);
+	color: var(--ink);
 }
 
 /* ── 카드 목록 ─────────────────────────────────────────── */
@@ -311,93 +581,156 @@ a {
 .card {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: var(--sp-5);
 	height: 100%;
-	padding: 10px;
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	padding: var(--sp-5);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	box-shadow: inset 0 0 0 1px var(--line-inner);
 }
 
 .card:hover {
-	border-color: var(--accent);
+	background: var(--surface-2);
+	border-color: var(--line-active);
 }
 
 .card-body {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: var(--sp-1);
 }
 
 .card-body strong {
-	font-weight: 600;
-	line-height: 1.3;
+	font-weight: var(--fw-medium);
+	line-height: var(--lh-tight);
+	color: var(--ink);
 }
 
 .card-meta {
 	display: flex;
-	gap: 4px;
+	gap: var(--sp-2);
 	flex-wrap: wrap;
 }
 
 .tag {
-	padding: 1px 6px;
-	border: 1px solid var(--border);
-	color: var(--text-dim);
-	font-size: 10.5px;
+	padding: 1px var(--sp-3);
+	border: 1px solid var(--line);
+	color: var(--ink-dim);
+	font-size: var(--fs-tiny);
 	line-height: 1.5;
+	white-space: nowrap;
 }
 
+/*
+	축 색 태그에 좌측 바를 세우지 않는다.
+
+	세워 두었더니 **상세 한 화면에 수십 개**가 깔렸다 — 스킬마다 죄악·공격 타입·방어 구분이
+	붙으니 태그가 곧 화면의 대부분이고, 그 전부가 왼쪽에 색 막대를 갖는다. 강조가 도처에
+	있으면 강조가 아니다.
+
+	「색만으로 구분하지 않는다」는 제약은 이 바가 없어도 지켜진다. 축 색 태그는 **아이콘과
+	이름을 함께** 달고 있어 신호가 이미 둘이다. 바는 셋째였고 그것이 소음이었다.
+*/
+
+/* 강조 태그 — 전용 기프트처럼 "고를 이유"에 해당하는 것. */
 .tag-mark {
 	border-color: var(--accent);
-	color: var(--accent);
+	color: var(--ink-gold);
+	background: rgba(201, 168, 76, 0.08);
 }
 
 /* ── 이미지 ────────────────────────────────────────────── */
 
+/*
+	이미지가 폭을 넘지 않게 한다.
+
+	마크업이 `width` · `height` 속성을 고정값으로 들고 있어(`components/ui.tsx` 의 `Icon`)
+	좁은 폭에서 그 값이 그대로 상자를 밀어낸다. E.G.O 상세의 CG 가 420px 이라 390px 화면에서
+	패널을 92px 넘겼다 — 실측으로 잡은 것이다.
+*/
+.site-main img {
+	max-width: 100%;
+}
+
 .icon {
 	flex: none;
 	object-fit: contain;
+	max-width: 100%;
 }
 
 .icon-none {
 	display: inline-block;
-	border: 1px dashed var(--border);
+	border: 1px dashed var(--line-strong);
+	background: var(--surface-inset);
+}
+
+/*
+	큰 그림은 비율을 지키며 줄어야 한다. 작은 아이콘은 고정 치수가 맞으므로 건드리지 않는다.
+
+	`flex: none` 만으로는 안 된다 — `flex-shrink: 0` 이 축소를 막아 `max-width` 가 무력해진다.
+	그림이 담긴 통 자체가 그림 때문에 늘어나 버리므로 `max-width: 100%` 의 기준도 함께 늘어난다.
+	줄어들 수 있게 풀어 준다.
+*/
+.hero-icon .icon,
+.portraits .icon,
+.pack-arts img {
+	height: auto;
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.hero-icon,
+.portraits,
+.pack-arts figure {
+	min-width: 0;
 }
 
 .hero-icon {
 	display: flex;
 	justify-content: center;
-	margin-bottom: 14px;
+	margin-bottom: var(--sp-7);
 }
 
-/* ── 결손과 부재 (05-ui-foundation 6.1) ────────────────── */
+/* ── 결손과 부재 ───────────────────────────────────────────
+   **성격이 다른 셋이며 같은 기호를 쓰지 않는다.**
+     결손   데이터에 있어야 하는데 없다. 명시적으로 표기한다.
+     부재   없는 것이 정상이다. 결손으로 보이게 하지 않는다.
+     폴백   표시할 문자열은 있고 언어만 다르다. 위 둘과 또 다르다. */
 
 .missing {
-	color: #d98f6a;
-	font-size: 12px;
+	color: var(--state-missing);
+	font-size: var(--fs-xs);
+	/* 색을 못 보는 경우에도 결손임이 읽히도록 밑줄을 점선으로 둔다. */
+	text-decoration: underline dotted var(--state-missing);
+	text-underline-offset: 2px;
 }
 
 .absent {
-	color: var(--text-dim);
-	font-size: 12px;
+	color: var(--state-absent);
+	font-size: var(--fs-xs);
+	font-style: italic;
 }
 
 .fellback {
-	margin-left: 4px;
-	padding: 0 3px;
-	border: 1px solid var(--border);
-	color: var(--text-dim);
-	font-size: 9.5px;
+	margin-left: var(--sp-2);
+	padding: 0 var(--sp-1);
+	border: 1px solid var(--line-strong);
+	color: var(--state-fallback);
+	font-family: var(--font-display);
+	font-size: var(--fs-micro);
+	letter-spacing: var(--ls-normal);
 	text-decoration: none;
 	vertical-align: 1px;
+	cursor: help;
 }
 
 /* ── 상세 ──────────────────────────────────────────────── */
 
 .stage-name {
-	margin: 0 0 6px;
-	font-weight: 600;
+	margin: 0 0 var(--sp-3);
+	font-weight: var(--fw-medium);
+	color: var(--ink-cream);
 }
 
 .desc {
@@ -409,7 +742,7 @@ a {
 	margin: 0;
 	display: grid;
 	grid-template-columns: auto 1fr;
-	gap: 6px 14px;
+	gap: var(--sp-3) var(--sp-7);
 }
 
 .facts > div {
@@ -417,8 +750,8 @@ a {
 }
 
 .facts dt {
-	color: var(--text-dim);
-	font-size: 12px;
+	color: var(--ink-muted);
+	font-size: var(--fs-xs);
 }
 
 .facts dd {
@@ -431,18 +764,24 @@ a {
 	padding: 0;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px 12px;
+	gap: var(--sp-2) var(--sp-6);
 }
 
 .inline-gift {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
+	gap: var(--sp-3);
 }
 
+/*
+	합성 레시피.
+
+	한 슬롯은 `count` 개를 `options` 중에서 채운다. 재료를 평탄하게 늘어놓으면 대체 관계가
+	사라지므로 슬롯을 하나의 묶음으로 세운다.
+*/
 .recipe {
-	padding: 8px 0;
-	border-bottom: 1px solid var(--divider);
+	padding: var(--sp-4) 0;
+	border-bottom: 1px solid var(--line-faint);
 }
 
 .recipe:last-child {
@@ -452,28 +791,34 @@ a {
 .slot {
 	display: flex;
 	align-items: baseline;
-	gap: 8px;
-	padding: 3px 0;
+	gap: var(--sp-4);
+	/* 들여쓰기만으로 묶음을 표시한다. 괘선을 세우면 태그·그룹 머리와 좌측 선이 겹쳐 쌓인다. */
+	padding: var(--sp-3) 0 var(--sp-3) var(--sp-5);
 }
 
 .slot-count {
 	flex: none;
-	color: var(--text-dim);
-	font-size: 12px;
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-wide);
 }
 
 .slot-options {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 6px;
+	gap: var(--sp-3);
 	align-items: center;
 }
 
+/* 대체 관계의 "또는". 재료와 같은 무게로 보이면 안 된다. */
 .or {
-	margin-right: 6px;
-	color: var(--text-dim);
-	font-size: 11px;
+	margin-right: var(--sp-3);
+	color: var(--ink-faint);
+	font-size: var(--fs-xs);
 	font-style: normal;
+	text-transform: uppercase;
+	letter-spacing: var(--ls-wide);
 }
 
 /* ── 페이지 이동 ───────────────────────────────────────── */
@@ -483,39 +828,287 @@ a {
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--gap);
-	margin-top: 24px;
-	padding-top: 14px;
-	border-top: 1px solid var(--divider);
+	margin-top: var(--sp-10);
+	padding-top: var(--sp-7);
+	border-top: 1px solid var(--line-faint);
+}
+
+.pager a {
+	padding: var(--sp-4) var(--sp-6);
+	border: 1px solid var(--line);
+	font-family: var(--font-display);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-normal);
+	color: var(--ink-dim);
+}
+
+.pager a:hover {
+	border-color: var(--line-active);
+	color: var(--ink-gold);
+	background: var(--surface-2);
 }
 
 .pager-at {
-	color: var(--text-dim);
-	font-size: 12px;
+	color: var(--ink-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	letter-spacing: var(--ls-wide);
 }
 
 /* ── 목록·상세 공통 ────────────────────────────────────── */
 
+/*
+	테마 팩 카드 — **세로 봉지 카드**.
+
+	애셋이 380 × 690(세로 1:1.8) 인 매달린 포일 팩 아트다. 이전 구현이 이것을 56 × 34
+	가로 상자에 넣어 실제로는 19 × 34 로 렌더됐고 판독이 불가능했다. 그림을 세워야 한다.
+	`.cardgrid-wide` 는 팩 목록에만 쓰이므로 다른 목록에 영향이 없다.
+*/
 .cardgrid-wide {
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: var(--sp-6);
+}
+
+.cardgrid-wide .card {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--sp-4);
+	padding: var(--sp-4);
+}
+
+/*
+	HTML 의 width·height 속성을 덮는다.
+
+	비율을 고정하지 않고 높이만 잡는다 — 팩 애셋이 한 형식이 아니다. 봉지는 380 × 690 이고
+	극한 팩은 314 × 628 의 다른 카드 형식이다. 비율을 하나로 박으면 한쪽에 여백이 생긴다.
+*/
+.cardgrid-wide .card .icon {
+	width: auto;
+	height: 240px;
+	max-width: 100%;
+	align-self: center;
+	background: var(--surface-inset);
+}
+
+/*
+	합성한 그림은 통이 대신 높이와 정렬을 받는다.
+
+	**글자 크기를 위해 통의 폭을 CSS 가 알아야 한다.** 프로토타입은 브라우저에서 재서
+	변수로 넘겼지만, 높이가 고정이고 형식이 둘뿐이라 여기서는 계산으로 나온다 —
+	봉지 380 × 690, 극한 314 × 628 이다. 재는 자바스크립트가 필요 없다.
+*/
+.cardgrid-wide .card .packart {
+	align-self: center;
+	max-width: 100%;
+	height: 240px;
+	--packart-w: calc(240px * 380 / 690);
+}
+
+.cardgrid-wide .card .packart:has(.packart-name--ext) {
+	--packart-w: calc(240px * 314 / 628);
+}
+
+/* 목록에서는 비율을 박지 않는다 — 높이만 주고 폭은 애셋이 정한다. 형식이 둘이라 그 편이 맞다. */
+.cardgrid-wide .card .packart-base {
+	height: 100%;
+	width: auto;
+}
+
+.packart-base {
+	display: block;
+	width: 100%;
+	height: auto;
+	background: var(--surface-inset);
+}
+
+/* ── 팩 그림 합성 ──────────────────────────────────────────
+   **애셋이 두 장이고 게임은 그것을 겹쳐 쓴다.**
+
+     기반  `{sprite}.webp`        380 × 690. 가운데가 빈 8각 창을 가진 봉지
+     보스  `{sprite}_boss.webp`   391 × 432. 프레임 없는 투명 그림 (34 종)
+
+   봉지만 내면 가운데가 텅 빈 카드가 되어 팩을 식별할 수 없다. 게임 내 카드는 8각 창
+   자리에 보스가 채워져 있고 그 위로 비닐 광택이 지나간다. 그 순서를 그대로 쌓는다.
+
+   위치는 봉지 그림의 8각 창 실측에서 나왔다 — 창이 세로 25%~72% 에 있어 중심이 48.5%
+   이고, 보스 그림 높이가 봉지의 62.6%(432/690) 이므로 위를 14% 로 두면 창에 맞는다.
+
+   보스 그림이 봉지 실루엣을 넘는 것은 게임도 같다(가장자리에서 잘린다). `overflow` 로 자른다. */
+
+.packart {
+	position: relative;
+	display: inline-block;
+	overflow: hidden;
+	line-height: 0;
+}
+
+/*
+	보스 그림.
+
+	**파일 상자가 아니라 그림 내용을 기준으로 앉힌다.** 보스 파일 40 개가 모두 391 × 432 인데
+	그 안의 그림 위치가 파일마다 다르다(위 여백 0~16.2% · 왼쪽 0~14.1%). 고정 좌표로 놓으면
+	여백이 큰 파일이 창 아래로 밀리고 옆으로 치우친다 — 실제로 그렇게 났다.
+
+	알파 경계를 재서 팩마다 값을 계산해 두었다(`js/pack-names.js` 의 `PACK_BOSS_FIT`).
+	기본값은 여백이 없는 파일 기준이며, 값이 없으면 그 자리로 물러선다.
+*/
+.packart-boss {
+	position: absolute;
+	top: var(--boss-top, 15%);
+	left: var(--boss-left, -3%);
+	height: var(--boss-h, 66%);
+	width: auto;
+	pointer-events: none;
+	z-index: 1;
+}
+
+/*
+	팩 이름.
+
+	**게임은 117 종 전부에 이름을 인쇄한다.** 봉지 하단 금색 괘선 두 줄 사이가 그 자리이며
+	위키의 완성 카드 넷을 실측해 위치를 잡았다 — 죄악 82% · 공격 타입 80% · canto 79% ·
+	철도 81% 로 모두 80% 근처에 중심이 온다. 74%~90% 상자를 두고 가운데 정렬하면 한 줄과
+	두 줄이 같은 자리에 앉는다(게임도 긴 이름은 두 줄로 흘린다).
+
+	**극한 카드도 이름을 인쇄한다. 다만 띠 위치가 다르다.**
+
+	극한 팩 애셋은 314 × 628 의 다른 형식이고 띠가 더 아래에 있다 — 위키의 극한 완성 카드
+	(`Efflorescing Greenery`)를 프레임 안쪽 기준으로 재니 91% 였고, 우리 애셋의 붉은 괘선과
+	어두운 띠도 86%~99% 에 있다. 그래서 `--ext` 변형을 둔다.
+
+	아트 안에 구워진 「MirrorClock OrangeRoad」·「The Magic Hello Bus」 같은 것은 **팩 이름이
+	아니라 로고**다. canto 의 「CANTO I」 와 같은 성격이며 팩 이름은 그 아래 띠에 따로 들어간다.
+	처음에 이것을 제목으로 오인해 20 종을 제외했다.
+
+	서체는 게임의 KOTRA Bold 가 아니다 — 공공누리 제1유형이지만 재배포가 금지되어 웹폰트로
+	쓸 수 없다. 대체 서체를 쓰며 그것은 결함이 아니라 라이선스 준수의 결과다.
+*/
+.packart-name {
+	position: absolute;
+	left: 5%;
+	right: 5%;
+	/*
+		봉지 띠의 실측 좌표. 애셋 픽셀에서 잰 것이며 눈대중이 아니다.
+
+		행별 평균 밝기를 보면 봉지는 예외 없이 76.7% 에서 밝기가 뚝 떨어지고 85% 에서 다시
+		오른다 — 그 사이가 이름 띠다. Crimson_normal · AttackType_normal · AttackType_hard ·
+		Bleed_normal 을 각각 확인했고 모두 같았다.
+
+		처음에 74%~90% 로 두었더니 위로 2%, 아래로 5% 넘쳐 두 줄 이름이 괘선을 밟았다.
+	*/
+	/*
+		띠의 **중심**에 앵커한다.
+
+		`top` + `height` 로 상자를 두었더니 높이가 8.5%(약 20px)여서 **두 줄 이름이 잘렸다.**
+		게임은 긴 이름을 두 줄로 흘리므로 상자가 위아래로 자라야 한다. 중심을 잡고
+		`translateY(-50%)` 로 걸면 줄 수가 늘어도 띠 가운데를 지킨다.
+
+		중심 좌표 = 76.5% + 8.5%/2 = 80.75%.
+	*/
+	top: 80.75%;
+	transform: translateY(-50%);
+	z-index: 3;
+	text-align: center;
+	font-family: var(--font-title);
+	/*
+		카드 폭에 비례해야 한다. 컨테이너 질의(`cqi`)를 쓰려 했으나
+		`container-type: inline-size` 는 인라인 축 containment 를 걸어 **내용으로 폭을 정할 수
+		없게 만든다** — 그림 크기를 따라가던 통이 0 으로 붕괴했다(실측). 폭을 재서 넘긴다.
+	*/
+	font-size: calc(var(--packart-w, 150px) * 0.088);
+	font-weight: var(--fw-bold);
+	line-height: 1.12;
+	letter-spacing: var(--ls-normal);
+	/*
+		색은 팩마다 다르다.
+
+		게임은 이름을 카드 팔레트에 맞춰 물들인다. 위키의 완성 카드 113 장을 우리 봉지 애셋과
+		겹쳐 차분을 내고 글자 픽셀만 골라 뽑았다(`js/pack-names.js`). 48 종이 고유색을 갖고
+		나머지는 기본값 크림으로 간다 — 그 크림도 눈대중이 아니라 58 종에서 같게 나온 실측값이다.
+	*/
+	color: var(--packart-name-color, #ebcaa2);
+	/* 아트 위에 얹히므로 어두운 테두리로 판독을 지킨다. 게임도 같은 처리를 한다. */
+	text-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.95),
+		0 0 6px rgba(0, 0, 0, 0.8);
+	/*
+		부드러운 받침.
+
+		봉지에는 어두운 띠가 이미 구워져 있으나 canto 계열은 그 자리에 큰 「CANTO N」 글자가
+		있어 이름과 겹친다. 경계가 보이지 않게 위아래로 흘려 깐다 — 띠가 있는 봉지에서는
+		거의 드러나지 않고, 바쁜 아트에서만 일한다.
+	*/
+	background: linear-gradient(
+		180deg,
+		transparent 0,
+		rgba(8, 7, 6, 0.55) 22%,
+		rgba(8, 7, 6, 0.6) 78%,
+		transparent 100%
+	);
+	pointer-events: none;
+}
+
+/*
+	극한 카드.
+
+	붉은 괘선이 86% 에 있고 이름은 **그 위**에 앉는다 — 위키의 극한 완성 카드
+	(`Efflorescing Greenery`)가 그 순서다. 84% 로 두었더니 이름이 괘선 아래로 내려가
+	순서가 뒤집혔다.
+
+	봉지와 값이 가까운 것은 우연이 아니다. 카드 형식이 달라도 띠는 같은 비율 자리에 있다.
+	그래도 변형을 남겨 둔다 — 형식이 둘이라는 사실을 코드에 남기는 편이 낫고, 한쪽만
+	조정해야 할 때 갈 곳이 분명하다.
+*/
+.packart-name--ext {
+	/* 중심 = 76.5% + 9%/2 = 81%. */
+	top: 81%;
+}
+
+/* 비닐 광택. 봉지 그림에 이미 광택이 구워져 있으나 보스를 얹으면 그 위가 비므로 다시 깐다. */
+.packart-gloss {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	pointer-events: none;
+	background: linear-gradient(
+		112deg,
+		transparent 0 33%,
+		rgba(255, 255, 255, 0.11) 36%,
+		rgba(255, 255, 255, 0.03) 41%,
+		transparent 45% 59%,
+		rgba(255, 255, 255, 0.07) 62%,
+		transparent 67%
+	);
+	mix-blend-mode: screen;
 }
 
 .entry-grid {
-	margin-bottom: 12px;
+	margin-bottom: var(--sp-6);
 }
 
 .card-entry {
 	justify-content: space-between;
-	padding: 16px;
+	padding: var(--sp-8);
+	font-family: var(--font-display);
+	letter-spacing: var(--ls-normal);
+}
+
+.card-entry strong {
+	font-size: var(--fs-lg);
+	text-transform: uppercase;
+	color: var(--ink-cream);
 }
 
 .entry-n {
-	color: var(--text-dim);
-	font-size: 12px;
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	letter-spacing: var(--ls-wide);
 }
 
 .lede {
-	margin: 0 0 18px;
-	color: var(--text-dim);
+	margin: 0 0 var(--sp-8);
+	color: var(--ink-dim);
 	max-width: 70ch;
 }
 
@@ -526,37 +1119,40 @@ a {
 }
 
 .plain > li + li {
-	margin-top: 14px;
-	padding-top: 14px;
-	border-top: 1px solid var(--divider);
+	margin-top: var(--sp-7);
+	padding-top: var(--sp-7);
+	border-top: 1px solid var(--line-faint);
 }
 
 .row-head {
 	display: flex;
 	align-items: center;
-	gap: 7px;
+	gap: var(--sp-3);
 	flex-wrap: wrap;
-	margin-bottom: 5px;
+	margin-bottom: var(--sp-2);
 }
 
 .req {
-	margin: 4px 0 0;
-	color: var(--text-dim);
-	font-size: 12px;
+	margin: var(--sp-2) 0 0;
+	color: var(--ink-muted);
+	font-size: var(--fs-xs);
 }
 
 .idcode {
-	color: var(--text-dim);
-	font-size: 11px;
-	font-family: ui-monospace, monospace;
+	color: var(--ink-faint);
+	font-size: var(--fs-xs);
+	font-family: var(--font-mono);
 }
 
 .grouph {
-	margin: 16px 0 8px;
-	font-size: 11.5px;
-	letter-spacing: 0.07em;
+	margin: var(--sp-8) 0 var(--sp-4);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
-	color: var(--text-dim);
+	color: var(--ink-muted);
+	/* 목록과의 구분은 글자와 간격이 맡는다. 좌측 괘선은 두지 않는다. */
+	padding-left: var(--sp-5);
 }
 
 .grouph:first-child {
@@ -567,63 +1163,95 @@ a {
 
 .uptie-pick {
 	display: flex;
-	gap: 3px;
+	gap: var(--sp-1);
+}
+
+.uptie-pick button {
+	appearance: none;
+	width: 26px;
+	height: 26px;
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	color: var(--ink-muted);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	cursor: pointer;
+}
+
+.uptie-pick button:hover {
+	background: var(--surface-3);
+	color: var(--ink);
+}
+
+.uptie-pick button[aria-pressed='true'] {
+	background: var(--surface-2);
+	border-color: var(--line-active);
+	color: var(--ink-gold);
 }
 
 .skill-nums {
-	margin: 0 0 5px;
-	color: var(--text-dim);
-	font-size: 12px;
+	margin: 0 0 var(--sp-2);
+	color: var(--ink-dim);
+	font-size: var(--fs-xs);
 }
 
 .coins {
 	list-style: none;
-	margin: 8px 0 0;
+	margin: var(--sp-4) 0 0;
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: var(--sp-2);
 }
 
 .coins li {
 	display: flex;
 	align-items: baseline;
-	gap: 7px;
+	gap: var(--sp-3);
 }
 
+/*
+	코인 번호.
+
+	**개수에 상한이 없다** — 실측 최대 9 개다. 고정 슬롯을 두지 않고 세로로 쌓는다.
+	브론즈 코인 계열의 금속색을 쓴다.
+*/
 .coin-i {
 	flex: none;
 	width: 18px;
 	height: 18px;
 	display: inline-grid;
 	place-items: center;
-	border: 1px solid var(--border);
-	color: var(--text-dim);
-	font-size: 10.5px;
+	border: 1px solid var(--line-strong);
+	background: var(--surface-inset);
+	color: var(--atk-slash);
+	font-family: var(--font-num);
+	font-size: var(--fs-tiny);
 }
 
 .coin-t {
 	flex: none;
-	color: var(--text-dim);
-	font-size: 11.5px;
+	color: var(--ink-muted);
+	font-size: var(--fs-xs);
 	min-width: 74px;
 }
 
 .portraits {
 	display: flex;
-	gap: 8px;
+	gap: var(--sp-4);
 	flex-wrap: wrap;
 	justify-content: center;
 }
 
-/* ── 분포 막대 (팩 상세) ───────────────────────────────── */
+/* ── 분포 막대 ─────────────────────────────────────────── */
 
 .dist-group h4 {
-	margin: 14px 0 6px;
-	font-size: 11.5px;
-	letter-spacing: 0.06em;
+	margin: var(--sp-7) 0 var(--sp-3);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
-	color: var(--text-dim);
+	color: var(--ink-muted);
 }
 
 .dist-group h4:first-child {
@@ -640,27 +1268,38 @@ a {
 	display: grid;
 	grid-template-columns: 110px 1fr auto;
 	align-items: center;
-	gap: 8px;
-	padding: 2px 0;
+	gap: var(--sp-4);
+	padding: var(--sp-1) 0;
 }
 
 .dist-key {
-	font-size: 12px;
+	font-size: var(--fs-xs);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	color: var(--ink-dim);
 }
 
+/*
+	채워진 막대.
+
+	**축 색을 여기서 쓴다.** 이전 구현은 죄악 7 행이 모두 같은 금색이었고, 그것이
+	색 축이 없다는 사실의 가장 눈에 띄는 결과였다. 축이 없으면 금색으로 물러선다.
+	수치가 오른쪽에 함께 있어 색이 단독으로 뜻을 전하지 않는다.
+*/
 .dist-bar {
 	height: 8px;
 	min-width: 2px;
-	background: var(--accent);
-	opacity: 0.5;
+	background: var(--axis-color, var(--accent-soft));
+	/* 게임의 게이지는 납작한 단색이 아니라 위쪽이 밝다. */
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .dist-n {
-	color: var(--text-dim);
-	font-size: 11.5px;
+	color: var(--ink-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-normal);
 }
 
 .bulk > summary {
@@ -673,30 +1312,32 @@ a {
 }
 
 .status-list .desc {
-	color: var(--text-dim);
-	font-size: 12.5px;
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
 }
 
 .grace-steps {
 	list-style: none;
-	margin: 6px 0 0;
+	margin: var(--sp-3) 0 0;
 	padding: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: var(--sp-2);
 }
 
 .grace-steps li {
 	display: flex;
-	gap: 7px;
+	gap: var(--sp-3);
 	align-items: baseline;
 }
 
 .search-results {
-	margin-bottom: 26px;
+	margin-bottom: var(--sp-10);
 }
 
-/* ── 스킬 타일 (프레임 + 아이콘) ───────────────────────── */
+/* ── 스킬 타일 ─────────────────────────────────────────────
+   `skill.tier` 가 애셋을 고르는 키다. 프레임이 아이콘 뒤에 깔리므로
+   **아이콘이 없는 13 종에서도 죄악과 등급이 프레임만으로 읽힌다** — 프레임이 대체 표시다. */
 
 .skill-tile {
 	position: relative;
@@ -704,6 +1345,8 @@ a {
 	width: 34px;
 	height: 34px;
 	display: inline-block;
+	/* 죄악 색 링. 프레임 애셋이 없을 때도 축이 남는다. */
+	box-shadow: 0 0 0 1px var(--axis-color, var(--line-strong));
 }
 
 .skill-tile img {
@@ -715,23 +1358,23 @@ a {
 }
 
 .skill-tile-ico {
-	padding: 6px;
+	padding: var(--sp-3);
 }
 
 .attr {
-	margin-left: 5px;
-	color: var(--text-dim);
-	font-size: 9.5px;
+	margin-left: var(--sp-2);
+	color: var(--ink-faint);
+	font-size: var(--fs-micro);
 	font-style: normal;
-	letter-spacing: 0.04em;
+	letter-spacing: var(--ls-normal);
 }
 
-/* ── 편성 ──────────────────────────────────────────────── */
+/* ── 편성 — 수감자별 전량 목록 ─────────────────────────── */
 
 .squad-row {
-	margin-bottom: 26px;
-	padding-bottom: 20px;
-	border-bottom: 1px solid var(--divider);
+	margin-bottom: var(--sp-10);
+	padding-bottom: var(--sp-9);
+	border-bottom: 1px solid var(--line-faint);
 }
 
 .squad-row:last-child {
@@ -741,31 +1384,37 @@ a {
 .squad-head {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin-bottom: 12px;
+	gap: var(--sp-5);
+	margin-bottom: var(--sp-6);
 }
 
 .squad-head h3 {
 	margin: 0;
-	font-size: 14px;
-	font-weight: 700;
-	letter-spacing: 0.04em;
+	font-family: var(--font-display);
+	font-size: var(--fs-base);
+	font-weight: var(--fw-bold);
+	letter-spacing: var(--ls-normal);
+	color: var(--ink-cream);
 }
 
 .squad-head .hint {
-	color: var(--text-dim);
-	font-size: 11.5px;
+	color: var(--ink-muted);
+	font-size: var(--fs-xs);
 	white-space: nowrap;
+}
+
+.squad-head a.hint:hover {
+	color: var(--ink-gold);
 }
 
 .squad-cols {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 22px;
+	gap: var(--sp-9);
 	align-items: start;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1020px) {
 	.squad-cols {
 		grid-template-columns: 1fr;
 	}
@@ -777,39 +1426,39 @@ a {
 	padding: 0;
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 6px;
+	gap: var(--sp-3);
 }
 
 .squad-cell {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--sp-4);
 	height: 100%;
-	padding: 6px 8px;
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	padding: var(--sp-3) var(--sp-4);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
 }
 
 .squad-cell:hover {
-	border-color: var(--accent);
+	background: var(--surface-2);
+	border-color: var(--line-active);
 }
 
 .squad-cell-body {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	font-size: 12.5px;
+	gap: var(--sp-1);
+	font-size: var(--fs-sm);
 }
-
 
 /* ── 아이콘 태그 ───────────────────────────────────────── */
 
 .tag-icon {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 1px 6px 1px 4px;
+	gap: var(--sp-2);
+	padding: 1px var(--sp-3) 1px var(--sp-2);
 }
 
 .tag-icon img {
@@ -818,28 +1467,48 @@ a {
 	object-fit: contain;
 }
 
+/* 상자를 정사각으로 잡지 않는 이유는 `.chip img` 에 적었다. 여기도 높이로 통일한다. */
 .icon-inline {
-	width: 20px;
+	width: auto;
 	height: 20px;
+	max-width: 52px;
 	object-fit: contain;
 	vertical-align: middle;
 }
 
-/* 필터 칩 안의 아이콘 */
+/*
+	아이콘 상자를 정사각으로 잡지 않는다.
+
+	애셋 54 종 가운데 32 종만 1:1 이고 등급 계열은 아니다 — 실측으로 인격 등급이
+	`0` 162×273(0.59) · `00` 319×260(1.23) · `000` 467×279(1.67) 이고, E.G.O 등급 다섯은
+	가로 배너라 2.7~2.9 다. 고리 수만큼 옆으로 길어지는 그림이라 그런 것이며 결함이 아니다.
+
+	16×16 상자에 `contain` 으로 넣으면 **비율마다 다른 크기로 앉는다** — `0` 은 9.5×16,
+	`000` 은 16×9.6, `zayin` 은 16×5.6 이 되어 같은 축의 칩끼리 무게가 어긋났다.
+
+	높이를 기준으로 통일한다. 폭은 그림이 정하고, 배너가 지나치게 길어지지 않게만 막는다.
+*/
 .chip img {
-	width: 16px;
+	width: auto;
 	height: 16px;
+	max-width: 42px;
 	object-fit: contain;
-	margin-right: 4px;
+	margin-right: var(--sp-2);
 	vertical-align: -3px;
 }
 
-/* ── 팩 카드 그림 (일반 / 보스 층) ─────────────────────── */
+/* 글자가 없는 칩은 오른쪽 여백도 없다. 인격 등급이 그렇다. */
+.chip img:only-child {
+	margin-right: 0;
+}
+
+/* ── 팩 카드 그림 (상세) ───────────────────────────────────
+   일반 층과 보스 층 두 장. 보스 아트는 391 × 432 로 프레임이 없다. */
 
 .pack-arts {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
+	gap: var(--sp-6);
 	justify-content: center;
 }
 
@@ -848,67 +1517,100 @@ a {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 4px;
+	gap: var(--sp-2);
+}
+
+/*
+	기반 그림에만 배경과 테두리를 준다.
+
+	`>` 로 직계만 잡는 것이 중요하다. 합성하면 기반 그림이 `.packart` 안으로 들어가고
+	위에 얹히는 `.packart-boss` 가 이 자리에 오는데, 그것까지 잡으면 투명한 보스 그림 뒤에
+	검은 상자가 깔린다 — 실제로 그렇게 났다.
+*/
+.pack-arts figure > img,
+.pack-arts figure > .packart {
+	background: var(--surface-inset);
+	border: 1px solid var(--line);
+}
+
+/* 상세는 폭으로 잡는다. 글자 크기가 폭에 비례하므로 같은 값을 변수로도 넘긴다. */
+.pack-arts figure > .packart {
+	width: 160px;
+	--packart-w: 160px;
+}
+
+.packart-boss {
+	background: none;
+	border: 0;
 }
 
 .pack-arts figcaption {
-	color: var(--text-dim);
-	font-size: 11px;
+	color: var(--ink-muted);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wide);
+	text-transform: uppercase;
 }
 
 /* ── 추천 슬라이스 ─────────────────────────────────────── */
 
 .rank > li + li {
-	margin-top: 16px;
-	padding-top: 16px;
+	margin-top: var(--sp-8);
+	padding-top: var(--sp-8);
 }
 
 .comp {
 	list-style: none;
-	margin: 6px 0 0;
+	margin: var(--sp-3) 0 0;
 	padding: 0;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px 10px;
-	font-size: 11.5px;
-	color: var(--text-dim);
+	gap: var(--sp-2) var(--sp-5);
+	font-size: var(--fs-xs);
+	color: var(--ink-muted);
 }
 
 .comp-k {
-	margin-right: 4px;
+	margin-right: var(--sp-2);
 }
 
 .comp-v {
-	color: var(--text);
+	color: var(--ink);
+	font-family: var(--font-num);
+	letter-spacing: var(--ls-normal);
 }
 
 .why {
-	margin: 6px 0 0;
-	padding-left: 16px;
-	font-size: 12.5px;
-	color: var(--text-dim);
+	margin: var(--sp-3) 0 0;
+	padding-left: var(--sp-8);
+	font-size: var(--fs-sm);
+	color: var(--ink-dim);
 }
 
 .compact > li + li {
-	margin-top: 6px;
-	padding-top: 6px;
+	margin-top: var(--sp-3);
+	padding-top: var(--sp-3);
 }
 
-/* ── 기준 버전 스탬프 ──────────────────────────────────── */
+/* ── 기준 버전 스탬프 ──────────────────────────────────────
+   데이터가 특정 스냅샷의 것이므로 조회 화면에서도 확인 가능해야 한다.
+   흐린 고무도장 레터링이 게임의 시그니처 중 하나다 — 그 톤을 쓴다. */
 
 .stamp {
-	margin-top: 26px;
-	color: var(--text-dim);
-	font-size: 12px;
+	margin-top: var(--sp-10);
+	color: var(--ink-faint);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wider);
+	text-transform: uppercase;
 }
 
-/* ── 편성 ───────────────────────────────────────────────
+/* ── 편성 ──────────────────────────────────────────────────
    배치는 이전 프로토타입의 SQUAD 탭을 따른다 — 덱 레일 · 수감자 12칸 · 프로필의 3열.
-   가져온 것은 배치이며 그쪽의 색·질감·전환은 가져오지 않는다.
-   12는 6·4·3으로 모두 나누어떨어져 어느 폭에서도 마지막 행이 비지 않는다. */
+   12 는 6·4·3·2 로 모두 나누어떨어져 어느 폭에서도 마지막 행이 비지 않는다. */
 
 .formation {
-	margin: 22px 0 30px;
+	margin: var(--sp-9) 0 30px;
 }
 
 .formation-cols {
@@ -937,26 +1639,29 @@ a {
 /* 덱 레일 */
 
 .deckrail {
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	box-shadow: inset 0 0 0 1px var(--line-inner);
 }
 
 .rail-h {
 	padding: 9px 11px;
-	border-bottom: 1px solid var(--divider);
-	font-size: 11px;
-	letter-spacing: 0.1em;
+	border-bottom: 1px solid var(--line-faint);
+	background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wider);
 	text-transform: uppercase;
-	color: var(--text-dim);
+	color: var(--ink-muted);
 }
 
 .rail-list {
 	list-style: none;
 	margin: 0;
-	padding: 6px;
+	padding: var(--sp-3);
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: var(--sp-1);
 	max-height: 420px;
 	overflow-y: auto;
 }
@@ -965,28 +1670,34 @@ a {
 	width: 100%;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 7px 9px;
+	gap: var(--sp-4);
+	padding: var(--sp-3) 9px;
 	background: none;
-	border: 1px solid var(--border);
-	border-left-width: 3px;
-	color: var(--text-dim);
+	border: 1px solid var(--line);
+	color: var(--ink-dim);
 	font: inherit;
-	font-size: 12px;
+	font-size: var(--fs-xs);
 	text-align: left;
 	cursor: pointer;
 }
 
+.rail-slot:hover {
+	background: var(--surface-2);
+	color: var(--ink);
+}
+
 .rail-slot[aria-pressed='true'] {
-	border-color: var(--accent);
-	color: var(--text);
+	background: var(--surface-2);
+	border-color: var(--line-active);
+	color: var(--ink-gold);
 }
 
 .rail-n {
 	flex: none;
 	width: 14px;
-	font-size: 11px;
-	color: var(--text-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	color: var(--ink-faint);
 }
 
 .rail-name {
@@ -1000,15 +1711,35 @@ a {
 .rail-actions {
 	display: flex;
 	gap: var(--gap-sm);
-	padding: 0 6px 8px;
+	padding: 0 var(--sp-3) var(--sp-4);
+}
+
+.rail-actions button,
+.rail-actions a {
+	appearance: none;
+	flex: 1;
+	padding: var(--sp-3) var(--sp-4);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
+	color: var(--ink-dim);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-normal);
+	cursor: pointer;
+}
+
+.rail-actions button:hover {
+	border-color: var(--line-active);
+	color: var(--ink-gold);
+	background: var(--surface-3);
 }
 
 .rail-note {
-	padding: 8px 11px;
-	border-top: 1px solid var(--divider);
-	color: var(--text-dim);
-	font-size: 10.5px;
-	line-height: 1.6;
+	padding: var(--sp-4) 11px;
+	border-top: 1px solid var(--line-faint);
+	color: var(--ink-faint);
+	font-size: var(--fs-tiny);
+	line-height: var(--lh-base);
 }
 
 /* 수감자 12칸 */
@@ -1017,18 +1748,28 @@ a {
 	display: flex;
 	align-items: center;
 	gap: var(--gap-sm);
-	margin-bottom: 12px;
+	margin-bottom: var(--sp-6);
 }
 
 .deck-name input {
 	width: min(260px, 60vw);
+	background: var(--surface-inset);
+	border: 1px solid var(--line);
+	color: var(--ink);
+	padding: var(--sp-4) var(--sp-5);
+	font: inherit;
+	font-family: var(--font-display);
+	letter-spacing: var(--ls-normal);
+}
+
+.deck-name input:focus {
+	outline: none;
+	border-color: var(--line-active);
 }
 
 /*
-	4열 × 3행이다. v1 은 6열 × 2행이었는데 그쪽은 프로필이 좁고 셸이 넓었다.
-	우리 셸은 1360px 상한이고(`--shell-max`) 레일 168 + 프로필 330 을 빼면 6열에서 칸이
-	121px 이 된다 — E.G.O 다섯 자리가 들어가지 않는다. 12는 4·3·2 로 모두 나누어떨어져
-	어느 단계에서도 마지막 행이 비지 않는다.
+	4 열 × 3 행이다. 셸 상한이 1360px 이고 레일 168 + 프로필 330 을 빼면 6 열에서 칸이
+	121px 이 되어 E.G.O 다섯 자리가 들어가지 않는다.
 */
 .sgrid {
 	list-style: none;
@@ -1036,16 +1777,16 @@ a {
 	padding: 0;
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 10px;
+	gap: var(--sp-5);
 }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
 	.sgrid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 430px) {
+@media (max-width: 480px) {
 	.sgrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -1054,14 +1795,18 @@ a {
 .sslot {
 	display: flex;
 	flex-direction: column;
-	background: var(--bg-raised);
-	border: 1px solid var(--border);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	box-shadow: inset 0 0 0 1px var(--line-inner);
 	overflow: hidden;
 }
 
 /* 출전은 색만으로 구분하지 않는다 — 칸 안의 「출전」 체크가 함께 켜져 있다. */
 .sslot-on {
-	border-color: var(--accent);
+	border-color: var(--line-active);
+	box-shadow:
+		inset 0 0 0 1px var(--line-inner),
+		0 0 0 1px rgba(201, 168, 76, 0.35);
 }
 
 .sslot-main {
@@ -1081,7 +1826,7 @@ a {
 	position: relative;
 	aspect-ratio: 1 / 1.08;
 	overflow: hidden;
-	background: var(--bg);
+	background: var(--surface-inset);
 	display: grid;
 	place-items: center;
 }
@@ -1096,37 +1841,52 @@ a {
 	object-fit: contain;
 }
 
+/*
+	초상 아래에 어둠을 깔아 이름줄과 이어지게 한다. 게임의 인격 카드가 같은 구조다.
+	초상이 1급 요소이므로 위쪽은 건드리지 않는다.
+*/
+.sslot-port::after {
+	content: '';
+	position: absolute;
+	inset: auto 0 0 0;
+	height: 42%;
+	background: linear-gradient(180deg, transparent, rgba(8, 7, 6, 0.85));
+	pointer-events: none;
+	z-index: 1;
+}
+
+/* 초상이 없는 것은 결손이 아니라 부재다. 사선 줄무늬로 자리를 남긴다. */
 .sslot-port-none {
 	width: 100%;
 	height: 100%;
 	background: repeating-linear-gradient(
 		135deg,
-		var(--bg) 0 6px,
-		var(--bg-raised) 6px 12px
+		var(--surface-inset) 0 6px,
+		var(--surface-1) 6px 12px
 	);
 }
 
 .sslot-rarity {
 	position: absolute;
-	left: 4px;
-	top: 4px;
+	left: var(--sp-2);
+	top: var(--sp-2);
 	z-index: 2;
 	line-height: 0;
 }
 
 .sslot-kw {
 	position: absolute;
-	left: 4px;
-	bottom: 4px;
+	left: var(--sp-2);
+	bottom: var(--sp-2);
 	z-index: 2;
 	display: flex;
-	gap: 3px;
+	gap: var(--sp-1);
 }
 
 .sslot-mech {
 	position: absolute;
-	right: 4px;
-	top: 4px;
+	right: var(--sp-2);
+	top: var(--sp-2);
 	z-index: 2;
 	display: flex;
 	flex-direction: column;
@@ -1135,61 +1895,70 @@ a {
 
 .sslot-name {
 	display: block;
-	padding: 6px 8px 7px;
-	border-top: 1px solid var(--divider);
+	padding: var(--sp-3) var(--sp-4) var(--sp-3);
+	border-top: 1px solid var(--line-faint);
 }
 
 .sslot-sinner {
 	display: block;
-	font-size: 10.5px;
-	color: var(--accent);
+	font-family: var(--font-display);
+	font-size: var(--fs-tiny);
+	letter-spacing: var(--ls-wide);
+	text-transform: uppercase;
+	color: var(--ink-gold);
 }
 
 .sslot-id {
 	display: block;
 	margin-top: 1px;
-	font-size: 11.5px;
-	color: var(--text);
+	font-size: var(--fs-xs);
+	color: var(--ink);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
+/* 고르지 않은 칸. 부재이므로 결손 표기를 쓰지 않는다. */
 .sslot-id-none {
-	color: var(--text-dim);
+	color: var(--state-absent);
 	font-style: italic;
 }
 
 .sslot-ego {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 5px 7px;
-	background: var(--bg);
+	gap: var(--sp-3);
+	padding: var(--sp-3) var(--sp-3);
+	background: var(--surface-inset);
 	border: none;
-	border-top: 1px solid var(--divider);
+	border-top: 1px solid var(--line-faint);
 	color: inherit;
 	font: inherit;
 	cursor: pointer;
 }
 
+.sslot-ego:hover {
+	background: var(--surface-2);
+}
+
 .sslot-ego-label {
 	flex: none;
-	font-size: 9px;
-	letter-spacing: 0.1em;
-	color: var(--text-dim);
+	font-family: var(--font-display);
+	font-size: var(--fs-micro);
+	letter-spacing: var(--ls-wider);
+	color: var(--ink-faint);
 }
 
 /* 칸이 좁아져도 다섯 자리가 잘리지 않게 줄어든다 — 자리가 보이는 것이 이 줄의 목적이다. */
 .sslot-ego-cells {
 	display: flex;
-	gap: 4px;
+	gap: var(--sp-2);
 	flex: 1;
 	min-width: 0;
 	justify-content: flex-end;
 }
 
-/* 빈 등급은 공백이 아니라 자리로 보인다 — 결손이 아니라 부재다(05-ui-foundation 6.1). */
+/* 빈 등급은 공백이 아니라 자리로 보인다 — 결손이 아니라 부재다. */
 .ecell {
 	width: 20px;
 	height: 20px;
@@ -1197,8 +1966,8 @@ a {
 	flex: 0 1 20px;
 	aspect-ratio: 1;
 	border-radius: 50%;
-	border: 1px dashed var(--border);
-	background: var(--bg-raised);
+	border: 1px dashed var(--line-strong);
+	background: var(--surface-1);
 	display: grid;
 	place-items: center;
 	overflow: hidden;
@@ -1224,32 +1993,44 @@ a {
 	opacity: 0.45;
 }
 
+/* 등급 아이콘이 없을 때의 글자 대체. ALEPH 처럼 출시분이 없는 등급이 여기 걸린다. */
 .ecell-rank-text {
-	font-size: 9px;
-	color: var(--text-dim);
+	font-family: var(--font-display);
+	font-size: var(--fs-micro);
+	color: var(--ink-faint);
 }
 
+/* 칸 안의 결손 표기. 데이터에 있어야 하는데 없는 경우다. */
 .sslot-missing {
 	display: block;
-	padding: 4px 7px;
-	font-size: 10.5px;
+	padding: var(--sp-2) var(--sp-3);
+	font-size: var(--fs-tiny);
 	line-height: 1.5;
-	border-top: 1px solid var(--divider);
+	border-top: 1px solid var(--line-faint);
+	color: var(--state-missing);
+	background: rgba(217, 143, 106, 0.08);
 }
 
 .sslot-deploy {
 	display: flex;
 	align-items: center;
-	gap: 5px;
-	padding: 5px 7px;
-	border-top: 1px solid var(--divider);
-	font-size: 11px;
-	color: var(--text-dim);
+	gap: var(--sp-2);
+	padding: var(--sp-3) var(--sp-3);
+	border-top: 1px solid var(--line-faint);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-normal);
+	color: var(--ink-muted);
 	cursor: pointer;
 }
 
 .sslot-on .sslot-deploy {
-	color: var(--text);
+	color: var(--ink-gold);
+	background: rgba(201, 168, 76, 0.06);
+}
+
+.sslot-deploy input {
+	accent-color: var(--accent);
 }
 
 /* 죄악 공급 / 수요 */
@@ -1257,8 +2038,8 @@ a {
 .res-track {
 	position: relative;
 	height: 8px;
-	background: var(--bg);
-	border: 1px solid var(--border);
+	background: var(--surface-inset);
+	border: 1px solid var(--line);
 }
 
 .res-track .dist-bar {
@@ -1267,29 +2048,32 @@ a {
 	height: 100%;
 }
 
+/* 수요 표시자. 공급 막대 위에 세로선으로 겹쳐 "여기까지 필요하다"를 적는다. */
 .res-demand {
 	position: absolute;
 	top: -2px;
 	bottom: -2px;
 	width: 2px;
-	background: var(--text);
+	background: var(--ink);
+	z-index: 2;
 }
 
+/* 부족. 색과 함께 글자가 흐려지지 않게 명도를 유지한다. */
 .res-short .dist-key,
 .res-short .dist-n {
-	color: #e0a0a0;
+	color: var(--state-short);
 }
 
 .cost-short {
-	border-color: #e0a0a0;
-	color: #e0a0a0;
+	border-color: var(--state-short);
+	color: var(--state-short);
 }
 
 .notice-inline {
-	margin-top: 8px;
-	color: var(--text-dim);
-	font-size: 10.5px;
-	line-height: 1.6;
+	margin-top: var(--sp-4);
+	color: var(--ink-muted);
+	font-size: var(--fs-tiny);
+	line-height: var(--lh-base);
 }
 
 /* 선택 모달 */
@@ -1300,13 +2084,13 @@ a {
 	z-index: 50;
 	display: grid;
 	place-items: center;
-	padding: 16px;
+	padding: var(--sp-8);
 }
 
 .modal-scrim {
 	position: absolute;
 	inset: 0;
-	background: rgba(0, 0, 0, 0.72);
+	background: rgba(0, 0, 0, 0.78);
 	border: none;
 	padding: 0;
 	cursor: pointer;
@@ -1318,54 +2102,87 @@ a {
 	height: min(860px, 88vh);
 	display: flex;
 	flex-direction: column;
-	background: var(--bg-raised);
-	border: 1px solid var(--accent);
+	background: var(--surface-2);
+	border: 1px solid var(--line-active);
+	box-shadow:
+		inset 0 0 0 1px var(--line-inner),
+		0 20px 60px rgba(0, 0, 0, 0.7);
 }
 
 .mhead {
 	display: flex;
 	align-items: center;
 	gap: var(--gap-sm);
-	padding: 12px 16px;
-	border-bottom: 1px solid var(--divider);
+	padding: var(--sp-6) var(--sp-8);
+	border-bottom: 1px solid var(--line-faint);
+	background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
 	flex: none;
 }
 
 .mhead h3 {
-	font-size: 15px;
+	margin: 0;
+	font-family: var(--font-title);
+	font-size: var(--fs-lg);
+	font-weight: var(--fw-bold);
+	letter-spacing: var(--ls-wide);
+	text-transform: uppercase;
+	color: var(--ink-cream);
+}
+
+.mhead button {
+	appearance: none;
+	margin-left: auto;
+	padding: var(--sp-3) var(--sp-5);
+	background: none;
+	border: 1px solid var(--line-strong);
+	color: var(--ink-dim);
+	font: inherit;
+	font-size: var(--fs-sm);
+	cursor: pointer;
+}
+
+.mhead button:hover {
+	border-color: var(--alert);
+	color: var(--ink);
 }
 
 .mtabs {
 	display: flex;
 	gap: 2px;
-	padding: 0 16px;
-	border-bottom: 1px solid var(--border);
+	padding: 0 var(--sp-8);
+	border-bottom: 1px solid var(--line);
 	flex: none;
 }
 
 .mtab {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 9px 14px;
+	gap: var(--sp-3);
+	padding: 9px var(--sp-7);
 	background: none;
 	border: none;
 	border-bottom: 2px solid transparent;
-	color: var(--text-dim);
-	font: inherit;
-	font-size: 12.5px;
+	color: var(--ink-muted);
+	font-family: var(--font-display);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-normal);
 	cursor: pointer;
 }
 
+.mtab:hover {
+	color: var(--ink);
+}
+
 .mtab[aria-selected='true'] {
-	color: var(--text);
+	color: var(--ink-gold);
+	background: var(--surface-1);
 	border-bottom-color: var(--accent);
 }
 
 /* 목록이 길어져도 필터가 화면 밖으로 밀리지 않게 도구 영역만 따로 스크롤한다. */
 .mtools {
-	padding: 9px 16px 7px;
-	border-bottom: 1px solid var(--divider);
+	padding: 9px var(--sp-8) var(--sp-3);
+	border-bottom: 1px solid var(--line-faint);
 	max-height: 168px;
 	overflow-y: auto;
 	flex: none;
@@ -1374,7 +2191,8 @@ a {
 .mbody {
 	flex: 1;
 	overflow-y: auto;
-	padding: 14px 16px;
+	padding: var(--sp-7) var(--sp-8);
+	background: var(--surface-1);
 }
 
 .mfoot {
@@ -1382,9 +2200,27 @@ a {
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--gap-sm);
-	padding: 9px 16px;
-	border-top: 1px solid var(--divider);
+	padding: 9px var(--sp-8);
+	border-top: 1px solid var(--line-faint);
+	background: var(--surface-2);
 	flex: none;
+}
+
+.mfoot button {
+	appearance: none;
+	padding: var(--sp-4) var(--sp-7);
+	background: var(--surface-3);
+	border: 1px solid var(--line-strong);
+	color: var(--ink-dim);
+	font-family: var(--font-display);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-normal);
+	cursor: pointer;
+}
+
+.mfoot button:hover {
+	border-color: var(--line-active);
+	color: var(--ink-gold);
 }
 
 .pickgrid {
@@ -1400,18 +2236,24 @@ a {
 	width: 100%;
 	height: 100%;
 	display: flex;
-	gap: 10px;
-	padding: 8px;
-	background: var(--bg);
-	border: 1px solid var(--border);
+	gap: var(--sp-5);
+	padding: var(--sp-4);
+	background: var(--surface-2);
+	border: 1px solid var(--line);
 	color: inherit;
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
 }
 
+.pickcard:hover {
+	background: var(--surface-3);
+	border-color: var(--line-active);
+}
+
 .pickcard[aria-pressed='true'] {
-	border-color: var(--accent);
+	border-color: var(--line-active);
+	background: var(--surface-3);
 }
 
 /* 같은 등급에 이미 다른 것이 있다. 막지 않고 표기한다 — 누르면 교체다. */
@@ -1423,7 +2265,9 @@ a {
 	justify-content: center;
 	align-items: center;
 	min-height: 74px;
-	color: var(--text-dim);
+	color: var(--ink-muted);
+	font-family: var(--font-display);
+	letter-spacing: var(--ls-normal);
 }
 
 .pickcard-port {
@@ -1432,12 +2276,12 @@ a {
 	width: 56px;
 	height: 62px;
 	overflow: hidden;
-	background: var(--bg-raised);
+	background: var(--surface-inset);
 }
 
 /*
 	초상만 채운다. 희귀도 아이콘도 이 상자의 직계 자식이라 `> img` 로 잡으면 그것까지
-	100% 로 늘어나 초상을 덮는다 — 실제로 그렇게 났다. 클래스로 갈라 둔다.
+	100% 로 늘어나 초상을 덮는다. 클래스로 갈라 둔다.
 */
 .pickcard-img {
 	position: absolute;
@@ -1455,15 +2299,15 @@ a {
 	height: 100%;
 	background: repeating-linear-gradient(
 		135deg,
-		var(--bg) 0 6px,
-		var(--bg-raised) 6px 12px
+		var(--surface-inset) 0 6px,
+		var(--surface-1) 6px 12px
 	);
 }
 
 .pickcard-rarity {
 	position: absolute;
-	left: 3px;
-	top: 3px;
+	left: var(--sp-1);
+	top: var(--sp-1);
 	z-index: 2;
 }
 
@@ -1472,13 +2316,14 @@ a {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: var(--sp-2);
 }
 
 .pickcard-body strong {
-	font-size: 12.5px;
+	font-size: var(--fs-sm);
 	overflow: hidden;
 	text-overflow: ellipsis;
+	color: var(--ink);
 }
 
 /* 전량 목록은 편성 아래에 접어 둔다. */
@@ -1502,7 +2347,569 @@ a {
 	white-space: nowrap;
 }
 
-.notice { padding: .5rem .75rem; border: 1px solid currentColor; border-radius: 4px; }
-.deck-code { display: flex; gap: .5rem; align-items: flex-start; flex-wrap: wrap; margin: .5rem 0; }
-.deck-code label { display: flex; flex-direction: column; gap: .25rem; flex: 1 1 20rem; }
-.deck-code textarea { width: 100%; font-family: monospace; font-size: .8rem; }
+/* 고지 상자. 데이터의 한계를 알리는 자리이며 경보가 아니다. */
+.notice {
+	padding: var(--sp-4) var(--sp-6);
+	border: 1px solid var(--line-strong);
+	background: var(--surface-1);
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+}
+
+.deck-code {
+	display: flex;
+	gap: var(--sp-4);
+	align-items: flex-start;
+	flex-wrap: wrap;
+	margin: var(--sp-4) 0;
+}
+
+.deck-code label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+	flex: 1 1 20rem;
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-normal);
+	color: var(--ink-muted);
+}
+
+.deck-code textarea {
+	width: 100%;
+	background: var(--surface-inset);
+	border: 1px solid var(--line);
+	color: var(--ink);
+	padding: var(--sp-4);
+	font-family: var(--font-mono);
+	font-size: var(--fs-sm);
+	line-height: var(--lh-base);
+	resize: vertical;
+}
+
+.deck-code textarea:focus {
+	outline: none;
+	border-color: var(--line-active);
+}
+
+.deck-code button,
+.deck-code a {
+	appearance: none;
+	padding: var(--sp-4) var(--sp-7);
+	background: var(--surface-2);
+	border: 1px solid var(--line-strong);
+	color: var(--ink-dim);
+	font-family: var(--font-display);
+	font-size: var(--fs-sm);
+	letter-spacing: var(--ls-normal);
+	cursor: pointer;
+}
+
+.deck-code button:hover,
+.deck-code a:hover {
+	border-color: var(--line-active);
+	color: var(--ink-gold);
+	background: var(--surface-3);
+}
+
+/* ── 거울 던전 트래커 ──────────────────────────────────────
+   3열 골격과 층 레일은 편성 것을 그대로 쓴다 — `.formation-cols` · `.deckrail` ·
+   `.rail-*`. 트래커가 새로 갖는 것은 아래 다섯뿐이다.
+
+     .runstep      층 레일 슬롯의 진행 상태
+     .runstep-mark 그 상태의 기호
+     .packrank     후보 팩 순위 뱃지 (3위까지)
+     .packscore    후보 팩 점수
+     .owned        보유 기프트 목록
+
+   순위를 **색과 위치로만 말하지 않는다.** 뱃지 숫자 · 카드 테두리 · 정렬 순서가 함께 간다. */
+
+.runstep {
+	justify-content: space-between;
+}
+
+/*
+	지나온 층 · 지금 층 · 아직 안 간 층.
+
+	색만으로 가르지 않는다 — `.runstep-mark` 의 기호(✓ · ●)가 함께 있고, 아직 안 간 층은
+	이름 자리가 비어 있어 셋이 글자만으로도 구분된다.
+*/
+.runstep[data-state='done'] {
+	color: var(--ink-dim);
+}
+
+.runstep[data-state='current'] {
+	border-color: var(--line-active);
+	background: var(--surface-2);
+	color: var(--ink-gold);
+}
+
+.runstep[data-state='todo'] {
+	color: var(--ink-muted);
+	cursor: default;
+}
+
+.runstep[data-state='todo']:hover {
+	background: none;
+	color: var(--ink-muted);
+}
+
+.runstep-mark {
+	flex: none;
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	color: var(--ink-muted);
+}
+
+.runstep[data-state='current'] .runstep-mark {
+	color: var(--accent);
+}
+
+/* 레일 안에서 펼쳐지는 그 층의 획득분. 목록 자체는 사이드바 것과 같은 `.owned` 다. */
+.owned {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+}
+
+.owned li {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	font-size: var(--fs-xs);
+	color: var(--ink-dim);
+}
+
+.owned-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/*
+	층 레일이 168px 이라 한 줄로는 기프트 이름이 잘린다. 여기서만 줄바꿈을 푼다 —
+	이름을 자르는 것보다 두 줄로 흐르는 편이 낫다.
+*/
+.owned-inrail {
+	margin: var(--sp-2) 0 var(--sp-3) var(--sp-5);
+	padding: var(--sp-3) 9px;
+}
+
+.owned-inrail .owned-name {
+	overflow: visible;
+	white-space: normal;
+	line-height: var(--lh-tight);
+}
+
+/* 15 층이 한눈에 들어와야 한다. 편성 덱 목록(최대 10)보다 길다. */
+.deckrail .rail-list:has(.runstep) {
+	max-height: none;
+}
+
+/*
+	순위 뱃지.
+
+	상위 셋에만 붙는다. 넷째부터는 점수만으로 충분하고, 뱃지를 다 붙이면 27 장이 전부
+	강조되어 아무것도 강조되지 않는다.
+*/
+.packrank {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 4;
+	min-width: 20px;
+	padding: 2px var(--sp-3);
+	background: var(--accent);
+	color: var(--surface-page);
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	line-height: 1.5;
+	text-align: center;
+}
+
+.cardgrid-wide .card[data-rank] {
+	border-color: var(--line-active);
+}
+
+.packscore {
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	color: var(--ink-gold);
+	letter-spacing: var(--ls-normal);
+}
+
+/* ── 스타일을 두지 않는 마크업 훅 ─────────────────────────
+   아래 셋은 마크업에 있으나 규칙이 없다. **빠뜨린 것이 아니다** — 원본 스타일시트도
+   같고, 배치와 간격을 다른 것이 맡고 있어서다. 나중에 누가 "누락"으로 보고 채우지 않도록
+   적어 둔다.
+
+     .skill           스킬 한 덩이의 그릇. 구분선은 `.plain > li + li` 가 그린다.
+     .coin-d          코인 효과 설명. 본문 스타일을 그대로 물려받는 것이 맞다.
+     .formation-main  편성 가운데 단. 치수는 `.formation-cols` 의 격자가 정한다. */
+
+/* ── 기본 폼 요소 ──────────────────────────────────────────
+   클래스가 없는 자리도 톤을 맞춘다. 원본 스타일시트에는 없던 구획이며
+   되돌려 옮길 때 맨 끝에 붙이면 된다. */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+input[type='checkbox'] {
+	accent-color: var(--accent);
+}
+
+/* ── 목록 화면 ─────────────────────────────────────────────
+   인격·E.G.O 목록. 수감자별 섹션 + 세로 카드 + 상단에 붙는 필터.
+
+   **평평한 격자 하나를 수감자 12 묶음으로 갈랐다.** 184 장을 한 줄로 늘어놓으면 어느
+   인격이 누구 것인지 카드마다 읽어야 했다. 섹션은 건너뛰기를 맡고 필터는 거르기를
+   맡는다 — 둘은 다른 일이라 수감자 축을 필터에도 남긴다. */
+
+.listbar {
+	position: sticky;
+	/* 사이트 머리 아래에 얹는다. 머리 높이가 바뀌면 이 값도 함께 움직여야 한다. */
+	top: var(--head-h);
+	z-index: 20;
+	margin: 0 calc(var(--sp-6) * -1) var(--gap);
+	padding: var(--sp-5) var(--sp-6) var(--sp-4);
+	background: var(--surface-page);
+	border-bottom: 1px solid var(--line);
+	box-shadow: 0 10px 18px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* 축 칩과 검색이 한 줄을 나눠 쓴다. 검색이 전폭을 혼자 쓰면 그만큼 카드가 밀린다. */
+.axisbar {
+	position: static;
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+}
+
+.axisbar .filters {
+	margin: 0 0 0 auto;
+	flex: 0 1 300px;
+	min-width: 180px;
+}
+
+.axisbar .filters .srch {
+	padding: var(--sp-3) var(--sp-5);
+	font-size: var(--fs-xs);
+}
+
+.axischip {
+	cursor: pointer;
+	transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.axischip[aria-expanded='true'] {
+	background: var(--surface-2);
+	border-color: var(--line-active);
+	color: var(--ink-gold);
+}
+
+/*
+	패널은 **뜨지 않고 자리를 밀어내며** 열린다.
+
+	떠 있게 두었더니 적용된 조건과 카드를 덮었고, 덮으니 스크롤할 때 닫아야 했고, 닫히니
+	또 열어야 했다. 등급 3 · 속성 7 · 키워드 7 · 특수 2 는 두 줄이면 다 보이는 양이라
+	숨겨서 얻는 것이 거의 없다.
+
+	`0fr → 1fr` 이면 내용 높이를 몰라도 진짜 높이가 흐른다. 소속 93 도 같은 규칙으로 열린다.
+*/
+.axispanels {
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows 0.18s ease;
+}
+
+.axispanels[data-open='true'] {
+	grid-template-rows: 1fr;
+}
+
+.axispanels-in {
+	overflow: hidden;
+}
+
+.axispanel {
+	margin-top: var(--sp-4);
+	padding: var(--sp-5) var(--sp-6);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	box-shadow: inset 0 0 0 1px var(--line-inner);
+}
+
+.axispanel .filter-axis {
+	padding-left: 0;
+}
+
+/* 적용된 조건과 카드 도구를 한 줄에 나눠 놓는다 — 왼쪽이 무엇을 걸렀는지, 오른쪽이 어떻게 볼지다. */
+.toolrow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--gap);
+	flex-wrap: wrap;
+	margin-top: var(--sp-4);
+	padding-top: var(--sp-4);
+	border-top: 1px solid var(--line-faint);
+}
+
+.applied {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+}
+
+.applied .filter-axis-label,
+.sortbar .filter-axis-label {
+	position: static;
+	width: auto;
+	margin-right: var(--sp-3);
+}
+
+/* 축 이름은 값보다 한 단 흐리게. 읽는 순서가 「무엇을」 다음 「어떻게」다. */
+.applied-k {
+	margin-right: var(--sp-3);
+	color: var(--ink-muted);
+	font-size: var(--fs-tiny);
+	letter-spacing: var(--ls-wide);
+	text-transform: uppercase;
+}
+
+.applied-k::after {
+	content: ':';
+	margin-left: 1px;
+}
+
+.sortbar {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+}
+
+/* 남은 수와 정렬 사이를 벌린다 — 붙어 있으면 「14 / 184 정렬」이 한 낱말로 읽힌다. */
+.sortbar > .hint {
+	margin-right: var(--sp-4);
+}
+
+/* ── 기프트 카드 ───────────────────────────────────────────
+   그림이 256 × 256 정사각이라 인격·E.G.O 와 같은 통을 그대로 쓴다. 다만 인물 초상이
+   아니라 물건 아이콘이라 잘라내지 않고 통 안에 온전히 넣는다 — 잘리면 무엇인지 알 수 없다. */
+
+.cardgrid-gift {
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.cardgrid-gift .unit-art > img:not(.unit-rank) {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	padding: var(--sp-4);
+}
+
+/*
+	등급.
+
+	게임은 카드에 로마자를 인쇄한다. 애셋으로는 없어 글자로 낸다 — 기프트 그림 456 장과
+	`assets/icons/` 54 종을 다 뒤졌고 숫자·로마자 아이콘이 없다.
+*/
+.gift-tier {
+	position: absolute;
+	top: var(--sp-2);
+	left: var(--sp-3);
+	z-index: 1;
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: var(--fs-xl);
+	line-height: 1.1;
+	letter-spacing: var(--ls-wide);
+	/*
+		상자를 두지 않는다. 테두리를 치면 카드 위에 표를 하나 더 붙인 꼴이 되어 그림과
+		따로 논다. 대신 어두운 그림자로 판독을 지킨다 — 팩 이름을 띠에 얹을 때와 같은 수다.
+	*/
+	text-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.95),
+		0 0 6px rgba(0, 0, 0, 0.85);
+}
+
+/*
+	더 보기.
+
+	관찰자의 표적이자 손으로 누를 수 있는 버튼이다. 관찰자는 문서가 숨겨져 있으면 돌지
+	않으므로 손으로 이어갈 길을 함께 둔다.
+*/
+.loadmore {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--sp-4);
+	width: 100%;
+	margin-top: var(--sp-7);
+	padding: var(--sp-6);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	color: var(--ink-dim);
+	font-family: var(--font-display);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-wide);
+	cursor: pointer;
+}
+
+.loadmore:hover {
+	border-color: var(--line-active);
+	color: var(--ink-cream);
+}
+
+/* ── 섹션 ────────────────────────────────────────────────── */
+
+.secgroup {
+	margin-top: var(--sp-9);
+	/* 목차로 건너뛸 때 섹션 머리가 상단 덩이에 가리지 않게 띄운다. */
+	scroll-margin-top: calc(var(--head-h) + 110px);
+}
+
+.secgroup .icon {
+	flex: none;
+	margin-right: var(--sp-4);
+}
+
+/* ── 세로 카드 ───────────────────────────────────────────── */
+
+/*
+	이름을 맨 위에 좌측 정렬로 두고 그림을 카드 폭만큼 키운다.
+
+	가로 카드는 초상이 52px 에 묶여 인물을 알아볼 수 없었고, 이름이 그림 오른쪽에서 시작해
+	길이에 따라 눈이 좌우로 흔들렸다.
+
+	이름은 **한 줄로 자른다.** 두 줄 자리를 미리 잡으면 한 줄짜리 이름 위나 아래에 빈 줄이
+	남고, 예약을 걷어내면 두 줄짜리가 그 줄 전체의 그림 위치를 밀었다. 전문은 `title` 에 있고
+	상세 화면이 온전히 낸다.
+*/
+.unit {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--sp-3);
+	padding: var(--sp-4);
+}
+
+.unit-name {
+	display: block;
+	text-align: left;
+	font-size: var(--fs-lg);
+	line-height: var(--lh-tight);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.unit-art {
+	position: relative;
+	display: block;
+	aspect-ratio: 1 / 1;
+	overflow: hidden;
+	background: var(--surface-inset);
+	line-height: 0;
+}
+
+/* 등급 배지도 이 안에 있으므로 초상만 집는다 — 안 그러면 배지가 카드를 덮는다. */
+.unit-art > img:not(.unit-rank) {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	/* 초상은 위쪽에 얼굴이 있다. 잘릴 때 얼굴을 남긴다. */
+	object-position: 50% 20%;
+}
+
+/* 밝은 아트 위에서도 등급이 읽히게 위쪽에 그늘을 깐다. 게임도 같은 처리를 한다. */
+.unit-art::after {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto;
+	height: 42%;
+	background: linear-gradient(180deg, rgba(8, 7, 6, 0.7), transparent);
+	pointer-events: none;
+}
+
+/*
+	등급은 **그림 위 좌측 상단**에 얹는다.
+
+	이름 옆에 두었더니 인격과 E.G.O 의 제목 줄이 서로 다른 모양이 됐다 — 애셋 종횡비가
+	인격 0.59~1.67, E.G.O 2.69~2.90 이라 높이를 맞추면 폭이 15~43px 대 70~75px 이 된다.
+	그림 위로 올리면 제목 줄이 이름 전용이 되어 두 화면의 골격이 같아진다.
+*/
+.unit-rank {
+	position: absolute;
+	left: var(--sp-3);
+	top: var(--sp-3);
+	z-index: 2;
+	width: auto;
+	height: 24px;
+	max-width: 64px;
+	object-fit: contain;
+	filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+}
+
+.unit .card-meta {
+	align-items: center;
+	font-size: var(--fs-sm);
+}
+
+/* ── 맨 위로 ─────────────────────────────────────────────── */
+
+/* 12 섹션을 훑고 나면 조건을 다시 걸려고 위로 올라가야 한다. 한 화면 넘게 내려갔을 때만 낸다. */
+.totop {
+	position: fixed;
+	right: var(--sp-8);
+	bottom: var(--sp-8);
+	z-index: 30;
+	display: grid;
+	place-items: center;
+	width: 42px;
+	height: 42px;
+	background: var(--surface-2);
+	border: 1px solid var(--line-strong);
+	box-shadow: inset 0 0 0 1px var(--line-inner), 0 8px 18px -8px rgba(0, 0, 0, 0.9);
+	color: var(--ink-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	text-decoration: none;
+	opacity: 0;
+	transform: translateY(8px);
+	pointer-events: none;
+	transition: opacity 0.16s, transform 0.16s, color 0.12s, border-color 0.12s;
+}
+
+.totop[data-on='true'] {
+	opacity: 1;
+	transform: none;
+	pointer-events: auto;
+}
+
+.totop:hover {
+	color: var(--ink-gold);
+	border-color: var(--line-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.totop {
+		transition: none;
+	}
+}
+
+/* 열리면서 문서가 길어질 때 브라우저가 스크롤을 되잡지 않게 한다. */
+html:has(.axispanels) {
+	overflow-anchor: none;
+}

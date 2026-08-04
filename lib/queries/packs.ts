@@ -12,40 +12,25 @@ import { localeFilter, multi, nameOf, one, type SearchParams } from './shared';
  * 등장 확률은 표시하지 않는다. 팩별 기프트 목록은 확보했으나 확률은 어느 출처에도 없다.
  */
 
+/**
+ * 목록 거르기.
+ *
+ * **분류로 거르지 않는다.** 화면이 쓰는 종류가 `category` 한 칸으로 나오지 않기 때문이다 —
+ * 발푸르기스 2 · 3 회가 `extreme` 로 분류돼 있어 분류로 거르면 그 둘이 빠진다. 종류
+ * 판정은 스프라이트와 캐노니컬 태그까지 봐야 서므로 화면에서 거른다(`lib/pack-label.ts`).
+ *
+ * 여기 남는 것은 이름 검색뿐이다.
+ */
 export interface PackFilter {
 	q?: string | undefined;
-	categories: string[];
-	superposition?: boolean | undefined;
-	extreme?: boolean | undefined;
-	exclusiveOnly?: boolean | undefined;
 }
 
 export function readPackFilter(params: SearchParams): PackFilter {
-	const bool = (key: string) => {
-		const v = one(params[key]);
-		return v === '1' ? true : v === '0' ? false : undefined;
-	};
-	return {
-		q: one(params['q'])?.trim() || undefined,
-		categories: multi(params['category']),
-		superposition: bool('superposition'),
-		extreme: bool('extreme'),
-		exclusiveOnly: bool('exclusive'),
-	};
-}
-
-export async function listPackCategories() {
-	const rows = await db.pack.groupBy({ by: ['category'], _count: true, orderBy: { category: 'asc' } });
-	return rows.map((r) => ({ id: r.category, count: r._count }));
+	return { q: one(params['q'])?.trim() || undefined };
 }
 
 export async function listPacks(locale: Locale, filter: PackFilter) {
 	const and: Prisma.PackWhereInput[] = [];
-	if (filter.categories.length) and.push({ category: { in: filter.categories } });
-	if (filter.superposition !== undefined) and.push({ superposition: filter.superposition });
-	if (filter.extreme !== undefined) and.push({ extreme: filter.extreme });
-	if (filter.exclusiveOnly === true) and.push({ exclusiveGifts: { some: {} } });
-	if (filter.exclusiveOnly === false) and.push({ exclusiveGifts: { none: {} } });
 	if (filter.q) {
 		and.push({
 			texts: {
@@ -72,6 +57,8 @@ export async function listPacks(locale: Locale, filter: PackFilter) {
 		superposition: p.superposition,
 		extreme: p.extreme,
 		icon: packIcon(p.sprite),
+		// 카드가 봉지·보스·이름을 겹쳐 내므로 스프라이트 키 자체가 필요하다.
+		sprite: p.sprite,
 		text: nameOf(p.texts, locale),
 		giftCount: p._count.gifts,
 		exclusiveCount: p._count.exclusiveGifts,
@@ -151,7 +138,14 @@ export async function getPack(id: string, locale: Locale) {
 		extreme: pack.extreme,
 		floorLength: pack.floorLength,
 		icon: packIcon(pack.sprite),
-		// 보스 층에는 보스가 함께 그려진 카드가 쓰인다(실측 40개).
+		sprite: pack.sprite,
+		/*
+			보스 층 그림.
+
+			**완성된 카드가 아니라 투명한 보스 층 한 장이다**(391 × 432). 봉지 위에 겹쳐야
+			게임과 같은 카드가 된다 — 조사 기록은 `publish/PACK-ART.md` 다. 규칙으로
+			짝을 찾는 것은 실측 40 종이고, 규칙 밖 7 종은 `lib/pack-art.ts` 의 표가 맡는다.
+		*/
 		bossIcon: packBossIcon(pack.sprite),
 		text: nameOf(pack.texts, locale),
 		bosses: pack.bosses.map((b) => ({

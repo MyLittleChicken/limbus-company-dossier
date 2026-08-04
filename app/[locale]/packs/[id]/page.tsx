@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
-import { UI } from '@/lib/ui-text';
+import { PACK_CATEGORY, PACK_DIFFICULTY, UI } from '@/lib/ui-text';
 import { getPack } from '@/lib/queries/packs';
 import { Facts, Icon, Name, Nothing, Panel, SecLabel } from '@/components/ui';
+import { PackArt } from '@/components/pack-art';
 
 /**
  * 팩 상세 — 3단 구성(05-ui-foundation 4.2).
@@ -24,6 +25,10 @@ export default async function PackDetailPage({
 
 	const t = UI[locale];
 	const ko = locale === 'ko';
+
+	// 목록과 같은 말을 쓴다. 모르는 값이 오면 그대로 낸다.
+	const categoryLabel = PACK_CATEGORY[locale][pack.category] ?? pack.category;
+	const difficultyLabel = (id: string) => PACK_DIFFICULTY[locale][id] ?? id;
 
 	const giftLink = (g: (typeof pack.gifts)[number]) => (
 		<li key={g.id}>
@@ -99,24 +104,35 @@ export default async function PackDetailPage({
 				<aside>
 					<Panel title={ko ? '속성' : 'Attributes'}>
 						<div className="hero-icon pack-arts">
+							{/*
+							 * 보스 층 그림이 따로 있으면 여기는 봉지만 낸다 — 둘이 같아지면
+							 * 나란히 둘 이유가 없다. 규칙 밖 7 종은 보스 층 그림이 없으므로
+							 * 이 자리에서 합성한다.
+							 */}
 							<figure>
-								<Icon src={pack.icon} alt="" size={160} shape="wide" />
+								<PackArt
+									id={pack.id}
+									sprite={pack.sprite}
+									name={pack.text?.name ?? null}
+									showBoss={!pack.bossIcon}
+								/>
 								<figcaption>{ko ? '일반 층' : 'Normal floor'}</figcaption>
 							</figure>
 							{/*
-							 * 보스 층에는 보스가 함께 그려진 카드가 쓰인다. 없는 팩이 있고
-							 * Canto 계열은 그 자체가 보스전이라 변형을 갖지 않는다.
+							 * 보스 층. 애셋은 프레임 없는 투명 그림이라 봉지 위에 겹쳐야
+							 * 게임과 같은 카드가 된다. 없는 팩이 있고 Canto 계열은 그 자체가
+							 * 보스전이라 변형을 갖지 않는다.
 							 */}
 							{pack.bossIcon ? (
 								<figure>
-									<Icon src={pack.bossIcon} alt="" size={160} shape="wide" />
+									<PackArt id={pack.id} sprite={pack.sprite} name={pack.text?.name ?? null} />
 									<figcaption>{ko ? '보스 층' : 'Boss floor'}</figcaption>
 								</figure>
 							) : null}
 						</div>
 						<Facts
 							rows={[
-								[ko ? '분류' : 'Category', pack.category],
+								[ko ? '분류' : 'Category', categoryLabel],
 								[
 									ko ? '변형' : 'Variant',
 									pack.variant ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
@@ -145,7 +161,8 @@ export default async function PackDetailPage({
 							<ul className="inline-list">
 								{pack.floors.map((f) => (
 									<li key={`${f.difficulty}${f.range}`} className="tag">
-										{f.difficulty} {f.range}
+										{difficultyLabel(f.difficulty)} {f.range}
+										{ko ? '층' : 'F'}
 									</li>
 								))}
 							</ul>
