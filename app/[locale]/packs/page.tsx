@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
-import { PACK_CATEGORY, PACK_DIFFICULTY, UI } from '@/lib/ui-text';
+import { PACK_CATEGORY, UI } from '@/lib/ui-text';
 import { listPackCategories, listPacks, readPackFilter } from '@/lib/queries/packs';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox, TriFilter } from '@/components/filters';
@@ -32,9 +32,8 @@ export default async function PacksPage({
 		listCollabPackIds(),
 	]);
 
-	// 데이터의 내부 값을 게임이 쓰는 말로 옮긴다. 모르는 값이 오면 그대로 낸다 — 숨기지 않는다.
+	// 필터 칩은 분류 축을 그대로 남긴다. 모르는 값이 오면 그대로 낸다 — 숨기지 않는다.
 	const categoryLabel = (id: string) => PACK_CATEGORY[locale][id] ?? id;
-	const difficultyLabel = (id: string) => PACK_DIFFICULTY[locale][id] ?? id;
 
 	return (
 		<>
@@ -99,20 +98,11 @@ export default async function PacksPage({
 											)}
 										</span>
 									</span>
-									<span className="card-meta">
-										{p.floors.length === 0 ? (
-											<span className="absent">
-												{ko ? '일반 층 순환에 등장하지 않음' : 'Not in the normal rotation'}
-											</span>
-										) : (
-											p.floors.map((f) => (
-												<span key={`${f.difficulty}${f.range}`} className="tag">
-													{difficultyLabel(f.difficulty)} {f.range}
-													{ko ? '층' : 'F'}
-												</span>
-											))
-										)}
-									</span>
+									{/*
+										등장 층은 상세로 미뤘다. 난이도 × 구간 조합이 팩마다 하나에서 여덟까지
+										달라 카드 높이가 제멋대로였다. 목록에서 팩을 가리는 데 필요한 정보도
+										아니다 — 「언제 고를 수 있는가」는 위의 종류가 이미 말한다.
+									*/}
 								</div>
 							</Link>
 						</li>

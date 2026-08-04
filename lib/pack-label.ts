@@ -22,11 +22,21 @@ const GENERIC = new Set(['attack_type', 'sin', 'keyword']);
 /**
  * 발푸르기스 회차는 스프라이트에서만 나온다.
  *
- * `Walpu4_NoonOfViolet` 처럼 접두에 회차가 박혀 있다 — 실측 4 · 5 · 6 · 8 이다.
- * **필드가 아니라 파일명에서 유도한 값이다.** `pack_tag` 은 `Walpurgisnacht` 까지만
- * 말하고 회차를 담지 않는다. 규칙이 깨지면 회차 없이 이름만 낸다.
+ * `Walpu4_NoonOfViolet` 처럼 접두에 회차가 박혀 있다. **필드가 아니라 파일명에서 유도한
+ * 값이다** — `pack_tag` 은 `Walpurgisnacht` 까지만 말하고 회차를 담지 않는다.
+ *
+ * **분류보다 스프라이트를 믿는다.** 2 회와 3 회 팩이 `walpurgis` 가 아니라 `extreme` 로
+ * 분류돼 있다(`Walpu2_Extreme` 녹빛 여명의 시련 · `Walpu3_Extreme` 어느 도서관의 어떤 책
+ * 속으로). 극한 형식으로 나온 발푸르기스 팩이며 태그도 `Extreme` 하나뿐이라, 분류만 보면
+ * 어느 회차 것인지 알 수 없다. 그래서 회차 판정을 분류보다 앞에 둔다.
+ *
+ * 실측 2 · 3 · 4 · 5 · 6 · 8 회다. 1 · 7 · 9 회 팩은 없다 — 인격과 E.G.O 는 1~9 회가
+ * 모두 있으므로 없는 쪽이 팩이다.
  */
-const WALPURGIS_ROUND = /^Walpu(\d+)_/;
+const WALPURGIS_ROUND = /^Walpu(\d+)[_.]/;
+
+/** 숨겨진 팩. 캐노니컬 분류 경로가 `Hidden` 이며 실측 1 건(3001 뽕.황)이다. */
+const HIDDEN_SPRITE = 'HiddenTheme';
 
 export type PackKindInput = {
 	category: string;
@@ -40,22 +50,23 @@ export function packKind(pack: PackKindInput, locale: Locale): string {
 	const ko = locale === 'ko';
 
 	if (pack.collab) return ko ? '콜라보 한정' : 'Collab only';
+	if (pack.sprite === HIDDEN_SPRITE) return ko ? '히든' : 'Hidden';
+
+	// 분류보다 앞에 둔다 — 2 · 3 회가 `extreme` 로 분류돼 있다(위 주석).
+	const round = WALPURGIS_ROUND.exec(pack.sprite)?.[1];
+	if (round) return ko ? `${round}회 발푸르기스` : `Walpurgis Night ${round}`;
+	if (pack.category === 'walpurgis') return ko ? '발푸르기스의 밤' : 'Walpurgis Night';
+
 	if (GENERIC.has(pack.category)) return ko ? '범용' : 'Generic';
 
 	if (pack.category === 'canto' && pack.chapter) {
 		return ko ? `${pack.chapter}장` : `Canto ${pack.chapter}`;
 	}
 
-	if (pack.category === 'walpurgis') {
-		const round = WALPURGIS_ROUND.exec(pack.sprite)?.[1];
-		if (!round) return ko ? '발푸르기스의 밤' : 'Walpurgis Night';
-		return ko ? `${round}회 발푸르기스` : `Walpurgis Night ${round}`;
-	}
-
 	return OTHER[locale][pack.category] ?? pack.category;
 }
 
-/** 위 넷에 들지 않는 것. 분류 이름을 그대로 쓴다. */
+/** 위에 들지 않는 것. 분류 이름을 그대로 쓴다. */
 const OTHER: Record<Locale, Record<string, string>> = {
 	ko: { railway: '거울굴절철도', extreme: '극한', event: '이벤트' },
 	en: { railway: 'Refraction Railway', extreme: 'Extreme', event: 'Event' },
