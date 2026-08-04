@@ -418,13 +418,13 @@ model IdentityAxis {
 /// **질의마다 이름 매칭을 다시 하면 오매칭이 되살아난다** — `Dawn Office Identities` 가
 /// `DawnTeam` 상태에, `N Corp. Fanatic Identities` 가 `AssemblePersonality` 에 걸린다.
 model TriggerRef {
-  /// 대리 PK. refId 가 nullable 이라 (triggerId, refKind, refId) 를 @@id 로 못 쓴다
-  id        Int     @id @default(autoincrement())
   triggerId String  @map("trigger_id")
   /// axis | association | unit_keyword | sin | resonance | attack_type
   /// | skill_kind | coin | deployment | none
   refKind   String  @map("ref_kind")
-  refId     String? @map("ref_id")
+  /// 참조 대상이 없으면 빈 문자열이다. NULL 이면 PK 에 못 들어가고
+  /// unique 로 두면 PostgreSQL 이 NULL 을 서로 다르게 봐 중복을 막지 못한다
+  refId     String  @default("") @map("ref_id")
   /// resonance 전용. activate | threshold | dominant | scaling
   resonanceMode String? @map("resonance_mode")
   /// resonance threshold 전용
@@ -438,7 +438,7 @@ model TriggerRef {
 
   trigger Trigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
-  @@unique([triggerId, refKind, refId])
+  @@id([triggerId, refKind, refId])
   @@index([refKind, refId])
   @@map("trigger_ref")
   @@schema("canonical")
@@ -446,18 +446,18 @@ model TriggerRef {
 
 /// 효과가 무엇을 다루나. 연쇄 엣지의 출발점이다.
 model EffectRef {
-  /// 대리 PK. refId 가 nullable 이라 (effectId, refKind, refId) 를 @@id 로 못 쓴다
-  id       Int     @id @default(autoincrement())
   effectId String  @map("effect_id")
   /// axis | sin | attack_type | none
   refKind  String  @map("ref_kind")
-  refId    String? @map("ref_id")
+  /// 참조 대상이 없으면 빈 문자열이다. NULL 이면 PK 에 못 들어가고
+  /// unique 로 두면 PostgreSQL 이 NULL 을 서로 다르게 봐 중복을 막지 못한다
+  refId    String  @default("") @map("ref_id")
   /// inflict | gain | consume | trigger
   mode     String
 
   effect Effect @relation(fields: [effectId], references: [id], onDelete: Cascade)
 
-  @@unique([effectId, refKind, refId])
+  @@id([effectId, refKind, refId])
   @@map("effect_ref")
   @@schema("canonical")
 }

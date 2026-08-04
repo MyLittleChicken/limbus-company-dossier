@@ -212,26 +212,24 @@ CREATE TABLE "canonical"."identity_axis" (
 
 -- CreateTable
 CREATE TABLE "canonical"."trigger_ref" (
-    "id" SERIAL NOT NULL,
     "trigger_id" TEXT NOT NULL,
     "ref_kind" TEXT NOT NULL,
-    "ref_id" TEXT,
+    "ref_id" TEXT NOT NULL DEFAULT '',
     "resonance_mode" TEXT,
     "threshold" INTEGER,
     "evaluability" TEXT NOT NULL,
 
-    CONSTRAINT "trigger_ref_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "trigger_ref_pkey" PRIMARY KEY ("trigger_id","ref_kind","ref_id")
 );
 
 -- CreateTable
 CREATE TABLE "canonical"."effect_ref" (
-    "id" SERIAL NOT NULL,
     "effect_id" TEXT NOT NULL,
     "ref_kind" TEXT NOT NULL,
-    "ref_id" TEXT,
+    "ref_id" TEXT NOT NULL DEFAULT '',
     "mode" TEXT NOT NULL,
 
-    CONSTRAINT "effect_ref_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "effect_ref_pkey" PRIMARY KEY ("effect_id","ref_kind","ref_id")
 );
 
 -- CreateTable
@@ -1136,12 +1134,6 @@ CREATE INDEX "identity_axis_axis_id_idx" ON "canonical"."identity_axis"("axis_id
 
 -- CreateIndex
 CREATE INDEX "trigger_ref_ref_kind_ref_id_idx" ON "canonical"."trigger_ref"("ref_kind", "ref_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "trigger_ref_trigger_id_ref_kind_ref_id_key" ON "canonical"."trigger_ref"("trigger_id", "ref_kind", "ref_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "effect_ref_effect_id_ref_kind_ref_id_key" ON "canonical"."effect_ref"("effect_id", "ref_kind", "ref_id");
 
 -- CreateIndex
 CREATE INDEX "gift_domain_idx" ON "canonical"."gift"("domain");
