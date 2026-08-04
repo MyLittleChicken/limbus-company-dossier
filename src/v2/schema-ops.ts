@@ -30,12 +30,20 @@ export async function tableCount(prisma: PrismaClient, schema: string): Promise<
 }
 
 /**
- * 스키마 이름은 식별자라 파라미터로 못 넘긴다. 문자열로 박아야 하므로
- * **모양을 좁혀서 주입을 막는다.** 우리가 쓰는 이름은 소문자·숫자·밑줄뿐이다.
+ * 스키마 이름도 테이블 이름도 식별자라 파라미터로 못 넘긴다. 문자열로 박아야
+ * 하므로 **모양을 좁혀서 주입을 막는다.** 우리가 쓰는 이름은 소문자·숫자·
+ * 밑줄뿐이다 — 스키마 이름 전용이 아니라 두 종류 다 여기를 거친다.
  */
 function ident(name: string): string {
-	if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`스키마 이름이 이상하다: ${name}`);
+	if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`식별자가 이상하다: ${name}`);
 	return `"${name}"`;
+}
+
+export async function schemaExists(prisma: PrismaClient, name: string): Promise<boolean> {
+	const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
+		SELECT count(*)::bigint AS n FROM information_schema.schemata WHERE schema_name = ${name}
+	`;
+	return Number(rows[0]?.n ?? 0n) > 0;
 }
 
 /**
@@ -49,8 +57,15 @@ function ident(name: string): string {
  * `pg_stat_user_tables.n_live_tup` 같은 추정치는 안 쓴다 — ANALYZE 시점에 따라
  * 틀리고, 가드가 틀린 값으로 통과하면 그게 최악이다. 테이블마다 `EXISTS` 로
  * 직접 묻고, 하나라도 참이면 즉시 멈춘다(94개를 다 돌 필요가 없다).
+ *
+ * 스키마 자체가 없으면 테이블 목록이 그냥 비어서 조용히 `false` 가 나온다 —
+ * 호출자가 "비었다"로 오해하고 지나가면 뒤에서 Prisma 원시 오류로 죽는다.
+ * 먼저 `schemaExists` 로 보고, 없으면 그 사실을 말하는 오류를 던진다.
  */
 export async function hasAnyRow(prisma: PrismaClient, schema: string): Promise<boolean> {
+	if (!(await schemaExists(prisma, schema))) {
+		throw new Error(`스키마 "${schema}" 가 아예 없다. hasAnyRow 는 있는 스키마의 행만 잰다.`);
+	}
 	const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
 		SELECT table_name FROM information_schema.tables
 		WHERE table_schema = ${schema} AND table_type = 'BASE TABLE'
@@ -66,13 +81,6 @@ export async function hasAnyRow(prisma: PrismaClient, schema: string): Promise<b
 
 export function renameSchema(from: string, to: string): string {
 	return `ALTER SCHEMA ${ident(from)} RENAME TO ${ident(to)}`;
-}
-
-export async function schemaExists(prisma: PrismaClient, name: string): Promise<boolean> {
-	const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
-		SELECT count(*)::bigint AS n FROM information_schema.schemata WHERE schema_name = ${name}
-	`;
-	return Number(rows[0]?.n ?? 0n) > 0;
 }
 
 /**
@@ -106,4 +114,30 @@ export function extractCanonicalDdl(fullDdl: string): string[] {
 			(block) =>
 				block.includes('"canonical"') && !block.includes('"app"') && !block.includes('"raw"'),
 		);
+}
+
+/**
+ * `extractCanonicalDdl` 이 걸러낸 것과 원본이 종류별로 몇 개씩 같은지 재는
+ * 잣대다. **검사 203건은 행 수만 본다** — 인덱스나 FK 가 통째로 빠져도 걸리지
+ * 않는다. 그 누락을 잡는 곳이 이 함수뿐이다.
+ *
+ * `build-canonical.ts` 가 원본 `fullDdl` 과 걸러낸 `statements` 양쪽에 이 함수를
+ * 돌려 **서로** 비교한다 — 숫자를 여기 상수로 안 박는 이유다. 스키마가 자라면
+ * 두 쪽 다 같이 자라니 "같다"만 참이면 된다.
+ */
+export function tallyCanonicalDdl(sql: string): Record<string, number> {
+	const patterns: Record<string, RegExp> = {
+		'CREATE TABLE "canonical".': /^CREATE TABLE "canonical"\./gm,
+		'CREATE INDEX ... ON "canonical"': /^CREATE (?:UNIQUE )?INDEX .* ON "canonical"\./gm,
+		// canonical 소유 테이블은 항상 "canonical"."table" 로 이어지므로 뒤에 `.` 을
+		// 본다 — `\b` 는 안 된다. `"` 와 `.` 둘 다 비단어 문자라 그 사이엔 단어
+		// 경계가 없어서 아예 매치가 0 이 되는 함정이 있었다(실측으로 잡음).
+		'ALTER TABLE "canonical".': /^ALTER TABLE "canonical"\./gm,
+		'CREATE TYPE "canonical".': /^CREATE TYPE "canonical"\./gm,
+	};
+	const out: Record<string, number> = {};
+	for (const [label, re] of Object.entries(patterns)) {
+		out[label] = (sql.match(re) ?? []).length;
+	}
+	return out;
 }
