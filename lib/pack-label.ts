@@ -46,24 +46,74 @@ export type PackKindInput = {
 	collab: boolean;
 };
 
-export function packKind(pack: PackKindInput, locale: Locale): string {
-	const ko = locale === 'ko';
+/**
+ * 종류의 차례.
+ *
+ * **언제 열리는가로 늘어놓는다** — 늘 고를 수 있는 것이 먼저고 한정이 뒤다. 알파벳
+ * 분류 순서(`attack_type` · `canto` · `event` · `extreme` · `keyword` · `railway` ·
+ * `sin` · `walpurgis`)로 두었더니 범용 41 종이 세 덩이로 흩어져 목록 앞·중간·뒤에
+ * 따로 나왔다. 읽는 사람에게는 아무 뜻이 없는 차례다.
+ */
+const KIND_ORDER = [
+	'generic',
+	'canto',
+	'railway',
+	'extreme',
+	'event',
+	'walpurgis',
+	'collab',
+	'hidden',
+] as const;
 
-	if (pack.collab) return ko ? '콜라보 한정' : 'Collab only';
-	if (pack.sprite === HIDDEN_SPRITE) return ko ? '히든' : 'Hidden';
+export type PackKindKey = (typeof KIND_ORDER)[number];
+
+export type PackKind = {
+	key: PackKindKey;
+	/** 장·회차처럼 같은 종류 안에서 갈리는 수. 없으면 0 이다. */
+	step: number;
+	label: string;
+};
+
+export function packKind(pack: PackKindInput, locale: Locale): PackKind {
+	const ko = locale === 'ko';
+	const kind = (key: PackKindKey, label: string, step = 0): PackKind => ({ key, step, label });
+
+	if (pack.collab) return kind('collab', ko ? '콜라보 한정' : 'Collab only');
+	if (pack.sprite === HIDDEN_SPRITE) return kind('hidden', ko ? '히든' : 'Hidden');
 
 	// 분류보다 앞에 둔다 — 2 · 3 회가 `extreme` 로 분류돼 있다(위 주석).
 	const round = WALPURGIS_ROUND.exec(pack.sprite)?.[1];
-	if (round) return ko ? `${round}회 발푸르기스` : `Walpurgis Night ${round}`;
-	if (pack.category === 'walpurgis') return ko ? '발푸르기스의 밤' : 'Walpurgis Night';
-
-	if (GENERIC.has(pack.category)) return ko ? '범용' : 'Generic';
-
-	if (pack.category === 'canto' && pack.chapter) {
-		return ko ? `${pack.chapter}장` : `Canto ${pack.chapter}`;
+	if (round) {
+		const n = Number(round);
+		return kind('walpurgis', ko ? `${n}회 발푸르기스` : `Walpurgis Night ${n}`, n);
+	}
+	if (pack.category === 'walpurgis') {
+		return kind('walpurgis', ko ? '발푸르기스의 밤' : 'Walpurgis Night');
 	}
 
-	return OTHER[locale][pack.category] ?? pack.category;
+	if (GENERIC.has(pack.category)) return kind('generic', ko ? '범용' : 'Generic');
+
+	if (pack.category === 'canto' && pack.chapter) {
+		const n = Number(pack.chapter);
+		return kind('canto', ko ? `${pack.chapter}장` : `Canto ${pack.chapter}`, n);
+	}
+
+	const key: PackKindKey =
+		pack.category === 'railway' ? 'railway' : pack.category === 'event' ? 'event' : 'extreme';
+	return kind(key, OTHER[locale][pack.category] ?? pack.category);
+}
+
+/**
+ * 목록 차례.
+ *
+ * 종류 → 장·회차 → id 다. id 는 팩이 나온 순서를 담고 있어 같은 종류 안에서 기준이 된다.
+ */
+export function comparePackKind(a: PackKind, b: PackKind, aId: string, bId: string): number {
+	return (
+		KIND_ORDER.indexOf(a.key) - KIND_ORDER.indexOf(b.key) ||
+		a.step - b.step ||
+		aId.localeCompare(bId)
+	);
 }
 
 /** 위에 들지 않는 것. 분류 이름을 그대로 쓴다. */
