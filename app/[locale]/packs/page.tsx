@@ -2,13 +2,19 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
-import { PACK_CATEGORY, UI } from '@/lib/ui-text';
-import { listPackCategories, listPacks, readPackFilter } from '@/lib/queries/packs';
-import type { SearchParams } from '@/lib/queries/shared';
-import { ChipFilter, ClearFilters, SearchBox, TriFilter } from '@/components/filters';
+import { UI } from '@/lib/ui-text';
+import { listPacks, readPackFilter } from '@/lib/queries/packs';
+import { multi, type SearchParams } from '@/lib/queries/shared';
+import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
 import { Empty, Name, SecLabel } from '@/components/ui';
 import { PackArt } from '@/components/pack-art';
-import { comparePackKind, packKind } from '@/lib/pack-label';
+import {
+	comparePackKind,
+	KIND_ORDER,
+	PACK_KIND_LABEL,
+	packKind,
+	type PackKindKey,
+} from '@/lib/pack-label';
 import { listCollabPackIds } from '@/lib/queries/canonical/packs';
 
 export default async function PacksPage({
@@ -25,24 +31,20 @@ export default async function PacksPage({
 	const ko = locale === 'ko';
 
 	const filter = readPackFilter(sp);
-	const [packs, categories, collabIds] = await Promise.all([
+	const [packs, collabIds] = await Promise.all([
 		listPacks(locale, filter),
-		listPackCategories(),
 		// 콜라보 판정은 캐노니컬 태그에만 있다. 이름으로 짐작하지 않는다.
 		listCollabPackIds(),
 	]);
 
-	// 필터 칩은 분류 축을 그대로 남긴다. 모르는 값이 오면 그대로 낸다 — 숨기지 않는다.
-	const categoryLabel = (id: string) => PACK_CATEGORY[locale][id] ?? id;
-
 	/*
-		차례를 종류로 세운다.
+		종류를 매기고 그것으로 차례를 세운다.
 
 		질의는 `category` 알파벳 순으로 내려주는데 그 차례에는 뜻이 없다 — 범용 41 종이
 		`attack_type` · `keyword` · `sin` 세 덩이로 갈려 목록 앞·중간·뒤에 따로 나왔다.
 		늘 고를 수 있는 것을 먼저, 한정을 뒤로 놓는다.
 	*/
-	const sorted = packs
+	const all = packs
 		.map((pack) => ({
 			pack,
 			kind: packKind(
@@ -57,12 +59,28 @@ export default async function PacksPage({
 		}))
 		.sort((a, b) => comparePackKind(a.kind, b.kind, a.pack.id, b.pack.id));
 
+	/*
+		축도 같은 종류를 쓴다.
+
+		**분류로 거르면 어긋난다** — 발푸르기스 칩을 눌러도 2 · 3 회가 나오지 않았다.
+		그 둘이 `extreme` 로 분류돼 있어서다. 칩이 말하는 것과 카드가 말하는 것이 달랐다.
+	*/
+	const counts = new Map<PackKindKey, number>();
+	for (const { kind } of all) counts.set(kind.key, (counts.get(kind.key) ?? 0) + 1);
+	const kindOptions = KIND_ORDER.filter((key) => counts.has(key)).map((key) => ({
+		value: key,
+		label: `${PACK_KIND_LABEL[locale][key]} ${counts.get(key)}`,
+	}));
+
+	const picked = new Set(multi(sp['kind']));
+	const sorted = picked.size ? all.filter(({ kind }) => picked.has(kind.key)) : all;
+
 	return (
 		<>
 			<SecLabel
 				title={t.nav.packs}
 				sub={ko ? '층 진입 시 선택하는 단위' : 'Chosen on entering a floor'}
-				hint={`${packs.length}`}
+				hint={`${sorted.length}`}
 			/>
 
 			<Suspense fallback={<div className="filters" />}>
@@ -72,18 +90,10 @@ export default async function PacksPage({
 				</div>
 				<div className="filter-axes">
 					<ChipFilter
-						param="category"
-						label={ko ? '분류' : 'Category'}
-						options={categories.map((c) => ({
-								value: c.id,
-								label: `${categoryLabel(c.id)} ${c.count}`,
-							}))}
+						param="kind"
+						label={ko ? '종류' : 'Kind'}
+						options={kindOptions}
 					/>
-					<div className="filter-axis">
-						<TriFilter param="superposition" label={ko ? '중첩' : 'Superposition'} />
-						<TriFilter param="extreme" label={ko ? '극한' : 'Extreme'} />
-						<TriFilter param="exclusive" label={ko ? '전용 기프트 보유' : 'Has exclusives'} />
-					</div>
 				</div>
 			</Suspense>
 

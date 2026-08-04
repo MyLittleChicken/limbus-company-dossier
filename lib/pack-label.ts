@@ -54,7 +54,7 @@ export type PackKindInput = {
  * `sin` · `walpurgis`)로 두었더니 범용 41 종이 세 덩이로 흩어져 목록 앞·중간·뒤에
  * 따로 나왔다. 읽는 사람에게는 아무 뜻이 없는 차례다.
  */
-const KIND_ORDER = [
+export const KIND_ORDER = [
 	'generic',
 	'canto',
 	'railway',
@@ -66,6 +66,35 @@ const KIND_ORDER = [
 ] as const;
 
 export type PackKindKey = (typeof KIND_ORDER)[number];
+
+/**
+ * 필터 축에 쓰는 종류 이름.
+ *
+ * 카드는 「3장」·「2회 발푸르기스」처럼 낱낱을 말하지만 축은 묶음까지만 말한다 —
+ * 장 아홉과 회차 여섯을 칩으로 펴면 축이 스물을 넘는다.
+ */
+export const PACK_KIND_LABEL: Record<Locale, Record<PackKindKey, string>> = {
+	ko: {
+		generic: '범용',
+		canto: '장',
+		railway: '거울굴절철도',
+		extreme: '극한',
+		event: '이벤트',
+		walpurgis: '발푸르기스의 밤',
+		collab: '콜라보',
+		hidden: '히든',
+	},
+	en: {
+		generic: 'Generic',
+		canto: 'Canto',
+		railway: 'Refraction Railway',
+		extreme: 'Extreme',
+		event: 'Event',
+		walpurgis: 'Walpurgis Night',
+		collab: 'Collab',
+		hidden: 'Hidden',
+	},
+};
 
 export type PackKind = {
 	key: PackKindKey;
