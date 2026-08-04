@@ -372,14 +372,14 @@ export function UnitList({
 											{u.rankText ? <span className="gift-tier">{u.rankText}</span> : null}
 										</span>
 										<span className="card-meta">
-											{u.note != null ? (
-												<span className="tag">{u.note}</span>
-											) : u.season === undefined ? null : seasonLabel(u.season) ? (
+											{u.season === undefined ? null : seasonLabel(u.season) ? (
 												<span className="tag">{seasonLabel(u.season)}</span>
 											) : (
 												// 시즌을 쓰는 목록에서만 결손을 말한다. 기프트는 시즌 자체가 없다.
 												<span className="tag absent">시즌 없음</span>
 											)}
+											{/* 시즌 옆에 한 줄 더. 인격의 획득 경로가 여기 온다. */}
+											{u.note != null ? <span className="tag">{u.note}</span> : null}
 											{u.fellBack ? <abbr className="fellback">EN</abbr> : null}
 										</span>
 									</Link>
