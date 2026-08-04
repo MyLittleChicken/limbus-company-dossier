@@ -21,11 +21,12 @@
 		<a href="screens/states.html">상태</a>
 		<span class="nav-sep" aria-hidden="true"></span>
 		<a href="screens/home.html">홈</a>
-		<a href="screens/gifts.html">기프트</a>
-		<a href="screens/packs.html">테마 팩</a>
 		<a href="screens/identities.html">인격</a>
 		<a href="screens/egos.html">E.G.O</a>
+		<a href="screens/gifts.html">기프트</a>
+		<a href="screens/packs.html">테마 팩</a>
 		<a href="screens/squad.html">편성</a>
+		<a href="screens/dungeon.html">거울 던전</a>
 	</nav>
 </header>
 
@@ -34,13 +35,17 @@
 		<h2>디자인 시스템</h2>
 		<span class="kr">토큰과 화면</span>
 		<span class="rule"></span>
-		<span class="hint">22 화면 · 148 클래스</span>
+		<span class="hint">27 화면 · 153 클래스</span>
 	</div>
 
 	<p class="lede">
 		실행 중인 앱의 DOM 을 그대로 떠 온 정적 화면 위에 토큰 기반 스타일을 입힌 것이다.
 		클래스명과 마크업 구조를 하나도 바꾸지 않았으므로 제품으로 되돌려 옮기는 일은
 		스타일시트 교체로 끝난다.
+
+		예외가 넷이다 — 상태 카탈로그와 거울 던전 트래커 셋은 대응하는 라우트가 없어
+		떠 올 곳이 없었다. 트래커는 <code>tools/make-dungeon.mjs</code> 가 기존 화면에서
+		팩·기프트·점수를 뽑아 만든다.
 	</p>
 
 	<!-- ── 화면 ────────────────────────────────────────── -->
@@ -53,28 +58,40 @@
 
 	<ul class="cardgrid entry-grid">
 		<li><a class="card card-entry" href="screens/home.html"><strong>홈</strong><span class="entry-n">1</span></a></li>
-		<li><a class="card card-entry" href="screens/gifts.html"><strong>기프트 목록</strong><span class="entry-n">456</span></a></li>
-		<li><a class="card card-entry" href="screens/gift-detail.html"><strong>기프트 상세</strong></a></li>
-		<li><a class="card card-entry" href="screens/gift-recipe.html"><strong>기프트 — 합성</strong></a></li>
-		<li><a class="card card-entry" href="screens/gift-material.html"><strong>기프트 — 재료</strong></a></li>
-		<li><a class="card card-entry" href="screens/packs.html"><strong>테마 팩 목록</strong><span class="entry-n">117</span></a></li>
-		<li><a class="card card-entry" href="screens/pack-detail.html"><strong>테마 팩 상세</strong></a></li>
-		<li><a class="card card-entry" href="screens/pack-dense.html"><strong>팩 — 최대 밀도</strong><span class="entry-n">188</span></a></li>
+		<li><a class="card card-entry" href="screens/home-search.html"><strong>검색 결과</strong></a></li>
 		<li><a class="card card-entry" href="screens/identities.html"><strong>인격 목록</strong><span class="entry-n">184</span></a></li>
 		<li><a class="card card-entry" href="screens/identity-detail.html"><strong>인격 상세</strong></a></li>
 		<li><a class="card card-entry" href="screens/egos.html"><strong>E.G.O 목록</strong><span class="entry-n">110</span></a></li>
 		<li><a class="card card-entry" href="screens/ego-detail.html"><strong>E.G.O 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/gifts.html"><strong>기프트 목록</strong><span class="entry-n">456</span></a></li>
+		<li><a class="card card-entry" href="screens/gift-detail.html"><strong>기프트 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/gift-recipe.html"><strong>기프트 — 합성</strong></a></li>
+		<li><a class="card card-entry" href="screens/gift-material.html"><strong>기프트 — 재료</strong></a></li>
+		<li><a class="card card-entry" href="screens/gifts-empty.html"><strong>빈 결과</strong></a></li>
+		<li><a class="card card-entry" href="screens/packs.html"><strong>테마 팩 목록</strong><span class="entry-n">117</span></a></li>
+		<li><a class="card card-entry" href="screens/pack-detail.html"><strong>테마 팩 상세</strong></a></li>
+		<li><a class="card card-entry" href="screens/pack-boss.html"><strong>팩 — 보스 층</strong></a></li>
+		<li><a class="card card-entry" href="screens/pack-dense.html"><strong>팩 — 최대 밀도</strong><span class="entry-n">188</span></a></li>
 		<li><a class="card card-entry" href="screens/squad.html"><strong>편성</strong><span class="entry-n">12</span></a></li>
 		<li><a class="card card-entry" href="screens/squad-picker.html"><strong>편성 — 선택 모달</strong></a></li>
 		<li><a class="card card-entry" href="screens/squad-partial.html"><strong>편성 — 빈 칸</strong></a></li>
+		<li><a class="card card-entry" href="screens/dungeon.html"><strong>거울 던전 — 런 시작</strong></a></li>
+		<li><a class="card card-entry" href="screens/dungeon-run.html"><strong>거울 던전 — 팩 고르기</strong><span class="entry-n">27</span></a></li>
+		<li><a class="card card-entry" href="screens/dungeon-floor.html"><strong>거울 던전 — 층 진행 중</strong></a></li>
+		<li><a class="card card-entry" href="screens/dungeon-gifts.html"><strong>거울 던전 — 기프트 추가</strong><span class="entry-n">63</span></a></li>
+		<li><a class="card card-entry" href="screens/about.html"><strong>고지</strong></a></li>
+		<li><a class="card card-entry" href="screens/states.html"><strong>상태 카탈로그</strong></a></li>
+	</ul>
+
+	<!--
+		아래 셋은 nav 에서 내렸다. 층별 등장 팩과 추천은 거울 던전의 추천·덱 트래킹
+		기능으로 흡수될 예정이고, 용어는 노출하지 않기로 했다. 화면 파일은 남긴다.
+	-->
+	<p class="doc-note">nav 에서 내린 화면 — 거울 던전에 흡수 예정이거나 노출하지 않는다</p>
+	<ul class="cardgrid entry-grid">
 		<li><a class="card card-entry" href="screens/recommend.html"><strong>추천</strong></a></li>
 		<li><a class="card card-entry" href="screens/floors.html"><strong>층별 등장 팩</strong></a></li>
-		<li><a class="card card-entry" href="screens/dungeon.html"><strong>거울 던전</strong></a></li>
 		<li><a class="card card-entry" href="screens/glossary.html"><strong>용어</strong><span class="entry-n">1472</span></a></li>
-		<li><a class="card card-entry" href="screens/about.html"><strong>고지</strong></a></li>
-		<li><a class="card card-entry" href="screens/gifts-empty.html"><strong>빈 결과</strong></a></li>
-		<li><a class="card card-entry" href="screens/home-search.html"><strong>검색 결과</strong></a></li>
-		<li><a class="card card-entry" href="screens/states.html"><strong>상태 카탈로그</strong></a></li>
 	</ul>
 
 	<!-- ── 색 ──────────────────────────────────────────── -->
@@ -306,7 +323,7 @@
 		</div>
 	</section>
 
-	<p class="stamp">MD7 · 2026-07-25 스냅샷 기준 · 148 클래스 / 22 화면</p>
+	<p class="stamp">MD7 · 2026-07-25 스냅샷 기준 · 153 클래스 / 27 화면</p>
 </main>
 
 <footer class="site-footer">

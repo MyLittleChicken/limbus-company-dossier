@@ -1,10 +1,10 @@
 /**
  * 전체 화면을 한 장에 늘어놓는 컨택트 시트를 만든다.
  *
- * 화면이 24 개라 하나씩 열어보면 전체가 눈에 들어오지 않는다. 데스크톱(1440)과 모바일(390)
+ * 화면이 27 개라 하나씩 열어보면 전체가 눈에 들어오지 않는다. 데스크톱(1440)과 모바일(390)
  * 전면 캡처를 받아 축소하고, 썸네일에서 실제 페이지로 들어갈 수 있는 목록을 낸다.
  *
- * **Chrome 을 한 번만 띄운다.** 캡처마다 새로 띄우면 48 장에 몇 분이 걸린다.
+ * **Chrome 을 한 번만 띄운다.** 캡처마다 새로 띄우면 54 장에 몇 분이 걸린다.
  *
  *   node publish/tools/review-sheet.mjs [--desktop-only]
  *
@@ -50,10 +50,14 @@ const PHONE_W = Math.round(390 * SCALE);
 */
 const GROUPS = [
 	{ title: '진입', screens: ['home', 'home-search'] },
-	{ title: '목록', screens: ['gifts', 'packs', 'identities', 'egos', 'floors', 'glossary', 'gifts-empty'] },
-	{ title: '상세', screens: ['gift-detail', 'gift-recipe', 'gift-material', 'pack-detail', 'pack-boss', 'pack-dense', 'identity-detail', 'ego-detail'] },
-	{ title: '편성과 추천', screens: ['squad', 'squad-picker', 'squad-partial', 'recommend'] },
-	{ title: '그 외', screens: ['dungeon', 'about', 'states'] },
+	{ title: '목록', screens: ['identities', 'egos', 'gifts', 'packs', 'gifts-empty'] },
+	{ title: '상세', screens: ['identity-detail', 'ego-detail', 'gift-detail', 'gift-recipe', 'gift-material', 'pack-detail', 'pack-boss', 'pack-dense'] },
+	{ title: '편성', screens: ['squad', 'squad-picker', 'squad-partial'] },
+	{ title: '거울 던전 트래커', screens: ['dungeon', 'dungeon-run', 'dungeon-floor', 'dungeon-gifts'] },
+	{ title: '그 외', screens: ['about', 'states'] },
+	// nav 에서 내렸으나 화면 파일은 남긴 것. 층별 등장 팩과 추천은 거울 던전의
+	// 추천·덱 트래킹 기능으로 흡수될 예정이고, 용어는 노출하지 않는다.
+	{ title: 'nav 에서 내림', screens: ['floors', 'recommend', 'glossary'] },
 ];
 
 const LABEL = {
@@ -64,7 +68,9 @@ const LABEL = {
 	'pack-detail': '테마 팩 상세', 'pack-boss': '테마 팩 — 보스 층', 'pack-dense': '테마 팩 — 최대 밀도 (기프트 188)',
 	'identity-detail': '인격 상세', 'ego-detail': 'E.G.O 상세',
 	squad: '편성', 'squad-picker': '편성 — 선택 모달', 'squad-partial': '편성 — 빈 칸',
-	recommend: '추천', dungeon: '거울 던전 구성', about: '출처와 고지', states: '상태 카탈로그',
+	recommend: '추천', dungeon: '거울 던전 — 런 시작',
+	'dungeon-run': '거울 던전 — 팩 고르기 (hard 3층 · 후보 27)',
+	'dungeon-floor': '거울 던전 — 층 진행 중', 'dungeon-gifts': '거울 던전 — 기프트 추가 모달', about: '출처와 고지', states: '상태 카탈로그',
 };
 
 mkdirSync(join(OUT, 'thumb'), { recursive: true });

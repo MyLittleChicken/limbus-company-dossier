@@ -366,18 +366,6 @@ body::after {
 	gap: var(--gap-sm);
 }
 
-/* 레드 인덱스탭. 서류 색인처럼 패널 머리 왼쪽에 붙는다. 브릭레드를 쓰는 두 자리 중 하나다. */
-.panel-h::before {
-	content: '';
-	position: absolute;
-	left: 0;
-	top: 50%;
-	transform: translateY(-50%);
-	width: 3px;
-	height: 60%;
-	background: var(--alert);
-}
-
 .panel-h h3 {
 	margin: 0;
 	font-family: var(--font-display);
@@ -449,8 +437,6 @@ body::after {
 	appearance: none;
 	background: var(--surface-1);
 	border: 1px solid var(--line);
-	/* 좌측 액센트 바가 눌린 상태의 두 번째 신호다 — 색만으로 구분하지 않는다. */
-	border-left: 3px solid var(--line);
 	color: var(--ink-dim);
 	padding: var(--sp-3) var(--sp-5);
 	font-family: var(--font-display);
@@ -468,13 +454,6 @@ body::after {
 	color: var(--ink-gold);
 	background: var(--surface-2);
 	border-color: var(--line-active);
-	border-left-color: var(--accent);
-}
-
-/* 축 색을 가진 칩은 눌렸을 때 그 축의 색으로 바를 세운다. */
-.chip[aria-pressed='true'][data-kw],
-.chip[aria-pressed='true'][data-sin] {
-	border-left-color: var(--axis-color);
 }
 
 .cardgrid {
@@ -527,15 +506,35 @@ body::after {
 	margin-bottom: var(--sp-8);
 }
 
+/*
+	칩이 두 줄을 넘을 때 라벨 자리를 침범하지 않게 한다.
+
+	라벨을 흐름에 두면 그것도 flex 항목이라 **둘째 줄부터 칩이 라벨 아래로 흘러든다.**
+	소속 93 · 수감자 12 처럼 칩이 많은 축에서 라벨과 칩이 한 덩이로 뭉쳐 어느 것이 축 이름인지
+	보이지 않았다. 라벨을 흐름에서 빼고 그만큼 왼쪽을 비워 두면 칩은 몇 줄이 되든 같은
+	세로선에서 시작한다.
+
+	라벨이 없는 축도 있다(팩의 중첩·극한, 상태 카탈로그). 그런 축은 비워 둘 이유가 없다.
+*/
 .filter-axis {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: var(--sp-2);
 	flex-wrap: wrap;
+	padding-left: calc(62px + var(--sp-4));
+}
+
+.filter-axis:not(:has(> .filter-axis-label)) {
+	padding-left: 0;
 }
 
 .filter-axis-label {
-	min-width: 62px;
+	position: absolute;
+	left: 0;
+	/* 칩의 세로 패딩과 같다 — 첫 줄 칩의 글자와 눈이 맞는다. */
+	top: var(--sp-3);
+	width: 62px;
 	font-family: var(--font-display);
 	font-size: var(--fs-xs);
 	letter-spacing: var(--ls-wide);
@@ -543,10 +542,26 @@ body::after {
 	color: var(--ink-muted);
 }
 
+/*
+	좁은 화면에서는 라벨을 흐름으로 되돌린다.
+
+	390px 에서 왼쪽 62px 을 비워 두면 칩이 쓸 폭이 16% 줄고, 소속 93 처럼 칩이 많은 축은
+	그만큼 세로로 길어진다. 폭이 귀한 쪽이 정렬보다 앞선다 — 라벨을 제 줄에 얹는다.
+*/
+@media (max-width: 480px) {
+	.filter-axis {
+		padding-left: 0;
+	}
+
+	.filter-axis-label {
+		position: static;
+		width: 100%;
+	}
+}
+
 /* 초기화는 조건이 걸려 있을 때만 나온다. 레드를 쓰는 두 자리 중 나머지 하나다. */
 .chip-clear {
 	flex: none;
-	border-left-color: var(--alert);
 	color: var(--ink-dim);
 }
 
@@ -607,12 +622,16 @@ body::after {
 	white-space: nowrap;
 }
 
-/* 축 색을 가진 태그는 좌측에 그 색 바를 세운다. 아이콘이 함께 있으므로 색이 단독이 아니다. */
-.tag[data-sin],
-.tag[data-kw],
-.tag[data-atk] {
-	border-left: 2px solid var(--axis-color);
-}
+/*
+	축 색 태그에 좌측 바를 세우지 않는다.
+
+	세워 두었더니 **상세 한 화면에 수십 개**가 깔렸다 — 스킬마다 죄악·공격 타입·방어 구분이
+	붙으니 태그가 곧 화면의 대부분이고, 그 전부가 왼쪽에 색 막대를 갖는다. 강조가 도처에
+	있으면 강조가 아니다.
+
+	「색만으로 구분하지 않는다」는 제약은 이 바가 없어도 지켜진다. 축 색 태그는 **아이콘과
+	이름을 함께** 달고 있어 신호가 이미 둘이다. 바는 셋째였고 그것이 소음이었다.
+*/
 
 /* 강조 태그 — 전용 기프트처럼 "고를 이유"에 해당하는 것. */
 .tag-mark {
@@ -773,9 +792,8 @@ body::after {
 	display: flex;
 	align-items: baseline;
 	gap: var(--sp-4);
+	/* 들여쓰기만으로 묶음을 표시한다. 괘선을 세우면 태그·그룹 머리와 좌측 선이 겹쳐 쌓인다. */
 	padding: var(--sp-3) 0 var(--sp-3) var(--sp-5);
-	/* 슬롯의 좌측 괘선이 "이 묶음 안에서 고른다"를 표시한다. */
-	border-left: 2px solid var(--line-strong);
 }
 
 .slot-count {
@@ -1108,9 +1126,8 @@ body::after {
 	letter-spacing: var(--ls-wide);
 	text-transform: uppercase;
 	color: var(--ink-muted);
-	/* 그룹 머리에 짧은 괘선을 붙여 목록과 구분한다. */
+	/* 목록과의 구분은 글자와 간격이 맡는다. 좌측 괘선은 두지 않는다. */
 	padding-left: var(--sp-5);
-	border-left: 2px solid var(--line-strong);
 }
 
 .grouph:first-child {
@@ -1425,19 +1442,39 @@ body::after {
 	object-fit: contain;
 }
 
+/* 상자를 정사각으로 잡지 않는 이유는 `.chip img` 에 적었다. 여기도 높이로 통일한다. */
 .icon-inline {
-	width: 20px;
+	width: auto;
 	height: 20px;
+	max-width: 52px;
 	object-fit: contain;
 	vertical-align: middle;
 }
 
+/*
+	아이콘 상자를 정사각으로 잡지 않는다.
+
+	애셋 54 종 가운데 32 종만 1:1 이고 등급 계열은 아니다 — 실측으로 인격 등급이
+	`0` 162×273(0.59) · `00` 319×260(1.23) · `000` 467×279(1.67) 이고, E.G.O 등급 다섯은
+	가로 배너라 2.7~2.9 다. 고리 수만큼 옆으로 길어지는 그림이라 그런 것이며 결함이 아니다.
+
+	16×16 상자에 `contain` 으로 넣으면 **비율마다 다른 크기로 앉는다** — `0` 은 9.5×16,
+	`000` 은 16×9.6, `zayin` 은 16×5.6 이 되어 같은 축의 칩끼리 무게가 어긋났다.
+
+	높이를 기준으로 통일한다. 폭은 그림이 정하고, 배너가 지나치게 길어지지 않게만 막는다.
+*/
 .chip img {
-	width: 16px;
+	width: auto;
 	height: 16px;
+	max-width: 42px;
 	object-fit: contain;
 	margin-right: var(--sp-2);
 	vertical-align: -3px;
+}
+
+/* 글자가 없는 칩은 오른쪽 여백도 없다. 인격 등급이 그렇다. */
+.chip img:only-child {
+	margin-right: 0;
 }
 
 /* ── 팩 카드 그림 (상세) ───────────────────────────────────
@@ -1606,7 +1643,6 @@ body::after {
 	padding: var(--sp-3) 9px;
 	background: none;
 	border: 1px solid var(--line);
-	border-left-width: 3px;
 	color: var(--ink-dim);
 	font: inherit;
 	font-size: var(--fs-xs);
@@ -1622,7 +1658,6 @@ body::after {
 .rail-slot[aria-pressed='true'] {
 	background: var(--surface-2);
 	border-color: var(--line-active);
-	border-left-color: var(--accent);
 	color: var(--ink-gold);
 }
 
@@ -1648,7 +1683,8 @@ body::after {
 	padding: 0 var(--sp-3) var(--sp-4);
 }
 
-.rail-actions button {
+.rail-actions button,
+.rail-actions a {
 	appearance: none;
 	flex: 1;
 	padding: var(--sp-3) var(--sp-4);
@@ -2284,7 +2320,6 @@ body::after {
 .notice {
 	padding: var(--sp-4) var(--sp-6);
 	border: 1px solid var(--line-strong);
-	border-left: 3px solid var(--state-missing);
 	background: var(--surface-1);
 	color: var(--ink-dim);
 	font-size: var(--fs-sm);
@@ -2326,7 +2361,8 @@ body::after {
 	border-color: var(--line-active);
 }
 
-.deck-code button {
+.deck-code button,
+.deck-code a {
 	appearance: none;
 	padding: var(--sp-4) var(--sp-7);
 	background: var(--surface-2);
@@ -2338,10 +2374,142 @@ body::after {
 	cursor: pointer;
 }
 
-.deck-code button:hover {
+.deck-code button:hover,
+.deck-code a:hover {
 	border-color: var(--line-active);
 	color: var(--ink-gold);
 	background: var(--surface-3);
+}
+
+/* ── 거울 던전 트래커 ──────────────────────────────────────
+   3열 골격과 층 레일은 편성 것을 그대로 쓴다 — `.formation-cols` · `.deckrail` ·
+   `.rail-*`. 트래커가 새로 갖는 것은 아래 다섯뿐이다.
+
+     .runstep      층 레일 슬롯의 진행 상태
+     .runstep-mark 그 상태의 기호
+     .packrank     후보 팩 순위 뱃지 (3위까지)
+     .packscore    후보 팩 점수
+     .owned        보유 기프트 목록
+
+   순위를 **색과 위치로만 말하지 않는다.** 뱃지 숫자 · 카드 테두리 · 정렬 순서가 함께 간다. */
+
+.runstep {
+	justify-content: space-between;
+}
+
+/*
+	지나온 층 · 지금 층 · 아직 안 간 층.
+
+	색만으로 가르지 않는다 — `.runstep-mark` 의 기호(✓ · ●)가 함께 있고, 아직 안 간 층은
+	이름 자리가 비어 있어 셋이 글자만으로도 구분된다.
+*/
+.runstep[data-state='done'] {
+	color: var(--ink-dim);
+}
+
+.runstep[data-state='current'] {
+	border-color: var(--line-active);
+	background: var(--surface-2);
+	color: var(--ink-gold);
+}
+
+.runstep[data-state='todo'] {
+	color: var(--ink-muted);
+	cursor: default;
+}
+
+.runstep[data-state='todo']:hover {
+	background: none;
+	color: var(--ink-muted);
+}
+
+.runstep-mark {
+	flex: none;
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	color: var(--ink-muted);
+}
+
+.runstep[data-state='current'] .runstep-mark {
+	color: var(--accent);
+}
+
+/* 레일 안에서 펼쳐지는 그 층의 획득분. 목록 자체는 사이드바 것과 같은 `.owned` 다. */
+.owned {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--sp-2);
+}
+
+.owned li {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	font-size: var(--fs-xs);
+	color: var(--ink-dim);
+}
+
+.owned-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/*
+	층 레일이 168px 이라 한 줄로는 기프트 이름이 잘린다. 여기서만 줄바꿈을 푼다 —
+	이름을 자르는 것보다 두 줄로 흐르는 편이 낫다.
+*/
+.owned-inrail {
+	margin: var(--sp-2) 0 var(--sp-3) var(--sp-5);
+	padding: var(--sp-3) 9px;
+}
+
+.owned-inrail .owned-name {
+	overflow: visible;
+	white-space: normal;
+	line-height: var(--lh-tight);
+}
+
+/* 15 층이 한눈에 들어와야 한다. 편성 덱 목록(최대 10)보다 길다. */
+.deckrail .rail-list:has(.runstep) {
+	max-height: none;
+}
+
+/*
+	순위 뱃지.
+
+	상위 셋에만 붙는다. 넷째부터는 점수만으로 충분하고, 뱃지를 다 붙이면 27 장이 전부
+	강조되어 아무것도 강조되지 않는다.
+*/
+.packrank {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 4;
+	min-width: 20px;
+	padding: 2px var(--sp-3);
+	background: var(--accent);
+	color: var(--surface-page);
+	font-family: var(--font-num);
+	font-size: var(--fs-xs);
+	line-height: 1.5;
+	text-align: center;
+}
+
+.cardgrid-wide .card[data-rank] {
+	border-color: var(--line-active);
+}
+
+.packscore {
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	color: var(--ink-gold);
+	letter-spacing: var(--ls-normal);
 }
 
 /* ── 스타일을 두지 않는 마크업 훅 ─────────────────────────
