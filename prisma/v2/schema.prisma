@@ -368,6 +368,123 @@ model Keyword {
   @@schema("canonical")
 }
 
+/// 트리거가 판정하는 축. `status_category` 중 트리거가 참조하는 것만이다.
+///
+/// **`BULLET` 은 `keyword` 테이블에 없다.** 탄환은 키워드가 아니지만 키워드처럼
+/// 동작한다 — 게임이 「특수 탄환」이라는 계열을 두고 `Allies have Ammo Skill` 트리거가
+/// 이를 참조한다. 그래서 축 어휘를 `keyword` 와 분리해 둔다.
+model Axis {
+  /// COMBUSTION · LACERATION · VIBRATION · BURST · SINKING · BREATH · CHARGE · BULLET
+  id   String  @id
+  /// status_keyword — keyword 테이블에도 있는 7종
+  /// bullet        — keyword 에 없는 BULLET
+  kind String
+  /// 판정 보류를 기록한다. 마탄 7종(FREISHUTZ_OUTIS_EGO_BULLET)이 BULLET 태그를
+  /// 갖지 않는 것 등. 재적재에도 남아야 다음 사람이 다시 헤매지 않는다
+  note String?
+
+  identities IdentityAxis[]
+
+  @@map("axis")
+  @@schema("canonical")
+}
+
+/// 인격이 가진 축. 세 경로를 한 관계로 통일한다.
+///
+/// keyword         identity_keyword → axis            mj 가 특수 키워드 파생과
+///                                                    「~로만 취급됨」을 이미 반영했다
+/// special_status  identity_status → status_category → axis   홍매화 → LACERATION
+/// ego_granted     **저작 2행.** 「인격으로 취급됨」이 명시된 E.G.O 만이다.
+///                 `ego_status` 는 「다루는 상태」지 「주는 축」이 아니다 —
+///                 20705 홀리데이는 5축을 증폭하지만 어느 축의 인격도 아니다
+model IdentityAxis {
+  identityId String @map("identity_id")
+  axisId     String @map("axis_id")
+  source     String
+  /// ego_granted 일 때 어느 E.G.O 가 주는가
+  egoId      String? @map("ego_id")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  axis     Axis     @relation(fields: [axisId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, axisId, source])
+  @@index([axisId])
+  @@map("identity_axis")
+  @@schema("canonical")
+}
+
+/// 트리거가 무엇을 참조하나. 이름 유도 결과를 적재 시 한 번 풀어 굳힌다.
+///
+/// **질의마다 이름 매칭을 다시 하면 오매칭이 되살아난다** — `Dawn Office Identities` 가
+/// `DawnTeam` 상태에, `N Corp. Fanatic Identities` 가 `AssemblePersonality` 에 걸린다.
+model TriggerRef {
+  /// 대리 PK. refId 가 nullable 이라 (triggerId, refKind, refId) 를 @@id 로 못 쓴다
+  id        Int     @id @default(autoincrement())
+  triggerId String  @map("trigger_id")
+  /// axis | association | unit_keyword | sin | resonance | attack_type
+  /// | skill_kind | coin | deployment | none
+  refKind   String  @map("ref_kind")
+  refId     String? @map("ref_id")
+  /// resonance 전용. activate | threshold | dominant | scaling
+  resonanceMode String? @map("resonance_mode")
+  /// resonance threshold 전용
+  threshold     Int?
+  /// roster       편성만으로 확정된다             … Identities · Allies have X Skill
+  /// roster_gated 편성이 가능성을, 런타임이 발생을  X Skill Used · X Resonance · Deployment Position
+  /// runtime      편성과 무관하다                 Clash Win · Critical Hit
+  /// always       항상                           Always
+  /// unclassified 원본이 분류를 포기했다            Other Uncommon Triggers
+  evaluability String @map("evaluability")
+
+  trigger Trigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+
+  @@unique([triggerId, refKind, refId])
+  @@index([refKind, refId])
+  @@map("trigger_ref")
+  @@schema("canonical")
+}
+
+/// 효과가 무엇을 다루나. 연쇄 엣지의 출발점이다.
+model EffectRef {
+  /// 대리 PK. refId 가 nullable 이라 (effectId, refKind, refId) 를 @@id 로 못 쓴다
+  id       Int     @id @default(autoincrement())
+  effectId String  @map("effect_id")
+  /// axis | sin | attack_type | none
+  refKind  String  @map("ref_kind")
+  refId    String? @map("ref_id")
+  /// inflict | gain | consume | trigger
+  mode     String
+
+  effect Effect @relation(fields: [effectId], references: [id], onDelete: Cascade)
+
+  @@unique([effectId, refKind, refId])
+  @@map("effect_ref")
+  @@schema("canonical")
+}
+
+/// 정량자. **이 계획에서 유일하게 「값」이 저작인 테이블이다.**
+///
+/// 어느 출처에도 구조화돼 있지 않다 — limbus-assets 가 트리거 어휘를 저작할 때
+/// 정량자를 버렸다. 같은 「3인 이상」인데 9282 는 편성 기준이고 9283 은 출격 기준이다.
+model GiftTriggerParam {
+  giftId    String @map("gift_id")
+  triggerId String @map("trigger_id")
+  /// min_count | denominator | slot
+  kind      String
+  /// min_count → "3" · denominator → "roster"|"field"
+  value     String?
+  /// slot 전용. **다중값이다** — 9761 은 #1·#2·#7·#8 이고 슬롯 공간은 8이다
+  slots     Int[]
+  /// wiki | game-verified
+  source    String
+
+  gift Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@id([giftId, triggerId, kind])
+  @@map("gift_trigger_param")
+  @@schema("canonical")
+}
+
 model KeywordText {
   keywordId String @map("keyword_id")
   locale    Locale
@@ -384,6 +501,7 @@ model KeywordText {
 model Trigger {
   id    String @id
   gifts GiftTrigger[]
+  refs  TriggerRef[]
 
   @@map("trigger")
   @@schema("canonical")
@@ -393,6 +511,7 @@ model Trigger {
 model Effect {
   id    String @id
   gifts GiftEffect[]
+  refs  EffectRef[]
 
   @@map("effect")
   @@schema("canonical")
@@ -438,6 +557,7 @@ model Gift {
   choiceEvents   ChoiceEventGift[]
   startGifts     StartGift[]
   runGifts       RunGift[]
+  triggerParams  GiftTriggerParam[]
 
   @@index([domain])
   @@index([sin])
@@ -857,6 +977,7 @@ model Identity {
   keywords     IdentityKeyword[]
   unitKeywords IdentityUnitKeyword[]
   statuses     IdentityStatus[]
+  axes         IdentityAxis[]
 
   @@index([sinnerId])
   @@index([star])
