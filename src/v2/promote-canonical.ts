@@ -16,6 +16,11 @@
  * (실패시킨 트랜잭션 뒤에 스키마 이름도 FK 도 그대로였다). 이게 이 명령의 안전이
  * 서 있는 자리다.
  *
+ * **이전 판을 지우는 것도 같은 트랜잭션 안이다**(결정 3, 첫 문장). 밖에 두면 거기서만
+ * 원자성이 깨진다 — 삭제가 성공하고 교체가 실패하면 승격은 안 됐는데 N-1 백업만
+ * 영구히 사라지고, 트랜잭션이 되돌아가도 그건 안 돌아온다. 2차 리뷰에서 잡힌
+ * 유일한 구멍이었고, 실제로 실패시켜 이전 판이 되살아나는 것을 확인했다.
+ *
  * **왜 `prisma.$transaction` 인가 — 수동 `BEGIN`/`COMMIT` 이 아니다.** Prisma 는
  * 커넥션 풀을 쓴다. `$executeRawUnsafe('BEGIN')` 과 그다음 문장이 같은 커넥션으로
  * 간다는 보장이 없다 — 실측하면 순차 호출은 대개 같은 커넥션을 다시 잡지만
@@ -39,6 +44,8 @@ import {
 	appTypeColumns,
 	exactCount,
 	formatIds,
+	ident,
+	outsideDependents,
 	qualifiesSchema,
 	rebindSql,
 	renameSchema,
@@ -189,14 +196,14 @@ async function precheckAppIntegrity(prisma: PrismaClient, target: string): Promi
  * **대개 "아무것도 안 바뀌었다"가 답이다.** 그 사실을 말해 주는 것이 중요하다 —
  * 사람이 모르면 멀쩡한 DB 를 손으로 고치려 들 수 있다.
  *
- * 위험한 자리는 트랜잭션 **밖**이다: 이전 `canonical_bak` 을 지우는 중, 선검사 중,
- * 접속이 끊긴 경우. 그래서 세 이름의 실제 존재 여부를 다시 읽어서 찍는다.
+ * 위험한 자리는 트랜잭션 **밖**이다: 선검사 중, 상태를 읽는 중, 접속이 끊긴 경우.
+ * 그래서 세 이름의 실제 존재 여부를 다시 읽어서 찍는다. 이전 판 삭제는 2차 리뷰
+ * 뒤로 트랜잭션 **안**에 있으므로 여기서 따로 다룰 갈래가 없다 — 실패하면 되살아난다.
  */
 async function reportFailureAndRecovery(
 	prisma: PrismaClient,
 	mode: Mode,
 	plan: Plan,
-	droppedPrevOutgoing: boolean,
 ): Promise<void> {
 	const live = await schemaExists(prisma, LIVE);
 	const incoming = await schemaExists(prisma, plan.incoming);
@@ -206,11 +213,6 @@ async function reportFailureAndRecovery(
 	console.error(
 		`지금 상태 — ${LIVE} 존재: ${live} · ${plan.incoming} 존재: ${incoming} · ${plan.outgoing} 존재: ${outgoing}`,
 	);
-	if (droppedPrevOutgoing) {
-		console.error(
-			`이전 ${plan.outgoing} 은 이 실행이 지웠다(설계 결정 3 — 이전 판은 하나만 남긴다). 의도한 삭제다.`,
-		);
-	}
 
 	if (live && incoming) {
 		console.error('교체 전 상태 그대로다 — 살아있는 판도 새 판도 제자리에 있다. 한 행도 안 바뀌었다.');
@@ -254,10 +256,9 @@ async function safeReportFailureAndRecovery(
 	prisma: PrismaClient,
 	mode: Mode,
 	plan: Plan,
-	droppedPrevOutgoing: boolean,
 ): Promise<void> {
 	try {
-		await reportFailureAndRecovery(prisma, mode, plan, droppedPrevOutgoing);
+		await reportFailureAndRecovery(prisma, mode, plan);
 	} catch (reportErr) {
 		console.error('\n상태를 못 읽었다 — 복구 안내를 못 만든다. 원인:', reportErr);
 		console.error('스키마 이름을 직접 확인해라:');
@@ -299,7 +300,6 @@ async function main(): Promise<void> {
 	}
 	const plan = PLANS[mode];
 	const prisma = new PrismaClient();
-	let droppedPrevOutgoing = false;
 	let started = false;
 
 	try {
@@ -342,32 +342,62 @@ async function main(): Promise<void> {
 		console.log(`\n2. 선검사 — app 이 가리키는 것이 ${plan.incoming} 에 다 있나 (트랜잭션 전)`);
 		await precheckAppIntegrity(prisma, plan.incoming);
 
-		console.log(`\n3. ${plan.outgoing} 이름 정리`);
+		console.log(`\n3. ${plan.outgoing} 이름 정리 — 무엇을 지울지 정하기만 하고, 지우는 것은 트랜잭션 안이다`);
+		let dropOutgoing: string | null = null;
 		if (await schemaExists(prisma, plan.outgoing)) {
 			if (plan.outgoingOccupied === 'refuse') {
 				throw new Error(
-					`${plan.outgoing} 스키마가 이미 있다. ${mode} 는 ${LIVE} 을 그 이름으로 옮기려 하는데 자리가 차 있다.\n` +
-						`그 안에 무엇이 있는지 먼저 조사해라(행수를 보면 안다). 필요 없다고 판단되면 ` +
-						`DROP SCHEMA "${plan.outgoing}" CASCADE 로 지우고 다시 돌려라 — 이 명령은 말없이 지우지 않는다.`,
+					[
+						`${plan.outgoing} 스키마가 이미 있다. ${mode} 는 ${LIVE} 을 그 이름으로 옮기려 하는데 자리가 차 있다.`,
+						`이 명령은 그 자리를 말없이 비우지 않는다 — 무엇이 있는지 사람이 먼저 봐야 한다.`,
+						'',
+						`전형적인 경우는 「승격 뒤 v2:build 로 새 판을 구워 둔 상태」다. 그렇다면 ${plan.outgoing} 은`,
+						`막 구운 판이라 버리면 안 된다. 옆으로 치우고 되돌려라:`,
+						`  ALTER SCHEMA "${plan.outgoing}" RENAME TO "${plan.outgoing}_keep"`,
+						`  npm run v2:${mode}`,
+						`되돌린 뒤 그 판을 다시 승격하려면 "${plan.outgoing}_keep" 을 "${plan.outgoing}" 으로 되돌려 놓으면 된다.`,
+						'',
+						`정말 버릴 물건이라고 확인했으면 그때 DROP SCHEMA "${plan.outgoing}" CASCADE 로 지우고 다시 돌려라.`,
+					].join('\n'),
 				);
 			}
-			// 파괴적 SQL 은 무엇을 할지 먼저 출력하고 실행한다.
-			const rows = await tableCount(prisma, plan.outgoing);
+			const tables = await tableCount(prisma, plan.outgoing);
+			// CASCADE 는 스키마 밖에서 이것을 참조하는 것도 말없이 같이 지운다. 지운
+			// 뒤에는 무엇이 있었는지 알 방법이 없으므로 먼저 세어서 찍는다.
+			const dependents = await outsideDependents(prisma, plan.outgoing);
+			if (dependents.length > 0) {
+				throw new Error(
+					[
+						`${plan.outgoing} 을 스키마 밖에서 참조하는 것이 ${dependents.length}건 있다.`,
+						`DROP SCHEMA … CASCADE 는 이것들을 말없이 같이 지운다 — 그래서 멈춘다.`,
+						...dependents.map((d) => `  ${d}`),
+						'',
+						`정상이라면 0건이어야 한다. 이전 판(${plan.outgoing})은 지난 승격이 app 을 이미 새 판으로`,
+						`돌려놨으므로 아무도 안 가리킨다. 위 목록은 누군가 손으로 만든 것일 가능성이 높다 —`,
+						`무엇인지 확인하고 옮기거나 지운 뒤 다시 돌려라.`,
+					].join('\n'),
+				);
+			}
 			console.log(
-				`  이전 ${plan.outgoing} 이 있다(${rows}테이블). 설계 결정 3 — 이전 판은 하나만 남긴다. 지금 지운다:`,
+				`  이전 ${plan.outgoing} 이 있다(${tables}테이블) · 스키마 밖에서 이것을 참조하는 것 0건 — CASCADE 가 딸려 지울 것이 없다.`,
 			);
-			const dropSchema = `DROP SCHEMA "${plan.outgoing}" CASCADE`;
-			console.log(`  ${dropSchema}`);
-			await prisma.$executeRawUnsafe(dropSchema);
-			droppedPrevOutgoing = true;
+			console.log(
+				`  설계 결정 3 — 이전 판은 하나만 남긴다. 아래 트랜잭션의 첫 문장으로 지운다(교체가 실패하면 되살아난다).`,
+			);
+			dropOutgoing = `DROP SCHEMA ${ident(plan.outgoing)} CASCADE`;
 		} else {
 			console.log(`  ${plan.outgoing} 없음 — 지울 것 없다.`);
 		}
 
-		console.log('\n4. 한 트랜잭션 — FK 떼기 · 이름 교체 · 타입 재지정 · FK 붙이기');
+		console.log('\n4. 한 트랜잭션 — 이전 판 지우기 · FK 떼기 · 이름 교체 · 타입 재지정 · FK 붙이기');
 		started = true;
 		await prisma.$transaction(
 			async (tx) => {
+				// 이전 판 삭제도 트랜잭션 **안**이다. 밖에 두면 여기서만 원자성이
+				// 깨진다 — 삭제가 성공하고 교체가 실패하면 승격은 안 됐는데 N-1
+				// 백업만 영구히 사라진다. 트랜잭션이 되돌아가도 그건 안 돌아온다.
+				// PostgreSQL 은 DROP SCHEMA 도 트랜잭션이라 그대로 들어간다.
+				if (dropOutgoing) await exec(tx, dropOutgoing);
 				for (const sql of drop) await exec(tx, sql);
 				await exec(tx, renameSchema(LIVE, plan.outgoing));
 				await exec(tx, renameSchema(plan.incoming, LIVE));
@@ -389,11 +419,11 @@ async function main(): Promise<void> {
 		);
 		console.log('npm run v2:verify:canonical 로 새 canonical 을 확인해라.');
 	} catch (err) {
-		// 트랜잭션을 열기도 전에 거절한 경우(선검사·존재 확인)는 DB 가 안 바뀌었고
-		// 오류 메시지가 이미 이유를 담고 있다 — 상태 보고를 덧붙이면 그 메시지가
-		// 묻힌다. 이전 판을 지웠거나 트랜잭션을 열었을 때만 보고한다.
-		if (started || droppedPrevOutgoing) {
-			await safeReportFailureAndRecovery(prisma, mode, plan, droppedPrevOutgoing);
+		// 트랜잭션을 열기도 전에 거절한 경우(선검사·존재 확인·밖 의존)는 DB 가 안
+		// 바뀌었고 오류 메시지가 이미 이유를 담고 있다 — 상태 보고를 덧붙이면 그
+		// 메시지가 묻힌다. 트랜잭션을 열었을 때만 보고한다.
+		if (started) {
+			await safeReportFailureAndRecovery(prisma, mode, plan);
 		}
 		throw err;
 	} finally {

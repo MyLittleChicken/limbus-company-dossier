@@ -195,11 +195,61 @@ export function retargetTypeSql(cols: AppTypeColumn[]): string[] {
  * 지금 접속은 `?schema=public` 이라 늘 한정이 붙지만, **재부착이 옳은 판을 가리키는
  * 근거가 접속 문자열 하나**라면 그건 근거가 아니다. 승격 전에 직접 확인한다.
  *
- * 앞뒤 문자를 함께 보는 이유 — `canonical_bak.gift` 는 `canonical` 로 시작하지만
+ * 앞 문자를 함께 보는 이유 — `canonical_bak.gift` 는 `canonical` 로 시작하지만
  * 다른 스키마다. 마침표를 요구하고 앞에 식별자 문자가 없어야 통과시킨다.
+ *
+ * **따옴표를 친 한정형도 통과시킨다**(`"canonical".gift`). 이름에 대문자나 예약어가
+ * 섞이면 PostgreSQL 이 따옴표를 붙여 찍는데, 그것도 완벽하게 한정된 정의문이다.
+ * 처음엔 앞 문자 제외 목록에 `"` 를 넣었다가 2차 리뷰에서 잡혔다 — 앞 문자 검사가
+ * 노리는 `mycanonical.` 은 `[A-Za-z]` 가 이미 막으므로 `"` 제외는 **얻는 것 없이
+ * 멀쩡한 정의문을 거부하기만** 했다.
  */
 export function qualifiesSchema(def: string, schema: string): boolean {
-	return new RegExp(`(^|[^A-Za-z0-9_."])${schema}\\.`).test(def);
+	return new RegExp(`(^|[^A-Za-z0-9_.])"?${schema}"?\\.`).test(def);
+}
+
+/**
+ * `schema` **밖**에서 `schema` 안의 것을 참조하는 목록.
+ *
+ * `DROP SCHEMA … CASCADE` 는 이것들을 **말없이 같이 지운다.** 지우기 전에 세어서
+ * 찍어야 「조용한 누락 금지」가 지켜진다 — 지운 뒤에는 무엇이 있었는지 알 방법이 없다.
+ *
+ * 설계 3.2 가 꼽은 세 갈래(FK · 컬럼 타입 · 뷰)를 각각 묻는다. `pg_depend` 를 통째로
+ * 훑고 `pg_identify_object` 로 스키마를 알아내는 방법을 먼저 해 봤는데 못 쓴다 —
+ * 하위 개체(뷰의 재작성 규칙 · 컬럼 기본값 · toast 테이블)는 스키마가 `NULL` 로
+ * 나와서 **안쪽 의존이 전부 "밖"으로 잡힌다**(실측: 멀쩡한 canonical_bak 이 기본값
+ * 수십 건으로 걸렸다). 세 갈래를 따로 물으면 그 착시가 없고 사람이 읽기도 낫다.
+ */
+export async function outsideDependents(prisma: QueryClient, schema: string): Promise<string[]> {
+	const rows = await prisma.$queryRaw<Array<{ d: string }>>`
+		SELECT 'FK ' || fn.nspname || '.' || fc.relname || ' · ' || co.conname AS d
+		  FROM pg_constraint co
+		  JOIN pg_class fc ON fc.oid = co.conrelid
+		  JOIN pg_namespace fn ON fn.oid = fc.relnamespace
+		  JOIN pg_class tc ON tc.oid = co.confrelid
+		  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+		 WHERE co.contype = 'f' AND tn.nspname = ${schema} AND fn.nspname <> ${schema}
+		UNION
+		SELECT '타입 ' || n.nspname || '.' || c.relname || '.' || a.attname
+		  FROM pg_attribute a
+		  JOIN pg_class c ON c.oid = a.attrelid
+		  JOIN pg_namespace n ON n.oid = c.relnamespace
+		  JOIN pg_type t ON t.oid = a.atttypid
+		  JOIN pg_namespace tn ON tn.oid = t.typnamespace
+		 WHERE tn.nspname = ${schema} AND n.nspname <> ${schema}
+		   AND a.attnum > 0 AND NOT a.attisdropped AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+		UNION
+		SELECT '뷰 ' || vn.nspname || '.' || v.relname
+		  FROM pg_depend d
+		  JOIN pg_rewrite rw ON rw.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+		  JOIN pg_class v ON v.oid = rw.ev_class
+		  JOIN pg_namespace vn ON vn.oid = v.relnamespace
+		  JOIN pg_class ref ON ref.oid = d.refobjid AND d.refclassid = 'pg_class'::regclass
+		  JOIN pg_namespace refn ON refn.oid = ref.relnamespace
+		 WHERE refn.nspname = ${schema} AND vn.nspname <> ${schema}
+		 ORDER BY 1
+	`;
+	return rows.map((r) => r.d);
 }
 
 /**

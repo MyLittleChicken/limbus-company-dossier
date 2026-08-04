@@ -241,6 +241,19 @@ test('스키마 한정 확인 — 한정된 정의문', () => {
 	assert.equal(qualifiesSchema('canonical."Difficulty"', 'canonical'), true);
 });
 
+// 이름에 대문자나 예약어가 섞이면 PostgreSQL 이 따옴표를 붙여 찍는다. 그것도
+// 완벽하게 한정된 정의문이라 통과해야 한다 — 2차 리뷰에서 잡힌 것으로, 앞 문자
+// 제외 목록에 `"` 가 있어 멀쩡한 정의문이 거부됐다.
+test('스키마 한정 확인 — 따옴표 친 한정형도 통과한다', () => {
+	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES "canonical".gift(id)', 'canonical'), true);
+	assert.equal(qualifiesSchema('"canonical"."Difficulty"', 'canonical'), true);
+	// 따옴표를 허용해도 접두사 착각은 여전히 막아야 한다
+	assert.equal(qualifiesSchema('REFERENCES "canonical_bak".gift(id)', 'canonical'), false);
+	// 앞 문자 검사가 노리던 것 — 여기는 그대로 막힌다
+	assert.equal(qualifiesSchema('REFERENCES mycanonical.gift(id)', 'canonical'), false);
+	assert.equal(qualifiesSchema('REFERENCES "mycanonical".gift(id)', 'canonical'), false);
+});
+
 test('스키마 한정 확인 — 한정이 없으면 거짓', () => {
 	// search_path 에 canonical 이 들어 있으면 PostgreSQL 이 이렇게 찍는다
 	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES gift(id)', 'canonical'), false);
