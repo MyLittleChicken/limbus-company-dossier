@@ -6,6 +6,7 @@
  *
  * 실행: npm run v2:canonical
  */
+import { readFile } from 'node:fs/promises';
 import { PrismaClient } from './generated/client.js';
 import { latestSnapshotId, mergeIndexes, readSource, readSourceGroup } from './source.js';
 import { Meta } from './canonical/meta.js';
@@ -17,6 +18,9 @@ import { buildSkills } from './canonical/skills.js';
 import { buildIdentities } from './canonical/identities.js';
 import { buildEgos } from './canonical/egos.js';
 import { buildStatuses } from './canonical/statuses.js';
+import { buildAxis } from './canonical/axis.js';
+import { buildIdentityAxis } from './canonical/identity-axis.js';
+import { buildGiftTriggerParam } from './canonical/gift-trigger-param.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
@@ -207,6 +211,22 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// ── 축 어휘와 트리거·효과 참조 ─────────────────────────────
+		// 이름 유도를 여기서 한 번 풀어 굳힌다 — 질의마다 다시 하면 오매칭이 되살아난다.
+		// vocab·statuses·sinners·identities 가 모두 만들어진 뒤여야 한다.
+		const axisTables = buildAxis({
+			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
+			statusTextEn: statuses.statusText
+				.filter((s) => s.locale === 'en')
+				.map((s) => ({ statusId: s.statusId, name: s.name })),
+			associationTextEn: sinners.associationText
+				.filter((a) => a.locale === 'en')
+				.map((a) => ({ associationId: a.associationId, name: a.name })),
+			triggerIds: vocab.trigger.map((t) => t.id),
+			effectIds: vocab.effect.map((e) => e.id),
+			sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
+		}, meta);
+
 		// ── E.G.O 계열 ─────────────────────────────────────────────
 		// **파일명으로 가른다.** E.G.O 는 각성 스킬과 패시브가 같은 번호를 쓴다
 		// (실측 교집합 110건) — id 자릿수로 가르면 한쪽이 다른 쪽을 덮어쓴다.
@@ -234,6 +254,36 @@ async function main(): Promise<void> {
 			},
 			meta,
 		);
+
+		// 인격 축 프로파일. **egos 뒤여야 한다** — ego_granted 경로가 E.G.O 의
+		// 수감자를 보고 장착 후보 인격을 편다
+		const identityAxis = buildIdentityAxis({
+			identityKeyword: identities.identityKeyword.map((k) => ({ identityId: k.identityId, keywordId: k.keywordId })),
+			identityStatus: identities.identityStatus,
+			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
+			axisIds: axisTables.axis.map((a) => a.id),
+			identity: identities.identity.map((i) => ({ id: i.id, sinnerId: i.sinnerId })),
+			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
+		}, meta);
+
+		// 트리거 정량자. **level 0 만 본다** — 강화 단계는 조건 문장이 같아 중복이다.
+		// 산문을 여기서 한 번 뽑아 구조로 굳힌다. 질의 시점에 desc 를 다시 읽지 않는다
+		const giftTriggerParam = buildGiftTriggerParam({
+			giftDesc: gifts.giftStageText
+				.filter((t) => t.locale === 'ko' && t.level === 0 && t.desc !== null)
+				.map((t) => ({ giftId: t.giftId, desc: t.desc as string })),
+			giftTrigger: gifts.giftTrigger.map((t) => ({ giftId: t.giftId, triggerId: t.triggerId })),
+			triggerRef: axisTables.triggerRef.map((r) => ({
+				triggerId: r.triggerId, refKind: r.refKind, refId: r.refId, evaluability: r.evaluability,
+			})),
+			associationKo: sinners.associationText
+				.filter((a) => a.locale === 'ko')
+				.map((a) => ({ associationId: a.associationId, name: a.name })),
+			giftSlots: gifts.giftRequirement
+				.filter((r) => r.kind === 'slots')
+				.map((r) => ({ giftId: r.giftId, slots: (r.value as number[]) ?? [] })),
+			axisIds: axisTables.axis.map((a) => a.id),
+		}, meta);
 
 		// ── 거울 던전 구성 ─────────────────────────────────────────
 		const mdAsset = (f: string) =>
@@ -375,6 +425,8 @@ async function main(): Promise<void> {
 			         canonical.choice_event, canonical.achievement, canonical.reward,
 			         canonical.adversity, canonical.grace, canonical.encounter, canonical.enemy,
 			         canonical.enemy_part,
+			         canonical.axis, canonical.identity_axis, canonical.trigger_ref,
+			         canonical.effect_ref, canonical.gift_trigger_param,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
 		`;
@@ -407,6 +459,12 @@ async function main(): Promise<void> {
 		]);
 		counts.push(['trigger', (await prisma.trigger.createMany({ data: vocab.trigger })).count]);
 		counts.push(['effect', (await prisma.effect.createMany({ data: vocab.effect })).count]);
+
+		// 축 어휘와 트리거·효과 참조. trigger·effect 다음이어야 FK 가 안 깨진다.
+		// identity_axis 는 identity 가 서야 하므로 뒤에서 적재한다(축이 먼저).
+		counts.push(['axis', (await prisma.axis.createMany({ data: axisTables.axis })).count]);
+		counts.push(['trigger_ref', await chunked(axisTables.triggerRef, (d) => prisma.triggerRef.createMany({ data: d }))]);
+		counts.push(['effect_ref', await chunked(axisTables.effectRef, (d) => prisma.effectRef.createMany({ data: d }))]);
 
 		counts.push([
 			'gift',
@@ -445,6 +503,11 @@ async function main(): Promise<void> {
 			await chunked(gifts.giftRequirement, (d) =>
 				prisma.giftRequirement.createMany({ data: d as never }),
 			),
+		]);
+		// gift_trigger_param 은 gift 를 FK 로 건다 — gift 가 선 뒤여야 한다
+		counts.push([
+			'gift_trigger_param',
+			await chunked(giftTriggerParam, (d) => prisma.giftTriggerParam.createMany({ data: d })),
 		]);
 		counts.push([
 			'fusion_recipe',
@@ -498,6 +561,8 @@ async function main(): Promise<void> {
 		counts.push(['passive_text', await chunked(identities.passiveText, (d) => prisma.passiveText.createMany({ data: d as never }))]);
 
 		counts.push(['identity', await chunked(identities.identity, (d) => prisma.identity.createMany({ data: d }))]);
+		// identity_axis 는 identity·axis 둘 다 FK 로 걸어 여기서 적재한다 — axis 는 이미 위에서 섰다.
+		counts.push(['identity_axis', await chunked(identityAxis, (d) => prisma.identityAxis.createMany({ data: d }))]);
 		counts.push(['identity_text', await chunked(identities.identityText, (d) => prisma.identityText.createMany({ data: d as never }))]);
 		counts.push(['identity_resist', await chunked(identities.identityResist, (d) => prisma.identityResist.createMany({ data: d as never }))]);
 		counts.push(['identity_speed', await chunked(identities.identitySpeed, (d) => prisma.identitySpeed.createMany({ data: d }))]);
@@ -564,6 +629,12 @@ async function main(): Promise<void> {
 			'field_source',
 			await chunked(meta.sources, (d) => prisma.fieldSource.createMany({ data: d })),
 		]);
+
+		// 파생 뷰. 테이블이 다 선 뒤에 건다 — 뷰가 컬럼을 참조하므로 순서가 있다.
+		// CREATE OR REPLACE 라 재적재에 안전하고, TRUNCATE 는 뷰를 안 지운다.
+		await prisma.$executeRawUnsafe(
+			await readFile(new URL('../../prisma/v2/views.sql', import.meta.url), 'utf8'),
+		);
 
 		console.log('');
 		for (const [t, n] of counts) console.log(`  ${t.padEnd(22)} ${String(n).padStart(6)}`);

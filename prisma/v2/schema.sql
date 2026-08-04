@@ -192,6 +192,60 @@ CREATE TABLE "canonical"."keyword" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."axis" (
+    "id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "note" TEXT,
+
+    CONSTRAINT "axis_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."identity_axis" (
+    "identity_id" TEXT NOT NULL,
+    "axis_id" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "ego_id" TEXT NOT NULL DEFAULT '',
+
+    CONSTRAINT "identity_axis_pkey" PRIMARY KEY ("identity_id","axis_id","source","ego_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."trigger_ref" (
+    "trigger_id" TEXT NOT NULL,
+    "ref_kind" TEXT NOT NULL,
+    "ref_id" TEXT NOT NULL DEFAULT '',
+    "resonance_mode" TEXT,
+    "threshold" INTEGER,
+    "evaluability" TEXT NOT NULL,
+
+    CONSTRAINT "trigger_ref_pkey" PRIMARY KEY ("trigger_id","ref_kind","ref_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."effect_ref" (
+    "effect_id" TEXT NOT NULL,
+    "ref_kind" TEXT NOT NULL,
+    "ref_id" TEXT NOT NULL DEFAULT '',
+    "mode" TEXT NOT NULL,
+
+    CONSTRAINT "effect_ref_pkey" PRIMARY KEY ("effect_id","ref_kind","ref_id")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_trigger_param" (
+    "gift_id" TEXT NOT NULL,
+    "trigger_id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "tier" INTEGER NOT NULL DEFAULT 0,
+    "value" TEXT,
+    "slots" INTEGER[],
+    "source" TEXT NOT NULL,
+
+    CONSTRAINT "gift_trigger_param_pkey" PRIMARY KEY ("gift_id","trigger_id","kind","tier")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."keyword_text" (
     "keyword_id" TEXT NOT NULL,
     "locale" "canonical"."Locale" NOT NULL,
@@ -1077,6 +1131,12 @@ CREATE INDEX "pack_boss_encounter_encounter_id_idx" ON "canonical"."pack_boss_en
 CREATE INDEX "floor_pack_pack_id_idx" ON "canonical"."floor_pack"("pack_id");
 
 -- CreateIndex
+CREATE INDEX "identity_axis_axis_id_idx" ON "canonical"."identity_axis"("axis_id");
+
+-- CreateIndex
+CREATE INDEX "trigger_ref_ref_kind_ref_id_idx" ON "canonical"."trigger_ref"("ref_kind", "ref_id");
+
+-- CreateIndex
 CREATE INDEX "gift_domain_idx" ON "canonical"."gift"("domain");
 
 -- CreateIndex
@@ -1195,6 +1255,21 @@ ALTER TABLE "canonical"."pack_boss_encounter" ADD CONSTRAINT "pack_boss_encounte
 
 -- AddForeignKey
 ALTER TABLE "canonical"."floor_pack" ADD CONSTRAINT "floor_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_axis" ADD CONSTRAINT "identity_axis_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."identity_axis" ADD CONSTRAINT "identity_axis_axis_id_fkey" FOREIGN KEY ("axis_id") REFERENCES "canonical"."axis"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."trigger_ref" ADD CONSTRAINT "trigger_ref_trigger_id_fkey" FOREIGN KEY ("trigger_id") REFERENCES "canonical"."trigger"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."effect_ref" ADD CONSTRAINT "effect_ref_effect_id_fkey" FOREIGN KEY ("effect_id") REFERENCES "canonical"."effect"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_trigger_param" ADD CONSTRAINT "gift_trigger_param_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."keyword_text" ADD CONSTRAINT "keyword_text_keyword_id_fkey" FOREIGN KEY ("keyword_id") REFERENCES "canonical"."keyword"("id") ON DELETE CASCADE ON UPDATE CASCADE;

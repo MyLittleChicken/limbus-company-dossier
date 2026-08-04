@@ -98,10 +98,20 @@ async function main(): Promise<void> {
 		//         이전에는 축 루프가 조용히 continue 해 아무 기록도 안 남겼다. 「말없이
 		//         버리지 않는다」규칙에 따라 이번에 처음 기록한다
 		//   973 + 42 + 122 = 1,137
+		//   +5    identity.axis — 축이 없는 인격 5건(10201·10205·10305·10903·11206).
+		//         keyword·special_status 어느 경로로도 축을 못 얻는다(설계 13절).
+		//         1,137 + 5 = 1,142
+		//   +12   gift.min_count — 게이트를 트리거에 못 귄 12건. 11건은 1xxx·2xxx
+		//         스토리 던전 기프트로 출처에 트리거가 아예 없고(126종 전부),
+		//         1건은 9173 빛바랜 외투 「정신력 -45인 **적**이 3명 이상」이라
+		//         편성이 아니라 적을 센다 — 올바른 배제다
+		//   +3    gift.denominator — 9220·9270·9829 가 분모 어휘를 안 적었다.
+		//         셋 다 중지 소속 게이트다. 추측해 채우지 않고 결손으로 남긴다
+		//         1,142 + 15 = 1,157
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_137,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,137`,
+			ok: gapTotal + overrideCount === 1_157,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,157`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -753,6 +763,190 @@ async function main(): Promise<void> {
 			await prisma.fieldGap.count({ where: { field: 'statuses' } }),
 			0,
 		);
+
+		// ══ 메카닉 축 ═══════════════════════════════════════════════
+		// 축은 8종이다. status_category 의 카테고리 중 트리거가 참조하는 것만이며,
+		// 주살·마탄·원호 방어 등은 트리거가 하나도 참조하지 않아 축이 아니다
+		eq('axis', await prisma.axis.count(), 8);
+		eq('trigger_ref', await prisma.triggerRef.count(), 150);
+		eq('effect_ref', await prisma.effectRef.count(), 55);
+		// 566 = keyword 266 + special_status 300. 여기에 ego_granted 62 가 더해진다 —
+		// 착영휘도(20509)·엄숙한 애도(20109) 가 수감자 5(15인)·1(16인) 소속이라 (15+16)×2
+		eq('identity_axis', await prisma.identityAxis.count(), 628);
+		eq('identity_axis (ego_granted)',
+			await prisma.identityAxis.count({ where: { source: 'ego_granted' } }), 62);
+
+		// ego_granted 만 ego_id 를 갖는다. 반대로 새면 무조건 축이 되어
+		// 착영휘도를 안 낀 이상까지 출혈 인격이 된다
+		const egoIdLeak = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.identity_axis
+			WHERE (source = 'ego_granted') <> (ego_id <> '')
+		`;
+		checks.push({
+			name: 'ego_id 는 ego_granted 에만 있다 (0이어야 한다)',
+			ok: Number(egoIdLeak[0]?.n ?? 1n) === 0,
+			detail: `${Number(egoIdLeak[0]?.n ?? 0n)} / 0`,
+		});
+
+		// **소속 트리거가 상태에 걸리면 안 된다.** 이름 매칭에서 실재하는 오매칭이다 —
+		// 'Dawn Office Identities' 가 DawnTeam(Dawn Office) 상태에,
+		// 'N Corp. Fanatic Identities' 가 AssemblePersonality(Fanatic) 에 걸린다
+		const misMatched = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.trigger_ref
+			WHERE trigger_id LIKE '% Identities' AND ref_kind = 'axis'
+		`;
+		checks.push({
+			name: '소속 트리거가 축에 잘못 걸렸다 (0이어야 한다)',
+			ok: Number(misMatched[0]?.n ?? 1n) === 0,
+			detail: `${Number(misMatched[0]?.n ?? 0n)} / 0`,
+		});
+
+		// trigger_ref·effect_ref 의 axis 참조가 전부 axis 테이블에 있어야 한다
+		const orphanAxis = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT (SELECT count(*) FROM canonical.trigger_ref r
+			        WHERE r.ref_kind='axis' AND NOT EXISTS
+			          (SELECT 1 FROM canonical.axis a WHERE a.id = r.ref_id))
+			     + (SELECT count(*) FROM canonical.effect_ref r
+			        WHERE r.ref_kind='axis' AND NOT EXISTS
+			          (SELECT 1 FROM canonical.axis a WHERE a.id = r.ref_id)) AS n
+		`;
+		checks.push({
+			name: '축 테이블에 없는 축을 가리킨다 (0이어야 한다)',
+			ok: Number(orphanAxis[0]?.n ?? 1n) === 0,
+			detail: `${Number(orphanAxis[0]?.n ?? 0n)} / 0`,
+		});
+
+		// evaluability 5갈래 — 한 갈래도 0이면 안 된다. 규칙이 퇴화하면 전부 한 값으로 쏠린다
+		const evalDist = await prisma.$queryRaw<Array<{ evaluability: string; n: bigint }>>`
+			SELECT evaluability, count(*)::bigint AS n
+			FROM canonical.trigger_ref GROUP BY 1
+		`;
+		const ed = Object.fromEntries(evalDist.map((r) => [r.evaluability, Number(r.n)]));
+		checks.push({
+			name: 'evaluability 5갈래가 전부 나온다',
+			ok: ['roster', 'roster_gated', 'runtime', 'always', 'unclassified']
+				.every((k) => (ed[k] ?? 0) > 0),
+			detail: Object.entries(ed).map(([k, v]) => `${k} ${v}`).join(' · '),
+		});
+
+		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. 홍매화(특수 출혈)가
+		// status_category 로 LACERATION 에 닿는 것이 이 설계의 핵심 발견이다
+		const faust = await prisma.identityAxis.findMany({
+			// ego_granted 를 뺀다 — 이 골든은 **무조건** 축을 재는 것이다
+			where: { identityId: '10208', NOT: { source: 'ego_granted' } },
+			select: { axisId: true },
+		});
+		const faustAxes = [...new Set(faust.map((r) => r.axisId))].sort().join(' · ');
+		checks.push({
+			name: '10208 검계 살수 파우스트 = BREATH · LACERATION',
+			ok: faustAxes === 'BREATH · LACERATION',
+			detail: faustAxes,
+		});
+
+		// 골든 — 착영휘도(20509)를 낀 이상은 「출혈·호흡을 부여하는 인격으로 취급됨」이다.
+		// 수감자 5 인격 전부가 후보이며, 실제 축 여부는 편성의 E.G.O 선택이 가른다
+		const yisang = await prisma.identityAxis.findMany({
+			where: { identityId: '10501', source: 'ego_granted' },
+			select: { axisId: true, egoId: true },
+		});
+		const yisangAxes = yisang.map((r) => `${r.axisId}:${r.egoId}`).sort().join(' · ');
+		checks.push({
+			name: '10501 이상 + 착영휘도 = BREATH · LACERATION (조건부)',
+			ok: yisangAxes === 'BREATH:20509 · LACERATION:20509',
+			detail: yisangAxes,
+		});
+
+		// ── 파생 뷰 ─────────────────────────────────────────────────
+		// **이 뷰가 「구조만으로 푼다」의 증거물이다.** 인격 성질을 trigger_ref 와
+		// 같은 어휘로 정규화하므로 판정이 분기 없는 조인 하나가 된다
+		const capKinds = await prisma.$queryRaw<Array<{ ref_kind: string; n: bigint }>>`
+			SELECT ref_kind, count(*)::bigint AS n
+			FROM canonical.v_identity_capability GROUP BY 1
+		`;
+		const wantKinds = ['association', 'attack_type', 'axis', 'coin',
+			'resonance', 'sin', 'skill_kind', 'unit_keyword'];
+		checks.push({
+			name: 'v_identity_capability 종류 8갈래',
+			ok: capKinds.map((r) => r.ref_kind).sort().join(',') === wantKinds.join(','),
+			detail: capKinds.map((r) => `${r.ref_kind} ${Number(r.n)}`).sort().join(' · '),
+		});
+
+		// 어휘가 어긋나면 조인이 조용히 0을 낸다. **근거 없는 참조를 세어 고정한다** —
+		// none 31(참조 대상 없음) + deployment 1(사용자 입력)
+		// + Any/Any Absolute Resonance 2(죄악별 최댓값이라 이 조인으로는 안 닿는다)
+		const unbacked = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.trigger_ref tr
+			WHERE NOT EXISTS (SELECT 1 FROM canonical.v_identity_capability ic
+			                  WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id)
+		`;
+		checks.push({
+			name: '편성으로 근거를 못 대는 trigger_ref 34 (150 중 116 이 닿는다)',
+			ok: Number(unbacked[0]?.n ?? 0n) === 34,
+			detail: `${Number(unbacked[0]?.n ?? 0n)} / 34`,
+		});
+
+		// ── 트리거 정량자 ───────────────────────────────────────────
+		// 숫자는 어느 출처에도 구조화돼 있지 않다 — raw 를 전수로 확인했다.
+		// `gift_stage_text.desc` 산문에서 적재 시점에 한 번 뽑아 굳힌 것이다
+		eq('gift_trigger_param', await prisma.giftTriggerParam.count(), 188);
+		eq('gift_trigger_param (min_count)',
+			await prisma.giftTriggerParam.count({ where: { kind: 'min_count' } }), 69);
+		eq('gift_trigger_param (denominator)',
+			await prisma.giftTriggerParam.count({ where: { kind: 'denominator' } }), 59);
+		// gift_requirement.slots 60행을 Deployment Position 에 귄다. 실측 60/60 유일
+		eq('gift_trigger_param (slot)',
+			await prisma.giftTriggerParam.count({ where: { kind: 'slot' } }), 60);
+
+		// **분모를 틀리면 전부 틀린다.** 49건이 출전(대기 인원 제외)이라 편성 12 로
+		// 세면 과대 판정이 된다. waiting 1건은 9778 통상 작전용 장비뿐이다
+		const denom = await prisma.giftTriggerParam.groupBy({
+			by: ['value'], where: { kind: 'denominator' }, _count: { _all: true },
+		});
+		const dm = Object.fromEntries(denom.map((r) => [String(r.value), r._count._all]));
+		checks.push({
+			name: '분모 field 49 · roster 9 · waiting 1',
+			ok: dm['field'] === 49 && dm['roster'] === 9 && dm['waiting'] === 1,
+			detail: JSON.stringify(dm),
+		});
+
+		// 다단 임계 6건. tier 를 PK 에 안 넣으면 뒤엣단이 조용히 사라진다
+		const tiered = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+				SELECT gift_id, trigger_id FROM canonical.gift_trigger_param
+				WHERE kind = 'min_count' GROUP BY 1, 2 HAVING count(*) > 1
+			) x
+		`;
+		checks.push({
+			name: '다단 임계 6건 (9206·9211·9235·9270·9802·9803)',
+			ok: Number(tiered[0]?.n ?? 0n) === 6,
+			detail: `${Number(tiered[0]?.n ?? 0n)} / 6`,
+		});
+
+		// 골든 — 진혼(9088). 설계가 처음부터 예시로 든 기프트다
+		const requiem = await prisma.giftTriggerParam.findMany({
+			where: { giftId: '9088' }, select: { triggerId: true, kind: true, value: true },
+		});
+		const rq = requiem.map((r) => `${r.triggerId}|${r.kind}|${r.value}`).sort().join(' · ');
+		checks.push({
+			name: '9088 진혼 = 화상 5인 · 출전 분모',
+			ok: rq === 'Allies have Burn Skill|denominator|field · Allies have Burn Skill|min_count|5',
+			detail: rq,
+		});
+
+		// min_count 는 반드시 그 트리거가 실제로 가리키는 것을 센다. 귀속이 어긋나면
+		// 「화상 5인」이 소속 트리거에 붙는 식으로 조용히 틀린 답이 나온다
+		const badAttr = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_trigger_param p
+			WHERE p.kind = 'min_count' AND NOT EXISTS (
+				SELECT 1 FROM canonical.trigger_ref tr
+				WHERE tr.trigger_id = p.trigger_id
+				  AND tr.ref_kind IN ('axis', 'association', 'unit_keyword'))
+		`;
+		checks.push({
+			name: 'min_count 가 축·소속·유닛 트리거에만 붙었다 (0이어야 한다)',
+			ok: Number(badAttr[0]?.n ?? 1n) === 0,
+			detail: `${Number(badAttr[0]?.n ?? 0n)} / 0`,
+		});
 
 		// ══ 거울 던전·인카운터 계열 ═════════════════════════════════
 		eq('choice_event', await prisma.choiceEvent.count(), 159);
