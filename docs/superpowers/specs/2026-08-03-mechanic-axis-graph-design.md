@@ -789,3 +789,116 @@ v_identity_capability 종류 8갈래
 
 18절은 이를 「위키·게임 확인」이라 적었으나 틀렸다 — **확인처는 우리 `desc` 다.**
 저작인 것은 맞다.
+
+## 21. 3단계 — 트리거 정량자 (2026-08-04)
+
+`gift_trigger_param` 188행. **진혼이 판정된다.**
+
+```
+9088 진혼   Allies have Burn Skill   min_count 5 · denominator field
+편성 화상 6인 ≥ 5인 → 발동
+9090 피안개  Allies have Bleed Skill  min_count 5   같은 편성 출혈 0인 → 미달
+```
+
+### ① 산문에서 뽑되, 산물은 구조다
+
+37번 결정 —「설명을 파싱하는 구조는 부적절하다」— 을 지킨다. 파싱은 **적재 시점
+1회**이고 질의는 구조만 읽는다. `source` 열이 유도(`desc_derived` 128)인지 기존 구조
+재활용(`requirement` 60)인지 남긴다.
+
+```
+min_count     69행   62기프트.  값 2·3·4·5·6·8·10·12
+denominator   59행   field 49 · roster 9 · waiting 1
+slot          60행   gift_requirement.slots 를 Deployment Position 에 귀었다 (60/60 유일)
+```
+
+### ② 분모가 셋이다 — 편성으로 세면 49건이 틀린다
+
+```
+field    49   「출격 인원을 기준으로 함」 · 「대기 인원 제외」
+roster    9   「편성 인원을 기준/포함」 · 「대기 인원 포함」
+waiting   1   9778 통상 작전용 장비 「대기 인원에 … 4명 이상」 — 편성에서 출전을 뺀 자리
+```
+
+어휘 판정 순서에서 **「대기 인원에」가 먼저다.** 「대기 인원 포함/제외」보다 뒤에
+두면 9778 이 엉뚱한 분모를 받는다.
+
+### ③ PK 가 다단 임계를 못 담았다 — 세 번째 같은 함정
+
+```
+@@id([giftId, triggerId, kind])  →  @@id([giftId, triggerId, kind, tier])
+```
+
+한 트리거에 임계가 여러 단인 기프트가 6건이다.
+
+```
+9206 혈향도래      Allies have Bleed Skill    5 → 10
+9211 먹장구름      Allies have Sinking Skill  6 → 10
+9235 데스페라도    Allies have Ammo Skill     2 → 5 → 8
+9270 작.형.등장    The Middle Identities      3 → 5
+9802               Allies have Charge Skill   6 → 8
+9803               Allies have Poise Skill    6 → 10
+```
+
+`TriggerRef.refId` · `IdentityAxis.egoId` 에 이어 **세 번째다.** 세 번 모두 「지금
+데이터로는 안 부딪히지만 구조상 뚫려 있다」였고, 세 번 모두 실제로 부딪혔거나
+부딪힐 참이었다. 복합 PK 를 설계할 때 **행을 가르는 축을 하나라도 빼면 조용히
+사라진다.**
+
+### ④ 귀속 — 어느 트리거의 상세인가
+
+`gift_requirement` 가 못 푼 문제다(8절). 게이트 문장의 **대상**을 보고 정한다.
+
+```
+[Combustion] … 인격이 5인 이상   →  축 COMBUSTION 을 가리키는 트리거
+검계 소속 인격이 3인 이상        →  소속 BLADE_LINEAGE 를 가리키는 트리거
+```
+
+후보가 여럿이면 **`evaluability='roster'` 를 먼저 본다.** 진혼은
+`Allies have Burn Skill`(roster) 과 `Burn Skill Used`(roster_gated) 둘을 갖는데
+「보유한 인격이 5인」은 편성을 보는 앞엣것의 조건이다. roster 가 없으면 같은 축을
+가리키는 아무 트리거나 쓴다 — 9796 애달픈 날숨은 `Allies have Poise`(runtime)
+하나뿐이다.
+
+한 문장에 대상이 여럿이면 **수에 가까운 쪽**을 쓴다. 9280 본국검보가 그 자리다 —
+「검계 소속 인격을 제외한 … S사 소속 인격 1인을 검계 소속으로 취급하고, 턴 시작시
+검계 소속 인격이 3인 이상」.
+
+소속명은 **알려진 이름으로 직접 찾는다.** `\S+?\s*소속` 같은 패턴은 「새벽 사무소
+소속」의 공백을 못 넘어 「사무소」만 잡는다.
+
+### ⑤ 저작 1행 · 올바른 배제 1건
+
+```
+[BloodDinner] → unit_keyword BLOODFIEND    9795 떨어진 한 방울. 저작이다
+                status_category 에 없어 축으로 못 닿는다.
+                이름이 닮았다는 것은 근거가 아니므로 유도로 풀지 않는다
+```
+
+9173 빛바랜 외투는 「정신력이 -45인 **적**이 3명 이상」이라 편성이 아니라 적을
+센다. **올바른 배제이므로 결손 이유를 갈라 적는다** — 「못 정했다」로 뭉치면 실제
+결손과 구별되지 않는다.
+
+### ⑥ 결손 15건 — 전부 설명된다
+
+```
+min_count 12   11건은 1xxx·2xxx 스토리 던전. 출처에 트리거가 아예 없다(126종 전부)
+                1건은 9173. 적을 센다 — 올바른 배제
+denominator 3  9220·9270·9829 가 분모 어휘를 안 적었다. 셋 다 중지 소속 게이트.
+                추측해 채우지 않는다
+```
+
+결손 합계 1,142 → 1,157.
+
+### ⑦ 검사 196 → 203 · 테스트 349 → 363
+
+```
+gift_trigger_param 188 · min_count 69 · denominator 59 · slot 60
+분모 field 49 · roster 9 · waiting 1
+다단 임계 6건
+9088 진혼 = 화상 5인 · 출전 분모
+min_count 가 축·소속·유닛 트리거에만 붙었다 (0이어야 한다)
+```
+
+골든의 「`gift_trigger_param` 은 비어 있다」 트립와이어가 **실제로 깨져서** 이 절로
+왔다. 0 을 고정해 둔 것이 제 일을 했다.

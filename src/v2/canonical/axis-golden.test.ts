@@ -103,9 +103,47 @@ test('축을 가리키는 트리거가 43종이다', async () => {
 	assert.equal(n, 43);
 });
 
-test('gift_trigger_param 은 비어 있다 — 저작 전이다', async () => {
-	// 정량자는 이 계획의 범위 밖이다. 비어 있음을 명시적으로 고정해,
-	// 나중에 채웠을 때 이 테스트가 깨져 「채웠다」는 사실이 드러나게 한다
-	const n = await prisma.giftTriggerParam.count();
-	assert.equal(n, 0);
+test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · slot 60', async () => {
+	// 예전 이 테스트는 0 을 고정하는 트립와이어였다. 채우면 깨지도록 두었고,
+	// 실제로 깨져서 여기로 왔다 — 「채웠다」가 기록에 남는 방식이다
+	const rows = await prisma.giftTriggerParam.groupBy({ by: ['kind'], _count: { _all: true } });
+	const m = Object.fromEntries(rows.map((r) => [r.kind, r._count._all]));
+	assert.deepEqual(m, { min_count: 69, denominator: 59, slot: 60 });
+});
+
+test('진혼이 실제로 판정된다 — 화상 6인 ≥ 5인, 분모는 출전', async () => {
+	// 설계가 처음부터 예시로 든 자리다. 트리거·임계값·분모가 다 있어야 답이 나온다
+	const rows = await prisma.$queryRaw<Array<{ need: number; have: bigint; denom: string }>>`
+		SELECT p.value::int AS need, d.value AS denom,
+		       (SELECT count(DISTINCT ic.identity_id)
+		          FROM canonical.v_identity_capability ic
+		          JOIN canonical.trigger_ref tr ON tr.trigger_id = p.trigger_id
+		               AND tr.ref_kind = ic.ref_kind AND tr.ref_id = ic.ref_id
+		         WHERE ic.ego_id = '' AND ic.identity_id = ANY(${SQUAD})) AS have
+		  FROM canonical.gift_trigger_param p
+		  JOIN canonical.gift_trigger_param d
+		    ON d.gift_id = p.gift_id AND d.trigger_id = p.trigger_id AND d.kind = 'denominator'
+		 WHERE p.gift_id = '9088' AND p.kind = 'min_count'
+	`;
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0]?.need, 5);
+	assert.equal(rows[0]?.denom, 'field');
+	assert.equal(Number(rows[0]?.have ?? 0n), 6);
+	assert.ok(Number(rows[0]?.have ?? 0n) >= (rows[0]?.need ?? 0), '발동해야 한다');
+});
+
+test('같은 편성에서 미달하는 기프트가 있다 — 게이트가 실제로 거른다', async () => {
+	// 9090 피안개는 출혈 5인을 요구한다. 이 화상·진동 편성에는 출혈 인격이 없다
+	const rows = await prisma.$queryRaw<Array<{ need: number; have: bigint }>>`
+		SELECT p.value::int AS need,
+		       (SELECT count(DISTINCT ic.identity_id)
+		          FROM canonical.v_identity_capability ic
+		          JOIN canonical.trigger_ref tr ON tr.trigger_id = p.trigger_id
+		               AND tr.ref_kind = ic.ref_kind AND tr.ref_id = ic.ref_id
+		         WHERE ic.ego_id = '' AND ic.identity_id = ANY(${SQUAD})) AS have
+		  FROM canonical.gift_trigger_param p
+		 WHERE p.gift_id = '9090' AND p.kind = 'min_count'
+	`;
+	assert.equal(rows[0]?.need, 5);
+	assert.equal(Number(rows[0]?.have ?? 0n), 0);
 });

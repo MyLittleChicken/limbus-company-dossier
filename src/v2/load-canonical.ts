@@ -20,6 +20,7 @@ import { buildEgos } from './canonical/egos.js';
 import { buildStatuses } from './canonical/statuses.js';
 import { buildAxis } from './canonical/axis.js';
 import { buildIdentityAxis } from './canonical/identity-axis.js';
+import { buildGiftTriggerParam } from './canonical/gift-trigger-param.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
@@ -265,6 +266,25 @@ async function main(): Promise<void> {
 			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
 		}, meta);
 
+		// 트리거 정량자. **level 0 만 본다** — 강화 단계는 조건 문장이 같아 중복이다.
+		// 산문을 여기서 한 번 뽑아 구조로 굳힌다. 질의 시점에 desc 를 다시 읽지 않는다
+		const giftTriggerParam = buildGiftTriggerParam({
+			giftDesc: gifts.giftStageText
+				.filter((t) => t.locale === 'ko' && t.level === 0 && t.desc !== null)
+				.map((t) => ({ giftId: t.giftId, desc: t.desc as string })),
+			giftTrigger: gifts.giftTrigger.map((t) => ({ giftId: t.giftId, triggerId: t.triggerId })),
+			triggerRef: axisTables.triggerRef.map((r) => ({
+				triggerId: r.triggerId, refKind: r.refKind, refId: r.refId, evaluability: r.evaluability,
+			})),
+			associationKo: sinners.associationText
+				.filter((a) => a.locale === 'ko')
+				.map((a) => ({ associationId: a.associationId, name: a.name })),
+			giftSlots: gifts.giftRequirement
+				.filter((r) => r.kind === 'slots')
+				.map((r) => ({ giftId: r.giftId, slots: (r.value as number[]) ?? [] })),
+			axisIds: axisTables.axis.map((a) => a.id),
+		}, meta);
+
 		// ── 거울 던전 구성 ─────────────────────────────────────────
 		const mdAsset = (f: string) =>
 			readSource(prisma, snapshotId, `mirror-dungeon/limbus-assets/${f}`);
@@ -483,6 +503,11 @@ async function main(): Promise<void> {
 			await chunked(gifts.giftRequirement, (d) =>
 				prisma.giftRequirement.createMany({ data: d as never }),
 			),
+		]);
+		// gift_trigger_param 은 gift 를 FK 로 건다 — gift 가 선 뒤여야 한다
+		counts.push([
+			'gift_trigger_param',
+			await chunked(giftTriggerParam, (d) => prisma.giftTriggerParam.createMany({ data: d })),
 		]);
 		counts.push([
 			'fusion_recipe',

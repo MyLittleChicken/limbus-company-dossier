@@ -237,11 +237,12 @@ CREATE TABLE "canonical"."gift_trigger_param" (
     "gift_id" TEXT NOT NULL,
     "trigger_id" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
+    "tier" INTEGER NOT NULL DEFAULT 0,
     "value" TEXT,
     "slots" INTEGER[],
     "source" TEXT NOT NULL,
 
-    CONSTRAINT "gift_trigger_param_pkey" PRIMARY KEY ("gift_id","trigger_id","kind")
+    CONSTRAINT "gift_trigger_param_pkey" PRIMARY KEY ("gift_id","trigger_id","kind","tier")
 );
 
 -- CreateTable

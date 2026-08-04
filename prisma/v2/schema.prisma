@@ -476,16 +476,19 @@ model GiftTriggerParam {
   triggerId String @map("trigger_id")
   /// min_count | denominator | slot
   kind      String
-  /// min_count → "3" · denominator → "roster"|"field"
+  /// 한 트리거에 임계가 여러 단인 기프트가 있다 — 9206 혈향도래는 5인·10인 두 단,
+  /// 9270 작.형.등장은 3인·5인이다. 0 부터 등장순. 다른 종류는 0 하나뿐이다
+  tier      Int    @default(0)
+  /// min_count → "5" · denominator → "roster"|"field"|"waiting"
   value     String?
   /// slot 전용. **다중값이다** — 9761 은 #1·#2·#7·#8 이고 슬롯 공간은 8이다
   slots     Int[]
-  /// wiki | game-verified
+  /// desc_derived | requirement | authored
   source    String
 
   gift Gift @relation(fields: [giftId], references: [id], onDelete: Cascade)
 
-  @@id([giftId, triggerId, kind])
+  @@id([giftId, triggerId, kind, tier])
   @@map("gift_trigger_param")
   @@schema("canonical")
 }

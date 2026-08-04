@@ -101,10 +101,17 @@ async function main(): Promise<void> {
 		//   +5    identity.axis — 축이 없는 인격 5건(10201·10205·10305·10903·11206).
 		//         keyword·special_status 어느 경로로도 축을 못 얻는다(설계 13절).
 		//         1,137 + 5 = 1,142
+		//   +12   gift.min_count — 게이트를 트리거에 못 귄 12건. 11건은 1xxx·2xxx
+		//         스토리 던전 기프트로 출처에 트리거가 아예 없고(126종 전부),
+		//         1건은 9173 빛바랜 외투 「정신력 -45인 **적**이 3명 이상」이라
+		//         편성이 아니라 적을 센다 — 올바른 배제다
+		//   +3    gift.denominator — 9220·9270·9829 가 분모 어휘를 안 적었다.
+		//         셋 다 중지 소속 게이트다. 추측해 채우지 않고 결손으로 남긴다
+		//         1,142 + 15 = 1,157
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_142,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,142`,
+			ok: gapTotal + overrideCount === 1_157,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,157`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -878,12 +885,68 @@ async function main(): Promise<void> {
 			detail: `${Number(unbacked[0]?.n ?? 0n)} / 34`,
 		});
 
-		// **정량자는 아직 저작 전이다.** 실측 — 「인격이 N인 이상」 게이트가 70건,
-		// 그중 40건이 「대기 인원 제외」라 분모가 편성 12 가 아니라 출전이다.
-		// raw 를 전수로 확인했다: assets `triggers` 는 라벨뿐이고 mj 에도 수치가 없다.
-		// 숫자는 `gift_stage_text.desc` 산문에만 있다. 0 이 아니게 되면 이 검사가
-		// 깨지고, 그때 기준값을 올리면서 「무엇을 얼마나 저작했나」가 기록에 남는다
-		eq('gift_trigger_param (저작 전이므로 0)', await prisma.giftTriggerParam.count(), 0);
+		// ── 트리거 정량자 ───────────────────────────────────────────
+		// 숫자는 어느 출처에도 구조화돼 있지 않다 — raw 를 전수로 확인했다.
+		// `gift_stage_text.desc` 산문에서 적재 시점에 한 번 뽑아 굳힌 것이다
+		eq('gift_trigger_param', await prisma.giftTriggerParam.count(), 188);
+		eq('gift_trigger_param (min_count)',
+			await prisma.giftTriggerParam.count({ where: { kind: 'min_count' } }), 69);
+		eq('gift_trigger_param (denominator)',
+			await prisma.giftTriggerParam.count({ where: { kind: 'denominator' } }), 59);
+		// gift_requirement.slots 60행을 Deployment Position 에 귄다. 실측 60/60 유일
+		eq('gift_trigger_param (slot)',
+			await prisma.giftTriggerParam.count({ where: { kind: 'slot' } }), 60);
+
+		// **분모를 틀리면 전부 틀린다.** 49건이 출전(대기 인원 제외)이라 편성 12 로
+		// 세면 과대 판정이 된다. waiting 1건은 9778 통상 작전용 장비뿐이다
+		const denom = await prisma.giftTriggerParam.groupBy({
+			by: ['value'], where: { kind: 'denominator' }, _count: { _all: true },
+		});
+		const dm = Object.fromEntries(denom.map((r) => [String(r.value), r._count._all]));
+		checks.push({
+			name: '분모 field 49 · roster 9 · waiting 1',
+			ok: dm['field'] === 49 && dm['roster'] === 9 && dm['waiting'] === 1,
+			detail: JSON.stringify(dm),
+		});
+
+		// 다단 임계 6건. tier 를 PK 에 안 넣으면 뒤엣단이 조용히 사라진다
+		const tiered = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+				SELECT gift_id, trigger_id FROM canonical.gift_trigger_param
+				WHERE kind = 'min_count' GROUP BY 1, 2 HAVING count(*) > 1
+			) x
+		`;
+		checks.push({
+			name: '다단 임계 6건 (9206·9211·9235·9270·9802·9803)',
+			ok: Number(tiered[0]?.n ?? 0n) === 6,
+			detail: `${Number(tiered[0]?.n ?? 0n)} / 6`,
+		});
+
+		// 골든 — 진혼(9088). 설계가 처음부터 예시로 든 기프트다
+		const requiem = await prisma.giftTriggerParam.findMany({
+			where: { giftId: '9088' }, select: { triggerId: true, kind: true, value: true },
+		});
+		const rq = requiem.map((r) => `${r.triggerId}|${r.kind}|${r.value}`).sort().join(' · ');
+		checks.push({
+			name: '9088 진혼 = 화상 5인 · 출전 분모',
+			ok: rq === 'Allies have Burn Skill|denominator|field · Allies have Burn Skill|min_count|5',
+			detail: rq,
+		});
+
+		// min_count 는 반드시 그 트리거가 실제로 가리키는 것을 센다. 귀속이 어긋나면
+		// 「화상 5인」이 소속 트리거에 붙는 식으로 조용히 틀린 답이 나온다
+		const badAttr = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_trigger_param p
+			WHERE p.kind = 'min_count' AND NOT EXISTS (
+				SELECT 1 FROM canonical.trigger_ref tr
+				WHERE tr.trigger_id = p.trigger_id
+				  AND tr.ref_kind IN ('axis', 'association', 'unit_keyword'))
+		`;
+		checks.push({
+			name: 'min_count 가 축·소속·유닛 트리거에만 붙었다 (0이어야 한다)',
+			ok: Number(badAttr[0]?.n ?? 1n) === 0,
+			detail: `${Number(badAttr[0]?.n ?? 0n)} / 0`,
+		});
 
 		// ══ 거울 던전·인카운터 계열 ═════════════════════════════════
 		eq('choice_event', await prisma.choiceEvent.count(), 159);
