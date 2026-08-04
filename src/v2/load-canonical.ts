@@ -25,6 +25,7 @@ import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
+import { emptyRequiredMessage, tableCount } from './schema-ops.js';
 
 const CHUNK = 1_000;
 
@@ -43,6 +44,11 @@ async function chunked<T>(
 async function main(): Promise<void> {
 	const prisma = new PrismaClient();
 	try {
+		// **살아있는 canonical 을 지우지 않기 위한 가드다**(설계 결정 4).
+		// 적재기는 빈 canonical 에만 굽는다. v2:build 가 먼저 옆으로 치워 준다.
+		const existing = await tableCount(prisma, 'canonical');
+		if (existing > 0) throw new Error(emptyRequiredMessage(existing));
+
 		const snapshotId = await latestSnapshotId(prisma);
 		console.log(`스냅샷 ${snapshotId} 를 읽는다`);
 
