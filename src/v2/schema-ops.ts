@@ -216,9 +216,11 @@ export function qualifiesSchema(def: string, schema: string): boolean {
  *
  * 설계 3.2 가 꼽은 세 갈래(FK · 컬럼 타입 · 뷰)를 각각 묻는다. `pg_depend` 를 통째로
  * 훑고 `pg_identify_object` 로 스키마를 알아내는 방법을 먼저 해 봤는데 못 쓴다 —
- * 하위 개체(뷰의 재작성 규칙 · 컬럼 기본값 · toast 테이블)는 스키마가 `NULL` 로
- * 나와서 **안쪽 의존이 전부 "밖"으로 잡힌다**(실측: 멀쩡한 canonical_bak 이 기본값
- * 수십 건으로 걸렸다). 세 갈래를 따로 물으면 그 착시가 없고 사람이 읽기도 낫다.
+ * 규칙(`pg_rewrite`)과 컬럼 기본값(`pg_attrdef`)은 스키마가 `NULL` 로 나와서
+ * **안쪽 의존이 전부 "밖"으로 잡힌다**(실측: 멀쩡한 canonical_bak 이 기본값 수십
+ * 건으로 걸렸다). 그 두 카탈로그에 namespace 컬럼이 아예 없고 소유 테이블만
+ * 가리키기 때문이다(toast 관계는 해당 없다 — `relnamespace = 'pg_toast'` 로 정상
+ * 스키마를 갖는다). 세 갈래를 따로 물으면 그 착시가 없고 사람이 읽기도 낫다.
  */
 export async function outsideDependents(prisma: QueryClient, schema: string): Promise<string[]> {
 	const rows = await prisma.$queryRaw<Array<{ d: string }>>`

@@ -176,6 +176,16 @@ COMMIT;
 실측으로 확인했다 — 교체·재조준이 한 트랜잭션에 들어가고, `app` 행이 그대로 살아남으며,
 뷰가 새 `canonical` 을 가리킨다.
 
+> **이 순서를 `prisma.$transaction` 안에서 내야 한다. 수동 `BEGIN` 은 안 된다**
+> (Task 4 실측). 위 SQL 은 **문장의 순서**를 적은 것이고 구현이 내는 것과 같지만,
+> `$executeRawUnsafe('BEGIN')` 으로 열면 안 된다 — Prisma 커넥션 풀은 동시 호출에서
+> 커넥션을 가르고(실측 pid 51430/51431/51432), `BEGIN` 은 문장이 끝나는 즉시 커넥션을
+> 반납하므로 다음 문장이 같은 커넥션이라는 보장이 없다. 갈리면 뒤따르는 DDL 이
+> **자동 커밋으로 나가고**, 그 순간 3.4 가 「존재하지 않는다」고 못 박은 반쯤 바뀐
+> 상태가 생긴다. `$transaction` 은 콜백이 도는 동안 커넥션을 점유하므로 그것만이
+> 안전하다. 7절 `v2:diff` 의 읽기 전용을 세션이 아니라 **트랜잭션에** 건 것도 같은
+> 판단이다.
+
 **FK 재부착이 승격의 검사 역할을 한다.** `app.run_gift` 가 새 판에 없는 기프트를
 가리키면 트랜잭션이 통째로 되돌아간다. 콜라보 기프트가 원본에서 빠지는 일이 실재하므로
 (PR #21 의 1122 팩) 이 실패는 실제로 일어날 수 있고, **일어나야 옳다.**
@@ -263,7 +273,79 @@ DB 접속이 필요 없고(재실행해도 바이트 단위로 같은 파일이 
 `load-canonical.ts` 는 과제 범위 밖 파일이지만, 이걸 고치지 않으면 `v2:build` 가
 끝까지 못 돈다.
 
-## 10. 범위 밖 — 그다음 PR
+## 10. 구현 결과
+
+결정 넷은 [ADR-07 `canonical` 은 승격으로만 바뀐다](../../adr/07-canonical-promotion.md)
+로 옮겼다. 여기는 **이 PR 이 실제로 무엇을 만들었나**만 적는다.
+
+### 10.1 명령 넷과 파일
+
+```
+npm run v2:build      src/v2/build-canonical.ts     신규
+npm run v2:diff       src/v2/diff-canonical.ts      신규
+npm run v2:promote    src/v2/promote-canonical.ts   신규 (promote)
+npm run v2:rollback   src/v2/promote-canonical.ts   신규 (rollback)
+
+src/v2/schema-ops.ts        신규.  스키마 이름 조작의 공통부.
+                            SQL 을 **만드는 것과 실행하는 것**을 갈라서 만드는 쪽은
+                            순수 함수로 둔다 — CI 가 DB 없이 테스트한다
+src/v2/schema-ops.test.ts   신규
+src/v2/load-canonical.ts    수정.  빈 canonical 가드(결정 4)
+package.json                명령 넷
+```
+
+### 10.2 검증 수치
+
+```
+검사        203건 전부 통과 (v2:verify:canonical)
+테스트      417건 전부 통과 · 타입 검사 둘 다 통과
+canonical    94테이블 · 152,399행
+raw          43,270 개체
+app.field_override   5행
+public       52테이블   안 건드림
+```
+
+승격 경로는 `promote → verify 203 → rollback → verify 203 → promote → verify 203`
+으로 왕복까지 태웠다. `wip` 과 `canonical` 이 행 152,399=152,399 · 인덱스 130=130 ·
+제약 179=179 로 완전히 같은 것을 따로 쟀다.
+
+거부 경로도 인위적으로 셋 태웠다 — 승격 선검사 거부(종료 1, 트랜잭션·`bak` 정리
+둘 다 시작 안 함) · `canonical_bak` 없는 rollback 거부 · 이전 `canonical_bak` 삭제.
+FK 재부착 직전에 일부러 던져 실패시켰을 때 `canonical_bak` 이 **같은 oid(50458)로**
+되살아났다 — 새로 만들어진 것이 아니라 그 객체가 돌아온 것이고, 그것이 원자성의
+증거다.
+
+### 10.3 실측으로 기각한 것
+
+```
+prisma migrate diff --from-url    9절.  P4002 또는 DROP 105건
+수동 BEGIN/COMMIT                  6.2 의 주석.  풀이 커넥션을 가른다
+통짜 pg_depend + pg_identify_object  아래
+```
+
+**`pg_depend` 를 통째로 훑어 스키마 밖 의존을 세는 방법은 못 쓴다.**
+`pg_identify_object` 가 규칙(`pg_rewrite`)과 컬럼 기본값(`pg_attrdef`)의 스키마를
+`NULL` 로 준다 — 그 카탈로그들에 namespace 컬럼이 없고 소유 테이블만 가리키기
+때문이다. 스키마가 `NULL` 이면 "밖"과 구분이 안 되므로 **안쪽 의존이 전부 밖으로
+잡히고**, 멀쩡한 `canonical_bak` 이 기본값 수십 건으로 걸린다. 대신 3.2 의 세 갈래
+(FK · 컬럼 타입 · 뷰)를 따로 물어 `UNION` 한다(`schema-ops.ts` 의
+`outsideDependents`). 살아있는 `canonical` 에 돌리면 3.2 가 적은 정확히 그 셋이 나온다.
+
+### 10.4 검증하지 못한 것 넷
+
+전문은 [ADR-07 6절](../../adr/07-canonical-promotion.md)에 있다. 요약하면,
+
+```
+차이 있는 새 판 승격      검증에 쓴 wip 은 전부 canonical 과 동일했다.
+                        통과 경로의 첫 실전은 다음 패치다
+enum 재지정의 값 이동     app.run 이 0행이라 USING …::text::<타입> 을 실측 못 했다
+교체의 ACCESS EXCLUSIVE  지금은 앱이 public 을 읽어 무해하다.
+                        앱 전환 뒤에는 승격이 짧게 앱을 멈춘다 — 6.1 의 그 창
+outsideDependents 의 범위  FK·컬럼 타입·뷰 셋뿐이다. 지금 스키마에 함수·트리거·
+                        도메인이 없어 충분하다. 쓰기 시작하면 같이 늘려야 한다
+```
+
+## 11. 범위 밖 — 그다음 PR
 
 ```
 snapshot_id 심기      canonical 이 자기 출처를 모른다.  증분의 기준점
