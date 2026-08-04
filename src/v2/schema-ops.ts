@@ -33,8 +33,11 @@ export async function tableCount(prisma: PrismaClient, schema: string): Promise<
  * 스키마 이름도 테이블 이름도 식별자라 파라미터로 못 넘긴다. 문자열로 박아야
  * 하므로 **모양을 좁혀서 주입을 막는다.** 우리가 쓰는 이름은 소문자·숫자·
  * 밑줄뿐이다 — 스키마 이름 전용이 아니라 두 종류 다 여기를 거친다.
+ *
+ * export 한다 — v2:diff(diff-canonical.ts)가 `wip`·`canonical` 사이를 오가며
+ * 테이블·컬럼 이름을 SQL 에 직접 박을 때 이 검사를 그대로 재사용한다.
  */
-function ident(name: string): string {
+export function ident(name: string): string {
 	if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`식별자가 이상하다: ${name}`);
 	return `"${name}"`;
 }
