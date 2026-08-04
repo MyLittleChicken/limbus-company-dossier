@@ -4,7 +4,16 @@
  * **SQL 문자열을 만드는 것과 실행하는 것을 가른다.** 만드는 쪽은 순수 함수라
  * DB 없이 테스트한다 — CI 는 데이터베이스를 쓰지 않는다.
  */
-import type { PrismaClient } from './generated/client.js';
+import type { Prisma } from './generated/client.js';
+
+/**
+ * 이 파일의 DB 함수들은 전부 `Prisma.TransactionClient` 를 받는다 — `PrismaClient`
+ * 가 아니다. `TransactionClient` 는 `Omit<PrismaClient, 트랜잭션 전용이 아닌 메서드
+ * 몇 개>` 라 **`PrismaClient` 값은 그대로 여기 넘길 수 있다**(구조적으로 상위집합).
+ * 반대로 v2:diff(diff-canonical.ts)처럼 `prisma.$transaction(async (tx) => …)`
+ * 안에서 받은 `tx` 도 그대로 넘길 수 있다 — 좁은 타입을 요구해야 양쪽 다 받는다.
+ */
+type QueryClient = Prisma.TransactionClient;
 
 /**
  * `canonical` 이 비어 있지 않을 때 적재기가 던지는 메시지 — 무엇이 문제인지
@@ -21,7 +30,7 @@ export function emptyRequiredMessage(): string {
 	].join('\n');
 }
 
-export async function tableCount(prisma: PrismaClient, schema: string): Promise<number> {
+export async function tableCount(prisma: QueryClient, schema: string): Promise<number> {
 	const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
 		SELECT count(*)::bigint AS n FROM information_schema.tables
 		WHERE table_schema = ${schema} AND table_type = 'BASE TABLE'
@@ -42,7 +51,7 @@ export function ident(name: string): string {
 	return `"${name}"`;
 }
 
-export async function schemaExists(prisma: PrismaClient, name: string): Promise<boolean> {
+export async function schemaExists(prisma: QueryClient, name: string): Promise<boolean> {
 	const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
 		SELECT count(*)::bigint AS n FROM information_schema.schemata WHERE schema_name = ${name}
 	`;
@@ -65,7 +74,7 @@ export async function schemaExists(prisma: PrismaClient, name: string): Promise<
  * 호출자가 "비었다"로 오해하고 지나가면 뒤에서 Prisma 원시 오류로 죽는다.
  * 먼저 `schemaExists` 로 보고, 없으면 그 사실을 말하는 오류를 던진다.
  */
-export async function hasAnyRow(prisma: PrismaClient, schema: string): Promise<boolean> {
+export async function hasAnyRow(prisma: QueryClient, schema: string): Promise<boolean> {
 	if (!(await schemaExists(prisma, schema))) {
 		throw new Error(`스키마 "${schema}" 가 아예 없다. hasAnyRow 는 있는 스키마의 행만 잰다.`);
 	}
@@ -84,6 +93,21 @@ export async function hasAnyRow(prisma: PrismaClient, schema: string): Promise<b
 
 export function renameSchema(from: string, to: string): string {
 	return `ALTER SCHEMA ${ident(from)} RENAME TO ${ident(to)}`;
+}
+
+/**
+ * id 목록이 길면 앞부분만 찍는다 — v2:diff 가 사라진/새 개체나 무결성이 깨진
+ * FK 값을 사람이 읽는 로그에 낼 때 쓴다. 수백 건이 통째로 로그를 덮으면 정작
+ * 중요한 요약이 묻힌다.
+ *
+ * `limit` 개까지는 그대로 나열하고, 넘으면 잘라서 "… (총 N건)" 을 덧붙인다 —
+ * 총 건수는 잘려도 알 수 있어야 한다. 경계는 `limit` 과 정확히 같을 때다:
+ * `ids.length === limit` 이면 전부 나열되고 꼬리표는 안 붙는다(잘린 것이
+ * 아니므로).
+ */
+export function formatIds(ids: string[], limit = 20): string {
+	const shown = ids.slice(0, limit).join(', ');
+	return ids.length > limit ? `${shown} … (총 ${ids.length}건)` : shown;
 }
 
 /**

@@ -5,6 +5,7 @@ import {
 	renameSchema,
 	extractCanonicalDdl,
 	tallyCanonicalDdl,
+	formatIds,
 } from './schema-ops.js';
 
 test('거부 메시지가 우회로를 알려 준다', () => {
@@ -105,6 +106,31 @@ test('canonical DDL 집계 — ALTER TABLE canonical 은 따옴표 뒤 마침표
 ALTER TABLE "canonical"."pack_text" ADD CONSTRAINT "pack_text_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id");
 `;
 	assert.equal(tallyCanonicalDdl(sql)['ALTER TABLE "canonical".'], 1);
+});
+
+// 경계값 셋 — 잘리기 직전(19)·경계(20, limit 과 정확히 같음)·잘린 직후(21).
+// v2:diff 의 개체 차·app 무결성 출력이 이 함수를 그대로 쓴다(리뷰 반영).
+test('formatIds — limit 보다 하나 적으면 안 잘린다(19/20)', () => {
+	const ids = Array.from({ length: 19 }, (_, i) => `id${i}`);
+	const out = formatIds(ids);
+	assert.doesNotMatch(out, /총/);
+	assert.equal(out.split(', ').length, 19);
+});
+
+test('formatIds — 정확히 limit 이면 안 잘린다(20/20)', () => {
+	const ids = Array.from({ length: 20 }, (_, i) => `id${i}`);
+	const out = formatIds(ids);
+	assert.doesNotMatch(out, /총/);
+	assert.equal(out.split(', ').length, 20);
+});
+
+test('formatIds — limit 을 하나 넘으면 잘리고 총 건수를 붙인다(21/20)', () => {
+	const ids = Array.from({ length: 21 }, (_, i) => `id${i}`);
+	const out = formatIds(ids);
+	assert.match(out, /… \(총 21건\)$/);
+	// 잘린 목록엔 20개만 나열된다(21번째 id20 은 안 보인다)
+	assert.equal(out.split(', ').length, 20);
+	assert.doesNotMatch(out, /id20 …/);
 });
 
 // extractCanonicalDdl 은 블록 안에 `"app"` 이라는 **글자 그대로의 부분 문자열**이
