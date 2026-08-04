@@ -6,7 +6,8 @@ import { UI } from '@/lib/ui-text';
 import { listPackCategories, listPacks, readPackFilter } from '@/lib/queries/packs';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox, TriFilter } from '@/components/filters';
-import { Empty, Icon, Name, SecLabel } from '@/components/ui';
+import { Empty, Name, SecLabel } from '@/components/ui';
+import { PackArt } from '@/components/pack-art';
 
 export default async function PacksPage({
 	params,
@@ -58,7 +59,11 @@ export default async function PacksPage({
 					{packs.map((p) => (
 						<li key={p.id}>
 							<Link href={`/${locale}/packs/${p.id}`} className="card">
-								<Icon src={p.icon} alt="" size={56} shape="wide" />
+								{/*
+									봉지 · 보스 · 광택 · 이름을 겹쳐 낸다. 봉지만 내면 8각 창과 이름 띠가
+									비어 팩을 알아볼 수 없다(`publish/PACK-ART.md`).
+								*/}
+								<PackArt id={p.id} sprite={p.sprite} name={p.text?.name ?? null} />
 								<div className="card-body">
 									<strong>
 										<Name value={p.text} notice={t.fallbackNotice} />

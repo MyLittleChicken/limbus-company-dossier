@@ -72,6 +72,8 @@ export async function listPacks(locale: Locale, filter: PackFilter) {
 		superposition: p.superposition,
 		extreme: p.extreme,
 		icon: packIcon(p.sprite),
+		// 카드가 봉지·보스·이름을 겹쳐 내므로 스프라이트 키 자체가 필요하다.
+		sprite: p.sprite,
 		text: nameOf(p.texts, locale),
 		giftCount: p._count.gifts,
 		exclusiveCount: p._count.exclusiveGifts,
@@ -151,7 +153,14 @@ export async function getPack(id: string, locale: Locale) {
 		extreme: pack.extreme,
 		floorLength: pack.floorLength,
 		icon: packIcon(pack.sprite),
-		// 보스 층에는 보스가 함께 그려진 카드가 쓰인다(실측 40개).
+		sprite: pack.sprite,
+		/*
+			보스 층 그림.
+
+			**완성된 카드가 아니라 투명한 보스 층 한 장이다**(391 × 432). 봉지 위에 겹쳐야
+			게임과 같은 카드가 된다 — 조사 기록은 `publish/PACK-ART.md` 다. 규칙으로
+			짝을 찾는 것은 실측 40 종이고, 규칙 밖 7 종은 `lib/pack-art.ts` 의 표가 맡는다.
+		*/
 		bossIcon: packBossIcon(pack.sprite),
 		text: nameOf(pack.texts, locale),
 		bosses: pack.bosses.map((b) => ({
