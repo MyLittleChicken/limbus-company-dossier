@@ -28,11 +28,11 @@ function input(): AxisInput {
 			'Allies have Burn Skill', 'Dawn Office Identities', 'Liu Assoc. Identities',
 			'Trigger Tremor Burst', 'Allies have Ammo Skill', 'Wrath Skill Used',
 			'Wrath Absolute Resonance', 'Counter Skill Used', 'Plus Coin Skill Used',
+			'Minus Coin Skill Used', 'Single-Coin Skill Used',
 			'Deployment Position', 'Clash Win', 'Always', 'Other Uncommon Triggers',
 			'Bloodfiend Identities', 'Yurodivy Identities',
 		],
 		effectIds: ['Inflict Burn Count', 'Deal Blunt Damage', 'Gain Buff', 'Consume Charge'],
-		unitKeywords: ['BLOODFIEND', 'SMALL'],
 		sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
 	};
 }
@@ -90,8 +90,12 @@ test('skill_kind 와 coin 을 none 으로 뭉개지 않는다', () => {
 	const t = buildAxis(input(), new Meta());
 	const counter = t.triggerRef.find((x) => x.triggerId === 'Counter Skill Used');
 	assert.deepEqual([counter?.refKind, counter?.refId], ['skill_kind', 'counter']);
-	const coin = t.triggerRef.find((x) => x.triggerId === 'Plus Coin Skill Used');
-	assert.equal(coin?.refKind, 'coin');
+	const plus = t.triggerRef.find((x) => x.triggerId === 'Plus Coin Skill Used');
+	assert.deepEqual([plus?.refKind, plus?.refId], ['coin', 'plus']);
+	const minus = t.triggerRef.find((x) => x.triggerId === 'Minus Coin Skill Used');
+	assert.deepEqual([minus?.refKind, minus?.refId], ['coin', 'minus']);
+	const single = t.triggerRef.find((x) => x.triggerId === 'Single-Coin Skill Used');
+	assert.deepEqual([single?.refKind, single?.refId], ['coin', 'single']);
 });
 
 test('어디에도 안 걸리는 트리거는 none 으로 명시 기록한다', () => {

@@ -425,7 +425,10 @@ model TriggerRef {
   /// 참조 대상이 없으면 빈 문자열이다. NULL 이면 PK 에 못 들어가고
   /// unique 로 두면 PostgreSQL 이 NULL 을 서로 다르게 봐 중복을 막지 못한다
   refId     String  @default("") @map("ref_id")
-  /// resonance 전용. activate | threshold | dominant | scaling
+  /// resonance 전용. 실제 저장값은 둘뿐이다 — activate(일반 공명, 7건) ·
+  /// absolute(절대 공명, 8건). `threshold`·`dominant`·`scaling` 은 쓰이지 않는다
+  /// (`scaling` 은 다른 어휘에서 온 이름이다). 이 열이 절대/일반 공명을 가른다 —
+  /// `resonance_mode='activate'` 로만 필터하면 절대 공명 8건을 놓친다
   resonanceMode String? @map("resonance_mode")
   /// resonance threshold 전용
   threshold     Int?

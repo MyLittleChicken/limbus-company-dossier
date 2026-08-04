@@ -222,7 +222,6 @@ async function main(): Promise<void> {
 				.map((a) => ({ associationId: a.associationId, name: a.name })),
 			triggerIds: vocab.trigger.map((t) => t.id),
 			effectIds: vocab.effect.map((e) => e.id),
-			unitKeywords: [...new Set(identities.identityUnitKeyword.map((u) => u.keyword))],
 			sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
 		}, meta);
 

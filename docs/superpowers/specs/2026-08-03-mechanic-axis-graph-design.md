@@ -638,20 +638,31 @@ Trigger Tremor Burst          → axis VIBRATION            (최장일치 폴백
 든 `Trigger Tremor Burst` 최장일치 문제가, 소속 우선·최장일치 규칙을 적재기에 그대로
 넣은 뒤에는 재발하지 않는다.
 
-### ③ 스키마가 설계와 한 군데 다르다 — `refId` 는 nullable 이 아니다
+### ③ 스키마가 설계와 세 군데 다르다
 
-15절은 `TriggerRef`·`EffectRef` 의 `refId` 를 `String?` 로 적었다. **실제 구현은
-`String @default("")` 다.**
+15절 스니펫은 요약이라 구현이 세 군데를 벗어났다. 셋 다 15절 본문을 이 결과로
+고쳤다 — 이 설계 문서를 다시 참고해 스키마를 되돌릴 때 아래로 회귀하면 안 된다.
 
 ```
-이유    @@id([triggerId, refKind, refId]) 에 nullable 컬럼을 넣으면 Prisma 가 P1012 로 거부한다.
-        @@unique 로 우회하면 PostgreSQL 이 NULL 을 서로 다르게 봐(NULLS DISTINCT) 다뤄
-        중복이 뚫린다. refKind='none' 행이 31건이라 실질적 구멍이었다.
-같은 관례   model FieldGap 의 locale String @default("") 가 이미 같은 패턴을 쓴다.
-```
+refId               String? → String @default("")
+                     이유    @@id([triggerId, refKind, refId]) 에 nullable 컬럼을 넣으면
+                             Prisma 가 P1012 로 거부한다. @@unique 로 우회하면 PostgreSQL 이
+                             NULL 을 서로 다르게 봐(NULLS DISTINCT) 다뤄 중복이 뚫린다 —
+                             refKind='none' 행이 31건이라 실질적 구멍이었다. model FieldGap 의
+                             locale String @default("") 가 이미 같은 패턴을 쓴다.
 
-15절의 프리즈마 스니펫을 이 결과로 고쳤다. 이 설계 문서를 다시 참고해 스키마를
-되돌릴 때 nullable 로 회귀하면 안 된다.
+IdentityAxis.egoId  15절 스니펫에 없는데 구현에 있다
+                     이유    ego_granted 축이 「어느 E.G.O 가 주는가」를 남겨야 16절의
+                             (identityId, egoId[]) 판정이 조인만으로 된다. 요약 스니펫이
+                             축약하며 뺐을 뿐 결정 자체는 15절 본문(「ego_granted 는 저작
+                             2행」)에 이미 있었다.
+
+GiftTriggerParam.value  String → String?
+                     이유    kind='slot' 행은 값이 슬롯 배열(slots Int[])에 있고 value 는
+                             안 쓴다 — min_count·denominator 행만 value 를 채운다. 15절
+                             스니펫은 value 를 필수로 적었으나 slot 행에는 값이 없으니
+                             nullable 이 맞다.
+```
 
 **남은 것은 정량자다.** 임계값 72 · 분모 · 배치 슬롯 ~90행이며 위키·게임 확인으로
 채운다. 파이프라인 밖의 일이다.

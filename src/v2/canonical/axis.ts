@@ -36,7 +36,6 @@ export interface AxisInput {
 	associationTextEn: Array<{ associationId: string; name: string }>;
 	triggerIds: string[];
 	effectIds: string[];
-	unitKeywords: string[];
 	sinIds: string[];
 }
 
@@ -171,7 +170,13 @@ export function buildAxis(input: AxisInput, meta: Meta): AxisTables {
 		if (atk !== undefined) { push('attack_type', atk); continue; }
 		const kind = SKILL_KINDS.find((k) => id.toLowerCase().includes(k));
 		if (kind !== undefined) { push('skill_kind', kind); continue; }
-		if (id.includes('Coin')) { push('coin', ''); continue; }
+		// coin 은 Plus/Minus/Single-Coin 셋뿐이다. refId 를 비워두면 구분이
+		// 참조 테이블에서 사라지고 트리거 id 문자열로만 남는다 — 채운다
+		if (id.includes('Coin')) {
+			const coinKind = id.includes('Plus') ? 'plus' : id.includes('Minus') ? 'minus' : 'single';
+			push('coin', coinKind);
+			continue;
+		}
 		if (id === 'Deployment Position') { push('deployment', ''); continue; }
 
 		// 6) **말없이 버리지 않는다.** none 으로 명시 기록한다

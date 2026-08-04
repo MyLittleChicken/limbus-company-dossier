@@ -10,6 +10,12 @@
 
 ## Global Constraints
 
+> **정정 (2026-08-04, 최종 검토 반영):** `refId` 는 실행 중 `String @default("")` 로
+> 바뀌었다. 아래 Task 2 의 스니펫과 테스트 곳곳에 남은 `refId: string | null` · `refId: null`
+> 은 실행 전 판본이다 — 이 계획서는 실행이 끝난 이력 문서라 본문은 그대로 두었다.
+> 스키마를 다시 참고할 때는 설계 문서 15절을 정본으로 삼는다
+> (`docs/superpowers/specs/2026-08-03-mechanic-axis-graph-design.md`).
+
 - **`raw` 스키마는 건드리지 않는다.** 재수집 없이 `npm run v2:canonical` 재계산만으로 끝난다.
 - **변환기는 파일을 읽지 않는다.** `raw.raw_object` 를 질의해 만든다. `src/v2/source.ts` 의 `readSource`·`readSourceGroup`·`str`·`num`·`arr` 도우미만 쓴다.
 - **지어내지 않는다.** 원본에 없는 값을 채우지 않는다. 유도 실패는 `meta.gap(...)` 으로 남긴다.

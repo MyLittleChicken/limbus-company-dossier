@@ -99,7 +99,7 @@ async function main(): Promise<void> {
 		//         버리지 않는다」규칙에 따라 이번에 처음 기록한다
 		//   973 + 42 + 122 = 1,137
 		//   +5    identity.axis — 축이 없는 인격 5건(10201·10205·10305·10903·11206).
-		//         keyword·special_status 어느 경로로도 축을 못 얻는다(task-4-report.md).
+		//         keyword·special_status 어느 경로로도 축을 못 얻는다(설계 13절).
 		//         1,137 + 5 = 1,142
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
