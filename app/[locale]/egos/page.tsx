@@ -73,7 +73,7 @@ export default async function EgosPage({ params }: { params: Promise<{ locale: s
 
 	const units: Unit[] = rows.map((e) => ({
 		id: e.id,
-		sinnerId: e.sinnerId,
+		sectionId: String(e.sinnerId),
 		rankIcon: e.rank ? egoRankIcon(e.rank) : null,
 		rankLabel: e.rank ?? '',
 		grade: e.rank ? RANKS.indexOf(e.rank) + 1 : 0,
@@ -101,8 +101,8 @@ export default async function EgosPage({ params }: { params: Promise<{ locale: s
 			<UnitList
 				units={units}
 				axes={axes}
-				sinners={sinners.map((s) => ({
-					id: s.id,
+				sections={sinners.map((s) => ({
+					id: String(s.id),
 					name: s.text?.name ?? String(s.id),
 					icon: s.icon,
 				}))}

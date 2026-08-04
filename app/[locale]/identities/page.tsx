@@ -85,7 +85,7 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 
 	const units: Unit[] = rows.map((u) => ({
 		id: u.id,
-		sinnerId: u.sinnerId,
+		sectionId: String(u.sinnerId),
 		rankIcon: rarityIcon(u.star),
 		rankLabel: '0'.repeat(u.star),
 		grade: u.star,
@@ -114,8 +114,8 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 			<UnitList
 				units={units}
 				axes={axes}
-				sinners={sinners.map((s) => ({
-					id: s.id,
+				sections={sinners.map((s) => ({
+					id: String(s.id),
 					name: s.text?.name ?? String(s.id),
 					icon: s.icon,
 				}))}

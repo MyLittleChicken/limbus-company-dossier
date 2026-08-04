@@ -141,6 +141,56 @@ export async function listGifts(locale: Locale, filter: GiftFilter) {
 
 export type GiftListItem = Awaited<ReturnType<typeof listGifts>>['items'][number];
 
+/**
+ * 저주·축복 기프트.
+ *
+ * 얻을 때는 「저주」로 붙어 아군에게 불리하게 걸리고, 조건을 채우면 「축복」으로 바뀌어
+ * 이로운 효과를 낸다. **데이터가 그것을 플래그로 갖고 있지 않아 설명문으로 가린다** —
+ * 「전투를 6회 승리할 시 해당 E.G.O 기프트가 변경됨」이라는 문장이 있는 것이 그것이고
+ * 실측 3 건이다(9227 귀기 서린 환도 · 9229 빛바랜 건틀릿 · 9231 그날의 기록).
+ *
+ * **한국어 행으로 가린다.** 화면 로케일과 무관하게 같은 셋이 나와야 하기 때문이다.
+ *
+ * 바뀐 뒤의 축복 기프트는 따로 있는 것으로 보인다 — 9228 신검합일 · 9230 황금빛 시간 ·
+ * 9232 가능성이 각각 id 하나 뒤에 있고 전부 3 등급 순수 이득 효과다. 다만 **둘을 잇는
+ * 값이 데이터에 없어** 짝으로 단정하지 않고 여기서 표시하지도 않는다.
+ */
+export async function listCursedGiftIds(): Promise<Set<number>> {
+	const rows = await db.giftText.findMany({
+		where: { locale: 'ko', enhanceLevel: 0, desc: { contains: '기프트가 변경' } },
+		select: { giftId: true },
+	});
+	return new Set(rows.map((r) => r.giftId));
+}
+
+/**
+ * 기프트 전량.
+ *
+ * **쪽을 나누지 않는다.** 456 장을 한 번에 내려보내고 거르기·정렬·섹션을 화면이 맡는다 —
+ * 인격 184 · E.G.O 110 · 팩 117 과 같은 방식이다. 그리기는 화면이 나눠 한다.
+ */
+export async function listAllGifts(locale: Locale) {
+	const rows = await db.gift.findMany({
+		orderBy: [{ tier: 'asc' }, { id: 'asc' }],
+		include: {
+			// 목록에는 기본 단계(0)의 이름만 쓴다.
+			texts: { where: { locale: { in: [locale, 'en'] }, enhanceLevel: 0 } },
+			keyword: { include: { texts: localeFilter(locale) } },
+			_count: { select: { exclusivePacks: true } },
+		},
+	});
+
+	return rows.map((g) => ({
+		id: g.id,
+		tier: g.tier,
+		icon: giftIcon(g.sprite),
+		text: nameOf(g.texts, locale),
+		keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
+		keywordId: g.keywordId,
+		exclusiveCount: g._count.exclusivePacks,
+	}));
+}
+
 export async function getGift(id: number, locale: Locale) {
 	const gift = await db.gift.findUnique({
 		where: { id },

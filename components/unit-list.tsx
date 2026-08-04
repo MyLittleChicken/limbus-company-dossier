@@ -4,27 +4,38 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 /**
- * 인격·E.G.O 목록.
+ * 인격 · E.G.O · 기프트 목록.
  *
- * 두 화면이 같은 골격을 쓴다 — 수감자별 섹션 · 세로 카드 · 상단에 붙는 인라인 필터.
- * 다른 것은 축 구성뿐이라 그것만 밖에서 받는다.
+ * 세 화면이 같은 골격을 쓴다 — 섹션으로 가른 세로 카드 · 상단에 붙는 인라인 필터 ·
+ * 정렬 뒤집기 · 이름 검색. 다른 것은 축 구성과 섹션 기준뿐이라 그것만 밖에서 받는다.
+ * 인격은 수감자로, E.G.O 도 수감자로, 기프트는 키워드로 가른다.
  *
  * **거르기를 브라우저에서 한다.** 축이 여섯이고 셋이 관계 테이블이라 조건마다 다시
- * 질의하면 왕복이 잦다. 184 장이면 한 번에 받아 거르는 편이 싸고, 조건을 켤 때마다
- * 화면이 즉시 반응한다. 목록이 커지면 그때 서버로 되돌린다.
+ * 질의하면 왕복이 잦다. 한 번에 받아 거르는 편이 싸고, 조건을 켤 때마다 화면이 즉시
+ * 반응한다.
+ *
+ * **대신 그리기를 나눈다.** 기프트가 456 장이라 한 번에 다 그리면 첫 화면이 늦다.
+ * 거른 결과를 `STEP` 씩 늘려 가며 그리고, 바닥에 둔 표적이 보이면 다음 몫을 붙인다.
  */
 
 export type Unit = {
 	id: string;
-	sinnerId: number;
-	rankIcon: string | null;
-	rankLabel: string;
+	/** 어느 섹션에 들어가는가. `sections` 의 id 와 맞춘다. */
+	sectionId: string;
+	/** 등급 그림. 없으면 `rankText` 를 쓴다. */
+	rankIcon?: string | null;
+	/** 등급을 글자로 낼 때. 기프트의 로마자가 그렇다 — 애셋이 없다. */
+	rankText?: string | null;
+	rankLabel?: string;
+	/** 정렬의 첫 열쇠. 인격·E.G.O 는 등급이고 기프트도 등급이다. */
 	grade: number;
-	season: number | null;
-	released: string | null;
+	season?: number | null;
+	released?: string | null;
 	image: string | null;
 	name: string;
-	fellBack: boolean;
+	fellBack?: boolean;
+	/** 카드 아래에 다는 한 줄. 시즌이 없는 목록이 쓴다. */
+	note?: string | null;
 	/** 축 id 집합. 필터가 이것만 본다. */
 	tags: Record<string, string[]>;
 };
@@ -40,7 +51,16 @@ export type Axis = {
 	 */
 	iconOnly?: boolean;
 };
-export type Sinner = { id: number; name: string; icon: string | null };
+export type Section = { id: string; name: string; icon?: string | null };
+
+/**
+ * 한 번에 그리는 몫. 바닥에 닿으면 이만큼 늘린다.
+ *
+ * **인격 184 · E.G.O 110 은 한 번에 다 들어간다.** 나누는 것은 기프트 456 뿐이며 그것이
+ * 노린 바다 — 200 보다 작게 잡았더니 인격 목록에서 뒤쪽 수감자 섹션이 처음에 없다가
+ * 나중에 생겨 목차 감각이 깨졌다.
+ */
+const STEP = 200;
 
 /**
  * 시즌 표기.
@@ -62,19 +82,26 @@ export function seasonLabel(raw: number | null): string | null {
 export function UnitList({
 	units,
 	axes,
-	sinners,
+	sections,
 	basePath,
 	searchPlaceholder,
+	variant = 'portrait',
 }: {
 	units: Unit[];
 	axes: Axis[];
-	sinners: Sinner[];
+	/** 섹션 머리. 여기 없는 `sectionId` 를 가진 카드는 그려지지 않는다. */
+	sections: Section[];
 	/*
 		상세로 가는 경로의 앞부분. **함수를 받지 않는다** — 서버 컴포넌트에서 클라이언트로
 		함수를 넘길 수 없어서다(직렬화 대상이 아니다).
 	*/
 	basePath: string;
 	searchPlaceholder: string;
+	/**
+	 * 그림을 어떻게 앉히는가. 인물 초상은 잘라서 채우고(`portrait`), 물건 아이콘은
+	 * 잘리면 무엇인지 알 수 없어 통 안에 온전히 넣는다(`icon`).
+	 */
+	variant?: 'portrait' | 'icon';
 }) {
 	const [picked, setPicked] = useState<Record<string, string[]>>({});
 	const [open, setOpen] = useState<string | null>(null);
@@ -134,9 +161,50 @@ export function UnitList({
 		return desc ? rows.reverse() : rows;
 	}, [shown, desc]);
 
-	const bySinner = useMemo(() => {
-		const map = new Map<number, Unit[]>();
-		for (const u of sorted) map.set(u.sinnerId, [...(map.get(u.sinnerId) ?? []), u]);
+	/*
+		그리기를 나눈다.
+
+		456 장을 한 번에 그리면 첫 화면이 늦다. 거른 결과의 앞에서부터 `STEP` 씩 붙이고
+		바닥의 표적이 보이면 다음 몫을 잇는다. **조건이 바뀌면 처음으로 되돌린다** —
+		안 그러면 좁게 거른 뒤에도 지난번에 늘려 둔 몫이 남아 엉뚱한 수를 그린다.
+	*/
+	const [limit, setLimit] = useState(STEP);
+	const tail = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => setLimit(STEP), [picked, q, desc]);
+
+	/*
+		표적은 **눌러서도 더 볼 수 있는 버튼**이다.
+
+		관찰자는 문서가 숨겨져 있으면 콜백을 부르지 않는다(`visibilityState` 가 `hidden` 인
+		동안 실측으로 한 번도 오지 않았다). 그런 상황에서 빈 표적만 두면 목록이 거기서
+		멈춘 채 아무 길도 남지 않는다. 손으로 이어갈 수 있게 두고, 관찰자는 그 버튼을 본다.
+	*/
+	useEffect(() => {
+		const target = tail.current;
+		if (!target) return;
+		const io = new IntersectionObserver((entries) => {
+			if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + STEP);
+		});
+		io.observe(target);
+		return () => io.disconnect();
+	}, [sorted.length, limit]);
+
+	const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
+
+	const bySection = useMemo(() => {
+		const map = new Map<string, Unit[]>();
+		for (const u of visible) map.set(u.sectionId, [...(map.get(u.sectionId) ?? []), u]);
+		return map;
+	}, [visible]);
+
+	/*
+		섹션 머리의 수는 **거른 전부**를 센다. 그린 몫만 세면 아래로 내려갈수록 수가 자라
+		읽는 사람이 무엇을 믿어야 할지 알 수 없다.
+	*/
+	const countBySection = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const u of sorted) map.set(u.sectionId, (map.get(u.sectionId) ?? 0) + 1);
 		return map;
 	}, [sorted]);
 
@@ -246,21 +314,21 @@ export function UnitList({
 				</div>
 			</div>
 
-			{sinners.map((s) => {
-				const rows = bySinner.get(s.id) ?? [];
+			{sections.map((s) => {
+				const rows = bySection.get(s.id) ?? [];
 				if (!rows.length) return null;
 				return (
 					<div key={s.id}>
-						<div className="seclabel secgroup" id={`sinner-${s.id}`}>
+						<div className="seclabel secgroup" id={`sec-${s.id}`}>
 							{s.icon ? (
 								/* eslint-disable-next-line @next/next/no-img-element */
 								<img className="icon" src={s.icon} alt="" width={28} height={28} />
 							) : null}
 							<h2>{s.name}</h2>
 							<span className="rule" />
-							<span className="hint">{rows.length}</span>
+							<span className="hint">{countBySection.get(s.id) ?? rows.length}</span>
 						</div>
-						<ul className="cardgrid">
+						<ul className={variant === 'icon' ? 'cardgrid cardgrid-gift' : 'cardgrid'}>
 							{rows.map((u) => (
 								<li key={u.id}>
 									<Link className="card unit" href={`${basePath}/${u.id}`}>
@@ -274,13 +342,18 @@ export function UnitList({
 											) : null}
 											{u.rankIcon ? (
 												/* eslint-disable-next-line @next/next/no-img-element */
-												<img className="unit-rank" src={u.rankIcon} alt={u.rankLabel} />
+												<img className="unit-rank" src={u.rankIcon} alt={u.rankLabel ?? ''} />
 											) : null}
+											{/* 등급 애셋이 없는 목록은 글자로 낸다 — 기프트의 로마자가 그렇다. */}
+											{u.rankText ? <span className="gift-tier">{u.rankText}</span> : null}
 										</span>
 										<span className="card-meta">
-											{seasonLabel(u.season) ? (
+											{u.note != null ? (
+												<span className="tag">{u.note}</span>
+											) : u.season === undefined ? null : seasonLabel(u.season) ? (
 												<span className="tag">{seasonLabel(u.season)}</span>
 											) : (
+												// 시즌을 쓰는 목록에서만 결손을 말한다. 기프트는 시즌 자체가 없다.
 												<span className="tag absent">시즌 없음</span>
 											)}
 											{u.fellBack ? <abbr className="fellback">EN</abbr> : null}
@@ -292,6 +365,21 @@ export function UnitList({
 					</div>
 				);
 			})}
+
+			{/* 바닥 표적. 여기가 보이면 다음 몫을 잇고, 눌러도 이어진다. */}
+			{visible.length < sorted.length ? (
+				<button
+					type="button"
+					ref={tail}
+					className="loadmore"
+					onClick={() => setLimit((n) => n + STEP)}
+				>
+					더 보기
+					<span className="hint">
+						{visible.length} / {sorted.length}
+					</span>
+				</button>
+			) : null}
 
 			{sorted.length === 0 ? <p className="emptied">조건에 맞는 것이 없습니다</p> : null}
 
