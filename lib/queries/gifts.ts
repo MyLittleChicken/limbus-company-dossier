@@ -151,16 +151,38 @@ export type GiftListItem = Awaited<ReturnType<typeof listGifts>>['items'][number
  *
  * **한국어 행으로 가린다.** 화면 로케일과 무관하게 같은 셋이 나와야 하기 때문이다.
  *
- * 바뀐 뒤의 축복 기프트는 따로 있는 것으로 보인다 — 9228 신검합일 · 9230 황금빛 시간 ·
- * 9232 가능성이 각각 id 하나 뒤에 있고 전부 3 등급 순수 이득 효과다. 다만 **둘을 잇는
- * 값이 데이터에 없어** 짝으로 단정하지 않고 여기서 표시하지도 않는다.
+ * 바뀐 뒤의 축복 셋도 함께 돌려준다(9228 신검합일 · 9230 황금빛 시간 · 9232 가능성).
+ * 짝을 잇는 값이 없어 **어느 저주가 어느 축복이 되는지는 말하지 않고** 같은 칸에 넣기만
+ * 한다. 아래 주석에 근거를 적었다.
  */
 export async function listCursedGiftIds(): Promise<Set<number>> {
-	const rows = await db.giftText.findMany({
+	const cursed = await db.giftText.findMany({
 		where: { locale: 'ko', enhanceLevel: 0, desc: { contains: '기프트가 변경' } },
 		select: { giftId: true },
 	});
-	return new Set(rows.map((r) => r.giftId));
+
+	/*
+		바뀐 뒤의 축복 기프트.
+
+		**둘을 잇는 값이 데이터에 없다.** `gift_effect` · `choice_event_gift` · `fusion_recipe`
+		를 다 봤지만 짝을 가리키는 것이 없다 — 저주 셋만 `choice_event_gift` 에 있고 축복
+		셋은 어디에도 걸리지 않는다.
+
+		그래서 **id 하나 뒤**라는 관찰을 쓰되 그대로 믿지 않고 걸러 확인한다. 저주는 전부
+		1 등급이고 축복은 3 등급이며 둘 다 키워드가 없다. 조건에 맞지 않으면 버린다 —
+		규칙이 깨졌는데 엉뚱한 기프트를 특수로 표시하는 것보다 낫다.
+
+		나무위키의 기프트 문서가 축복 기프트가 셋(신검합일 · 황금빛 시간 · 가능성)이라고
+		적고 있어 수는 맞는다. 다만 **어느 저주가 어느 축복이 되는지는 그 문서도 밝히지
+		않는다.** 여기서도 짝으로 잇지 않고 같은 칸에 넣기만 한다.
+	*/
+	const candidates = cursed.map((r) => r.giftId + 1);
+	const blessed = await db.gift.findMany({
+		where: { id: { in: candidates }, tier: '3', keywordId: null },
+		select: { id: true },
+	});
+
+	return new Set([...cursed.map((r) => r.giftId), ...blessed.map((g) => g.id)]);
 }
 
 /**

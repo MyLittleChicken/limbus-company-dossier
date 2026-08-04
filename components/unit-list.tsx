@@ -127,12 +127,22 @@ export function UnitList({
 		return () => removeEventListener('scroll', onScroll);
 	}, []);
 
-	const toggle = (axis: string, id: string) =>
+	const toggle = (axis: string, id: string) => {
+		/*
+			**고르는 것은 스크롤이 아니다.**
+
+			조건을 켜면 목록이 짧아지고 그만큼 문서가 줄어 브라우저가 스크롤 위치를 옮긴다.
+			그 이동이 스크롤 이벤트로 오는데 위의 감시가 그것을 사용자 스크롤로 읽어 패널을
+			닫았다 — 값 하나 고를 때마다 축이 접혀서 여럿을 고를 수 없었다. 여는 때와 같은
+			창을 두어 무시한다.
+		*/
+		openedAt.current = performance.now();
 		setPicked((prev) => {
 			const cur = prev[axis] ?? [];
 			const next = cur.includes(id) ? cur.filter((v) => v !== id) : [...cur, id];
 			return next.length ? { ...prev, [axis]: next } : omit(prev, axis);
 		});
+	};
 
 	const shown = useMemo(() => {
 		const needle = q.trim().toLowerCase();
