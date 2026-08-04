@@ -83,12 +83,54 @@ export async function hasAnyRow(prisma: QueryClient, schema: string): Promise<bo
 		WHERE table_schema = ${schema} AND table_type = 'BASE TABLE'
 	`;
 	for (const { table_name } of tables) {
-		const rows = await prisma.$queryRawUnsafe<Array<{ e: boolean }>>(
-			`SELECT EXISTS (SELECT 1 FROM ${ident(schema)}.${ident(table_name)}) AS e`,
-		);
+		let sql: string;
+		try {
+			sql = `SELECT EXISTS (SELECT 1 FROM ${ident(schema)}.${ident(table_name)}) AS e`;
+		} catch {
+			// `ident` 는 모양이 이상하면 던진다. 그 실패가 **적재기의 첫 줄**에서 나므로
+			// 그대로 새어 나가면 사람이 받는 것은 `식별자가 이상하다: X` 한 줄뿐이고,
+			// 적재기 전체가 무엇 때문에 멈췄는지·무엇을 해야 하는지가 안 나온다. 다른
+			// 거부 메시지와 같은 세 줄 구조(무엇이·왜·어떻게)로 바꿔 던진다.
+			throw new Error(
+				[
+					`"${schema}"."${table_name}" 의 이름이 ident 의 모양 검사(소문자·숫자·밑줄)를 못 지난다 — 이 테이블에 행이 있는지 확인할 수 없다.`,
+					'확인 못 한 채 통과시키면 적재기가 살아있는 판을 지울 수 있으므로 멈춘다(설계 결정 4).',
+					'대문자가 섞인 @@map 이 새로 생겼다면 schema-ops 의 ident 를 그 이름까지 다루도록 고쳐야 한다 — 이 가드를 우회하는 길은 없다.',
+				].join('\n'),
+			);
+		}
+		const rows = await prisma.$queryRawUnsafe<Array<{ e: boolean }>>(sql);
 		if (rows[0]?.e) return true;
 	}
 	return false;
+}
+
+/**
+ * 살아있는 판을 `canonical_hold` 에서 제자리로 돌리는 한 줄. **build·promote·diff 가
+ * 같이 쓴다** — 세 곳이 각자 문자열을 들고 있으면 언젠가 하나만 고친다.
+ */
+export const RESTORE_LIVE_SQL = 'ALTER SCHEMA "canonical_hold" RENAME TO "canonical"';
+
+/**
+ * `canonical` 이 없는데 `canonical_hold` 가 있는 상태에 할 말.
+ *
+ * **v2:build 가 SIGINT 나 크래시로 죽으면 `catch` 가 안 돌아 build 의 복구 안내가
+ * 안 나온다.** 그 상태는 `canonical` 없음 · `canonical_hold` 살아있는 판 · `wip`
+ * 새 판이다. 여기서 「`wip` 만 있으니 `wip` 을 `canonical` 로 올려라」고 안내하면
+ * 재앙이다 — 대조도 안 한 새 판이 살아있는 자리에 앉고, 진짜 이전 판은
+ * `canonical_bak` 이 아니라 `canonical_hold` 에 남아 v2:rollback 이 못 찾는다.
+ *
+ * 그래서 `canonical` 부재를 다루는 곳(promote 0단계 · diff)은 `canonical_hold` 를
+ * 한 번 더 읽고 이 갈래로 빠져야 한다.
+ */
+export function buildDiedMidwayMessage(): string[] {
+	return [
+		'canonical 이 없고 canonical_hold 가 있다 — v2:build 가 중간에 죽은 상태다(SIGINT·크래시면 build 자신의 복구 안내가 안 나온다).',
+		'살아있는 판은 canonical_hold 에 있다. wip 을 canonical 로 올리지 마라 — 대조도 안 한 새 판이 살아있는 자리에 앉고, 진짜 이전 판이 canonical_bak 이 아니라 canonical_hold 에 남아 v2:rollback 이 못 찾는다.',
+		'먼저 살아있는 판을 복귀시켜라:',
+		`  ${RESTORE_LIVE_SQL}`,
+		'복귀시킨 뒤 wip 이 남아 있으면 npm run v2:diff 로 대조하고 나서 승격을 판단해라.',
+	];
 }
 
 export function renameSchema(from: string, to: string): string {
@@ -135,6 +177,18 @@ export interface AppTypeColumn {
 	typeSchema: string;
 	/** `format_type(atttypid, atttypmod)` 원문 — 대소문자 섞인 타입 이름이 이미 따옴표까지 붙어 나온다. */
 	typeText: string;
+	/**
+	 * `pg_class.relkind` 원문. **`ALTER TABLE … ALTER COLUMN … TYPE` 이 먹는 것은
+	 * 실제 테이블(`r`)과 파티션 부모(`p`)뿐**이라 재조준 가능 여부를 호출부가 이걸로
+	 * 가른다 — 뷰·머티리얼라이즈드뷰의 컬럼 타입은 정의 질의를 따라가므로 그 문장이
+	 * 안 먹는다.
+	 */
+	relkind: string;
+}
+
+/** `ALTER TABLE … ALTER COLUMN … TYPE` 으로 다시 겨눌 수 있는 relkind. */
+export function isRetargetableRelkind(relkind: string): boolean {
+	return relkind === 'r' || relkind === 'p';
 }
 
 /**
@@ -285,37 +339,112 @@ export async function appDependencies(prisma: QueryClient): Promise<AppFk[]> {
  *
  * `information_schema.columns` 대신 `pg_attribute` 를 보는 이유는 `format_type` 이
  * 필요해서다 — 타입 이름을 우리가 조립하지 않고 PostgreSQL 이 찍어 준 것을 쓴다.
+ *
+ * **relkind 범위는 `outsideDependents` 의 타입 갈래와 같아야 한다.** 처음엔 여기만
+ * `'r'` 이었는데, 그러면 `app` 에 뷰나 파티션 테이블이 생겨 `canonical` 의 enum 을
+ * 쓸 때 승격이 그것을 못 보고 재조준을 빠뜨린다 — 그리고 **다음** 승격의
+ * `outsideDependents` 가 그것을 잡아 「누군가 손으로 만든 것일 가능성이 높다」는
+ * 엉뚱한 안내로 막는다. 안전 쪽으로 실패하지만 원인을 숨긴다. 여기서 같이 보고,
+ * 재조준이 안 되는 relkind 는 호출부가 이유를 말하며 거절한다
+ * (`isRetargetableRelkind`).
  */
 export async function appTypeColumns(
 	prisma: QueryClient,
 	schema: string,
 ): Promise<AppTypeColumn[]> {
 	const rows = await prisma.$queryRaw<
-		Array<{ table: string; column: string; typeSchema: string; typeText: string }>
+		Array<{
+			table: string;
+			column: string;
+			typeSchema: string;
+			typeText: string;
+			relkind: string;
+		}>
 	>`
 		SELECT cl.relname AS "table", a.attname AS "column",
-		       tns.nspname AS "typeSchema", format_type(a.atttypid, a.atttypmod) AS "typeText"
+		       tns.nspname AS "typeSchema", format_type(a.atttypid, a.atttypmod) AS "typeText",
+		       cl.relkind::text AS "relkind"
 		  FROM pg_attribute a
 		  JOIN pg_class cl ON cl.oid = a.attrelid
 		  JOIN pg_namespace ns ON ns.oid = cl.relnamespace
 		  JOIN pg_type t ON t.oid = a.atttypid
 		  JOIN pg_namespace tns ON tns.oid = t.typnamespace
 		 WHERE ns.nspname = 'app' AND tns.nspname = ${schema}
-		   AND cl.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+		   AND cl.relkind IN ('r', 'p', 'v', 'm', 'f')
+		   AND a.attnum > 0 AND NOT a.attisdropped
 		 ORDER BY cl.relname, a.attname
 	`;
 	return rows;
 }
 
 /**
- * `app` 이 새 판을 가리킬 수 있는지 보는 검사 둘 — 설계 6.2 의 "FK 재부착이 승격의
+ * `app` 이 새 판을 가리킬 수 있는지 보는 검사 하나 — 설계 6.2 의 "FK 재부착이 승격의
  * 검사 역할을 한다"를 **미리** 돌리는 것이다. v2:diff 가 예고로, v2:promote 가
  * 선검사로 같은 질의를 쓴다.
  */
-export const APP_FK_CHECKS = [
-	{ table: 'run_gift', fkColumn: 'gift_id', targetTable: 'gift' },
-	{ table: 'run_floor', fkColumn: 'pack_id', targetTable: 'pack' },
-] as const;
+export interface AppFkCheck {
+	table: string;
+	fkColumn: string;
+	targetTable: string;
+	targetColumn: string;
+}
+
+export interface AppFkCheckPlan {
+	checks: AppFkCheck[];
+	/**
+	 * 정의문에서 검사 모양을 못 읽어낸 FK. **조용히 빠지면 안 된다** — 선검사가
+	 * 없는 채로 승격이 돌면 사람이 받는 것은 선검사가 없애려던 바로 그 원시 오류다.
+	 */
+	unsupported: string[];
+}
+
+/**
+ * `FOREIGN KEY (a) REFERENCES s.t(b) …` 한 줄에서 검사에 필요한 넷을 뽑는다.
+ * 따옴표는 붙어 있을 수도 없을 수도 있다 — PostgreSQL 은 필요할 때만 붙인다.
+ */
+const FK_DEF = /^FOREIGN KEY\s*\(([^)]+)\)\s*REFERENCES\s+("?[^".()\s]+"?)\.("?[^".()\s]+"?)\s*\(([^)]+)\)/;
+
+function unquote(name: string): string {
+	return name.startsWith('"') && name.endsWith('"') ? name.slice(1, -1) : name;
+}
+
+/**
+ * 선검사 목록을 **카탈로그가 준 FK 정의문에서 유도한다.**
+ *
+ * 예전엔 `run_gift`·`run_floor` 둘을 상수로 박아 뒀는데, 같은 대상을 `appDependencies`
+ * 는 카탈로그에서 동적으로 읽고 있었다 — **한 대상에 진실 원천이 둘**이었다. 지금은
+ * 우연히 일치하지만 `app`→`canonical` FK 가 셋째로 늘면 승격은 그것을 떼었다 붙이면서
+ * 선검사만 건너뛰고, v2:diff 의 예고에서도 조용히 빠진다. 유도하면 그 어긋남이 원리적
+ * 으로 생길 수 없다.
+ *
+ * **읽어내지 못한 것은 버리지 않고 `unsupported` 로 돌려준다.** 복합 FK(컬럼 여러 개)
+ * 는 `appIntegrityCheck` 의 한 컬럼짜리 질의로 못 재고, 모양이 다른 정의문도 마찬가지
+ * 다. 그런 것을 조용히 빼면 「선검사가 통과했다」가 거짓이 된다.
+ */
+export function appFkChecks(fks: AppFk[]): AppFkCheckPlan {
+	const checks: AppFkCheck[] = [];
+	const unsupported: string[] = [];
+	for (const fk of fks) {
+		const m = FK_DEF.exec(fk.def);
+		if (!m) {
+			unsupported.push(`app.${fk.table}.${fk.name}: 정의문을 못 읽었다 — ${fk.def}`);
+			continue;
+		}
+		const [, cols, , targetTable, targetCols] = m;
+		// 복합 FK 는 「컬럼 하나가 가리키는 id 가 대상에 있나」로 못 잰다.
+		if ((cols ?? '').includes(',') || (targetCols ?? '').includes(',')) {
+			unsupported.push(`app.${fk.table}.${fk.name}: 복합 FK 라 한 컬럼짜리 선검사로 못 잰다 — ${fk.def}`);
+			continue;
+		}
+		checks.push({
+			table: fk.table,
+			fkColumn: unquote((cols ?? '').trim()),
+			targetTable: unquote(targetTable ?? ''),
+			targetColumn: unquote((targetCols ?? '').trim()),
+		});
+	}
+	return { checks, unsupported };
+}
 
 export interface AppIntegrityResult {
 	total: number;
@@ -325,8 +454,8 @@ export interface AppIntegrityResult {
 }
 
 /**
- * `app.<table>.<fkColumn>` 이 가리키는 값이 `<targetSchema>.<targetTable>.id` 에 다
- * 있는지.
+ * `app.<table>.<fkColumn>` 이 가리키는 값이 `<targetSchema>.<targetTable>.<targetColumn>`
+ * 에 다 있는지.
  *
  * `total` 이 0 이면 질의 자체를 건너뛴다 — 지금 DB 상태가 바로 이 경우다
  * (`run_gift`·`run_floor` 둘 다 0행). **"0 행이라 검사가 아무 일도 안 한 것"과 "행이
@@ -342,18 +471,20 @@ export interface AppIntegrityResult {
  */
 export async function appIntegrityCheck(
 	prisma: QueryClient,
-	check: { table: string; fkColumn: string; targetTable: string },
+	check: AppFkCheck,
 	targetSchema: string,
 ): Promise<AppIntegrityResult> {
 	const total = await exactCount(prisma, 'app', check.table);
 	if (total === 0) return { total: 0, skipped: true, missingIds: [] };
 
+	// 대상 컬럼도 정의문에서 온 것을 쓴다 — `id` 로 박아 두면 언젠가 `id` 가 아닌
+	// 컬럼을 가리키는 FK 가 생겼을 때 **엉뚱한 컬럼을 재고도 통과했다고 찍는다.**
 	const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
 		`SELECT DISTINCT a.${ident(check.fkColumn)} AS ${ident('id')}
 		   FROM ${ident('app')}.${ident(check.table)} a
 		  WHERE NOT EXISTS (
 		    SELECT 1 FROM ${ident(targetSchema)}.${ident(check.targetTable)} w
-		     WHERE w.${ident('id')} = a.${ident(check.fkColumn)}
+		     WHERE w.${ident(check.targetColumn)} = a.${ident(check.fkColumn)}
 		  )`,
 	);
 	return { total, skipped: false, missingIds: rows.map((r) => r.id) };
@@ -432,3 +563,53 @@ export function tallyCanonicalDdl(sql: string): Record<string, number> {
 	}
 	return out;
 }
+
+// ── v2:promote · v2:rollback 의 계획표 ───────────────────────────────────────
+
+/** 살아있는 이름. Prisma 가 스키마 이름을 하드코딩하므로(설계 3.1) 바뀌지 않는다. */
+export const LIVE_SCHEMA = 'canonical';
+
+export type Mode = 'promote' | 'rollback';
+
+export interface Plan {
+	/** 교체 뒤 `canonical` 이 될 스키마 — 지금 이 이름 밑에 새(또는 이전) 판이 있다. */
+	incoming: string;
+	/** 지금 `canonical` 이 물러날 이름. */
+	outgoing: string;
+	/** `incoming` 이 없을 때 사람에게 할 말. 조용히 넘어가지 않는다. */
+	missingIncoming: string[];
+	/** `outgoing` 이름이 이미 차 있을 때 어떻게 하나. */
+	outgoingOccupied: 'drop' | 'refuse';
+}
+
+/**
+ * **이 브랜치에서 결과가 가장 무거운 순수 데이터다.** `promote-canonical.ts` 안에
+ * 감춰 두면 테스트가 못 건드리는데, `outgoingOccupied` 의 `drop`/`refuse` 가 두 모드
+ * 사이에서 뒤바뀌기만 해도 **v2:rollback 이 갓 구운 `wip` 을 말없이 DROP 한다.**
+ * 타입 검사는 둘 다 `'drop' | 'refuse'` 라 못 잡는다. 그래서 스크립트가 아니라 여기
+ * (DB 없이 import 되는 순수 모듈)에 두고, `schema-ops.test.ts` 가 역연산 불변식을
+ * 못 박는다.
+ */
+export const PLANS: Record<Mode, Plan> = {
+	promote: {
+		incoming: 'wip',
+		outgoing: 'canonical_bak',
+		missingIncoming: [
+			'wip 스키마가 없다. v2:promote 는 v2:build 가 구운 새 판을 승격하는 명령이라 wip 없이는 할 일이 없다.',
+			'먼저 npm run v2:build 로 새 판을 구워라. 그 뒤 npm run v2:diff 로 무엇이 달라지는지 보고 승격해라.',
+		],
+		// 결정 3 — 이전 판은 하나만 남긴다. 다음 승격이 이전 bak 을 지운다.
+		outgoingOccupied: 'drop',
+	},
+	rollback: {
+		incoming: 'canonical_bak',
+		outgoing: 'wip',
+		missingIncoming: [
+			'canonical_bak 스키마가 없다. 되돌릴 이전 판이 없다는 뜻이다.',
+			'승격을 한 적이 없거나, 이미 되돌렸거나, 그다음 승격이 이전 판을 지웠다(설계 결정 3 — 이전 판은 하나만 남는다).',
+		],
+		// 승격과 달리 지우지 않는다. 되돌리기 중에 wip 이름이 차 있다는 것은 아직
+		// 승격 안 한 새 판이 거기 있다는 뜻일 수 있고, 그건 지울 물건이 아니다.
+		outgoingOccupied: 'refuse',
+	},
+};

@@ -25,6 +25,7 @@ import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { PrismaClient } from './generated/client.js';
 import {
+	RESTORE_LIVE_SQL,
 	renameSchema,
 	schemaExists,
 	tableCount,
@@ -52,8 +53,12 @@ async function alter(prisma: PrismaClient, sql: string): Promise<void> {
 	await prisma.$executeRawUnsafe(sql);
 }
 
-/** canonical_hold 로 되돌리는 한 줄 — 여러 갈래에서 반복하므로 한 곳에 둔다. */
-const RESTORE_LIVE_CMD = '  ALTER SCHEMA "canonical_hold" RENAME TO "canonical"    -- 살아있는 판을 복귀';
+/**
+ * canonical_hold 로 되돌리는 한 줄 — 여러 갈래에서 반복하므로 한 곳에 둔다.
+ * SQL 자체는 `schema-ops` 가 갖는다(promote·diff 의 「build 가 중간에 죽었다」안내가
+ * 같은 문장을 찍어야 해서다 — 세 곳이 각자 들고 있으면 언젠가 하나만 고친다).
+ */
+const RESTORE_LIVE_CMD = `  ${RESTORE_LIVE_SQL}    -- 살아있는 판을 복귀`;
 
 /**
  * canonical_hold 를 옆으로 치운 뒤(2단계) 실패하면 여기서 지금 상태를 읽어
@@ -118,13 +123,39 @@ async function main(): Promise<void> {
 	let movedLiveAside = false;
 	try {
 		console.log('1. 선점 확인 — wip · canonical_hold 가 이미 있으면 멈춘다');
+		const liveExists = await schemaExists(prisma, 'canonical');
+		const holdExists = await schemaExists(prisma, 'canonical_hold');
 		if (await schemaExists(prisma, 'wip')) {
+			// canonical 이 있는지 먼저 본다. 없으면 wip 이 **남은 유일한 판**일 수
+			// 있어서 무조건 "지워라"는 위험한 안내가 된다 — 아래 canonical_hold 거부가
+			// 「어느 쪽이 살아있는 판인지 먼저 조사해라」로 신중한 것과 같은 수준을
+			// 여기도 지킨다.
 			throw new Error(
-				'wip 스키마가 이미 있다. 앞선 v2:build 산물을 말없이 덮지 않는다. ' +
-					'필요 없으면 지우고("DROP SCHEMA wip CASCADE") 다시 돌려라.',
+				[
+					'wip 스키마가 이미 있다. 앞선 v2:build 산물을 말없이 덮지 않는다.',
+					...(liveExists
+						? [
+								'canonical 이 제자리에 있으므로 wip 은 아직 승격 안 한 새 판이다.',
+								'승격할 물건이면 npm run v2:diff 로 대조한 뒤 npm run v2:promote 를 써라.',
+								'정말 버릴 물건이라고 확인했으면 DROP SCHEMA "wip" CASCADE 로 지우고 다시 돌려라.',
+							]
+						: [
+								'canonical 이 없다 — wip 이 지금 남은 유일한 판일 수 있으므로 지우라고 말하지 않는다.',
+								...(holdExists
+									? [
+											'canonical_hold 가 있다. v2:build 가 중간에 죽은 흔적이고, 살아있는 판은 그쪽이다 —',
+											`먼저 ${RESTORE_LIVE_SQL} 로 복귀시킨 뒤 wip 을 어떻게 할지 판단해라.`,
+										]
+									: [
+											'canonical_hold 도 없다. 어느 스키마에 무엇이 있는지 먼저 조사해라:',
+											"  SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT LIKE 'pg_%'",
+											'행수를 비교하면 어느 것이 살아있는 판인지 알 수 있다(예: gift 582).',
+										]),
+							]),
+				].join('\n'),
 			);
 		}
-		if (await schemaExists(prisma, 'canonical_hold')) {
+		if (holdExists) {
 			throw new Error(
 				'canonical_hold 가 이미 있다. 앞선 v2:build 가 중간에 죽은 흔적이다. ' +
 					'canonical(지금 이름)과 canonical_hold 중 어느 쪽이 살아있는 판인지 먼저 조사해라 — ' +

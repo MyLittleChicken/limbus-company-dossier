@@ -38,13 +38,17 @@
  */
 import { PrismaClient, type Prisma } from './generated/client.js';
 import {
-	APP_FK_CHECKS,
+	LIVE_SCHEMA,
+	PLANS,
 	appDependencies,
+	appFkChecks,
 	appIntegrityCheck,
 	appTypeColumns,
+	buildDiedMidwayMessage,
 	exactCount,
 	formatIds,
 	ident,
+	isRetargetableRelkind,
 	outsideDependents,
 	qualifiesSchema,
 	rebindSql,
@@ -54,47 +58,20 @@ import {
 	tableCount,
 	type AppFk,
 	type AppTypeColumn,
+	type Mode,
+	type Plan,
 } from './schema-ops.js';
 
-type Mode = 'promote' | 'rollback';
-
-/** 살아있는 이름. Prisma 가 스키마 이름을 하드코딩하므로(설계 3.1) 바뀌지 않는다. */
-const LIVE = 'canonical';
-
-interface Plan {
-	/** 교체 뒤 `canonical` 이 될 스키마 — 지금 이 이름 밑에 새(또는 이전) 판이 있다. */
-	incoming: string;
-	/** 지금 `canonical` 이 물러날 이름. */
-	outgoing: string;
-	/** `incoming` 이 없을 때 사람에게 할 말. 조용히 넘어가지 않는다. */
-	missingIncoming: string[];
-	/** `outgoing` 이름이 이미 차 있을 때 어떻게 하나. */
-	outgoingOccupied: 'drop' | 'refuse';
-}
-
-const PLANS: Record<Mode, Plan> = {
-	promote: {
-		incoming: 'wip',
-		outgoing: 'canonical_bak',
-		missingIncoming: [
-			'wip 스키마가 없다. v2:promote 는 v2:build 가 구운 새 판을 승격하는 명령이라 wip 없이는 할 일이 없다.',
-			'먼저 npm run v2:build 로 새 판을 구워라. 그 뒤 npm run v2:diff 로 무엇이 달라지는지 보고 승격해라.',
-		],
-		// 결정 3 — 이전 판은 하나만 남긴다. 다음 승격이 이전 bak 을 지운다.
-		outgoingOccupied: 'drop',
-	},
-	rollback: {
-		incoming: 'canonical_bak',
-		outgoing: 'wip',
-		missingIncoming: [
-			'canonical_bak 스키마가 없다. 되돌릴 이전 판이 없다는 뜻이다.',
-			'승격을 한 적이 없거나, 이미 되돌렸거나, 그다음 승격이 이전 판을 지웠다(설계 결정 3 — 이전 판은 하나만 남는다).',
-		],
-		// 승격과 달리 지우지 않는다. 되돌리기 중에 wip 이름이 차 있다는 것은 아직
-		// 승격 안 한 새 판이 거기 있다는 뜻일 수 있고, 그건 지울 물건이 아니다.
-		outgoingOccupied: 'refuse',
-	},
-};
+/**
+ * 살아있는 이름. Prisma 가 스키마 이름을 하드코딩하므로(설계 3.1) 바뀌지 않는다.
+ *
+ * 이름도 계획표(`PLANS`)도 `schema-ops.ts` 에 산다 — **이 파일은 스크립트라 import
+ * 만 해도 `main()` 이 돌아 테스트가 못 건드린다.** `PLANS` 는 이 브랜치에서 결과가
+ * 가장 무거운 순수 데이터이므로(promote 와 rollback 의 `outgoingOccupied` 가 뒤바뀌면
+ * 되돌리기가 갓 구운 `wip` 을 말없이 지운다) DB 없이 불변식을 못 박아야 했다
+ * (`schema-ops.test.ts`).
+ */
+const LIVE = LIVE_SCHEMA;
 
 async function exec(tx: Prisma.TransactionClient, sql: string): Promise<void> {
 	console.log(`  ${sql}`);
@@ -141,6 +118,31 @@ function assertQualified(fks: AppFk[], types: AppTypeColumn[]): void {
 }
 
 /**
+ * 재조준의 또 다른 전제 — `ALTER TABLE … ALTER COLUMN … TYPE` 이 먹는 것은 실제
+ * 테이블뿐이다.
+ *
+ * `appTypeColumns` 는 `outsideDependents` 와 범위를 맞추느라 뷰·머티리얼라이즈드뷰·
+ * 외부 테이블까지 본다(그래야 `canonical` 타입을 쓰는 뷰가 조용히 빠지지 않는다).
+ * 그런 것이 나오면 **재조준 SQL 이 안 먹으므로 조립하지 않고 여기서 멈춘다** —
+ * 안 멈추면 트랜잭션 안에서 PostgreSQL 원시 오류로 죽고, 이 명령이 없애려던 바로
+ * 그 상황이 된다.
+ */
+function assertRetargetable(types: AppTypeColumn[]): void {
+	const bad = types.filter((t) => !isRetargetableRelkind(t.relkind));
+	if (bad.length === 0) return;
+	throw new Error(
+		[
+			`app 안에 ${LIVE} 의 타입을 쓰는 것이 있는데 테이블이 아니다 — ALTER TABLE … ALTER COLUMN … TYPE 으로는 다시 겨눌 수 없다.`,
+			...bad.map((t) => `  app.${t.table}.${t.column} (relkind=${t.relkind}) : ${t.typeText}`),
+			'',
+			`뷰는 정의 질의를 따라가므로 승격 전에 DROP 하고 승격 뒤 새 ${LIVE} 로 다시 만들어야 한다`,
+			'(설계 3.3 — 뷰는 OID 로 옛 판을 따라간다).',
+			'트랜잭션을 시작하지 않았다. DB 는 한 글자도 안 바뀌었다.',
+		].join('\n'),
+	);
+}
+
+/**
  * ★ 승격의 선검사 — 트랜잭션을 **시작하기 전에** `app` 무결성을 본다.
  *
  * 재부착이 어차피 검사 역할을 하므로(설계 6.2) 이 검사 없이도 잘못된 승격은
@@ -154,10 +156,34 @@ function assertQualified(fks: AppFk[], types: AppTypeColumn[]): void {
  *
  * 0행이면 「0행 · 확인할 것 없음」으로 **아무 일도 안 했다는 사실이 보이게** 찍는다
  * (`skipped`) — 조용히 "문제 없음"만 찍으면 나중에 진짜 문제를 놓친다.
+ *
+ * **검사 목록은 방금 읽은 `fks` 에서 유도한다.** 예전엔 상수로 박혀 있었고, 그래서
+ * 셋째 FK 가 생기면 승격은 그것을 떼었다 붙이면서 선검사만 건너뛰었다 — 사람이 받는
+ * 것은 선검사가 없애려던 바로 그 원시 오류다.
  */
-async function precheckAppIntegrity(prisma: PrismaClient, target: string): Promise<void> {
+async function precheckAppIntegrity(
+	prisma: PrismaClient,
+	target: string,
+	fks: AppFk[],
+): Promise<void> {
+	const { checks, unsupported } = appFkChecks(fks);
+	if (unsupported.length > 0) {
+		throw new Error(
+			[
+				`app → ${LIVE} FK ${unsupported.length}건의 선검사 모양을 정의문에서 못 읽어냈다 — 검사 없이 승격하지 않는다.`,
+				...unsupported.map((u) => `  ${u}`),
+				'',
+				'승격은 이 FK 를 떼었다 붙인다. 선검사를 건너뛰면 실패가 트랜잭션 안에서 PostgreSQL 원시 오류로만 나온다.',
+				'schema-ops 의 appFkChecks 를 이 모양까지 읽도록 늘려야 한다.',
+				'트랜잭션을 시작하지 않았다. DB 는 한 글자도 안 바뀌었다.',
+			].join('\n'),
+		);
+	}
+	if (checks.length === 0) {
+		console.log(`  app → ${LIVE} FK 가 없어 선검사할 것이 없다.`);
+	}
 	const blocked: string[] = [];
-	for (const check of APP_FK_CHECKS) {
+	for (const check of checks) {
 		const r = await appIntegrityCheck(prisma, check, target);
 		if (r.skipped) {
 			console.log(`  app.${check.table} 0행 · 확인할 것 없음`);
@@ -165,13 +191,13 @@ async function precheckAppIntegrity(prisma: PrismaClient, target: string): Promi
 		}
 		if (r.missingIds.length === 0) {
 			console.log(
-				`  app.${check.table} ${r.total.toLocaleString()}행 · 문제 없음 — 전부 ${target}.${check.targetTable} 에서 찾아진다`,
+				`  app.${check.table} ${r.total.toLocaleString()}행 · 문제 없음 — 전부 ${target}.${check.targetTable}.${check.targetColumn} 에서 찾아진다`,
 			);
 			continue;
 		}
 		blocked.push(
 			`  app.${check.table}.${check.fkColumn} ${r.total.toLocaleString()}행 중 ${r.missingIds.length}건이 ` +
-				`${target}.${check.targetTable} 에 없다: ${formatIds(r.missingIds)}`,
+				`${target}.${check.targetTable}.${check.targetColumn} 에 없다: ${formatIds(r.missingIds)}`,
 		);
 	}
 	if (blocked.length === 0) return;
@@ -312,8 +338,16 @@ async function main(): Promise<void> {
 			throw new Error(plan.missingIncoming.join('\n'));
 		}
 		if (!(await schemaExists(prisma, LIVE))) {
+			// canonical_hold 를 한 번 더 읽는다. v2:build 가 SIGINT·크래시로 죽으면
+			// build 의 catch 가 안 돌아 복구 안내가 없고, 그 상태가 정확히
+			// 「canonical 없음 · canonical_hold 살아있는 판 · wip 새 판」이다.
+			// 여기서 「wip 을 canonical 로 올려라」고 안내하면 재앙이다.
+			if (await schemaExists(prisma, 'canonical_hold')) {
+				throw new Error(buildDiedMidwayMessage().join('\n'));
+			}
 			throw new Error(
 				`${LIVE} 스키마가 없다 — 있어야 할 살아있는 판이 없다. DB 상태를 먼저 확인해라. ` +
+					`canonical_hold 도 없으므로 v2:build 가 중간에 죽은 것은 아니다. ` +
 					`${plan.incoming} 만 있는 상태라면 손으로 ${renameSchema(plan.incoming, LIVE)} 로 되돌린 뒤 다시 판단해라.`,
 			);
 		}
@@ -334,13 +368,14 @@ async function main(): Promise<void> {
 			);
 		}
 		assertQualified(fks, types);
+		assertRetargetable(types);
 
 		// 조립을 먼저 끝낸다 — 식별자 모양 검사에 걸리는 실패가 교체 도중에 나면 안 된다.
 		const { drop, add } = rebindSql(fks);
 		const retarget = retargetTypeSql(types);
 
 		console.log(`\n2. 선검사 — app 이 가리키는 것이 ${plan.incoming} 에 다 있나 (트랜잭션 전)`);
-		await precheckAppIntegrity(prisma, plan.incoming);
+		await precheckAppIntegrity(prisma, plan.incoming, fks);
 
 		console.log(`\n3. ${plan.outgoing} 이름 정리 — 무엇을 지울지 정하기만 하고, 지우는 것은 트랜잭션 안이다`);
 		let dropOutgoing: string | null = null;

@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
+	PLANS,
+	appFkChecks,
+	buildDiedMidwayMessage,
 	emptyRequiredMessage,
+	isRetargetableRelkind,
 	renameSchema,
 	extractCanonicalDdl,
 	tallyCanonicalDdl,
@@ -219,7 +224,7 @@ test('FK 재부착 SQL — 제약 이름에 따옴표가 들어오면 거부한�
 // 가리키고 있으면 canonical_bak 을 나중에 못 지운다.
 test('enum 재지정 SQL 을 format_type 결과 그대로 쓴다', () => {
 	const sql = retargetTypeSql([
-		{ table: 'run', column: 'difficulty', typeSchema: 'canonical', typeText: 'canonical."Difficulty"' },
+		{ table: 'run', column: 'difficulty', typeSchema: 'canonical', typeText: 'canonical."Difficulty"', relkind: 'r' },
 	]);
 	assert.deepEqual(sql, [
 		'ALTER TABLE "app"."run" ALTER COLUMN "difficulty" TYPE canonical."Difficulty" ' +
@@ -229,9 +234,23 @@ test('enum 재지정 SQL 을 format_type 결과 그대로 쓴다', () => {
 
 test('enum 재지정 SQL — 컬럼 이름에 따옴표가 들어오면 거부한다', () => {
 	assert.throws(
-		() => retargetTypeSql([{ table: 'run', column: 'a"b', typeSchema: 'canonical', typeText: 'canonical."Difficulty"' }]),
+		() =>
+			retargetTypeSql([
+				{ table: 'run', column: 'a"b', typeSchema: 'canonical', typeText: 'canonical."Difficulty"', relkind: 'r' },
+			]),
 		/식별자/,
 	);
+});
+
+// appTypeColumns 는 outsideDependents 와 범위를 맞추느라 뷰·머티리얼라이즈드뷰까지
+// 본다. 그것들엔 ALTER TABLE … ALTER COLUMN … TYPE 이 안 먹으므로 promote 가
+// 재조준 대상에서 갈라내야 한다 — 그 갈래의 잣대를 여기 고정한다.
+test('재조준 가능한 relkind 는 실제 테이블과 파티션 부모뿐이다', () => {
+	assert.equal(isRetargetableRelkind('r'), true);
+	assert.equal(isRetargetableRelkind('p'), true);
+	assert.equal(isRetargetableRelkind('v'), false);
+	assert.equal(isRetargetableRelkind('m'), false);
+	assert.equal(isRetargetableRelkind('f'), false);
 });
 
 // 재부착의 전제 — 정의문이 스키마를 이름으로 한정하고 있어야 한다. 한정이 없으면
@@ -265,4 +284,173 @@ test('스키마 한정 확인 — 한정이 없으면 거짓', () => {
 test('스키마 한정 확인 — canonical_bak 을 canonical 로 착각하지 않는다', () => {
 	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES canonical_bak.gift(id)', 'canonical'), false);
 	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES canonical_bak.gift(id)', 'canonical_bak'), true);
+});
+
+// ── 선검사 목록을 정의문에서 유도한다 ────────────────────────────────────────
+//
+// 예전엔 run_gift·run_floor 둘을 상수로 박아 뒀는데, 같은 대상을 appDependencies 는
+// 카탈로그에서 읽고 있었다 — 한 대상에 진실 원천이 둘. 셋째 FK 가 생기면 승격은
+// 그것을 떼었다 붙이면서 선검사만 건너뛴다. 유도가 그 어긋남을 원리적으로 없앤다.
+
+test('선검사 유도 — 지금 있는 FK 둘을 정의문에서 그대로 읽어낸다', () => {
+	const { checks, unsupported } = appFkChecks([
+		{
+			table: 'run_floor',
+			name: 'run_floor_pack_id_fkey',
+			foreignSchema: 'canonical',
+			def: 'FOREIGN KEY (pack_id) REFERENCES canonical.pack(id) ON UPDATE CASCADE ON DELETE RESTRICT',
+		},
+		{
+			table: 'run_gift',
+			name: 'run_gift_gift_id_fkey',
+			foreignSchema: 'canonical',
+			def: 'FOREIGN KEY (gift_id) REFERENCES canonical.gift(id) ON UPDATE CASCADE ON DELETE RESTRICT',
+		},
+	]);
+	assert.deepEqual(unsupported, []);
+	assert.deepEqual(checks, [
+		{ table: 'run_floor', fkColumn: 'pack_id', targetTable: 'pack', targetColumn: 'id' },
+		{ table: 'run_gift', fkColumn: 'gift_id', targetTable: 'gift', targetColumn: 'id' },
+	]);
+});
+
+// 셋째가 생기는 것이 이 수정의 이유다 — 상수였다면 여기서 조용히 빠졌다.
+test('선검사 유도 — FK 가 셋으로 늘면 검사도 셋이 된다', () => {
+	const { checks } = appFkChecks([
+		{ table: 'run_floor', name: 'a', foreignSchema: 'canonical', def: 'FOREIGN KEY (pack_id) REFERENCES canonical.pack(id)' },
+		{ table: 'run_gift', name: 'b', foreignSchema: 'canonical', def: 'FOREIGN KEY (gift_id) REFERENCES canonical.gift(id)' },
+		{ table: 'run_ego', name: 'c', foreignSchema: 'canonical', def: 'FOREIGN KEY (ego_id) REFERENCES canonical.ego(id)' },
+	]);
+	assert.equal(checks.length, 3);
+	assert.deepEqual(checks[2], { table: 'run_ego', fkColumn: 'ego_id', targetTable: 'ego', targetColumn: 'id' });
+});
+
+// PostgreSQL 은 필요할 때만 따옴표를 붙인다. 둘 다 같은 뜻이므로 둘 다 읽어야 한다.
+test('선검사 유도 — 따옴표가 붙은 정의문도 읽는다', () => {
+	const { checks } = appFkChecks([
+		{
+			table: 'run_gift',
+			name: 'x',
+			foreignSchema: 'canonical',
+			def: 'FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id")',
+		},
+	]);
+	assert.deepEqual(checks, [
+		{ table: 'run_gift', fkColumn: 'gift_id', targetTable: 'gift', targetColumn: 'id' },
+	]);
+});
+
+// 대상 컬럼을 `id` 로 박아 두면 id 가 아닌 것을 가리키는 FK 가 생겼을 때 엉뚱한
+// 컬럼을 재고도 "통과했다"고 찍는다 — 조용히 틀린 답이다.
+test('선검사 유도 — 대상 컬럼이 id 가 아니어도 정의문 그대로 쓴다', () => {
+	const { checks } = appFkChecks([
+		{ table: 'run_floor', name: 'y', foreignSchema: 'canonical', def: 'FOREIGN KEY (pack_code) REFERENCES canonical.pack(code)' },
+	]);
+	assert.deepEqual(checks, [
+		{ table: 'run_floor', fkColumn: 'pack_code', targetTable: 'pack', targetColumn: 'code' },
+	]);
+});
+
+// 못 읽은 것을 버리면 「선검사가 통과했다」가 거짓이 된다. 버리지 않고 돌려준다.
+test('선검사 유도 — 복합 FK 는 못 잰다고 말한다(조용히 빠지지 않는다)', () => {
+	const { checks, unsupported } = appFkChecks([
+		{ table: 'run_floor', name: 'z', foreignSchema: 'canonical', def: 'FOREIGN KEY (pack_id, floor) REFERENCES canonical.pack(id, floor)' },
+	]);
+	assert.deepEqual(checks, []);
+	assert.equal(unsupported.length, 1);
+	assert.match(unsupported[0] ?? '', /복합 FK/);
+	assert.match(unsupported[0] ?? '', /run_floor/);
+});
+
+test('선검사 유도 — 모양이 다른 정의문도 못 읽었다고 말한다', () => {
+	const { checks, unsupported } = appFkChecks([
+		{ table: 'run', name: 'w', foreignSchema: 'canonical', def: 'CHECK (difficulty IS NOT NULL)' },
+	]);
+	assert.deepEqual(checks, []);
+	assert.equal(unsupported.length, 1);
+	assert.match(unsupported[0] ?? '', /못 읽었다/);
+});
+
+// ── PLANS — 역연산 불변식 ───────────────────────────────────────────────────
+//
+// 이 브랜치에서 결과가 가장 무거운 순수 데이터다. outgoingOccupied 의 drop/refuse 가
+// 두 모드 사이에서 뒤바뀌면 v2:rollback 이 갓 구운 wip 을 말없이 DROP 한다 — 둘 다
+// 'drop' | 'refuse' 라 타입 검사는 못 잡는다. 문서와 원장에만 있던 「역연산」 보장을
+// DB 없이 여기서 지킨다.
+
+test('PLANS — promote 와 rollback 은 서로의 역연산이다', () => {
+	assert.equal(PLANS.promote.incoming, PLANS.rollback.outgoing);
+	assert.equal(PLANS.promote.outgoing, PLANS.rollback.incoming);
+	// 이름 자체도 못 박는다 — 위 둘만 보면 양쪽을 같이 뒤집었을 때 통과한다
+	assert.equal(PLANS.promote.incoming, 'wip');
+	assert.equal(PLANS.promote.outgoing, 'canonical_bak');
+});
+
+test('PLANS — 이름이 차 있을 때 지우는 것은 승격뿐이다', () => {
+	// 결정 3 — 이전 판은 하나만 남긴다. 다음 승격이 이전 bak 을 지운다.
+	assert.equal(PLANS.promote.outgoingOccupied, 'drop');
+	// 되돌리기 중의 wip 은 아직 승격 안 한 새 판일 수 있다. 지울 물건이 아니다.
+	assert.equal(PLANS.rollback.outgoingOccupied, 'refuse');
+});
+
+test('PLANS — incoming 이 없을 때 할 말이 무엇을 하라는지 담는다', () => {
+	assert.match(PLANS.promote.missingIncoming.join('\n'), /v2:build/);
+	assert.match(PLANS.rollback.missingIncoming.join('\n'), /canonical_bak/);
+});
+
+// ── build 가 중간에 죽은 상태의 안내 ────────────────────────────────────────
+//
+// v2:build 가 SIGINT·크래시로 죽으면 catch 가 안 돌아 build 의 복구 안내가 안 나온다.
+// 그 상태(canonical 없음 · canonical_hold 살아있는 판 · wip 새 판)에서 promote·diff 가
+// 「wip 을 canonical 로 올려라」고 안내하면 재앙이다.
+
+test('build 중단 안내 — canonical_hold 를 먼저 복귀시키라고 말한다', () => {
+	const m = buildDiedMidwayMessage().join('\n');
+	assert.match(m, /canonical_hold/);
+	assert.match(m, /ALTER SCHEMA "canonical_hold" RENAME TO "canonical"/);
+	// wip 을 올리라고 말하면 안 된다 — 그 반대를 말해야 한다
+	assert.match(m, /wip 을 canonical 로 올리지 마라/);
+	assert.match(m, /v2:rollback/);
+});
+
+// ── 진짜 prisma/v2/schema.sql 을 fixture 로 ──────────────────────────────────
+//
+// 커밋돼 있고 DB 가 필요 없는 파일이다. 위의 축약 fixture 는 걸러내기 규칙의 함정
+// (블록 안 빈 줄 · 문자열 리터럴의 "app")을 지키지만, **진짜 파일의 규모**는 안
+// 지킨다 — extractCanonicalDdl 이 조용히 절반만 걸러도 축약 fixture 는 통과한다.
+//
+// 아래 수는 전부 이 파일에서 실제로 센 값이다(2026-08-04 기준, `npm run v2:schema:ddl`
+// 산물). 스키마가 자라면 여기도 같이 고쳐야 한다 — 그 강제가 이 테스트의 목적이다.
+const REAL_SCHEMA_SQL = readFileSync(new URL('../../prisma/v2/schema.sql', import.meta.url), 'utf8');
+
+test('진짜 schema.sql — 블록 256개 중 227개가 순수 canonical', () => {
+	const blocks = REAL_SCHEMA_SQL.split(/(?=^-- [A-Z])/m)
+		.map((b) => b.trim())
+		.filter((b) => b.length > 0);
+	assert.equal(blocks.length, 256);
+	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 227);
+});
+
+test('진짜 schema.sql — 종류별 집계가 실측과 같다', () => {
+	const tally = tallyCanonicalDdl(REAL_SCHEMA_SQL);
+	assert.equal(tally['CREATE TABLE "canonical".'], 94);
+	assert.equal(tally['CREATE INDEX ... ON "canonical"'], 36);
+	assert.equal(tally['ALTER TABLE "canonical".'], 85);
+	assert.equal(tally['CREATE TYPE "canonical".'], 11);
+});
+
+// build-canonical.ts 의 실질적 방어선을 진짜 파일에 걸어 본다 — 걸러낸 것과 원본의
+// 종류별 개수가 같아야 한다. 축약 fixture 로는 "규칙이 성립한다"만 보이고 "이 파일에서
+// 성립한다"는 안 보인다.
+test('진짜 schema.sql — 걸러낸 것과 원본의 집계가 같다', () => {
+	const statements = extractCanonicalDdl(REAL_SCHEMA_SQL);
+	assert.deepEqual(tallyCanonicalDdl(statements.join('\n')), tallyCanonicalDdl(REAL_SCHEMA_SQL));
+});
+
+// app 문장에 섞인 canonical 참조 3건(app.run.difficulty 컬럼 · run_floor·run_gift 의
+// FK)은 걸러내기에서 빠져야 한다 — 그 재조준은 v2:promote 몫이다.
+test('진짜 schema.sql — 걸러낸 것에 app·raw 가 한 글자도 없다', () => {
+	const joined = extractCanonicalDdl(REAL_SCHEMA_SQL).join('\n');
+	assert.doesNotMatch(joined, /"app"/);
+	assert.doesNotMatch(joined, /"raw"/);
 });

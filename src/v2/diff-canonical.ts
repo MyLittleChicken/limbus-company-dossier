@@ -24,13 +24,27 @@
  */
 import { PrismaClient, type Prisma } from './generated/client.js';
 import {
-	APP_FK_CHECKS,
+	LIVE_SCHEMA,
+	appDependencies,
+	appFkChecks,
 	appIntegrityCheck,
+	buildDiedMidwayMessage,
 	exactCount,
 	formatIds,
 	ident,
 	schemaExists,
 } from './schema-ops.js';
+
+/**
+ * 이 대조가 **보는 것과 안 보는 것.** 요약 줄에 늘 같이 찍는다 — 「차이 없음」이
+ * 실제 범위보다 넓게 들리면 안 된다. `gift.hardOnly` 정정처럼 id 도 행수도 그대로인
+ * 컬럼 값 변경은 여기 안 나오는데(ADR-07 3절이 이 프로젝트의 전형이라고 못 박은 바로
+ * 그 종류다) 범위를 안 적으면 사람이 「아무것도 안 달라졌다」로 읽는다.
+ */
+const DIFF_SCOPE = [
+	'이 대조의 범위 — 값 비교는 안 한다. 테이블 집합 · 행수 · 네 테이블(gift·identity·ego·pack)의 id 집합 · app FK 무결성만 본다.',
+	'id 도 행수도 그대로인 컬럼 값 변경(예: gift.hardOnly 정정)은 여기 안 나온다 — ADR-07 3절이 전형이라고 적은 바로 그 종류다.',
+].join('\n');
 
 /** 개체 차를 보는 네 테이블 — 설계 7절. 전부 `id` 하나로 식별된다(문자열 PK). */
 const ENTITY_TABLES = ['gift', 'identity', 'ego', 'pack'] as const;
@@ -116,7 +130,17 @@ async function runDiff(tx: Prisma.TransactionClient): Promise<Incomplete | Compl
 	if (!(await schemaExists(tx, 'canonical'))) {
 		// 정상 운영에서는 canonical 이 없을 수 없다(살아있는 판이다) — 그래도 조용히
 		// 넘어가면 뒤 단계가 Prisma 원시 오류로 죽으며 원인을 숨긴다.
+		//
+		// canonical_hold 를 한 번 더 읽는다. wip 이 있고 canonical 이 없는 상태는
+		// 「v2:build 가 SIGINT·크래시로 중간에 죽었다」가 가장 그럴듯한 설명이고,
+		// 그때 살아있는 판은 canonical_hold 에 있다 — 그 사실을 안 알려 주면 사람이
+		// wip 을 살아있는 자리에 올리는 쪽으로 간다.
+		if (await schemaExists(tx, 'canonical_hold')) {
+			for (const line of buildDiedMidwayMessage()) console.error(line);
+			return { incomplete: true };
+		}
 		console.error('\ncanonical 스키마가 없다 — 있어야 할 살아있는 판이 없다. DB 상태를 먼저 확인해라.');
+		console.error('canonical_hold 도 없으므로 v2:build 가 중간에 죽은 것은 아니다.');
 		return { incomplete: true };
 	}
 
@@ -213,8 +237,26 @@ async function runDiff(tx: Prisma.TransactionClient): Promise<Incomplete | Compl
 	}
 
 	// 3. app 무결성 예고 — 승격의 FK 재부착이 실패할지 미리 본다.
+	//
+	// 검사 목록을 상수로 안 박고 카탈로그에서 유도한다 — v2:promote 와 **같은 진실
+	// 원천**이어야 한다. 예전엔 여기와 promote 가 상수 둘을 보고 promote 만
+	// appDependencies 를 봤다. 그러면 셋째 FK 가 생겼을 때 예고에서 조용히 빠진다.
 	console.log('\n3. app 무결성 예고 — 승격(v2:promote)의 FK 재부착이 실패할지 미리 본다');
-	for (const check of APP_FK_CHECKS) {
+	const liveFks = (await appDependencies(tx)).filter((d) => d.foreignSchema === LIVE_SCHEMA);
+	const { checks, unsupported } = appFkChecks(liveFks);
+	if (checks.length === 0 && unsupported.length === 0) {
+		console.log(
+			`  app → ${LIVE_SCHEMA} FK 가 하나도 없다 — 예고할 것이 없다는 뜻이다. 예상 밖이면 조사해라.`,
+		);
+	}
+	for (const u of unsupported) {
+		// 항목 = 선검사 모양을 못 읽어낸 FK 하나. 조용히 빼면 「예고에 문제 없음」이
+		// 거짓이 되고, 승격은 이 FK 를 실제로 떼었다 붙인다.
+		problems++;
+		console.log(`  ${u}`);
+		console.log('    → 이 FK 는 예고도 선검사도 못 한다. v2:promote 도 같은 이유로 거절한다.');
+	}
+	for (const check of checks) {
 		if (!commonTables.includes(check.targetTable)) {
 			console.log(
 				`  app.${check.table}.${check.fkColumn}: 대상 테이블(${check.targetTable})이 테이블 집합에서 갈렸다(0번 참고) — 건너뛴다.`,
@@ -230,14 +272,14 @@ async function runDiff(tx: Prisma.TransactionClient): Promise<Incomplete | Compl
 		}
 		if (result.missingIds.length === 0) {
 			console.log(
-				`  app.${check.table} ${result.total.toLocaleString()}행 · 문제 없음 — 전부 wip.${check.targetTable} 에서 찾아진다`,
+				`  app.${check.table} ${result.total.toLocaleString()}행 · 문제 없음 — 전부 wip.${check.targetTable}.${check.targetColumn} 에서 찾아진다`,
 			);
 		} else {
 			// 항목 = FK 무결성이 깨진 검사 하나(run_gift 또는 run_floor).
 			problems++;
 			console.log(
 				`  app.${check.table} ${result.total.toLocaleString()}행 중 ${result.missingIds.length}건이 ` +
-					`wip.${check.targetTable} 에 없다 — 승격 트랜잭션이 이 FK 재부착에서 통째로 되돌아간다: ` +
+					`wip.${check.targetTable}.${check.targetColumn} 에 없다 — 승격 트랜잭션이 이 FK 재부착에서 통째로 되돌아간다: ` +
 					formatIds(result.missingIds),
 			);
 		}
@@ -269,8 +311,14 @@ async function main(): Promise<void> {
 		}
 
 		console.log(
-			`\n${result.problems === 0 ? '차이 없음 — 승격을 막을 것이 안 보인다.' : `문제 ${result.problems}건 — 위 상세를 보고 승격 전에 조사해라.`}`,
+			`\n${
+				result.problems === 0
+					? '차이 없음 — 이 대조가 보는 범위 안에서는 승격을 막을 것이 안 보인다.'
+					: `문제 ${result.problems}건 — 위 상세를 보고 승격 전에 조사해라.`
+			}`,
 		);
+		// 범위는 두 갈래 모두에 찍는다 — 「차이 없음」쪽이 특히 넓게 들린다.
+		console.log(DIFF_SCOPE);
 		if (result.problems > 0) process.exitCode = 1;
 	} finally {
 		await prisma.$disconnect();
