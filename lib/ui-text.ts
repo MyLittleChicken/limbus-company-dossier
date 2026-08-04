@@ -73,6 +73,11 @@ export const UI: Record<Locale, UiText> = {
 	},
 };
 
-/** 내비게이션 순서. 엔티티 4종을 앞에 두고 부속 화면을 뒤에 둔다. */
-export const NAV_PRIMARY = ['gifts', 'packs', 'identities', 'egos'] as const;
+/**
+ * 내비게이션 순서. 엔티티 4종을 앞에 두고 부속 화면을 뒤에 둔다.
+ *
+ * 인격과 E.G.O 를 맨 앞에 둔다 — 가장 자주 찾는 것이 그 둘이고, 기프트·팩은
+ * 거울 던전 안에서 고르는 것이라 한 단 뒤에 온다.
+ */
+export const NAV_PRIMARY = ['identities', 'egos', 'gifts', 'packs'] as const;
 export const NAV_SECONDARY = ['squad', 'recommend', 'floors', 'dungeon', 'glossary'] as const;
