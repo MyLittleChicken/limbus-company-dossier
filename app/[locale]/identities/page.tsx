@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { listAxisLabels, listIdentitiesFull, listSinners } from '@/lib/queries/canonical/list';
-import { listEventRewardIdentityIds } from '@/lib/queries/raw/acquisition';
 import { keywordIcon, rarityIcon, sinIcon, statusIcon } from '@/lib/assets';
 import { SecLabel } from '@/components/ui';
 import { UnitList, type Axis, type Unit } from '@/components/unit-list';
@@ -22,27 +21,12 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 
 	const t = UI[locale];
 	const ko = locale === 'ko';
-	const [rows, sinners, labels, eventRewards] = await Promise.all([
+	const [rows, sinners, labels] = await Promise.all([
 		listIdentitiesFull(locale),
 		listSinners(locale),
 		listAxisLabels(locale),
-		listEventRewardIdentityIds(),
 	]);
 
-	/**
-	 * 어떻게 얻는가.
-	 *
-	 * 이벤트 보상 여부는 원본이 갖고 있다(`listEventRewardIdentityIds`). **기본 지급은
-	 * 등급으로 가린다** — 0 등급 12 종이 LCB 수감자 열둘과 정확히 같고 그것이 처음부터
-	 * 갖고 있는 인격이다. 나머지는 추출이다.
-	 *
-	 * 실측 기본 12 · 이벤트 보상 13 · 추출 159 로 합이 184 다.
-	 */
-	const acquisition = (id: string, star: number) => {
-		if (star === 1) return ko ? '기본' : 'Starting';
-		if (eventRewards.has(id)) return ko ? '이벤트 보상' : 'Event reward';
-		return ko ? '추출' : 'Extraction';
-	};
 
 	/** 데이터에 실제로 쓰인 값만 축에 올린다. 눌러도 아무것도 걸리지 않는 칩을 두지 않는다. */
 	const used = (pick: (u: (typeof rows)[number]) => string[]) => new Set(rows.flatMap(pick));
@@ -111,7 +95,6 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 		image: u.image,
 		name: u.text?.name ?? u.id,
 		fellBack: u.text?.fellBack ?? false,
-		note: acquisition(u.id, u.star),
 		tags: {
 			sinner: [String(u.sinnerId)],
 			grade: [String(u.star)],
