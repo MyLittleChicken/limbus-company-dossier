@@ -95,6 +95,218 @@ export function renameSchema(from: string, to: string): string {
 	return `ALTER SCHEMA ${ident(from)} RENAME TO ${ident(to)}`;
 }
 
+export async function exactCount(
+	prisma: QueryClient,
+	schema: string,
+	table: string,
+): Promise<number> {
+	const rows = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(
+		`SELECT count(*)::bigint AS n FROM ${ident(schema)}.${ident(table)}`,
+	);
+	return Number(rows[0]?.n ?? 0n);
+}
+
+// ── app 이 canonical 을 참조하는 세 갈래 (설계 3.2) ──────────────────────────
+//
+// ```
+// app.run.difficulty   →  canonical."Difficulty"   enum 타입
+// app.run_floor        →  canonical.pack           FK
+// app.run_gift         →  canonical.gift           FK
+// ```
+//
+// 스키마 이름을 바꾸면 이 의존이 **따라간다**(설계 3.3 실측 — PostgreSQL 이 의존을
+// 이름이 아니라 OID 로 들고 있어서다). 그래서 승격은 `app` 을 새 판으로 다시
+// 겨눠야 한다. 안 하면 옛 판을 지우는 순간 `app` 이 깨진다.
+
+/** `app` 이 `app` 밖을 참조하는 FK 하나. 이름도 정의문도 카탈로그에서 읽은 것 그대로다. */
+export interface AppFk {
+	table: string;
+	name: string;
+	/** 참조 대상 스키마 — 지금 교체하는 스키마인지 호출부가 가른다. */
+	foreignSchema: string;
+	/** `pg_get_constraintdef(oid)` 원문. 손대지 않는다. */
+	def: string;
+}
+
+/** `app` 의 컬럼 하나가 쓰는 `app` 밖 타입. `format_type` 원문을 들고 다닌다. */
+export interface AppTypeColumn {
+	table: string;
+	column: string;
+	typeSchema: string;
+	/** `format_type(atttypid, atttypmod)` 원문 — 대소문자 섞인 타입 이름이 이미 따옴표까지 붙어 나온다. */
+	typeText: string;
+}
+
+/**
+ * `app` 의 FK 를 뗐다 다시 붙이는 SQL.
+ *
+ * **정의문을 그대로 다시 쓴다.** `ON DELETE RESTRICT` 같은 옵션을 손으로 옮겨 적으면
+ * 언젠가 하나를 빠뜨리고, 그러면 삭제 동작이 조용히 바뀐다. 그 사고는 실행 시점에
+ * 아무 오류도 안 내므로 아무도 모른다.
+ *
+ * **왜 정의문을 그대로 다시 써도 새 판을 가리키나.** 정의문은 `REFERENCES
+ * canonical.gift(id)` 처럼 스키마를 **이름으로** 담고 있고, 이름 풀이는 ADD 를
+ * 실행하는 시점에 일어난다. 교체를 끝낸 뒤 붙이므로 그때 `canonical` 은 새 판이다
+ * (실측으로 확인 — 임시 스키마로 같은 순서를 돌려 FK 가 새 판을 가리키는 것을 봤다).
+ * 이름 한정이 없는 정의문이면 이 전제가 깨지므로 호출부가 `qualifiesSchema` 로 먼저
+ * 막는다.
+ *
+ * 제약 이름은 `ident` 를 그대로 쓴다 — Prisma 가 만드는 이름은 소문자·밑줄뿐이다.
+ * 어쩌다 대문자가 섞이면 여기서 던지는데, **모든 SQL 을 트랜잭션 밖에서 미리
+ * 조립하므로** 그 실패는 DB 를 한 글자도 안 바꾼 상태에서 난다.
+ */
+export function rebindSql(fks: AppFk[]): { drop: string[]; add: string[] } {
+	return {
+		drop: fks.map((f) => `ALTER TABLE "app".${ident(f.table)} DROP CONSTRAINT ${ident(f.name)}`),
+		add: fks.map((f) => `ALTER TABLE "app".${ident(f.table)} ADD CONSTRAINT ${ident(f.name)} ${f.def}`),
+	};
+}
+
+/**
+ * 컬럼 타입을 새 판의 같은 타입으로 다시 겨누는 SQL.
+ *
+ * **`app.run` 이 0행이어도 필요하다.** 행을 옮기려는 것이 아니라 컬럼이 어느
+ * 스키마의 타입을 가리키는지를 바꾸는 것이다 — 옛 판의 타입을 계속 가리키면
+ * `canonical_bak` 을 나중에 못 지운다(의존이 걸려 `DROP SCHEMA` 가 막힌다).
+ *
+ * `USING …::text::<타입>` 을 거치는 이유 — 옛 타입과 새 타입은 이름만 같지 서로
+ * 다른 타입이라 PostgreSQL 이 직접 캐스팅을 못 찾는다. 라벨 문자열을 거치면
+ * 라벨이 같은 값끼리 옮겨간다. **새 판에서 라벨이 사라졌으면 여기서 실패한다** —
+ * 그것도 옳은 실패다(0행이면 검사할 값이 없어 그냥 통과한다).
+ *
+ * 타입 이름은 `format_type` 원문을 쓴다 — Prisma 의 enum 은 `"Difficulty"` 처럼
+ * 대문자가 섞여 `ident` 의 모양 검사(소문자만)를 못 지난다. PostgreSQL 이 스스로
+ * 찍어 준 문자열이라 따옴표도 이미 옳게 붙어 있다.
+ */
+export function retargetTypeSql(cols: AppTypeColumn[]): string[] {
+	return cols.map(
+		(c) =>
+			`ALTER TABLE "app".${ident(c.table)} ALTER COLUMN ${ident(c.column)} TYPE ${c.typeText} ` +
+			`USING ${ident(c.column)}::text::${c.typeText}`,
+	);
+}
+
+/**
+ * 정의문이 `schema` 를 **이름으로 한정**하고 있는지.
+ *
+ * `pg_get_constraintdef`·`format_type` 은 `search_path` 를 본다 — 대상 스키마가
+ * `search_path` 에 들어 있으면 한정을 생략하고 `REFERENCES gift(id)` 로 찍는다.
+ * 그런 정의문을 교체 뒤에 그대로 다시 실행하면 어느 판을 가리킬지 알 수 없다.
+ * 지금 접속은 `?schema=public` 이라 늘 한정이 붙지만, **재부착이 옳은 판을 가리키는
+ * 근거가 접속 문자열 하나**라면 그건 근거가 아니다. 승격 전에 직접 확인한다.
+ *
+ * 앞뒤 문자를 함께 보는 이유 — `canonical_bak.gift` 는 `canonical` 로 시작하지만
+ * 다른 스키마다. 마침표를 요구하고 앞에 식별자 문자가 없어야 통과시킨다.
+ */
+export function qualifiesSchema(def: string, schema: string): boolean {
+	return new RegExp(`(^|[^A-Za-z0-9_."])${schema}\\.`).test(def);
+}
+
+/**
+ * `app` 이 `app` 밖을 참조하는 FK 를 카탈로그에서 읽는다. **실명을 하드코딩하지
+ * 않는다** — 모델이 바뀌면 이름이 바뀐다.
+ *
+ * `fns.nspname <> 'app'` 이 핵심이다. `app` 안끼리의 FK 넷(`run_floor → app.run`,
+ * `run_gift → app.run`, `run → app.account`, `setting → app.account`)은 스키마
+ * 교체와 아무 상관이 없다 — 떼었다 붙이면 위험만 는다.
+ */
+export async function appDependencies(prisma: QueryClient): Promise<AppFk[]> {
+	const rows = await prisma.$queryRaw<
+		Array<{ table: string; name: string; foreignSchema: string; def: string }>
+	>`
+		SELECT cl.relname AS "table", co.conname AS "name",
+		       fns.nspname AS "foreignSchema", pg_get_constraintdef(co.oid) AS "def"
+		  FROM pg_constraint co
+		  JOIN pg_class cl ON cl.oid = co.conrelid
+		  JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+		  JOIN pg_class fcl ON fcl.oid = co.confrelid
+		  JOIN pg_namespace fns ON fns.oid = fcl.relnamespace
+		 WHERE co.contype = 'f' AND ns.nspname = 'app' AND fns.nspname <> 'app'
+		 ORDER BY cl.relname, co.conname
+	`;
+	return rows;
+}
+
+/**
+ * `app` 의 컬럼 중 `schema` 의 타입을 쓰는 것 — 지금은 `app.run.difficulty` 하나뿐이지만
+ * 세어서 찾는다. 타입이 하나 늘었는데 여기 안 걸리면 `canonical_bak` 이 안 지워진다.
+ *
+ * `information_schema.columns` 대신 `pg_attribute` 를 보는 이유는 `format_type` 이
+ * 필요해서다 — 타입 이름을 우리가 조립하지 않고 PostgreSQL 이 찍어 준 것을 쓴다.
+ */
+export async function appTypeColumns(
+	prisma: QueryClient,
+	schema: string,
+): Promise<AppTypeColumn[]> {
+	const rows = await prisma.$queryRaw<
+		Array<{ table: string; column: string; typeSchema: string; typeText: string }>
+	>`
+		SELECT cl.relname AS "table", a.attname AS "column",
+		       tns.nspname AS "typeSchema", format_type(a.atttypid, a.atttypmod) AS "typeText"
+		  FROM pg_attribute a
+		  JOIN pg_class cl ON cl.oid = a.attrelid
+		  JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+		  JOIN pg_type t ON t.oid = a.atttypid
+		  JOIN pg_namespace tns ON tns.oid = t.typnamespace
+		 WHERE ns.nspname = 'app' AND tns.nspname = ${schema}
+		   AND cl.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+		 ORDER BY cl.relname, a.attname
+	`;
+	return rows;
+}
+
+/**
+ * `app` 이 새 판을 가리킬 수 있는지 보는 검사 둘 — 설계 6.2 의 "FK 재부착이 승격의
+ * 검사 역할을 한다"를 **미리** 돌리는 것이다. v2:diff 가 예고로, v2:promote 가
+ * 선검사로 같은 질의를 쓴다.
+ */
+export const APP_FK_CHECKS = [
+	{ table: 'run_gift', fkColumn: 'gift_id', targetTable: 'gift' },
+	{ table: 'run_floor', fkColumn: 'pack_id', targetTable: 'pack' },
+] as const;
+
+export interface AppIntegrityResult {
+	total: number;
+	/** true 면 `total` 이 0 이라 검사 자체를 안 돌렸다 — "문제 없음"과 구분해야 한다. */
+	skipped: boolean;
+	missingIds: string[];
+}
+
+/**
+ * `app.<table>.<fkColumn>` 이 가리키는 값이 `<targetSchema>.<targetTable>.id` 에 다
+ * 있는지.
+ *
+ * `total` 이 0 이면 질의 자체를 건너뛴다 — 지금 DB 상태가 바로 이 경우다
+ * (`run_gift`·`run_floor` 둘 다 0행). **"0 행이라 검사가 아무 일도 안 한 것"과 "행이
+ * 있는데 전부 통과한 것"을 호출부가 구분해서 찍어야 한다** — 조용히 "문제 없음"만
+ * 찍으면 나중에 진짜 문제(가리키는 대상이 아예 없어 검사가 텅 빈 결과를 낸 경우)를
+ * 놓친다. `skipped` 를 **반환 타입에** 따로 담아 그 구분을 문구가 아니라 구조로
+ * 보장한다 — 호출부가 실수로 `missingIds.length === 0` 만 보고 두 경우를 섞어 찍을
+ * 수 없다.
+ *
+ * `targetSchema` 를 받는 이유 — v2:diff 와 v2:promote 는 `wip` 을 보지만
+ * v2:rollback 은 `canonical_bak` 을 본다. 되돌리기도 같은 이유로 실패할 수 있다
+ * (승격 뒤에 새 판에만 있는 기프트를 가리키는 행이 들어왔다면).
+ */
+export async function appIntegrityCheck(
+	prisma: QueryClient,
+	check: { table: string; fkColumn: string; targetTable: string },
+	targetSchema: string,
+): Promise<AppIntegrityResult> {
+	const total = await exactCount(prisma, 'app', check.table);
+	if (total === 0) return { total: 0, skipped: true, missingIds: [] };
+
+	const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+		`SELECT DISTINCT a.${ident(check.fkColumn)} AS ${ident('id')}
+		   FROM ${ident('app')}.${ident(check.table)} a
+		  WHERE NOT EXISTS (
+		    SELECT 1 FROM ${ident(targetSchema)}.${ident(check.targetTable)} w
+		     WHERE w.${ident('id')} = a.${ident(check.fkColumn)}
+		  )`,
+	);
+	return { total, skipped: false, missingIds: rows.map((r) => r.id) };
+}
+
 /**
  * id 목록이 길면 앞부분만 찍는다 — v2:diff 가 사라진/새 개체나 무결성이 깨진
  * FK 값을 사람이 읽는 로그에 낼 때 쓴다. 수백 건이 통째로 로그를 덮으면 정작

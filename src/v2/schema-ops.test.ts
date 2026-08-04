@@ -6,6 +6,9 @@ import {
 	extractCanonicalDdl,
 	tallyCanonicalDdl,
 	formatIds,
+	rebindSql,
+	retargetTypeSql,
+	qualifiesSchema,
 } from './schema-ops.js';
 
 test('거부 메시지가 우회로를 알려 준다', () => {
@@ -160,4 +163,93 @@ test('canonical DDL 집계 — 필터가 뭔가를 빠뜨리면 어긋난다(회
 	assert.equal(original['CREATE TABLE "canonical".'], 1);
 	assert.equal(filtered['CREATE TABLE "canonical".'], 0);
 	assert.notDeepEqual(original, filtered); // build-canonical.ts 는 이 어긋남을 보고 멈춘다
+});
+
+// ── v2:promote · v2:rollback 이 쓰는 SQL 조립 ────────────────────────────────
+//
+// 여기 있는 것은 전부 순수 함수다 — DB 없이 돌아야 한다(CI 는 DB 를 안 쓴다).
+// 승격은 살아있는 152,399행이 걸린 자리라, SQL 을 만드는 규칙만이라도 DB 없이
+// 고정해 둔다.
+
+test('FK 재부착 SQL 을 정의문에서 만든다', () => {
+	const sql = rebindSql([
+		{
+			table: 'run_gift',
+			name: 'run_gift_gift_id_fkey',
+			foreignSchema: 'canonical',
+			def: 'FOREIGN KEY (gift_id) REFERENCES canonical.gift(id) ON UPDATE CASCADE ON DELETE RESTRICT',
+		},
+	]);
+	assert.deepEqual(sql.drop, ['ALTER TABLE "app"."run_gift" DROP CONSTRAINT "run_gift_gift_id_fkey"']);
+	assert.match(
+		sql.add[0] ?? '',
+		/ADD CONSTRAINT "run_gift_gift_id_fkey" FOREIGN KEY \(gift_id\) REFERENCES canonical\.gift\(id\)/,
+	);
+	// 옵션을 잃으면 삭제 동작이 바뀐다
+	assert.match(sql.add[0] ?? '', /ON DELETE RESTRICT/);
+});
+
+// 떼는 순서와 붙이는 순서가 어긋나도 SQL 자체는 성립하지만, 사람이 로그를 읽을 때
+// 짝을 못 맞춘다. 입력 순서를 그대로 유지하는지 고정해 둔다.
+test('FK 재부착 SQL — 여러 개를 입력 순서 그대로 낸다', () => {
+	const sql = rebindSql([
+		{ table: 'run_floor', name: 'a_fkey', foreignSchema: 'canonical', def: 'FOREIGN KEY (pack_id) REFERENCES canonical.pack(id)' },
+		{ table: 'run_gift', name: 'b_fkey', foreignSchema: 'canonical', def: 'FOREIGN KEY (gift_id) REFERENCES canonical.gift(id)' },
+	]);
+	assert.equal(sql.drop.length, 2);
+	assert.equal(sql.add.length, 2);
+	assert.match(sql.drop[0] ?? '', /"run_floor".*"a_fkey"/);
+	assert.match(sql.add[1] ?? '', /"run_gift".*"b_fkey"/);
+});
+
+// app 이 canonical 을 아예 안 참조하는 상태(예: 앞선 승격이 FK 를 못 붙인 뒤)에도
+// 조립은 조용히 빈 목록을 낸다 — 그 판정은 호출부(promote)가 한다.
+test('FK 재부착 SQL — 빈 목록이면 빈 SQL', () => {
+	assert.deepEqual(rebindSql([]), { drop: [], add: [] });
+});
+
+test('FK 재부착 SQL — 제약 이름에 따옴표가 들어오면 거부한다', () => {
+	assert.throws(
+		() => rebindSql([{ table: 'run_gift', name: 'a"b', foreignSchema: 'canonical', def: 'FOREIGN KEY (x) REFERENCES canonical.y(id)' }]),
+		/식별자/,
+	);
+});
+
+// 컬럼 타입 재지정. app.run 이 0행이어도 필요하다 — 컬럼이 옛 스키마의 타입을
+// 가리키고 있으면 canonical_bak 을 나중에 못 지운다.
+test('enum 재지정 SQL 을 format_type 결과 그대로 쓴다', () => {
+	const sql = retargetTypeSql([
+		{ table: 'run', column: 'difficulty', typeSchema: 'canonical', typeText: 'canonical."Difficulty"' },
+	]);
+	assert.deepEqual(sql, [
+		'ALTER TABLE "app"."run" ALTER COLUMN "difficulty" TYPE canonical."Difficulty" ' +
+			'USING "difficulty"::text::canonical."Difficulty"',
+	]);
+});
+
+test('enum 재지정 SQL — 컬럼 이름에 따옴표가 들어오면 거부한다', () => {
+	assert.throws(
+		() => retargetTypeSql([{ table: 'run', column: 'a"b', typeSchema: 'canonical', typeText: 'canonical."Difficulty"' }]),
+		/식별자/,
+	);
+});
+
+// 재부착의 전제 — 정의문이 스키마를 이름으로 한정하고 있어야 한다. 한정이 없으면
+// search_path 로 풀리므로, 교체 뒤 다시 실행했을 때 어느 판을 가리킬지 알 수 없다.
+test('스키마 한정 확인 — 한정된 정의문', () => {
+	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES canonical.gift(id)', 'canonical'), true);
+	assert.equal(qualifiesSchema('canonical."Difficulty"', 'canonical'), true);
+});
+
+test('스키마 한정 확인 — 한정이 없으면 거짓', () => {
+	// search_path 에 canonical 이 들어 있으면 PostgreSQL 이 이렇게 찍는다
+	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES gift(id)', 'canonical'), false);
+	assert.equal(qualifiesSchema('"Difficulty"', 'canonical'), false);
+});
+
+// canonical_bak 은 canonical 로 시작하지만 다른 스키마다. 접두사만 보면 옛 판을
+// 가리키는 정의문을 "한정됐다"고 잘못 통과시킨다.
+test('스키마 한정 확인 — canonical_bak 을 canonical 로 착각하지 않는다', () => {
+	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES canonical_bak.gift(id)', 'canonical'), false);
+	assert.equal(qualifiesSchema('FOREIGN KEY (gift_id) REFERENCES canonical_bak.gift(id)', 'canonical_bak'), true);
 });

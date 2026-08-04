@@ -23,19 +23,17 @@
  * 실행: npm run v2:diff
  */
 import { PrismaClient, type Prisma } from './generated/client.js';
-import { formatIds, ident, schemaExists } from './schema-ops.js';
+import {
+	APP_FK_CHECKS,
+	appIntegrityCheck,
+	exactCount,
+	formatIds,
+	ident,
+	schemaExists,
+} from './schema-ops.js';
 
 /** 개체 차를 보는 네 테이블 — 설계 7절. 전부 `id` 하나로 식별된다(문자열 PK). */
 const ENTITY_TABLES = ['gift', 'identity', 'ego', 'pack'] as const;
-
-/**
- * `app` 이 `canonical`/`wip` 을 참조하는 FK 둘 — v2:promote 가 재부착하는 바로
- * 그것이다(설계 6.2). 여기서 미리 걸리면 승격이 걸릴 것도 미리 아는 셈이다.
- */
-const APP_FK_CHECKS = [
-	{ table: 'run_gift', fkColumn: 'gift_id', targetTable: 'gift' },
-	{ table: 'run_floor', fkColumn: 'pack_id', targetTable: 'pack' },
-] as const;
 
 async function tableNames(tx: Prisma.TransactionClient, schema: string): Promise<Set<string>> {
 	const rows = await tx.$queryRaw<Array<{ table_name: string }>>`
@@ -63,17 +61,6 @@ async function liveTupEstimates(
 	return new Map(rows.map((r) => [r.relname, Number(r.n_live_tup ?? 0n)]));
 }
 
-async function exactCount(
-	tx: Prisma.TransactionClient,
-	schema: string,
-	table: string,
-): Promise<number> {
-	const rows = await tx.$queryRawUnsafe<Array<{ n: bigint }>>(
-		`SELECT count(*)::bigint AS n FROM ${ident(schema)}.${ident(table)}`,
-	);
-	return Number(rows[0]?.n ?? 0n);
-}
-
 interface EntityDiff {
 	missing: string[]; // canonical 에 있고 wip 에 없다 — 승격되면 사라질 개체
 	added: string[]; // wip 에 있고 canonical 에 없다 — 승격되면 새로 생길 개체
@@ -93,44 +80,6 @@ async function entityDiff(tx: Prisma.TransactionClient, table: string): Promise<
 		),
 	]);
 	return { missing: missing.map((r) => r.id), added: added.map((r) => r.id) };
-}
-
-interface AppIntegrityResult {
-	total: number;
-	/** true 면 `total` 이 0 이라 검사 자체를 안 돌렸다 — "문제 없음"과 구분해야 한다. */
-	skipped: boolean;
-	missingIds: string[];
-}
-
-/**
- * `app.<table>.<fkColumn>` 이 가리키는 값이 `wip.<targetTable>.id` 에 다 있는지.
- *
- * `total` 이 0 이면 질의 자체를 건너뛴다 — 지금 DB 상태(설계 검증 절)가 바로 이
- * 경우다(`run_gift`·`run_floor` 둘 다 0행). **"0 행이라 검사가 아무 일도 안 한
- * 것"과 "행이 있는데 전부 통과한 것"을 호출부가 구분해서 찍어야 한다** — 조용히
- * "문제 없음"만 찍으면 나중에 진짜 문제(가리키는 대상이 아예 없어 검사가 텅 빈
- * 결과를 낸 경우)를 놓친다. `skipped` 를 **반환 타입에** 따로 담아 그 구분을
- * 문구가 아니라 구조로 보장한다 — 호출부가 실수로 `missingIds.length === 0` 만
- * 보고 두 경우를 섞어 찍을 수 없다.
- */
-async function appIntegrityCheck(
-	tx: Prisma.TransactionClient,
-	table: string,
-	fkColumn: string,
-	targetTable: string,
-): Promise<AppIntegrityResult> {
-	const total = await exactCount(tx, 'app', table);
-	if (total === 0) return { total: 0, skipped: true, missingIds: [] };
-
-	const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-		`SELECT DISTINCT a.${ident(fkColumn)} AS ${ident('id')}
-		   FROM ${ident('app')}.${ident(table)} a
-		  WHERE NOT EXISTS (
-		    SELECT 1 FROM ${ident('wip')}.${ident(targetTable)} w
-		     WHERE w.${ident('id')} = a.${ident(fkColumn)}
-		  )`,
-	);
-	return { total, skipped: false, missingIds: rows.map((r) => r.id) };
 }
 
 /** wip 이나 canonical 이 아예 없어 대조를 못 돌린 경우 — problems 를 셀 것도 없다. */
@@ -272,7 +221,7 @@ async function runDiff(tx: Prisma.TransactionClient): Promise<Incomplete | Compl
 			);
 			continue;
 		}
-		const result = await appIntegrityCheck(tx, check.table, check.fkColumn, check.targetTable);
+		const result = await appIntegrityCheck(tx, check, 'wip');
 		if (result.skipped) {
 			// 0행이라 검사가 아무 일도 안 한 것 — "통과했다"와 다르다. 조용히 "문제
 			// 없음"만 찍으면 나중에 실제로 걸릴 때를 놓친다.
