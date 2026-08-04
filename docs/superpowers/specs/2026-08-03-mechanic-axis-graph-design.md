@@ -1,7 +1,8 @@
 # 메카닉 축 그래프 — 추천 엔진의 근간
 
-> 설계 2026-08-03 · 상태 WIP — **반증 통과 전이다**
-> 12절이 초판의 기둥 여섯을 무너뜨렸고 14절이 판단 여섯을 닫았다. 15·16절이 결정 후 구조다
+> 설계 2026-08-03 · 구현 2026-08-04 — **1단계 완료**
+> 12절이 초판의 기둥 여섯을 무너뜨렸고 14절이 판단 여섯을 닫았다. 15·16절이 결정 후 구조다.
+> **15절의 5테이블 중 4개가 적재됐다.** `gift_trigger_param`(정량자 ~90행)은 저작 전이다.
 > 선행 [ADR-06 3스키마 데이터베이스](../../adr/06-three-schema-database.md) · [소비자 관점 감사](../../audit/00-summary.md)
 > 이 문서의 모든 수치는 `canonical` 실측이다. 스냅샷 `2026-07-25`(MD7).
 
@@ -512,13 +513,13 @@ model IdentityAxis { identityId String  axisId String  source String
 /// 트리거가 무엇을 참조하나 + 판정 가능성
 /// refKind: axis | association | unit_keyword | sin | resonance | attack_type
 ///        | skill_kind | coin | deployment | none        ← 반증으로 4종 추가
-model TriggerRef { triggerId String  refKind String  refId String?
+model TriggerRef { triggerId String  refKind String  refId String @default("")
                    resonanceMode String?  threshold Int?
                    evaluability String
                    @@id([triggerId, refKind, refId]) }
 
 /// 효과가 무엇을 다루나. refKind 에 attack_type 추가
-model EffectRef { effectId String  refKind String  refId String?  mode String
+model EffectRef { effectId String  refKind String  refId String @default("")  mode String
                   @@id([effectId, refKind, refId]) }
 
 /// 정량자. 유일하게 「값」이 저작이다. slot 은 다중값이므로 Int[]
@@ -532,6 +533,10 @@ model GiftTriggerParam { giftId String  triggerId String  kind String
 
 **고친 것** — `TriggerRef` 에 `skill_kind`·`coin` refKind 와 `resonanceMode`·`threshold` 추가,
 `EffectRef` 에 `attack_type` 추가, `GiftTriggerParam.slots` 를 배열로(슬롯 공간 8).
+
+> **구현이 한 군데를 더 고쳤다 — `refId` 는 nullable 이 아니다.** 위 스니펫은 이미 구현을
+> 반영해 `String @default("")` 로 적었다. 초판은 `String?` 였다. 이유와 배경은 19절 ③에 적는다 —
+> 이 설계를 참고해 스키마를 되돌릴 때 nullable 로 회귀하면 안 된다.
 
 ## 16. 결정에 따른 평가 흐름
 
@@ -586,3 +591,67 @@ Neo4j 적재                  이 설계가 RDB 에서 검증된 뒤
 적 저항 프로파일               encounter_part_resist 11,800행
 패닉 스킬 · cursedPair 3쌍     raw 에 있고 canonical 에 없다. 결손 기록만
 ```
+
+## 19. 구현 결과 (2026-08-04)
+
+```
+axis                8행     status_category 중 트리거가 참조하는 8종
+trigger_ref       150행     refKind: axis 43 · none 31 · association 27 · sin 20
+                            resonance 15 · attack_type 6 · skill_kind 3 · coin 3
+                            deployment 1 · unit_keyword 1
+                            evaluability: roster_gated 57 · runtime 46 · roster 45
+                            always 1 · unclassified 1
+effect_ref         55행
+identity_axis     566행     keyword 266 + special_status 300
+gift_trigger_param   0행    저작 전. 검사가 0 을 고정한다
+```
+
+**검사는 9건이다.** 계획 브리프는 「7건」이라 적었으나 실장은 행 수 4 · 소속 트리거
+오매칭 방지 · 축 참조 무결성 · evaluability 5갈래 전부 0 초과 · 골든 표본(10208) ·
+저작 미완 고정까지 9건을 넣었다. `npm run v2:verify:canonical` 은 이 9건을 포함해
+**총계 191건 전부 통과**다.
+
+### ① 결손 합계 1,137 → 1,142 — 새로 생긴 결손이 아니다
+
+축이 하나도 없는 인격 5건(`10201`·`10205`·`10305`·`10903`·`11206`)을 `field_gap` 에
+`entity='identity', field='axis'` 로 기록해 합계가 늘었다. 이 5건은 13절이 이미 실측해
+둔 값이다 — keyword·special_status 어느 경로로도 축을 못 얻는다는 사실 자체는 설계
+시점에 알려져 있었다. 이번 적재가 한 일은 **몰랐던 결손을 새로 만든 게 아니라, 이미
+알던 결손을 처음으로 `field_gap` 에 기록한 것**이다. 회귀 가드 기준값도 1,142로 함께
+올렸다.
+
+### ② 골든 검증이 반증에서 나온 함정을 실제 데이터로 막았다
+
+12절이 반증으로 찾아낸 오매칭·최장일치 함정과 13절의 골든 표본을, 실제 적재 결과로
+다시 확인했다.
+
+```
+소속 트리거가 축에 걸린 건수     0
+Dawn Office Identities        → association DAWN         (DawnTeam 상태로 안 샜다)
+N Corp. Fanatic Identities    → association N_CORP_FNATIC
+Trigger Tremor Burst          → axis VIBRATION            (최장일치 폴백 작동)
+10208 검계 살수 파우스트        → BREATH · LACERATION       keyword · special_status 두 경로
+편성 6인 축 프로파일            화상 6 · 진동 5
+```
+
+7절이 확인된 오매칭 2건(Dawn Office · N Corp. Fanatic)이라 적은 자리와 12절 ⑥이 반례로
+든 `Trigger Tremor Burst` 최장일치 문제가, 소속 우선·최장일치 규칙을 적재기에 그대로
+넣은 뒤에는 재발하지 않는다.
+
+### ③ 스키마가 설계와 한 군데 다르다 — `refId` 는 nullable 이 아니다
+
+15절은 `TriggerRef`·`EffectRef` 의 `refId` 를 `String?` 로 적었다. **실제 구현은
+`String @default("")` 다.**
+
+```
+이유    @@id([triggerId, refKind, refId]) 에 nullable 컬럼을 넣으면 Prisma 가 P1012 로 거부한다.
+        @@unique 로 우회하면 PostgreSQL 이 NULL 을 서로 다르게 봐(NULLS DISTINCT) 다뤄
+        중복이 뚫린다. refKind='none' 행이 31건이라 실질적 구멍이었다.
+같은 관례   model FieldGap 의 locale String @default("") 가 이미 같은 패턴을 쓴다.
+```
+
+15절의 프리즈마 스니펫을 이 결과로 고쳤다. 이 설계 문서를 다시 참고해 스키마를
+되돌릴 때 nullable 로 회귀하면 안 된다.
+
+**남은 것은 정량자다.** 임계값 72 · 분모 · 배치 슬롯 ~90행이며 위키·게임 확인으로
+채운다. 파이프라인 밖의 일이다.
