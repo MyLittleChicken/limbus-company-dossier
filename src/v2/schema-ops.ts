@@ -477,17 +477,34 @@ export async function appIntegrityCheck(
 	const total = await exactCount(prisma, 'app', check.table);
 	if (total === 0) return { total: 0, skipped: true, missingIds: [] };
 
-	// 대상 컬럼도 정의문에서 온 것을 쓴다 — `id` 로 박아 두면 언젠가 `id` 가 아닌
-	// 컬럼을 가리키는 FK 가 생겼을 때 **엉뚱한 컬럼을 재고도 통과했다고 찍는다.**
-	const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-		`SELECT DISTINCT a.${ident(check.fkColumn)} AS ${ident('id')}
+	// 이름이 전부 정의문에서 오므로 `ident` 가 여기서 던질 수 있다. 그대로 새면
+	// 사람이 받는 것은 `식별자가 이상하다: X` 한 줄뿐이라, 선검사가 왜 멈췄는지도
+	// DB 가 안 바뀌었다는 사실도 안 나온다. `hasAnyRow` 와 같은 세 줄 구조로 던진다.
+	let sql: string;
+	try {
+		sql = buildIntegritySql(check, targetSchema);
+	} catch (err) {
+		throw new Error([
+			`app.${check.table} 무결성 선검사의 식별자를 SQL 에 못 넣는다: ${(err as Error).message}`,
+			'이름이 FK 정의문에서 오므로, 모양이 우리 규칙(소문자·숫자·밑줄)을 벗어났다는 뜻이다.',
+			'DB 는 한 글자도 안 바뀌었다. 해당 FK 의 이름을 확인하거나 ident 규칙을 넓혀라.',
+		].join('\n'));
+	}
+	const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(sql);
+	return { total, skipped: false, missingIds: rows.map((r) => r.id) };
+}
+
+/**
+ * 선검사 SQL. **대상 컬럼도 정의문에서 온 것을 쓴다** — `id` 로 박아 두면 언젠가
+ * `id` 가 아닌 컬럼을 가리키는 FK 가 생겼을 때 엉뚱한 컬럼을 재고도 통과했다고 찍는다.
+ */
+function buildIntegritySql(check: AppFkCheck, targetSchema: string): string {
+	return `SELECT DISTINCT a.${ident(check.fkColumn)} AS ${ident('id')}
 		   FROM ${ident('app')}.${ident(check.table)} a
 		  WHERE NOT EXISTS (
 		    SELECT 1 FROM ${ident(targetSchema)}.${ident(check.targetTable)} w
 		     WHERE w.${ident(check.targetColumn)} = a.${ident(check.fkColumn)}
-		  )`,
-	);
-	return { total, skipped: false, missingIds: rows.map((r) => r.id) };
+		  )`;
 }
 
 /**
@@ -527,11 +544,20 @@ export function formatIds(ids: string[], limit = 20): string {
  * FK. 그 재조준은 v2:promote 몫이다). `raw` 문장은 canonical 블록에 전혀
  * 섞이지 않는다 — raw 를 다시 만들려 들지 않는다.
  */
-export function extractCanonicalDdl(fullDdl: string): string[] {
+/**
+ * DDL 을 문장 블록으로 가른다. **`extractCanonicalDdl` 과 테스트가 같은 규칙을
+ * 써야 한다** — 테스트가 사본을 들고 있으면 이쪽 규칙이 바뀔 때 사본만 옛 규칙으로
+ * 남아 「블록 256개」 같은 회귀 고정이 조용히 뜻을 잃는다.
+ */
+export function splitDdlBlocks(fullDdl: string): string[] {
 	return fullDdl
 		.split(/(?=^-- [A-Z])/m)
 		.map((block) => block.trim())
-		.filter((block) => block.length > 0)
+		.filter((block) => block.length > 0);
+}
+
+export function extractCanonicalDdl(fullDdl: string): string[] {
+	return splitDdlBlocks(fullDdl)
 		.filter(
 			(block) =>
 				block.includes('"canonical"') && !block.includes('"app"') && !block.includes('"raw"'),

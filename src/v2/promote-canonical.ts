@@ -62,16 +62,14 @@ import {
 	type Plan,
 } from './schema-ops.js';
 
-/**
- * 살아있는 이름. Prisma 가 스키마 이름을 하드코딩하므로(설계 3.1) 바뀌지 않는다.
- *
- * 이름도 계획표(`PLANS`)도 `schema-ops.ts` 에 산다 — **이 파일은 스크립트라 import
- * 만 해도 `main()` 이 돌아 테스트가 못 건드린다.** `PLANS` 는 이 브랜치에서 결과가
- * 가장 무거운 순수 데이터이므로(promote 와 rollback 의 `outgoingOccupied` 가 뒤바뀌면
- * 되돌리기가 갓 구운 `wip` 을 말없이 지운다) DB 없이 불변식을 못 박아야 했다
- * (`schema-ops.test.ts`).
- */
+/** 살아있는 이름. Prisma 가 스키마 이름을 하드코딩하므로(설계 3.1) 바뀌지 않는다 */
 const LIVE = LIVE_SCHEMA;
+
+// 이 이름도 계획표(`PLANS`)도 `schema-ops.ts` 에 산다 — **이 파일은 스크립트라
+// import 만 해도 `main()` 이 돌아 테스트가 못 건드린다.** `PLANS` 는 이 브랜치에서
+// 결과가 가장 무거운 순수 데이터이므로(promote 와 rollback 의 `outgoingOccupied` 가
+// 뒤바뀌면 되돌리기가 갓 구운 `wip` 을 말없이 지운다) DB 없이 불변식을 못 박아야
+// 했다 — `schema-ops.test.ts` 가 등식뿐 아니라 이름 자체를 고정한다.
 
 async function exec(tx: Prisma.TransactionClient, sql: string): Promise<void> {
 	console.log(`  ${sql}`);

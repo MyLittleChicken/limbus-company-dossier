@@ -9,6 +9,7 @@ import {
 	isRetargetableRelkind,
 	renameSchema,
 	extractCanonicalDdl,
+	splitDdlBlocks,
 	tallyCanonicalDdl,
 	formatIds,
 	rebindSql,
@@ -424,10 +425,8 @@ test('build 중단 안내 — canonical_hold 를 먼저 복귀시키라고 말�
 const REAL_SCHEMA_SQL = readFileSync(new URL('../../prisma/v2/schema.sql', import.meta.url), 'utf8');
 
 test('진짜 schema.sql — 블록 256개 중 227개가 순수 canonical', () => {
-	const blocks = REAL_SCHEMA_SQL.split(/(?=^-- [A-Z])/m)
-		.map((b) => b.trim())
-		.filter((b) => b.length > 0);
-	assert.equal(blocks.length, 256);
+	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 256이 뜻을 잃는다
+	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 256);
 	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 227);
 });
 
