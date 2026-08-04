@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { emptyRequiredMessage, renameSchema, extractCanonicalDdl } from './schema-ops.js';
 
 test('거부 메시지가 우회로를 알려 준다', () => {
-	const m = emptyRequiredMessage(94);
+	const m = emptyRequiredMessage();
 	assert.match(m, /canonical/);
-	assert.match(m, /94/);
+	// 테이블 개수가 아니라 "데이터가 있다"는 사실을 담는다 — hasAnyRow 와 짝
+	assert.match(m, /행/);
 	// 무엇을 하라는지 없으면 사람이 막힌다
 	assert.match(m, /v2:build/);
 });

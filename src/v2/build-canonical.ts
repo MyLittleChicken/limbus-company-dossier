@@ -15,6 +15,11 @@
  * `--from-empty` 산물(`npm run v2:schema:ddl` 이 만드는 `prisma/v2/schema.sql`,
  * raw·canonical·app 이 섞여 있다)을 `extractCanonicalDdl` 로 걸러 쓴다 — 빈
  * 상태에서 만드는 것이니 애초에 DROP 이 없다.
+ *
+ * 4단계(적재)의 「빈 canonical」가드(설계 결정 4, `load-canonical.ts`)는 테이블
+ * 존재가 아니라 **행** 존재로 판정한다 — 방금 구운 DDL 은 테이블 94개·행 0개라
+ * 우회로 없이 그대로 통과한다. 살아있는 판(테이블 94개·행 152,399개)은 여전히
+ * 막힌다.
  */
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -23,12 +28,9 @@ import { renameSchema, schemaExists, tableCount, extractCanonicalDdl } from './s
 
 const SCHEMA_SQL_URL = new URL('../../prisma/v2/schema.sql', import.meta.url);
 
-function runScript(script: string, extraEnv: Record<string, string> = {}): void {
+function runScript(script: string): void {
 	console.log(`\n$ npm run ${script}`);
-	const result = spawnSync('npm', ['run', script], {
-		stdio: 'inherit',
-		env: { ...process.env, ...extraEnv },
-	});
+	const result = spawnSync('npm', ['run', script], { stdio: 'inherit' });
 	if (result.status !== 0) {
 		throw new Error(`npm run ${script} 실패 (exit ${result.status ?? '알 수 없음'})`);
 	}
@@ -113,9 +115,10 @@ async function main(): Promise<void> {
 		console.log(`새 canonical 테이블 ${built}개 생성`);
 
 		console.log('\n4. 적재 — npm run v2:canonical (canonical_hold 는 건드리지 않는다)');
-		// 방금 이 프로세스가 canonical 을 옆으로 치우고 새 DDL 을 구웠다는 것을
-		// 적재기의 「빈 canonical」가드에 알려 준다 — load-canonical.ts 참고.
-		runScript('v2:canonical', { V2_BUILD_FRESH_CANONICAL: '1' });
+		// 적재기의 「빈 canonical」가드(설계 결정 4)는 행 존재로 판정한다 —
+		// load-canonical.ts 참고. 방금 구운 DDL 은 테이블만 있고 행이 없으므로
+		// 우회로 없이 그대로 통과한다.
+		runScript('v2:canonical');
 
 		console.log('\n5. 검사 — npm run v2:verify:canonical');
 		runScript('v2:verify:canonical');

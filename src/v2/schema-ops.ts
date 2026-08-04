@@ -6,9 +6,16 @@
  */
 import type { PrismaClient } from './generated/client.js';
 
-export function emptyRequiredMessage(n: number): string {
+/**
+ * `canonical` 이 비어 있지 않을 때 적재기가 던지는 메시지 — 무엇이 문제인지
+ * (행이 있다) · 왜 막는지(결정 4, 살아있는 판 보호) · 어떻게 하는지(v2:build)
+ * 세 줄 구조. 테이블 개수가 아니라 「데이터가 있다」는 사실 자체를 담으므로
+ * 인자가 없다 — v2:build 3단계 직후는 테이블이 94개라도 행이 0개라 여기 안
+ * 걸린다(아래 `hasAnyRow` 참고).
+ */
+export function emptyRequiredMessage(): string {
 	return [
-		`canonical 에 테이블이 ${n}개 있다. 적재기는 빈 canonical 에만 굽는다.`,
+		'canonical 에 이미 행이 있다. 적재기는 빈 canonical 에만 굽는다.',
 		'살아있는 판을 지우지 않기 위한 가드다(설계 결정 4).',
 		'새로 구우려면 npm run v2:build 를 쓴다 — 살아있는 판을 먼저 옆으로 치운다.',
 	].join('\n');
@@ -29,6 +36,32 @@ export async function tableCount(prisma: PrismaClient, schema: string): Promise<
 function ident(name: string): string {
 	if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`스키마 이름이 이상하다: ${name}`);
 	return `"${name}"`;
+}
+
+/**
+ * `schema` 에 행이 하나라도 있는지 — **테이블 존재가 아니라 행 존재**를 본다.
+ *
+ * `tableCount` 로는 「갓 구운 빈 판」과 「살아있는 판」을 못 가른다 — 둘 다 테이블
+ * 94개다. v2:build 3단계(DDL) 직후는 테이블 94·행 0, 살아있는 판은 테이블 94·행
+ * 152,399 다. 위험의 실체는 "테이블이 있다"가 아니라 "데이터가 있다"이므로 행을
+ * 본다.
+ *
+ * `pg_stat_user_tables.n_live_tup` 같은 추정치는 안 쓴다 — ANALYZE 시점에 따라
+ * 틀리고, 가드가 틀린 값으로 통과하면 그게 최악이다. 테이블마다 `EXISTS` 로
+ * 직접 묻고, 하나라도 참이면 즉시 멈춘다(94개를 다 돌 필요가 없다).
+ */
+export async function hasAnyRow(prisma: PrismaClient, schema: string): Promise<boolean> {
+	const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+		SELECT table_name FROM information_schema.tables
+		WHERE table_schema = ${schema} AND table_type = 'BASE TABLE'
+	`;
+	for (const { table_name } of tables) {
+		const rows = await prisma.$queryRawUnsafe<Array<{ e: boolean }>>(
+			`SELECT EXISTS (SELECT 1 FROM ${ident(schema)}.${ident(table_name)}) AS e`,
+		);
+		if (rows[0]?.e) return true;
+	}
+	return false;
 }
 
 export function renameSchema(from: string, to: string): string {
