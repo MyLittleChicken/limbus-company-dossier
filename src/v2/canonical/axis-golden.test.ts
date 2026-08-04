@@ -13,8 +13,11 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '../generated/client.js';
+import { NO_DB, canonicalReachable } from './db-available.js';
 
 const prisma = new PrismaClient();
+/** CI 는 DB 를 쓰지 않는다. 없으면 건너뛰되 건너뛴 사실은 보고에 남는다 */
+const DB = { skip: (await canonicalReachable(prisma)) ? false : NO_DB };
 const SQUAD = ['10216', '11216', '11009', '10916', '10716', '10512'];
 
 // 테스트 프로세스 종료 전 커넥션을 정리한다 — 안 하면 프로세스가 안 끝나거나
@@ -23,7 +26,7 @@ after(async () => {
 	await prisma.$disconnect();
 });
 
-test('편성의 축 프로파일 — 화상 6 · 진동 5', async () => {
+test('편성의 축 프로파일 — 화상 6 · 진동 5', DB, async () => {
 	// **ego_granted 를 뺀다.** 이 편성의 10512 는 수감자 5 라 착영휘도 후보 행을 갖는다.
 	// 안 거르면 E.G.O 를 안 낀 편성이 출혈·호흡을 가진 것으로 세어진다
 	const rows = await prisma.$queryRaw<Array<{ axis_id: string; n: bigint }>>`
@@ -38,7 +41,7 @@ test('편성의 축 프로파일 — 화상 6 · 진동 5', async () => {
 	assert.equal(m['LACERATION'], undefined);
 });
 
-test('착영휘도를 끼면 그 편성에 출혈·호흡이 선다 — 조건부 축', async () => {
+test('착영휘도를 끼면 그 편성에 출혈·호흡이 선다 — 조건부 축', DB, async () => {
 	const rows = await prisma.$queryRaw<Array<{ axis_id: string; n: bigint }>>`
 		SELECT axis_id, count(DISTINCT identity_id)::bigint AS n
 		FROM canonical.identity_axis
@@ -53,7 +56,7 @@ test('착영휘도를 끼면 그 편성에 출혈·호흡이 선다 — 조건�
 	assert.equal(m['COMBUSTION'], 6);
 });
 
-test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_capability', async () => {
+test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_capability', DB, async () => {
 	// 이 뷰가 「RDB 구조만으로 푼다」의 증거물이다. CASE 도 ref_kind 별 특례도 없다
 	const rows = await prisma.$queryRaw<Array<{ backed: bigint; hit: bigint }>>`
 		SELECT count(*) FILTER (WHERE n IS NOT NULL)::bigint AS backed,
@@ -73,7 +76,7 @@ test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_c
 	assert.equal(Number(rows[0]?.hit ?? 0n), 67);
 });
 
-test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가 LACERATION 으로 닿는다', async () => {
+test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가 LACERATION 으로 닿는다', DB, async () => {
 	const rows = await prisma.identityAxis.findMany({
 		where: { identityId: '10208', egoId: '' },
 		select: { axisId: true, source: true },
@@ -86,24 +89,24 @@ test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가
 	);
 });
 
-test('소속 트리거가 상태가 아니라 소속을 가리킨다 — 오매칭 방지', async () => {
+test('소속 트리거가 상태가 아니라 소속을 가리킨다 — 오매칭 방지', DB, async () => {
 	const dawn = await prisma.triggerRef.findMany({ where: { triggerId: 'Dawn Office Identities' } });
 	assert.deepEqual(dawn.map((r) => [r.refKind, r.refId]), [['association', 'DAWN']]);
 	const fanatic = await prisma.triggerRef.findMany({ where: { triggerId: 'N Corp. Fanatic Identities' } });
 	assert.deepEqual(fanatic.map((r) => [r.refKind, r.refId]), [['association', 'N_CORP_FNATIC']]);
 });
 
-test('Trigger Tremor Burst 는 VIBRATION 이다 — 최장일치가 축을 못 찾으면 내려간다', async () => {
+test('Trigger Tremor Burst 는 VIBRATION 이다 — 최장일치가 축을 못 찾으면 내려간다', DB, async () => {
 	const r = await prisma.triggerRef.findMany({ where: { triggerId: 'Trigger Tremor Burst' } });
 	assert.deepEqual(r.map((x) => [x.refKind, x.refId]), [['axis', 'VIBRATION']]);
 });
 
-test('축을 가리키는 트리거가 43종이다', async () => {
+test('축을 가리키는 트리거가 43종이다', DB, async () => {
 	const n = await prisma.triggerRef.count({ where: { refKind: 'axis' } });
 	assert.equal(n, 43);
 });
 
-test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · slot 60', async () => {
+test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · slot 60', DB, async () => {
 	// 예전 이 테스트는 0 을 고정하는 트립와이어였다. 채우면 깨지도록 두었고,
 	// 실제로 깨져서 여기로 왔다 — 「채웠다」가 기록에 남는 방식이다
 	const rows = await prisma.giftTriggerParam.groupBy({ by: ['kind'], _count: { _all: true } });
@@ -111,7 +114,7 @@ test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · 
 	assert.deepEqual(m, { min_count: 69, denominator: 59, slot: 60 });
 });
 
-test('진혼이 실제로 판정된다 — 화상 6인 ≥ 5인, 분모는 출전', async () => {
+test('진혼이 실제로 판정된다 — 화상 6인 ≥ 5인, 분모는 출전', DB, async () => {
 	// 설계가 처음부터 예시로 든 자리다. 트리거·임계값·분모가 다 있어야 답이 나온다
 	const rows = await prisma.$queryRaw<Array<{ need: number; have: bigint; denom: string }>>`
 		SELECT p.value::int AS need, d.value AS denom,
@@ -132,7 +135,7 @@ test('진혼이 실제로 판정된다 — 화상 6인 ≥ 5인, 분모는 출�
 	assert.ok(Number(rows[0]?.have ?? 0n) >= (rows[0]?.need ?? 0), '발동해야 한다');
 });
 
-test('같은 편성에서 미달하는 기프트가 있다 — 게이트가 실제로 거른다', async () => {
+test('같은 편성에서 미달하는 기프트가 있다 — 게이트가 실제로 거른다', DB, async () => {
 	// 9090 피안개는 출혈 5인을 요구한다. 이 화상·진동 편성에는 출혈 인격이 없다
 	const rows = await prisma.$queryRaw<Array<{ need: number; have: bigint }>>`
 		SELECT p.value::int AS need,

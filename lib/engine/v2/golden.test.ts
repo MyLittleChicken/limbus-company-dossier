@@ -7,6 +7,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '../../../src/v2/generated/client.js';
+import { NO_DB, canonicalReachable } from '../../../src/v2/canonical/db-available.js';
 import { loadEngineData } from './load';
 import { Profile } from './profile';
 import { evaluateGifts } from './evaluate';
@@ -16,13 +17,20 @@ import type { Squad } from './types';
 const prisma = new PrismaClient();
 after(async () => { await prisma.$disconnect(); });
 
+/** CI 는 DB 를 쓰지 않는다. 없으면 건너뛰되 건너뛴 사실은 보고에 남는다 */
+const DB = { skip: (await canonicalReachable(prisma)) ? false : NO_DB };
+
 const SQUAD: Squad = {
 	roster: ['10216', '11216', '11009', '10916', '10716', '10512']
 		.map((identityId) => ({ identityId, egoIds: [] })),
 	field: ['10216', '11216', '11009', '10916', '10716', '10512'],
 };
 
-const data = await loadEngineData(prisma);
+// DB 가 없으면 적재 자체가 던진다. 빈 값으로 두고 아래 테스트를 전부 건너뛴다
+const data = DB.skip === false
+	? await loadEngineData(prisma)
+	: { capabilities: [], refsByTrigger: new Map(), giftTriggers: new Map(),
+		giftEffects: new Map(), effectRefs: new Map(), giftRefs: new Map(), params: [] };
 const verdicts = evaluateGifts({
 	squad: SQUAD,
 	profile: new Profile(SQUAD, data.capabilities),
@@ -32,7 +40,7 @@ const verdicts = evaluateGifts({
 });
 const byId = new Map(verdicts.map((v) => [v.giftId, v]));
 
-test('진혼(9088) 이 켜진다 — 화상 6 ≥ 5, 출전 분모', () => {
+test('진혼(9088) 이 켜진다 — 화상 6 ≥ 5, 출전 분모', DB, () => {
 	const v = byId.get('9088');
 	assert.equal(v?.grade, 'A');
 	const r = v?.reasons.find((x) => x.refKind === 'axis' && x.refId === 'COMBUSTION');
@@ -42,7 +50,7 @@ test('진혼(9088) 이 켜진다 — 화상 6 ≥ 5, 출전 분모', () => {
 	assert.equal(r?.verdict, 'satisfied');
 });
 
-test('피안개(9090) 는 같은 편성에서 미달한다 — 출혈 0 < 5', () => {
+test('피안개(9090) 는 같은 편성에서 미달한다 — 출혈 0 < 5', DB, () => {
 	const v = byId.get('9090');
 	const r = v?.reasons.find((x) => x.refId === 'LACERATION');
 	assert.equal(r?.have, 0);
@@ -50,7 +58,7 @@ test('피안개(9090) 는 같은 편성에서 미달한다 — 출혈 0 < 5', ()
 	assert.equal(r?.verdict, 'unsatisfied');
 });
 
-test('등급 셋이 전부 나온다 — 결합을 접지 않은 결과', () => {
+test('등급 셋이 전부 나온다 — 결합을 접지 않은 결과', DB, () => {
 	const n = { A: 0, B: 0, C: 0 };
 	for (const v of verdicts) n[v.grade] += 1;
 	assert.ok(n.A > 0 && n.B > 0 && n.C > 0, JSON.stringify(n));
@@ -59,7 +67,7 @@ test('등급 셋이 전부 나온다 — 결합을 접지 않은 결과', () => 
 	assert.equal(n.A + n.B + n.C, data.giftTriggers.size);
 });
 
-test('판정 불가를 목록에서 빼지 않는다 — C 도 근거를 갖는다', () => {
+test('판정 불가를 목록에서 빼지 않는다 — C 도 근거를 갖는다', DB, () => {
 	const c = verdicts.filter((v) => v.grade === 'C');
 	assert.ok(c.length > 0);
 	assert.ok(c.every((v) => v.decidable === 0));
@@ -67,11 +75,11 @@ test('판정 불가를 목록에서 빼지 않는다 — C 도 근거를 갖는�
 	assert.ok(c.some((v) => v.total > 0));
 });
 
-test('충족은 항상 판정 가능 범위 안이다', () => {
+test('충족은 항상 판정 가능 범위 안이다', DB, () => {
 	assert.ok(verdicts.every((v) => v.satisfied <= v.decidable && v.decidable <= v.total));
 });
 
-test('분모를 편성으로 바꾸면 답이 달라지는 기프트가 있다', () => {
+test('분모를 편성으로 바꾸면 답이 달라지는 기프트가 있다', DB, () => {
 	// 대기 인원을 채운 12인 편성. 출전은 그대로 6인이다
 	const wide: Squad = {
 		roster: [...SQUAD.roster, ...['10208', '10501', '10109', '11001', '10601', '10801']
@@ -91,7 +99,7 @@ test('분모를 편성으로 바꾸면 답이 달라지는 기프트가 있다',
 	assert.equal(r?.have, 6);
 });
 
-test('연쇄 — 보유 기프트가 아직 안 켜진 기프트를 켠다', () => {
+test('연쇄 — 보유 기프트가 아직 안 켜진 기프트를 켠다', DB, () => {
 	// **9088 진혼으로는 안 된다.** 진혼이 거는 화상은 이 편성이 이미 갖고 있어
 	// 사슬이 줄 것이 없다 — 설계가 「이미 충족된 참조는 뺀다」로 정한 자리다.
 	// 9095 고장난 나침반은 이 화상 덱에 없는 침잠을 건다
@@ -111,7 +119,7 @@ test('연쇄 — 보유 기프트가 아직 안 켜진 기프트를 켠다', () 
 	assert.ok(links.every((l) => l.via.length > 0));
 });
 
-test('이미 충족된 참조는 사슬이 되풀이하지 않는다 — 화상 덱에 화상 기프트', () => {
+test('이미 충족된 참조는 사슬이 되풀이하지 않는다 — 화상 덱에 화상 기프트', DB, () => {
 	// 진혼이 거는 화상은 편성이 이미 갖고 있다. 사슬이 이것으로 늘면 중복이다
 	const links = chain({
 		heldGiftIds: ['9088'],
@@ -123,13 +131,13 @@ test('이미 충족된 참조는 사슬이 되풀이하지 않는다 — 화상 
 	assert.equal(links.some((l) => l.via.some((v) => v.refId === 'COMBUSTION')), false);
 });
 
-test('실측 등급 — A 146 · B 219 · C 86', () => {
+test('실측 등급 — A 146 · B 219 · C 86', DB, () => {
 	const n = { A: 0, B: 0, C: 0 };
 	for (const v of verdicts) n[v.grade] += 1;
 	assert.deepEqual(n, { A: 146, B: 219, C: 86 });
 });
 
-test('전부 충족 95 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', () => {
+test('전부 충족 95 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', DB, () => {
 	const fired = verdicts.filter((v) => v.grade === 'A' && v.satisfied === v.total);
 	const sure = fired.filter((v) => v.certain === v.total);
 	assert.equal(fired.length, 95);
