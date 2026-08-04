@@ -34,6 +34,11 @@ export type Unit = {
 	image: string | null;
 	name: string;
 	fellBack?: boolean;
+	/**
+	 * 카드 아래에 다는 한 줄. 시즌을 쓰지 않는 목록이 이 자리를 쓴다 —
+	 * 기프트의 「전용 / 공통」이 그렇다.
+	 */
+	note?: string | null;
 	/** 축 id 집합. 필터가 이것만 본다. */
 	tags: Record<string, string[]>;
 };
@@ -376,6 +381,7 @@ export function UnitList({
 												// 시즌을 쓰는 목록에서만 결손을 말한다. 기프트는 시즌 자체가 없다.
 												<span className="tag absent">시즌 없음</span>
 											)}
+											{u.note != null ? <span className="tag">{u.note}</span> : null}
 											{u.fellBack ? <abbr className="fellback">EN</abbr> : null}
 										</span>
 									</Link>

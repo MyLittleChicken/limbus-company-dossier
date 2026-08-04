@@ -87,12 +87,13 @@ export default async function GiftsPage({ params }: { params: Promise<{ locale: 
 		name: g.text?.name ?? String(g.id),
 		fellBack: g.text?.fellBack ?? false,
 		/*
-			**전용·범용 표를 달지 않는다.**
+			어디서 나오는가.
 
-			「범용」이 두 뜻으로 읽혔다 — 섹션 머리의 범용은 키워드에 매이지 않는다는 뜻이고
-			카드의 범용은 전용 팩이 없다는 뜻이라 축이 다르다. 한쪽만 달면 카드 높이가
-			갈리고, 양쪽에 달면 말이 겹친다. 전용 여부는 상세가 낸다.
+			**「범용」이라 부르지 않는다.** 섹션 머리의 범용은 키워드에 매이지 않는다는 뜻이라
+			축이 다르다 — 같은 말을 두 자리에 쓰면 「범용 섹션의 전용 기프트」 같은 것이
+			읽히지 않는다. 양쪽 다 달아 카드 높이도 맞춘다.
 		*/
+		note: g.exclusiveCount > 0 ? (ko ? '전용' : 'Exclusive') : ko ? '공통' : 'Common',
 		tags: {
 			tier: [g.tier],
 			keyword: [sectionOf(g.id, g.keywordId)],
