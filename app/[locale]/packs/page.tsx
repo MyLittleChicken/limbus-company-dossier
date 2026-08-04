@@ -8,6 +8,8 @@ import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox, TriFilter } from '@/components/filters';
 import { Empty, Name, SecLabel } from '@/components/ui';
 import { PackArt } from '@/components/pack-art';
+import { packKind } from '@/lib/pack-label';
+import { listCollabPackIds } from '@/lib/queries/canonical/packs';
 
 export default async function PacksPage({
 	params,
@@ -23,7 +25,12 @@ export default async function PacksPage({
 	const ko = locale === 'ko';
 
 	const filter = readPackFilter(sp);
-	const [packs, categories] = await Promise.all([listPacks(locale, filter), listPackCategories()]);
+	const [packs, categories, collabIds] = await Promise.all([
+		listPacks(locale, filter),
+		listPackCategories(),
+		// 콜라보 판정은 캐노니컬 태그에만 있다. 이름으로 짐작하지 않는다.
+		listCollabPackIds(),
+	]);
 
 	// 데이터의 내부 값을 게임이 쓰는 말로 옮긴다. 모르는 값이 오면 그대로 낸다 — 숨기지 않는다.
 	const categoryLabel = (id: string) => PACK_CATEGORY[locale][id] ?? id;
@@ -76,21 +83,21 @@ export default async function PacksPage({
 										<Name value={p.text} notice={t.fallbackNotice} />
 									</strong>
 									<span className="card-meta">
-										{/* 장 팩은 몇 장인지가 분류만큼 중요하다 — 데이터가 `chapter` 로 갖고 있다. */}
+										{/*
+											언제 고를 수 있는 팩인가 하나. 무엇에 대한 팩인지는 그림과 이름이
+											이미 말하므로 되풀이하지 않는다.
+										*/}
 										<span className="tag">
-											{categoryLabel(p.category)}
-											{p.category === 'canto' && p.chapter ? ` ${p.chapter}` : ''}
+											{packKind(
+												{
+													category: p.category,
+													chapter: p.chapter,
+													sprite: p.sprite,
+													collab: collabIds.has(p.id),
+												},
+												locale,
+											)}
 										</span>
-										{p.superposition ? <span className="tag">{ko ? '중첩' : 'Super'}</span> : null}
-										{p.extreme ? <span className="tag">{ko ? '극한' : 'Extreme'}</span> : null}
-										<span className="tag">
-											{ko ? '기프트' : 'Gifts'} {p.giftCount}
-										</span>
-										{p.exclusiveCount > 0 ? (
-											<span className="tag tag-mark">
-												{ko ? '전용' : 'Excl.'} {p.exclusiveCount}
-											</span>
-										) : null}
 									</span>
 									<span className="card-meta">
 										{p.floors.length === 0 ? (
