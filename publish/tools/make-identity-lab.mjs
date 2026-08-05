@@ -18,7 +18,29 @@ import { PrismaClient } from '../../src/v2/generated/client.js';
 // 치환된 표시용 텍스트는 v1 층에만 있다 — 아래 `loadShown` 주석 참고.
 import { PrismaClient as V1Client } from '@prisma/client';
 
+/**
+ * 동기화 단계는 로마자로 적는다 — 게임 표기가 「동기화 IV」다.
+ * 기프트 등급도 같은 규칙을 쓴다(`lib/queries/gifts.ts`).
+ */
+const UPTIE_ROMAN = ['', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ'];
+const roman = (n) => UPTIE_ROMAN[n] ?? String(n);
+
+/** 부호를 붙여 적는다. 보정은 66 건이 0 이하라 부호가 뜻을 가른다. 빼기표(−)를 쓴다. */
+const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
+
+/**
+ * 일러스트 교체 단추의 아이콘.
+ *
+ * **애셋에 없어서 그린다.** 스냅샷 4721 장을 훑어도 화살표가 교차하는 그림이 없다 —
+ * `limbus-assets` 는 게임 콘텐츠 스프라이트만 담고 UI 껍데기는 담지 않는다. 유니코드
+ * `⇄` 는 글꼴마다 굵기와 크기가 달라 카드의 금색 선과 안 맞아서 직접 그렸다.
+ */
+const SWAP_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8h14M15 5l3 3-3 3M20 16H6M9 13l-3 3 3 3"/></svg>`;
+
+
 const ID = process.argv[2] ?? '10515';
+/* 시안을 자주 다시 만들므로 스타일이 캐시에 묶이지 않게 한다. */
+const STAMP = process.argv[3] ?? String(process.hrtime.bigint() % 1000000n);
 const OUT = join(process.cwd(), 'publish', 'lab');
 const db = new PrismaClient();
 const v1 = new V1Client();
@@ -56,6 +78,33 @@ const line = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const sinIcon = (sin) => (sin ? `../assets/icons/limbus-assets/${sin}.webp` : null);
 const atkIcon = (t) => (t ? `../assets/icons/limbus-assets/${cap(t)}.webp` : null);
 const rarityIcon = (star) => `../assets/icons/limbus-assets/${'0'.repeat(star)}.webp`;
+
+/**
+ * 수감자 상징. `sinners/` 에 12 종이 id 그대로 들어 있다(1 이상 … 12 그레고르).
+ * 목록 화면이 쓰는 것과 같은 그림이다(`lib/assets.ts` 의 `sinnerIcon`).
+ *
+ * 색이 수감자마다 다르게 박혀 있어 따로 물들이지 않는다 — 뫼르소는 남색, 파우스트는 분홍.
+ */
+const sinnerSymbol = (sinnerId) => `../assets/sinners/limbus-assets/${sinnerId}.webp`;
+
+/**
+ * 키워드 아이콘. **id 로는 못 찾는다.**
+ *
+ * 캐노니컬 id 와 파일명이 다섯 군데 갈린다 — `Laceration` → `Bleed.webp` ·
+ * `Burst` → `Rupture` · `Vibration` → `Tremor` · `Breath` → `Poise` · `Combustion` → `Burn`.
+ * 표를 새로 만들지 않고 **데이터가 이미 가진 `en` 이름을 그대로 열쇠로 준다** — 12 종 전부
+ * 이 규칙으로 찾힌다. 목록 화면이 쓰는 규칙과 같다(`lib/queries/canonical/list.ts`).
+ *
+ * **애셋 키가 필드로 있으면 사라질 규칙이다** — `docs/backlog/13-frontend-data-debt.md` 6 번.
+ */
+const keywordIcon = (enName) => `../assets/icons/limbus-assets/${enName}.webp`;
+
+/** 공격·방어 레벨과 속도. 셋 다 애셋에 있는 그림이라 새로 만들지 않는다. */
+const STAT_ICON = {
+	offense: '../assets/icons/limbus-assets/offense level.webp',
+	defense: '../assets/icons/limbus-assets/defense level.webp',
+	speed: '../assets/icons/limbus-assets/speed.webp',
+};
 const skillIcon = (id) => `../assets/skills/limbus-assets/${id}.webp`;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -104,8 +153,9 @@ async function load(id) {
 		},
 	});
 
-	const [keywordNames, associationNames, statusNames] = await Promise.all([
+	const [keywordNames, keywordEn, associationNames, statusNames] = await Promise.all([
 		db.keywordText.findMany({ where: { locale: 'ko' } }),
+		db.keywordText.findMany({ where: { locale: 'en' } }),
 		db.associationText.findMany({ where: { locale: 'ko' } }),
 		db.status.findMany({ include: { texts: { where: { locale: 'ko' } } } }),
 	]);
@@ -115,10 +165,12 @@ async function load(id) {
 
 	return {
 		id,
+		sinnerId: identity.sinnerId,
 		star: identity.star,
 		season: identity.season,
 		released: identity.releaseDate,
 		hp: identity.hp,
+		hpLevel: identity.hpLevel,
 		defCorrection: identity.defCorrection,
 		stagger: identity.stagger,
 		title: line(text?.title ?? id),
@@ -131,6 +183,9 @@ async function load(id) {
 		resists: identity.resists.map((r) => ({ type: r.atkType, value: r.value })),
 		speeds: identity.speed.map((s) => ({ uptie: s.uptie, min: s.min, max: s.max })),
 		keywords: identity.keywords.map((k) => name(keywordNames, 'keywordId', k.keywordId)),
+		keywordIds: identity.keywords.map((k) => k.keywordId),
+		// 아이콘 열쇠. id 가 아니라 `en` 이름이다 — 아래 `keywordIcon` 주석 참고.
+		keywordIconKeys: identity.keywords.map((k) => name(keywordEn, 'keywordId', k.keywordId)),
 		associations: identity.associations.map((a) => name(associationNames, 'associationId', a.associationId)),
 		statuses: identity.statuses.map((s) => name(statusNames, 'statusId', s.statusId)),
 		passives: identity.passives.map((p) => ({
@@ -177,7 +232,7 @@ const head = (title) => `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} — 인격 상세 시안</title>
 <link rel="stylesheet" href="../css/tokens.css"><link rel="stylesheet" href="../css/globals.css">
-<link rel="stylesheet" href="lab.css"></head><body>
+<link rel="stylesheet" href="lab.css?r=${STAMP}"></head><body>
 <header class="site-header"><div class="hbar"><div class="htitle"><a href="index.html">Mirror Tracker</a><span class="sub">인격 상세 시안</span></div></div>
 <nav class="site-nav"><a href="index.html">시안 목록</a></nav></header>
 <main class="site-main">`;
@@ -230,7 +285,7 @@ function passiveCard(p, shown) {
 	const t = shown.passiveOf.get(p.id);
 	return `<article class="lab-passive">
 	<div class="lab-skill-h"><strong>${esc(p.name)}</strong>
-		<span class="lab-skill-tags"><span class="tag">${p.role === 'support' ? '서포트' : '전투'}</span><span class="tag">동기화 ${p.level}</span></span>
+		<span class="lab-skill-tags"><span class="tag">${p.role === 'supporter' ? '서포트' : '전투'}</span><span class="tag">동기화 ${roman(p.level)}</span></span>
 	</div>
 	<div class="lab-desc">${lines(t?.desc ?? p.desc, t?.descRaw ?? p.desc, shown.koOf)}</div>
 </article>`;
@@ -255,7 +310,7 @@ const resistList = (d) =>
 
 const speedList = (d) =>
 	`<ul class="lab-speed">${d.speeds
-		.map((s) => `<li><span>동기화 ${s.uptie}</span><b>${s.min} – ${s.max}</b></li>`)
+		.map((s) => `<li><span>동기화 ${roman(s.uptie)}</span><b>${s.min} – ${s.max}</b></li>`)
 		.join('')}</ul>`;
 
 const chips = (arr) =>
@@ -366,6 +421,37 @@ function variantC(d, shown) {
 <section class="panel"><div class="panel-h"><h3>패시브</h3><span class="hint">${d.passives.length}</span></div>
 	<div class="panel-b lab-wide">${d.passives.map((p) => passiveCard(p, shown)).join('')}</div></section>
 ${statusPanel(d, shown)}
+<script>
+/*
+	레벨은 미리 그려 둘 수 없다.
+
+	앞선 시안은 단계를 몇 개만 두고 CSS 의 :has() 로 골랐지만, 1~60 을 자유롭게 고르려면 값을
+	그때 계산해야 한다. **여기서만 자바스크립트를 쓴다** — 동기화·일러스트는 여전히 CSS 다.
+
+	체력 = 기본 체력 + 레벨당 증가 × 레벨. 게젤샤프트의 값 둘(212 · 241)과 소수점 버림까지
+	맞는 것을 확인했다.
+*/
+(() => {
+	const hp = document.getElementById('hp');
+	const range = document.getElementById('lv');
+	const num = document.getElementById('lvn');
+	const base = Number(hp.dataset.base);
+	const per = Number(hp.dataset.per);
+	const atk = document.getElementById('atklv');
+	const def = document.getElementById('deflv');
+	const corr = Number(def.dataset.corr);
+	const draw = (v) => {
+		const lv = Math.min(60, Math.max(1, Math.round(Number(v) || 1)));
+		range.value = num.value = lv;
+		hp.textContent = Math.floor(base + per * lv);
+		// 공격 레벨 = 레벨. 방어 레벨 = 레벨 + 보정. 피해 배율 = 1 + 0.03 × (공격 − 방어).
+		atk.textContent = lv;
+		def.textContent = lv + corr;
+	};
+	range.addEventListener('input', (e) => draw(e.target.value));
+	num.addEventListener('change', (e) => draw(e.target.value));
+})();
+</script>
 ${foot}`;
 }
 
@@ -393,7 +479,7 @@ function variantD(d, shown) {
 <div class="lab-split">
 	<aside class="lab-side">
 		<img class="lab-side-art" src="${d.art.awake}" alt="">
-		<p class="lab-side-cap">3 동기화</p>
+		<p class="lab-side-cap">동기화 III</p>
 		<section class="panel"><div class="panel-h"><h3>기본</h3></div><div class="panel-b">${facts(d)}</div></section>
 		<section class="panel"><div class="panel-h"><h3>저항</h3></div><div class="panel-b">${resistList(d)}</div></section>
 		<section class="panel"><div class="panel-h"><h3>속도</h3></div><div class="panel-b">${speedList(d)}</div></section>
@@ -408,6 +494,111 @@ function variantD(d, shown) {
 	</div>
 </div>
 ${foot}`;
+}
+
+/* ── 기믹 키워드 설명 ──────────────────────────────────────
+   **게임 데이터에 없는 것이라 밖에서 가져왔다.** 상태 설명이 「{1}번 … {0}만큼」 꼴인데
+   그 두 자리가 서로 다른 것이라는 사실을 어느 출처도 말하지 않는다.
+
+   나무위키 「Limbus Company/키워드」 문서에서 확인했다(2026-08-05). 문장을 옮겨 적지 않고
+   사실만 우리 말로 줄여 적는다.
+
+   **여기 두는 것은 임시다.** 밖에서 온 지식이라 캐노니컬에 넣을 수 없고(ADR-04),
+   `app` 스키마의 어휘 표가 제자리다 — `docs/backlog/13-frontend-data-debt.md` 10 번. */
+
+/**
+ * 상태 설명.
+ *
+ * 게임 데이터의 설명은 수치 자리가 `{0}` · `{1}` 로 비어 있는 틀이라 그대로는 읽히지
+ * 않는다. 나무위키 「Limbus Company/키워드」의 정의 문장을 그대로 쓴다(2026-08-05 확인).
+ * 「효과 위력」·「횟수」·「수치」가 무엇인지가 문장 안에 이미 들어 있다.
+ *
+ * `canonical.status` 의 id 를 열쇠로 쓴다. 여기 없는 상태는 게임 데이터의 문장을
+ * `generalize()` 로 다듬어 낸다.
+ *
+ * **여기 두는 것은 임시다.** 게임 데이터가 아니라 밖에서 온 값이라 캐노니컬에 넣을 수
+ * 없고(ADR-04), `app` 스키마의 어휘 표가 제자리다 —
+ * `docs/backlog/13-frontend-data-debt.md` 10 번.
+ */
+const STATUS_DESC = {
+	/* 기믹 일곱 */
+	Combustion: '턴 종료 시, 효과 위력만큼 고정 피해를 받고 횟수 1 감소',
+	Laceration:
+		'공격 스킬의 코인 판정 시, 효과 위력만큼 고정 체력 피해를 받음. 공격 스킬의 코인 판정 후 횟수 1 감소',
+	Vibration: '진동 폭발 스킬로 피격 시, 효과 위력만큼 흐트러짐 손상. 턴 종료 후 횟수 1 감소',
+	Burst: '공격 스킬로 피격 시, 효과 위력만큼 고정 체력 피해를 받음. 피격 후 횟수 1 감소',
+	Sinking:
+		'공격 스킬로 피격 시, 효과 위력만큼 고정 정신력 피해를 받음 (정신력이 없는 대상에게는 우울 속성 피해로 적용됨) 피격 후 횟수 1 감소',
+	Breath: '적중 시 효과 위력에 비례한 확률로 치명타 피해를 입힘. 턴 종료 시, 치명타 발동 후 횟수 1 감소',
+	Charge: '소모 시 특정 스킬의 위력이 상승함. 횟수를 최대 20까지 얻을 수 있음. 턴 종료 시 횟수 1 감소',
+
+	/* 전투 중 자주 붙는 것 */
+	Paralysis: '한 턴 동안 수치만큼 코인 위력이 0으로 고정',
+	Vulnerable: '한 턴 동안 스킬로 받는 피해가 수치에 비례하여 증가 (최대 10)',
+	Protection: '한 턴 동안 스킬로 받는 피해가 수치에 비례하여 감소 (최대 10)',
+	Agility: '한 턴 동안 속도가 수치만큼 증가',
+	Binding: '한 턴 동안 속도가 수치만큼 감소',
+	ResultEnhancement: '한 턴 동안 스킬의 최종 위력이 수치만큼 증가',
+	ResultReduction: '한 턴 동안 스킬의 최종 위력이 수치만큼 감소',
+	Enhancement: '한 턴 동안 공격 스킬의 최종 위력이 수치만큼 증가',
+	Reduction: '한 턴 동안 공격 스킬의 최종 위력이 수치만큼 감소',
+	Endurance: '한 턴 동안 수비 스킬의 최종 위력이 수치만큼 증가',
+	Disarming: '한 턴 동안 수비 스킬의 최종 위력이 수치만큼 감소',
+	ParryingResultUp: '합 진행 시, 합 위력이 수치만큼 증가',
+	ParryingResultDown: '합 진행 시, 합 위력이 수치만큼 감소',
+	PlusCoinValueUp: '한 턴 동안 더하기 코인 위력이 수치만큼 증가',
+	PlusCoinValueDown: '한 턴 동안 더하기 코인 위력이 수치만큼 감소',
+	MinusCoinValueUp: '한 턴 동안 빼기 코인 위력이 수치만큼 증가',
+	MinusCoinValueDown: '한 턴 동안 빼기 코인 위력이 수치만큼 감소',
+	AttackDmgUp: '한 턴 동안 스킬로 가하는 피해가 수치에 비례하여 10%씩 증가 (최대 10)',
+	AttackDmgDown: '한 턴 동안 스킬로 가하는 피해가 수치에 비례하여 10%씩 감소 (최대 10)',
+	AttackUp: '한 턴 동안 공격 레벨이 수치에 비례하여 증가',
+	AttackDown: '한 턴 동안 공격 레벨이 수치에 비례하여 감소',
+	DefenseUp: '한 턴 동안 방어 레벨이 수치에 비례하여 증가',
+	DefenseDown: '한 턴 동안 방어 레벨이 수치에 비례하여 감소',
+	TakeHpHealIncrease: '이번 턴 동안 패시브, 스킬, 코인의 효과로 회복하는 체력 +10% (최대 5)',
+	TakeHpHealReduce: '이번 턴 동안 패시브, 스킬, 코인의 효과로 회복하는 체력 -10% (최대 5)',
+	Inactible: '1턴 동안 행동하지 않음',
+	Aggro: '집중 전투에서 도발치가 높은 슬롯일수록 적에게 공격받을 확률 증가함',
+	AttackLevelAdder: '한 턴 동안 공격 레벨이 수치에 비례하여 증가',
+	AttackDmgUp_Weak: '한 턴 동안 약점 공격 시 가하는 피해가 수치에 비례하여 증가',
+
+	/* 둘 이상의 인격·E.G.O·기프트가 공유하는 것 */
+	Bullet: '특정 스킬 사용 시 탄환이 소모됨. 탄환이 없을 때 공격이 취소됨',
+	Muckworm: '턴 종료 시 수치만큼 탐식 피해를 받고 출혈 횟수가 1 증가한 뒤 수치 1 감소',
+	Curse:
+		'턴 종료 시 다음 턴에 공격 위력 감소 1, 수비 위력 감소 1, 공격 레벨 감소 2, 방어 레벨 감소 2 중 무작위 1개의 효과를 얻고, 수치 1 감소',
+	DimensionRift: '턴 종료 시 수치만큼 파열 횟수가 증가한 뒤 이 효과 소멸',
+	BurstProtection: '한 턴 동안 파열 효과로 받는 피해 수치당 1 감소',
+	Assemble: '이번 턴 동안 못이 부여된 대상 공격 시 최종 위력이 수치만큼 증가',
+	AssemblePersonality: '이번 턴 동안 못이 부여된 대상 공격 시 최종 위력이 수치만큼 증가',
+	ChargeForceField:
+		'(충전 역장 수치 × 3)만큼 보호막을 얻음. 그만큼 보호막을 잃으면 충전 역장 1 감소. 턴 종료 시 충전 횟수를 충전 역장 수치만큼 얻고, 충전 역장과 그 보호막이 소멸',
+};
+
+/*
+	속성별 피해량·취약·보호.
+
+	위키가 틀로 적어 둔 것이다 — 「(공격 유형/죄악 속성) 스킬로 가하는/받는 피해량이
+	수치에 비례하여 10%씩 증가/감소 (최대 10)」. 40 종이 같은 꼴이라 표를 손으로 늘어놓지
+	않고 그 틀에 속성 이름만 끼워 넣는다.
+*/
+const ATTR = {
+	Slash: '참격', Penetrate: '관통', Hit: '타격',
+	Crimson: '분노', Scarlet: '색욕', Amber: '나태',
+	Shamrock: '탐식', Azure: '우울', Indigo: '오만', Violet: '질투',
+};
+
+for (const [key, name] of Object.entries(ATTR)) {
+	const give = (dir) => `한 턴 동안 ${name} 속성 스킬로 가하는 피해량이 수치에 비례하여 10%씩 ${dir} (최대 10)`;
+	const take = (dir) => `한 턴 동안 ${name} 속성 스킬로 받는 피해량이 수치에 비례하여 10%씩 ${dir} (최대 10)`;
+	STATUS_DESC[`${key}DamageUp`] = give('증가');
+	STATUS_DESC[`${key}DamageDown`] = give('감소');
+	STATUS_DESC[`${key}TakeDamageUp`] = take('증가');
+	STATUS_DESC[`${key}TakeDamageDown`] = take('감소');
+	// 속성별 위력 증감도 같은 틀이다 — 「한 턴 동안 스킬의 최종 위력이 수치만큼 증가/감소」.
+	STATUS_DESC[`${key}ResultUp`] = `한 턴 동안 ${name} 속성 스킬의 최종 위력이 수치만큼 증가`;
+	STATUS_DESC[`${key}ResultDown`] = `한 턴 동안 ${name} 속성 스킬의 최종 위력이 수치만큼 감소`;
 }
 
 /* ── 표시용 텍스트 ─────────────────────────────────────── */
@@ -466,8 +657,45 @@ async function loadShown(skillIds) {
 		if (r.uptie !== top.get(r.skillId)) continue;
 		coinOf.set(`${r.skillId}:${r.index}`, r);
 	}
+	/*
+		단계별로도 담는다.
+
+		**계산기를 만들지 않으므로 동기화는 수치를 다시 계산하는 장치가 아니다.** 단계마다
+		스킬 문구가 다르니 「무엇을 보여줄지」만 바꾼다.
+	*/
+	const stageAt = new Map();
+	for (const r of stages) stageAt.set(`${r.skillId}:${r.uptie}`, r);
+	const coinAt = new Map();
+	for (const r of coins) coinAt.set(`${r.skillId}:${r.uptie}:${r.index}`, r);
+
+	/*
+		**단계 행은 바뀔 때만 있다.**
+
+		1051504 방어 스킬은 v1 에 1 · 4 단계만 있다 — 2 · 3 에서는 문구가 그대로라 행이
+		없을 뿐 스킬이 사라진 것이 아니다. 그런데 그 단계를 찾으면 빈손이라 아코디언이
+		펼쳐지지 않았다. **앞 단계를 이어서 쓴다.**
+
+		1051503 은 다르다 — 3 단계부터 행이 생긴다. 캐노니컬도 같아서(1051503 은 uptie 3
+		부터) 그 앞에서는 **정말로 쓸 수 없는 스킬**이다. 이월할 앞 단계가 없으면 그렇게
+		읽고 화면이 「동기화 N 부터」라고 밝힌다.
+	*/
+	const uptieOf = new Map();
+	for (const r of stages) {
+		const list = uptieOf.get(r.skillId) ?? [];
+		list.push(r.uptie);
+		uptieOf.set(r.skillId, list.sort((a, b) => a - b));
+	}
+	/** 고른 단계 이하에서 가장 늦은 것. 없으면 그 단계에는 스킬이 없다. */
+	const at = (skillId, uptie) => {
+		const list = uptieOf.get(skillId) ?? [];
+		let found = null;
+		for (const u of list) if (u <= uptie) found = u;
+		return found;
+	};
+	const firstUptie = (skillId) => (uptieOf.get(skillId) ?? [])[0] ?? null;
+
 	const passiveOf = new Map(passiveTexts.map((t) => [t.passiveId, t]));
-	return { stageOf, coinOf, koOf, stOf, top, passiveOf };
+	return { stageOf, coinOf, stageAt, coinAt, at, firstUptie, koOf, stOf, top, passiveOf };
 }
 
 /**
@@ -521,51 +749,42 @@ function usedStatuses(d, shown) {
 /**
  * 수치 자리를 일반 설명으로 바꾼다.
  *
- * 게임이 상태 설명을 틀로 갖고 있어 수치 자리가 `{0}` · `{1}` 로 비어 있다 —
- * 「{1}번 공격 스킬의 코인 판정 시 {0}만큼 고정 체력 피해를 받음」 같은 식이다. 실측으로
+ * 게임이 상태 설명을 틀로 갖고 있어 수치 자리가 `{0}` · `{1}` 로 비어 있다. 실측으로
  * `{0}` 167 · `{1}` 18 · `{2}` 7 건이 쓰인다.
  *
  * **그 자리에 들어갈 수는 상태가 몇 겹 걸렸는지에 따라 매번 다르다.** 상세 화면은 특정
- * 전투의 값을 말하는 자리가 아니므로 채울 숫자가 없다. 그렇다고 `{0}` 을 그대로 내면
- * 글이 깨져 보인다.
+ * 전투의 값을 말하는 자리가 아니므로 채울 숫자가 없다.
  *
- * 그래서 **`N` 으로 세운다.** 앞뒤 낱말이 이미 무엇을 세는지 말해 준다 —
- * 「N턴 동안」 · 「N번」 · 「N만큼」 처럼 읽힌다. 수를 지어내지 않으면서 문장이 선다.
+ * 그래서 **자리가 무엇인지를 그대로 적는다** — `{0}` 은 「효과 위력」이고 `{1}` · `{2}` 는
+ * 「횟수」다. 기믹 일곱의 정의(`KEYWORD_DESC`)가 쓰는 말과 같아서 두 종류의 문장이 한
+ * 말투로 읽힌다.
  *
- * **두 `N` 이 서로 다른 것이라는 사실은 어디에도 없다.** 「위력」은 효과의 강도이고
- * 「횟수」는 지속 턴 수인데(나무위키 키워드 문서, 2026-08-05 확인) 게임 데이터가 그것을
- * 말하지 않는다. 밖에서 온 지식이라 캐노니컬에 넣을 수도 없다 — `app` 스키마에 어휘
- * 설명을 두는 것이 맞다. `docs/backlog/13-frontend-data-debt.md` 9 · 10 번.
+ * 부호와 이어 붙이기도 함께 푼다.
+ *
+ *   ±{0}0%   →  (효과 위력×10)%만큼 증가 / 감소   51 건. 숫자를 이어 붙인 틀이라 곱으로 푼다
+ *   ±{0}     →  효과 위력만큼 증가 / 감소         43 건. 「-3」 은 읽히지만 부호만 남으면 안 읽힌다
+ *   {0}개    →  (효과 위력)개                     세는 말이 뒤에 붙으면 괄호로 묶는다
+ *   {0}      →  효과 위력
+ *   {1} {2}  →  횟수
+ *
+ * **이 규칙은 데이터층에 있어야 한다** — 표시용 문자열이 담기면 사라진다.
+ * `docs/backlog/13-frontend-data-debt.md` 9 번.
  */
 const generalize = (s) =>
 	String(s ?? '')
-		/*
-			**`{0}0%` 는 곱셈이 아니라 숫자를 이어 붙인 것이다.**
-
-			수치가 3 이면 「30%」가 되라고 뒤에 `0` 을 붙여 둔 틀이다. 자리에 숫자가 들어갈
-			때만 통하는 수법이라, `N` 을 넣으면 「N0%」가 되어 뜻이 뒤집힌다. 실측 51 건이
-			이 꼴이므로 그냥 두면 안 된다. 뜻을 지키려면 곱으로 풀어야 한다.
-		*/
-		.replace(/([+\-−])\{\d+\}0%/g, (_, sign) => `N×10%만큼 ${sign === '+' ? '증가' : '감소'}`)
-		.replace(/\{\d+\}0%/g, 'N×10%')
-		/*
-			**부호도 말로 푼다.**
-
-			「방어 레벨 -{0}」 은 자리에 숫자가 들어갈 때만 읽힌다 — 「-3」 은 자연스럽지만
-			「-N」 은 값이 아니라 이름처럼 보인다. 실측 43 건(`+` 30 · `-` 13)이 이 꼴이다.
-			「증가 / 감소」는 게임이 다른 문장에서 이미 쓰는 말이라 새로 만든 표기가 아니다.
-
-			읽는 틀을 하나로 맞춘다 — **횟수는 「N번」, 피해는 「N만큼 … 피해」, 버프·디버프는
-			「N만큼 증가 / 감소」** 다. 앞의 둘은 원본 문장이 이미 그 꼴이라 손댈 것이 없고,
-			부호만 이 틀로 옮기면 셋이 같은 말투가 된다.
-		*/
-		.replace(/([+\-−])\{\d+\}/g, (_, sign) => `N만큼 ${sign === '+' ? '증가' : '감소'}`)
-		.replace(/\{\d+\}/g, 'N');
+		.replace(/([+\-−])\{0\}0%/g, (_, sign) => `(효과 위력×10)%만큼 ${sign === '+' ? '증가' : '감소'}`)
+		.replace(/\{\d+\}0%/g, '(효과 위력×10)%')
+		.replace(/([+\-−])\{0\}/g, (_, sign) => `효과 위력만큼 ${sign === '+' ? '증가' : '감소'}`)
+		.replace(/\{0\}(?=[개번턴회명장])/g, '(효과 위력)')
+		.replace(/\{0\}/g, '효과 위력')
+		.replace(/\{\d+\}(?=[개번턴회명장])/g, '(횟수)')
+		.replace(/\{\d+\}/g, '횟수');
 
 /** 상태 칸. 공식 프리뷰도 패시브 옆에 이것을 붙인다. */
 function statusPanel(d, shown) {
 	const rows = usedStatuses(d, shown);
 	if (!rows.length) return '';
+
 	return `<section class="panel"><div class="panel-h"><h3>이 인격이 쓰는 상태</h3><span class="hint">${rows.length}</span></div>
 	<div class="panel-b st-grid">${rows
 		.map(
@@ -575,8 +794,8 @@ function statusPanel(d, shown) {
 			<strong>${esc(st.name)}</strong>
 		</div>
 		<div class="st-body">${
-			st.desc
-				? esc(generalize(st.desc))
+			STATUS_DESC[st.id] || st.desc
+				? esc(STATUS_DESC[st.id] ?? generalize(st.desc))
 						.split('\n')
 						.filter((v) => v.trim())
 						.map((v) => `<p class="fx-line">${v}</p>`)
@@ -663,14 +882,14 @@ function variantE(d, shown) {
 	<div class="panel-b pm-stack">${d.passives
 		.map(
 			(p) => `<article class="pm-passive">
-		<div class="pm-skill-slot">${p.role === 'support' ? '서포트 패시브' : '패시브'}</div>
+		<div class="pm-skill-slot">${p.role === 'supporter' ? '서포트 패시브' : '패시브'}</div>
 		<div class="pm-skill-body">
 			<div class="pm-name" data-sin="none">${esc(p.name)}</div>
 			<div class="pm-lines">${(() => {
 				const t = passiveOf.get(p.id);
 				return lines(t?.desc ?? p.desc, t?.descRaw ?? p.desc, koOf);
 			})()}</div>
-			<p class="pm-req">동기화 ${p.level}</p>
+			<p class="pm-req">동기화 ${roman(p.level)}</p>
 		</div>
 	</article>`,
 		)
@@ -685,12 +904,243 @@ ${statusPanel(d, shown)}
 ${foot}`;
 }
 
+/**
+ * F. 정보 카드.
+ *
+ * 단테의 게젤샤프트가 쓰는 상단 카드를 가져오되 **계산기는 만들지 않는다.** 그 사이트가
+ * 스킬마다 한 화면을 먹는 것은 조건을 켜고 끄며 최종 피해를 다시 계산하기 때문이고,
+ * 우리는 정보만 내므로 그 자리가 통째로 필요 없다.
+ *
+ * 그래서 스킬을 **한 줄 요약 + 펼치기**로 둔다. 다섯이 한 화면에 들어와 서로 비교되고,
+ * 필요한 것만 열어 코인까지 본다.
+ *
+ * 동기화는 수치를 다시 계산하는 장치가 아니라 **무엇을 보여줄지 고르는 것**이다 — 단계마다
+ * 스킬 문구와 속도가 다르다. 라디오와 `:has()` 로만 움직여 자바스크립트가 없다.
+ */
+function variantF(d, shown) {
+	const { stageAt, coinAt, at, firstUptie, koOf } = shown;
+	const upties = [...new Set(d.speeds.map((s) => s.uptie))].sort((a, b) => a - b);
+
+	/*
+		레벨.
+
+		**체력은 레벨에 따라 는다** — `hp + hpLevel × 레벨` 이다. 단테의 게젤샤프트가 레벨
+		60 에서 10515 를 212, 10116 을 241 로 내는데 이 식과 소수점 버림까지 맞는다
+		(69 + 2.39×60 = 212.4 · 60 + 3.03×60 = 241.8). 두 인격으로 확인했다.
+	*/
+	const MAX_LEVEL = 60;
+
+	/* 흐트러짐 구간. 배열이며 인격마다 수가 다르다. */
+	const bar = `<span class="f-hp-bar">${(d.stagger ?? [])
+		.map((v) => `<i style="left:${v}%"><b>${v}%</b></i>`)
+		.join('')}</span>`;
+
+	const stat = (label, value, icon) =>
+		`<div class="f-stat"><span>${icon ? `<img src="${icon}" alt="">` : ''}${esc(label)}</span><b>${value}</b></div>`;
+
+	const skill = (s, label) => {
+		const id = Number(s.id);
+		const first = firstUptie(id);
+		return `<details class="f-skill">
+		<summary>
+			<img class="f-skill-icon" src="${skillIcon(s.id)}" alt="" loading="lazy">
+			<span class="f-skill-slot">${esc(label)}</span>
+			${upties
+				.map((u) => {
+					const su = at(id, u);
+					const st = su ? stageAt.get(`${id}:${su}`) : null;
+					return `<strong data-up="${u}">${esc(st?.name ?? s.name)}${
+						su ? '' : ` <em class="f-locked">동기화 ${roman(first)} 부터</em>`
+					}</strong>`;
+				})
+				.join('')}
+			<span class="f-skill-tags">
+				${coinDots(s.coins.length)}
+				${iconTag(sinIcon(s.sin), SIN[s.sin] ?? '—')}
+				${iconTag(atkIcon(s.atk), ATK[s.atk] ?? '—')}
+			</span>
+		</summary>
+		${upties
+			.map((u) => {
+				const su = at(id, u);
+				if (!su) {
+					return `<div class="f-skill-body" data-up="${u}"><p class="absent">동기화 ${roman(first)} 부터 쓸 수 있다</p></div>`;
+				}
+				const st = stageAt.get(`${id}:${su}`);
+				const coins = s.coins
+					.map((c, i) => {
+						const ct = coinAt.get(`${id}:${su}:${c.index}`);
+						return ct
+							? `<li><span class="coin-r">${ROMAN[i] ?? i + 1}</span><div>${lines(ct.desc, ct.descRaw, koOf)}</div></li>`
+							: '';
+					})
+					.join('');
+				return `<div class="f-skill-body" data-up="${u}">
+			<div class="pm-lines">${lines(st?.desc, st?.descRaw, koOf)}</div>
+			<ol class="pm-coins">${coins}</ol>
+		</div>`;
+			})
+			.join('')}
+	</details>`;
+	};
+
+	const attacks = d.skills.filter((s) => s.role === 'attack');
+	const others = d.skills.filter((s) => s.role !== 'attack');
+	const battle = d.passives.filter((p) => p.role !== 'supporter');
+	const support = d.passives.filter((p) => p.role === 'supporter');
+
+	const passivePanel = (title, rows) =>
+		rows.length
+			? `<section class="panel"><div class="panel-h"><h3>${title}</h3><span class="hint">${rows.length}</span></div>
+	<div class="panel-b lab-stack">${rows.map((p) => passiveCard(p, shown)).join('')}</div></section>`
+			: '';
+
+	return `${head(d.title)}
+<section class="f-card">
+	<div class="f-art">
+		<input type="checkbox" id="awake" hidden>
+		<img class="f-art-normal" src="${d.art.normal}" alt="">
+		<img class="f-art-awake" src="${d.art.awake}" alt="">
+		<i class="f-mount"></i>
+		<label for="awake" title="기본 · 3 동기화 일러스트 바꾸기" aria-label="일러스트 바꾸기">${SWAP_ICON}</label>
+	</div>
+	<div class="f-body">
+		<header class="f-head">
+			<div class="f-ident">
+				<div class="f-title">
+					<span class="f-emblem"><img src="${sinnerSymbol(
+						d.sinnerId,
+					)}" alt="" aria-hidden="true"></span>
+					<img class="lab-rank" src="${rarityIcon(d.star)}" alt="${'0'.repeat(d.star)}">
+					<h1>${esc(d.title)}<span class="f-sinner">${esc(d.sinner)}</span></h1>
+				</div>
+				<div class="f-affil">${chips(d.associations)}</div>
+			</div>
+			<dl class="f-file">
+				<div><dt>NO.</dt><dd>${esc(String(d.id))}</dd></div>
+				<div><dt>시즌</dt><dd>${esc(String(d.season ?? '—'))}</dd></div>
+				<div><dt>출시</dt><dd>${esc(d.released ?? '—')}</dd></div>
+			</dl>
+		</header>
+
+		<div class="f-picks">
+			<div class="f-pick f-pick--lv">
+				<span class="f-lab">레벨</span>
+				<input class="f-lv-range" type="range" min="1" max="${MAX_LEVEL}" value="${MAX_LEVEL}" id="lv">
+				<input class="f-lv-num" type="number" min="1" max="${MAX_LEVEL}" value="${MAX_LEVEL}" id="lvn" aria-label="레벨">
+			</div>
+			<div class="f-pick">
+				<span class="f-lab">동기화</span>
+				${upties
+					.map(
+						(u) =>
+							`<input type="radio" name="up" id="up${u}" ${u === upties[upties.length - 1] ? 'checked' : ''} hidden><label for="up${u}">${roman(u)}</label>`,
+					)
+					.join('')}
+			</div>
+		</div>
+
+		<div class="f-hp">
+			<span class="f-lab">체력</span>
+			<span class="f-hp-n" id="hp" data-base="${d.hp ?? 0}" data-per="${d.hpLevel ?? 0}">${Math.floor(
+				(d.hp ?? 0) + (d.hpLevel ?? 0) * MAX_LEVEL,
+			)}</span>
+			${bar}
+		</div>
+
+		<div class="f-stats">
+			<div class="f-statrow">
+				<span class="f-lab">스탯</span>
+				<div class="f-stat"><span><img src="${
+					STAT_ICON.offense
+				}" alt="">공격 레벨</span><b id="atklv">${MAX_LEVEL}</b></div>
+				<div class="f-stat"><span><img src="${
+					STAT_ICON.defense
+				}" alt="">방어 레벨 <em>보정 ${signed(
+					d.defCorrection ?? 0,
+				)}</em></span><b id="deflv" data-corr="${d.defCorrection ?? 0}">${
+					MAX_LEVEL + (d.defCorrection ?? 0)
+				}</b></div>
+				<div class="f-stat"><span><img src="${STAT_ICON.speed}" alt="">속도</span>${upties
+					.map((u) => {
+						const sp = d.speeds.find((x) => x.uptie === u);
+						return `<b data-up="${u}">${sp ? `${sp.min}–${sp.max}` : '—'}</b>`;
+					})
+					.join('')}</div>
+			</div>
+			<div class="f-statrow">
+				<span class="f-lab">저항</span>
+				${d.resists.map((r) => stat(ATK[r.type] ?? r.type, `×${r.value}`, atkIcon(r.type))).join('')}
+			</div>
+		</div>
+
+		<div class="f-tags">
+			<div><span class="f-lab">키워드</span>${
+				d.keywords.length
+					? d.keywords
+							.map(
+								(k, i) =>
+									`<span class="tag tag--icon"><img src="${keywordIcon(
+										d.keywordIconKeys[i],
+									)}" alt="">${esc(k)}</span>`,
+							)
+							.join('')
+					: '<span class="absent">없음</span>'
+			}</div>
+		</div>
+	</div>
+</section>
+
+<section class="panel"><div class="panel-h"><h3>스킬</h3><span class="hint">${d.skills.length}</span></div>
+	<div class="panel-b f-skills">
+		${attacks.map((s, i) => skill(s, `스킬 ${i + 1}`)).join('')}
+		${others.map((s) => skill(s, '방어')).join('')}
+	</div></section>
+
+${passivePanel('전투 패시브', battle)}
+${passivePanel('서포트 패시브', support)}
+${statusPanel(d, shown)}
+<script>
+/*
+	레벨은 미리 그려 둘 수 없다.
+
+	앞선 시안은 단계를 몇 개만 두고 CSS 의 :has() 로 골랐지만, 1~60 을 자유롭게 고르려면 값을
+	그때 계산해야 한다. **여기서만 자바스크립트를 쓴다** — 동기화·일러스트는 여전히 CSS 다.
+
+	체력 = 기본 체력 + 레벨당 증가 × 레벨. 게젤샤프트의 값 둘(212 · 241)과 소수점 버림까지
+	맞는 것을 확인했다.
+*/
+(() => {
+	const hp = document.getElementById('hp');
+	const range = document.getElementById('lv');
+	const num = document.getElementById('lvn');
+	const base = Number(hp.dataset.base);
+	const per = Number(hp.dataset.per);
+	const atk = document.getElementById('atklv');
+	const def = document.getElementById('deflv');
+	const corr = Number(def.dataset.corr);
+	const draw = (v) => {
+		const lv = Math.min(60, Math.max(1, Math.round(Number(v) || 1)));
+		range.value = num.value = lv;
+		hp.textContent = Math.floor(base + per * lv);
+		// 공격 레벨 = 레벨. 방어 레벨 = 레벨 + 보정. 피해 배율 = 1 + 0.03 × (공격 − 방어).
+		atk.textContent = lv;
+		def.textContent = lv + corr;
+	};
+	range.addEventListener('input', (e) => draw(e.target.value));
+	num.addEventListener('change', (e) => draw(e.target.value));
+})();
+</script>
+${foot}`;
+}
+
 const INDEX = (d) => `${head('시안 목록')}
 <div class="seclabel"><h2>인격 상세 시안</h2><span class="kr">${esc(d.title)} · ${esc(d.sinner)}</span><span class="rule"></span></div>
 <ul class="plain">
 	<li><a href="identity-a.html"><strong>A · 히어로 머리</strong></a><p class="lede">초상을 전폭으로 깔고 이름을 그 위에 얹는다. 목록 카드를 키운 꼴이라 넘어온 눈이 같은 것을 본다. 첫 화면에서 스킬이 밀린다.</p></li>
 	<li><a href="identity-b.html"><strong>B · 좌측 고정</strong></a><p class="lede">초상과 수치를 왼쪽에 붙여 두고 스킬만 오른쪽에서 흐른다. 스킬을 읽는 동안 등급과 저항이 계속 보인다.</p></li>
 	<li><a href="identity-c.html"><strong>C · 띠 머리 + 넓은 스킬</strong></a><p class="lede">초상을 작게 두고 수치를 한 띠에 압축한다. 스킬이 전폭을 써서 코인 효과가 줄바꿈 없이 들어간다.</p></li>
+	<li><a href="identity-f.html"><strong>F · 정보 카드 (계산기 없음)</strong></a><p class="lede">단테의 게젤샤프트의 상단 카드를 가져오되 계산기는 만들지 않는다. 스킬은 한 줄 요약 + 펼치기라 다섯이 한 화면에 들어온다. 동기화는 수치를 다시 계산하지 않고 무엇을 보여줄지만 고른다.</p></li>
 	<li><a href="identity-e.html"><strong>E · 프로젝트문 프리뷰 구조</strong></a><p class="lede">공식 인격 프리뷰 카드(IDENTITY INFO · SKILL · PASSIVE)의 짜임을 옮겼다. 코인을 동전으로 세고 코인 효과를 로마자로 묶으며, 타이밍 태그와 상태 이름을 색으로 가른다.</p></li>
 	<li><a href="identity-d.html"><strong>D · 히어로 머리 + 좌측 고정</strong></a><p class="lede">A 의 첫인상과 B 의 읽기를 합쳤다. 초상 높이를 낮춰 스킬이 첫 화면에 걸리게 하고, 그 아래에서는 수치가 왼쪽에 붙어 따라온다. 왼쪽 그림은 3 동기화다.</p></li>
 </ul>
@@ -707,6 +1157,7 @@ writeFileSync(join(OUT, 'identity-b.html'), variantB(d, shown));
 writeFileSync(join(OUT, 'identity-c.html'), variantC(d, shown));
 writeFileSync(join(OUT, 'identity-d.html'), variantD(d, shown));
 writeFileSync(join(OUT, 'identity-e.html'), variantE(d, shown));
+writeFileSync(join(OUT, 'identity-f.html'), variantF(d, shown));
 writeFileSync(join(OUT, 'index.html'), INDEX(d));
 await Promise.all([db.$disconnect(), v1.$disconnect()]);
 
