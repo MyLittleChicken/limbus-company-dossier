@@ -748,11 +748,17 @@ async function main(): Promise<void> {
 		// 표제어 치환이 끝났나. `desc` 는 표시용이고 `desc_raw` 가 원문이다 —
 		// 대괄호 표기가 남으면 화면이 그것을 그대로 그린다.
 		//
-		// **0 이 아니다.** `term` 에 id 는 있으나 `term_text` 에 그 로케일 이름이
-		// 없는 표제어가 있고(TabExplain 이 그 예다), 그때는 원문을 유지한다 —
-		// 지우면 문장이 무너지고 만들어내면 없는 말을 짓는 것이 된다.
+		// **0 이 아니고, 로케일마다 크게 다르다.** 이유가 셋이다.
 		//
-		// 일본어가 큰 것은 사전이 ko·en 만 있어서다(원본이 그렇고 현행도 같다).
+		//   ko  35     term 에 id 는 있으나 term_text 에 이름이 없는 표제어
+		//              (TabExplain 등 29종). 원문을 유지한다 — 지우면 문장이
+		//              무너지고 만들어내면 없는 말을 짓는 것이 된다
+		//   en  4,105  영어 문장이 원래 대괄호로 인쇄하는 표시가 있다 —
+		//              [On Use] 1,649 · [Indiscriminate] 490 · [Combat Start] 398.
+		//              표제어가 아니라 게임 표기다. 한국어는 「[사용 시]」라
+		//              영문 무늬에 안 걸린다
+		//   ja  4,331  사전이 ko·en 뿐이다. 원본이 그렇고 현행도 같다
+		//
 		// **이 수가 늘면 치환이 빠진 것이다.**
 		const tokens = await prisma.$queryRaw<Array<{ locale: string; n: bigint }>>`
 			SELECT locale, count(*)::bigint AS n FROM (
@@ -765,9 +771,9 @@ async function main(): Promise<void> {
 			) t WHERE "desc" ~ '\\[[A-Za-z]' GROUP BY locale`;
 		const tokenOf = (locale: string) =>
 			Number(tokens.find((r) => r.locale === locale)?.n ?? 0n);
-		eq('한국어에 남은 표제어 표기 (사전에 이름이 없다)', tokenOf('ko'), 28);
-		eq('영어에 남은 표제어 표기', tokenOf('en'), 75);
-		eq('일본어에 남은 표제어 표기 (사전이 ko·en 뿐이다)', tokenOf('ja'), 2_661);
+		eq('한국어에 남은 표제어 표기 (사전에 이름이 없다)', tokenOf('ko'), 35);
+		eq('영어에 남은 표제어 표기 (게임 표기 포함)', tokenOf('en'), 4_105);
+		eq('일본어에 남은 표제어 표기 (사전이 ko·en 뿐이다)', tokenOf('ja'), 4_331);
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);
