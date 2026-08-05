@@ -25,6 +25,7 @@ import { buildGiftTriggerParam } from './canonical/gift-trigger-param.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildMirrorDungeon } from './canonical/mirror-dungeon.js';
+import { substituteTokens } from './canonical/markup.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
 import { readAuthored, unknownRefs, authoredDigest, type KnownIds } from './authored.js';
@@ -453,6 +454,47 @@ async function main(): Promise<void> {
 					ordinal += 1;
 				}
 			}
+		}
+
+		// ── 표제어 치환 — 표시용 desc 를 완성한다 ──────────────────
+		// descOf 가 마크업만 지우고 [Combustion] 같은 표기는 남겨 뒀다. desc 는
+		// 표시용이고 desc_raw 가 원문이라는 규약이 이미 있으므로 누락이다 —
+		// 안 채우면 화면이 대괄호를 그대로 그린다(실측 다섯 표 14,954행).
+		//
+		// **후처리로 하는 이유**는 사전(term)이 statuses 빌더의 산물이라 다른
+		// 빌더들이 만들어질 때는 아직 없기 때문이다. 수동 보정과 같은 자리다.
+		const termDict: Record<string, Map<string, string>> = { ko: new Map(), en: new Map(), ja: new Map() };
+		for (const tt of statuses.termText) {
+			termDict[tt.locale]?.set(tt.termId, tt.name);
+		}
+		// 일본어 사전은 원본에 없다 — 현행도 ko·en 만 만든다. 그 로케일은 표기가 남는다
+		const tokenMisses = new Map<string, number>();
+		const substituteAll = <T extends { locale: string; desc: string | null }>(
+			rows: T[],
+			label: string,
+		): T[] =>
+			rows.map((r) => {
+				if (r.desc === null) return r;
+				const dict = termDict[r.locale];
+				if (dict === undefined || dict.size === 0) return r;
+				const { text, misses } = substituteTokens(r.desc, dict);
+				for (const m of misses) tokenMisses.set(m, (tokenMisses.get(m) ?? 0) + 1);
+				return text === r.desc ? r : { ...r, desc: text };
+			});
+
+		gifts.giftStageText = substituteAll(gifts.giftStageText, 'gift_stage_text');
+		skills.skillStageText = substituteAll(skills.skillStageText, 'skill_stage_text');
+		identities.passiveText = substituteAll(identities.passiveText, 'passive_text');
+		egos.egoSkillStageText = substituteAll(egos.egoSkillStageText, 'ego_skill_stage_text');
+		egos.egoPassiveText = substituteAll(egos.egoPassiveText, 'ego_passive_text');
+		statuses.statusText = substituteAll(statuses.statusText, 'status_text');
+
+		if (tokenMisses.size > 0) {
+			const top = [...tokenMisses.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+			console.log(
+				`표제어 치환 — 사전에 없는 표기 ${tokenMisses.size}종 (원문 유지). `
+				+ top.map(([k, n]) => `${k} ${n}`).join(' · '),
+			);
 		}
 
 		// ── 수동 보정 — 적재의 마지막 판정 ─────────────────────────

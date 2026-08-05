@@ -44,3 +44,47 @@ export function descOf(raw: string | null): { desc: string | null; descRaw: stri
 	if (!hasMarkup(raw)) return { desc: raw, descRaw: null };
 	return { desc: stripMarkup(raw), descRaw: raw };
 }
+
+/**
+ * 대괄호 표기. `[Combustion]` · `[Blade Lineage]` 처럼 표제어를 가리킨다.
+ *
+ * 현행 `src/text.ts` 의 `TOKEN` 과 같은 무늬다 — 마크업 목록과 같은 이유로
+ * 의도적으로 복제한다.
+ */
+const TOKEN = /\[([A-Za-z][A-Za-z0-9_ ]*)\]/g;
+
+/** 치환 못 한 표기. 어느 표제어가 사전에 없었는지 부르는 쪽이 알아야 한다. */
+export interface TokenMiss {
+	key: string;
+	count: number;
+}
+
+/**
+ * 표제어를 치환한 표시용 문자열.
+ *
+ * **`desc` 는 표시용이고 `desc_raw` 가 원문이다** — `descOf` 가 이미 그 규약을
+ * 세웠는데 마크업만 지우고 표기는 남겨 뒀다. 화면이 `[Combustion]` 을 그대로
+ * 그리므로 누락이다(실측 다섯 표 14,954행).
+ *
+ * 사전에 없는 표기는 **원문을 유지한다.** 지우면 문장이 무너지고, 만들어내면
+ * 없는 말을 짓는 것이 된다. 몇 종이 남았는지는 `misses` 로 돌려준다.
+ *
+ * 치환값 자체가 마크업을 품은 표제어가 있어(예: `중지 - 원한 문신 [<s>큰 누님</s>]`)
+ * 치환 뒤 한 번 더 지운다 — 현행이 겪은 함정이고 주석으로 남아 있다.
+ */
+export function substituteTokens(
+	text: string,
+	dict: ReadonlyMap<string, string>,
+): { text: string; misses: string[] } {
+	const misses: string[] = [];
+	TOKEN.lastIndex = 0;
+	const out = text.replace(TOKEN, (whole, key: string) => {
+		const hit = dict.get(key);
+		if (hit === undefined) {
+			misses.push(key);
+			return whole;
+		}
+		return hit;
+	});
+	return { text: stripMarkup(out), misses };
+}

@@ -741,6 +741,25 @@ async function main(): Promise<void> {
 			SELECT count(*)::bigint AS n FROM canonical.status_text
 			 WHERE "desc" ~ '\{[0-9]\}'`;
 		eq('설명에 남은 자리표시자 (× 3언어)', Number(placeholders[0]?.n ?? 0n), 15);
+
+		// 표제어 치환이 끝났나. `desc` 는 표시용이고 `desc_raw` 가 원문이다 —
+		// 대괄호 표기가 남으면 화면이 그것을 그대로 그린다.
+		//
+		// **일본어는 사전이 없어 남는다**(원본에 ko·en 만 있다). 그래서 0 이 아니라
+		// 실측을 박는다. 한국어·영어가 0 인 것이 요점이다
+		const tokens = await prisma.$queryRaw<Array<{ locale: string; n: bigint }>>`
+			SELECT locale, count(*)::bigint AS n FROM (
+				SELECT locale, "desc" FROM canonical.gift_stage_text
+				UNION ALL SELECT locale, "desc" FROM canonical.skill_stage_text
+				UNION ALL SELECT locale, "desc" FROM canonical.passive_text
+				UNION ALL SELECT locale, "desc" FROM canonical.ego_skill_stage_text
+				UNION ALL SELECT locale, "desc" FROM canonical.ego_passive_text
+				UNION ALL SELECT locale, "desc" FROM canonical.status_text
+			) t WHERE "desc" ~ '\[[A-Za-z]' GROUP BY locale`;
+		const tokenOf = (locale: string) =>
+			Number(tokens.find((r) => r.locale === locale)?.n ?? 0n);
+		eq('한국어에 남은 표제어 표기', tokenOf('ko'), 0);
+		eq('영어에 남은 표제어 표기', tokenOf('en'), 0);
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);

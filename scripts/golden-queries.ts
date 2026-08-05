@@ -91,6 +91,7 @@ async function casesV1(): Promise<Case[]> {
  */
 async function casesV2(): Promise<Case[]> {
 	const ref = await import('../lib/queries/canonical/reference.js');
+	const gifts = await import('../lib/queries/canonical/gifts.js');
 
 	return [
 		{ name: 'reference.listFloorPacks', run: () => ref.listFloorPacks('ko') },
@@ -98,6 +99,13 @@ async function casesV2(): Promise<Case[]> {
 		{ name: 'reference.listStatuses', run: () => ref.listStatuses('ko', ref.readGlossaryFilter({})) },
 		{ name: 'reference.listGlossaryAxes', run: () => ref.listGlossaryAxes('ko') },
 		{ name: 'reference.getCounts', run: () => ref.getCounts() },
+		{ name: 'gifts.listGifts', run: () => gifts.listGifts('ko', gifts.readGiftFilter({})) },
+		{ name: 'gifts.listAllGifts', run: () => gifts.listAllGifts('ko') },
+		{ name: 'gifts.listCursedGiftIds', run: () => gifts.listCursedGiftIds() },
+		{ name: 'gifts.listKeywords', run: () => gifts.listKeywords('ko') },
+		{ name: 'gifts.listSins', run: () => gifts.listSins('ko') },
+		{ name: 'gifts.getGift.9088', run: () => gifts.getGift(9088, 'ko') },
+		{ name: 'gifts.getGift.9090', run: () => gifts.getGift(9090, 'ko') },
 	];
 }
 

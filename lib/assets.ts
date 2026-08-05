@@ -94,8 +94,15 @@ function lookup(category: AssetCategory, key: string | null | undefined): string
 	return null;
 }
 
-/** 기프트 아이콘. 키는 `gift.sprite` 이며 id 가 아니다. */
-export const giftIcon = (sprite: string): string | null => lookup('gifts', sprite);
+/**
+ * 기프트 아이콘. 키는 `gift.sprite` 이며 id 가 아니다.
+ *
+ * **`null` 을 받는다.** 캐노니컬의 `gift.sprite` 가 nullable 이다 — 초판에 컬럼이
+ * 없어 아이콘이 전량 소실된 적이 있고 id 로는 유도되지 않는다(스키마 주석). 지금
+ * 거울 던전 기프트 456종은 전부 차 있지만, 없을 수 있는 것을 타입이 말해야 한다.
+ * `statusIcon` 이 같은 이유로 그렇게 돼 있다.
+ */
+export const giftIcon = (sprite: string | null): string | null => lookup('gifts', sprite);
 
 /**
  * 테마 팩 이미지. 키는 `pack.sprite` 다.
