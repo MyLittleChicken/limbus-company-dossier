@@ -1937,6 +1937,40 @@ model FieldOverride {
   @@schema("app")
 }
 
+/// 이름 매칭이 못 푸는 참조. **게임의 사실이며 규칙이 아니다** — 규칙은 코드에 있다.
+///
+///   kind='trigger'  키는 트리거 표시명.  'Bloodfiend Identities'
+///   kind='token'    키는 desc 안의 브래킷 토큰.  'BLOODDINNER'
+///
+/// canonical 을 가리키지만 FK 는 걸지 않는다(ADR-08). 승격 때 재조준 대상이
+/// 늘어난다. 대신 적재기가 선검사한다 — 없는 ref_id 면 build 가 거기서 멈춘다.
+model RefException {
+  kind    String
+  key     String
+  refKind String @map("ref_kind")
+  refId   String @map("ref_id")
+  /// 왜 이 값인가. 근거를 사람 말로 남긴다
+  note    String
+
+  @@id([kind, key])
+  @@map("ref_exception")
+  @@schema("app")
+}
+
+/// 「이 인격은 [X]를 부여하는 인격으로 취급됨」을 게임이 명시한 E.G.O.
+///
+/// **증폭기는 여기 없다.** 20705 홀리데이는 ego_status 로 축 7개를 받지만
+/// 「부여하는 인격으로 취급」이 아니라 위력 +1 이다. 어느 축의 인격도 아니다.
+model EgoGrantedAxis {
+  egoId  String @map("ego_id")
+  axisId String @map("axis_id")
+  note   String
+
+  @@id([egoId, axisId])
+  @@map("ego_granted_axis")
+  @@schema("app")
+}
+
 /// 트래커 사용자.
 model Account {
   id        String   @id

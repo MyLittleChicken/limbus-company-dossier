@@ -1051,6 +1051,26 @@ CREATE TABLE "app"."field_override" (
 );
 
 -- CreateTable
+CREATE TABLE "app"."ref_exception" (
+    "kind" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "ref_kind" TEXT NOT NULL,
+    "ref_id" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+
+    CONSTRAINT "ref_exception_pkey" PRIMARY KEY ("kind","key")
+);
+
+-- CreateTable
+CREATE TABLE "app"."ego_granted_axis" (
+    "ego_id" TEXT NOT NULL,
+    "axis_id" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+
+    CONSTRAINT "ego_granted_axis_pkey" PRIMARY KEY ("ego_id","axis_id")
+);
+
+-- CreateTable
 CREATE TABLE "app"."account" (
     "id" TEXT NOT NULL,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
