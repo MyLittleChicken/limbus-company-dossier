@@ -298,7 +298,7 @@ package.json                명령 넷
 
 ```
 검사        203건 전부 통과 (v2:verify:canonical)
-테스트      417건 전부 통과 · 타입 검사 둘 다 통과
+테스트      432건 전부 통과(건너뜀 12) · 타입 검사 둘 다 통과
 canonical    94테이블 · 152,399행
 raw          43,270 개체
 app.field_override   5행
