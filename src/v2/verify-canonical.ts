@@ -34,6 +34,28 @@ async function main(): Promise<void> {
 		eq('pack_category_path', await prisma.packCategoryPath.count(), 202);
 		eq('floor_pack', await prisma.floorPack.count(), 288);
 
+		// ── 거울 던전 판본 (앱 전환) ────────────────────────────────
+		// 층 표에서 유도한 값이다. 판본이 늘면 여기도 는다
+		eq('mirror_dungeon', await prisma.mirrorDungeon.count(), 1);
+		// loc-ko · en · ja 가 각각 MirrorDungeonName 을 낸다
+		eq('mirror_dungeon_text', await prisma.mirrorDungeonText.count(), 3);
+
+		const md = await prisma.mirrorDungeon.findFirst();
+		checks.push({
+			name: 'mirror_dungeon 이 실측과 같다 — MD7 · 15 · 5',
+			ok: md !== null && md.version === 'MD7' && md.totalFloors === 15 && md.baseFloors === 5,
+			detail: md === null
+				? '없다'
+				: `${md.version} · hard ${md.totalFloors} · normal ${md.baseFloors}`,
+		});
+		// 난이도 접미사가 붙은 이름(「… [NORMAL]」)이 새면 화면이 그걸 판본명으로 쓴다
+		const mdKo = await prisma.mirrorDungeonText.findFirst({ where: { locale: 'ko' } });
+		checks.push({
+			name: 'mirror_dungeon_text 에 난이도 표기가 안 섞였다',
+			ok: mdKo !== null && !mdKo.name.includes('['),
+			detail: mdKo === null ? '없다' : mdKo.name,
+		});
+
 		eq(
 			'tag 유일 종수',
 			(await prisma.packTag.findMany({ distinct: ['tag'], select: { tag: true } })).length,

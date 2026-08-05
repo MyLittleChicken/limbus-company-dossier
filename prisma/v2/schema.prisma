@@ -355,6 +355,45 @@ model FloorPack {
   @@map("floor_pack")
   @@schema("canonical")
 }
+
+/// 거울 던전 판본. **원본에 없는 값을 유도한다.**
+///
+/// 판본 번호도 층수도 데이터에 명시돼 있지 않다(`docs/01-data-source.md` 8절 미결).
+/// 판본은 `mirror-dungeon/loc-*` 파일명의 `_Mirror<n>` · `_MD<n>` 최댓값이고,
+/// 층수는 `floor_pack` 구간 표기의 최댓값이다. 현행 파이프라인도 같은 유도를 한다.
+///
+/// 적재 시점에 한 번 굳힌다 — 질의 시점에 다시 세지 않는다.
+model MirrorDungeon {
+  /// "MD7". 파일명에서 뽑는다
+  version     String @id
+  /// hard 구간의 최댓값. 실측 15
+  totalFloors Int    @map("total_floors")
+  /// normal 구간의 최댓값. 실측 5
+  baseFloors  Int    @map("base_floors")
+
+  texts MirrorDungeonText[]
+
+  @@map("mirror_dungeon")
+  @@schema("canonical")
+}
+
+/// 판본 명칭. 내부 키 `MD7` 은 화면에 노출하지 않는다(05-ui-foundation 10절).
+///
+/// **접미사 없는 id 를 쓴다.** `mirrordungeon_name_7` 이 판본 이름이고
+/// `_7_0` · `_7_1` 은 난이도가 붙은 표기다(「… [NORMAL]」 · 「… [HARD]」).
+/// 화면은 난이도를 따로 고르므로 이름에 그것이 섞이면 안 된다.
+model MirrorDungeonText {
+  version String
+  locale  Locale
+  name    String
+
+  dungeon MirrorDungeon @relation(fields: [version], references: [version], onDelete: Cascade)
+
+  @@id([version, locale])
+  @@map("mirror_dungeon_text")
+  @@schema("canonical")
+}
+
 // canonical — 어휘 (그래프 파생의 기반, 스펙 6절)
 // ─────────────────────────────────────────────────────────────
 

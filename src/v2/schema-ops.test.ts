@@ -424,24 +424,26 @@ test('build 중단 안내 — canonical_hold 를 먼저 복귀시키라고 말�
 // 산물). 스키마가 자라면 여기도 같이 고쳐야 한다 — 그 강제가 이 테스트의 목적이다.
 const REAL_SCHEMA_SQL = readFileSync(new URL('../../prisma/v2/schema.sql', import.meta.url), 'utf8');
 
-test('진짜 schema.sql — 블록 260개 중 229개가 순수 canonical', () => {
-	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 260이 뜻을 잃는다
+test('진짜 schema.sql — 블록 263개 중 232개가 순수 canonical', () => {
+	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 263이 뜻을 잃는다
 	//
-	// 256 → 260 은 ADR-08 이다.
+	// 256 → 260 은 ADR-08 이었다.
 	//   app.ref_exception · app.ego_granted_axis   +2   (canonical 밖)
 	//   canonical.build_info                        +1
 	//   field_source 의 snapshot_id 인덱스           +1
-	// canonical 227 → 229 가 뒤 둘이다. 저작을 app 으로 내리는 일 자체는
-	// canonical 구조를 안 건드렸다
-	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 260);
-	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 229);
+	//
+	// 260 → 263 은 앱 전환이다. canonical 에 없던 유일한 결손을 메웠다.
+	//   canonical.mirror_dungeon · mirror_dungeon_text   +2
+	//   그 둘 사이의 FK                                   +1
+	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 263);
+	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 232);
 });
 
 test('진짜 schema.sql — 종류별 집계가 실측과 같다', () => {
 	const tally = tallyCanonicalDdl(REAL_SCHEMA_SQL);
-	assert.equal(tally['CREATE TABLE "canonical".'], 95);
+	assert.equal(tally['CREATE TABLE "canonical".'], 97);
 	assert.equal(tally['CREATE INDEX ... ON "canonical"'], 37);
-	assert.equal(tally['ALTER TABLE "canonical".'], 85);
+	assert.equal(tally['ALTER TABLE "canonical".'], 86);
 	assert.equal(tally['CREATE TYPE "canonical".'], 11);
 });
 

@@ -24,6 +24,7 @@ import { buildIdentityAxis } from './canonical/identity-axis.js';
 import { buildGiftTriggerParam } from './canonical/gift-trigger-param.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
+import { buildMirrorDungeon } from './canonical/mirror-dungeon.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
 import { readAuthored, unknownRefs, authoredDigest, type KnownIds } from './authored.js';
@@ -382,6 +383,33 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// 거울 던전 판본. **층 표가 만들어진 뒤여야 한다** — 층수를 거기서 유도한다.
+		// 판본 번호는 파일 목록에서 뽑으므로 raw_file 을 읽는다
+		const mdLocaleFiles = await prisma.rawFile.findMany({
+			where: { snapshotId, srcPath: { startsWith: 'mirror-dungeon/loc-' } },
+			select: { srcPath: true },
+		});
+		const mdNameRows = await Promise.all(
+			(['ko', 'en', 'ja'] as const).map(async (locale) => {
+				const rows = await readSource(
+					prisma, snapshotId, `mirror-dungeon/loc-${locale}/MirrorDungeonName.json`,
+				);
+				return [...rows].map(([id, payload]) => ({
+					locale,
+					id,
+					content: String((payload as Record<string, unknown>)['content'] ?? ''),
+				}));
+			}),
+		);
+		const dungeon = buildMirrorDungeon(
+			{
+				localeFiles: mdLocaleFiles.map((f) => f.srcPath),
+				floorPack: tables.floorPack,
+				names: mdNameRows.flat(),
+			},
+			meta,
+		);
+
 		// ── 인카운터 ───────────────────────────────────────────────
 		const enemyLocOf = (locale: string) =>
 			readSourceGroup(prisma, snapshotId, 'encounters', `loc-${locale}`);
@@ -499,6 +527,16 @@ async function main(): Promise<void> {
 		counts.push([
 			'floor_pack',
 			await chunked(tables.floorPack, (d) => prisma.floorPack.createMany({ data: d as never })),
+		]);
+		// 판본은 층 표에서 유도한 것이라 floor_pack 뒤에 둔다 — 값의 순서가 아니라
+		// 읽는 사람의 순서다
+		counts.push([
+			'mirror_dungeon',
+			(await prisma.mirrorDungeon.createMany({ data: dungeon.mirrorDungeon })).count,
+		]);
+		counts.push([
+			'mirror_dungeon_text',
+			(await prisma.mirrorDungeonText.createMany({ data: dungeon.mirrorDungeonText as never })).count,
 		]);
 		// 어휘 차원이 기프트보다 먼저 서야 외래 키가 선다.
 		counts.push(['keyword', (await prisma.keyword.createMany({ data: vocab.keyword })).count]);

@@ -197,6 +197,24 @@ CREATE TABLE "canonical"."floor_pack" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."mirror_dungeon" (
+    "version" TEXT NOT NULL,
+    "total_floors" INTEGER NOT NULL,
+    "base_floors" INTEGER NOT NULL,
+
+    CONSTRAINT "mirror_dungeon_pkey" PRIMARY KEY ("version")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."mirror_dungeon_text" (
+    "version" TEXT NOT NULL,
+    "locale" "canonical"."Locale" NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "mirror_dungeon_text_pkey" PRIMARY KEY ("version","locale")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."keyword" (
     "id" TEXT NOT NULL,
     "order" INTEGER,
@@ -1291,6 +1309,9 @@ ALTER TABLE "canonical"."pack_boss_encounter" ADD CONSTRAINT "pack_boss_encounte
 
 -- AddForeignKey
 ALTER TABLE "canonical"."floor_pack" ADD CONSTRAINT "floor_pack_pack_id_fkey" FOREIGN KEY ("pack_id") REFERENCES "canonical"."pack"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."mirror_dungeon_text" ADD CONSTRAINT "mirror_dungeon_text_version_fkey" FOREIGN KEY ("version") REFERENCES "canonical"."mirror_dungeon"("version") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."identity_axis" ADD CONSTRAINT "identity_axis_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
