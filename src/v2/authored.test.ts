@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { unknownRefs, authoredDigest, type Authored, type KnownIds } from './authored.js';
+import { verdictOf, DIGEST_EXCLUDE } from './rebuild-verdict.js';
 
 const KNOWN: KnownIds = {
 	axisIds: new Set(['LACERATION', 'BREATH']),
@@ -112,4 +113,30 @@ test('두 표가 안 섞인다 — 같은 문자열이 다른 표에 있어도 �
 
 test('빈 저작도 지문을 낸다 — sha256 64자', () => {
 	assert.equal(authoredDigest({ refException: [], egoGranted: [] }).length, 64);
+});
+
+// ── 재현 판정 ────────────────────────────────────────────────────
+
+test('입력 같고 결과 같으면 재현됨', () => {
+	assert.equal(verdictOf({ inputChanged: false, same: true }), 'reproduced');
+});
+
+test('입력 같은데 결과가 다르면 경보다', () => {
+	assert.equal(verdictOf({ inputChanged: false, same: false }), 'failed');
+});
+
+test('입력이 바뀌었으면 결과가 달라도 실패가 아니다', () => {
+	// 저작이나 코드를 고쳤으면 결과가 다른 것이 정상이다.
+	// 여기서 「재현 실패」라고 말하면 거짓말이 된다
+	assert.equal(verdictOf({ inputChanged: true, same: false }), 'input-changed');
+});
+
+test('입력이 바뀌었는데 결과가 같아도 입력이 바뀐 것이다', () => {
+	// 고친 저작이 이 판에 영향을 안 줬을 뿐이다. 「재현됨」이라고 하면
+	// 다음 사람이 build_info 의 지문을 믿게 된다
+	assert.equal(verdictOf({ inputChanged: true, same: true }), 'input-changed');
+});
+
+test('build_info 는 대조에서 빠진다 — built_at 이 매번 다르다', () => {
+	assert.equal(DIGEST_EXCLUDE.has('build_info'), true);
 });

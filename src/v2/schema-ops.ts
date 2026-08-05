@@ -59,6 +59,39 @@ export async function liveRowCount(prisma: QueryClient, schema: string): Promise
 	return Number(rows[0]?.n ?? 0n);
 }
 
+/** 스키마의 기본 테이블 이름. 뷰는 안 센다 — 뷰는 파생이라 대조 대상이 아니다. */
+export async function tableNames(prisma: QueryClient, schema: string): Promise<Set<string>> {
+	const rows = await prisma.$queryRaw<Array<{ table_name: string }>>`
+		SELECT table_name FROM information_schema.tables
+		WHERE table_schema = ${schema} AND table_type = 'BASE TABLE'
+	`;
+	return new Set(rows.map((r) => r.table_name));
+}
+
+/**
+ * 표 하나의 내용 지문. **행 순서에 안 흔들린다.**
+ *
+ * 행마다 `md5(row::text)` 를 내고 그것을 정렬해 다시 md5 한다. 행을 먼저 줄이지
+ * 않으면 152,399행을 통째로 이어 붙이게 된다.
+ *
+ * **`id` 비교로는 부족해서 이렇게 한다.** `v2:diff` 의 개체 대조는 id 집합만
+ * 보므로 「id 도 행수도 그대로인 컬럼 값 변경」을 못 잡는데, ADR-07 3절이 그것을
+ * 정정의 전형이라고 적었다. 재현 검사가 잡아야 할 것이 바로 그 종류다.
+ *
+ * 열 순서가 같아야 같은 값이 나온다 — 두 스키마가 같은 DDL 에서 나왔으면 참이다.
+ */
+export async function tableDigest(
+	prisma: QueryClient,
+	schema: string,
+	table: string,
+): Promise<string> {
+	const rows = await prisma.$queryRawUnsafe<Array<{ d: string }>>(
+		`SELECT coalesce(md5(string_agg(h, '' ORDER BY h)), '') AS d
+		   FROM (SELECT md5(t::text) AS h FROM ${ident(schema)}.${ident(table)} t) s`,
+	);
+	return rows[0]?.d ?? '';
+}
+
 /**
  * 스키마 이름도 테이블 이름도 식별자라 파라미터로 못 넘긴다. 문자열로 박아야
  * 하므로 **모양을 좁혀서 주입을 막는다.** 우리가 쓰는 이름은 소문자·숫자·
