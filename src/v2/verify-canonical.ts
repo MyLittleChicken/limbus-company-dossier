@@ -737,16 +737,23 @@ async function main(): Promise<void> {
 		// 판이 없다(현행 파이프라인도 같은 것을 보여준다).
 		//
 		// **이 수가 늘면 우선순위가 뒤집힌 것이다.** 용어집 화면이 {0} 을 그린다
+		// **역슬래시를 두 번 쓴다.** 템플릿 문자열이 `\{` 를 `{` 로 삼켜 SQL 에는
+		// 다른 무늬가 간다 — `\[` 를 그렇게 썼다가 `[[A-Za-z]` 라는 문자 클래스가
+		// 되어 모든 글자에 걸린 적이 있다
 		const placeholders = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM canonical.status_text
-			 WHERE "desc" ~ '\{[0-9]\}'`;
+			 WHERE "desc" ~ '\\{[0-9]\\}'`;
 		eq('설명에 남은 자리표시자 (× 3언어)', Number(placeholders[0]?.n ?? 0n), 15);
 
 		// 표제어 치환이 끝났나. `desc` 는 표시용이고 `desc_raw` 가 원문이다 —
 		// 대괄호 표기가 남으면 화면이 그것을 그대로 그린다.
 		//
-		// **일본어는 사전이 없어 남는다**(원본에 ko·en 만 있다). 그래서 0 이 아니라
-		// 실측을 박는다. 한국어·영어가 0 인 것이 요점이다
+		// **0 이 아니다.** `term` 에 id 는 있으나 `term_text` 에 그 로케일 이름이
+		// 없는 표제어가 있고(TabExplain 이 그 예다), 그때는 원문을 유지한다 —
+		// 지우면 문장이 무너지고 만들어내면 없는 말을 짓는 것이 된다.
+		//
+		// 일본어가 큰 것은 사전이 ko·en 만 있어서다(원본이 그렇고 현행도 같다).
+		// **이 수가 늘면 치환이 빠진 것이다.**
 		const tokens = await prisma.$queryRaw<Array<{ locale: string; n: bigint }>>`
 			SELECT locale, count(*)::bigint AS n FROM (
 				SELECT locale, "desc" FROM canonical.gift_stage_text
@@ -755,11 +762,12 @@ async function main(): Promise<void> {
 				UNION ALL SELECT locale, "desc" FROM canonical.ego_skill_stage_text
 				UNION ALL SELECT locale, "desc" FROM canonical.ego_passive_text
 				UNION ALL SELECT locale, "desc" FROM canonical.status_text
-			) t WHERE "desc" ~ '\[[A-Za-z]' GROUP BY locale`;
+			) t WHERE "desc" ~ '\\[[A-Za-z]' GROUP BY locale`;
 		const tokenOf = (locale: string) =>
 			Number(tokens.find((r) => r.locale === locale)?.n ?? 0n);
-		eq('한국어에 남은 표제어 표기', tokenOf('ko'), 0);
-		eq('영어에 남은 표제어 표기', tokenOf('en'), 0);
+		eq('한국어에 남은 표제어 표기 (사전에 이름이 없다)', tokenOf('ko'), 28);
+		eq('영어에 남은 표제어 표기', tokenOf('en'), 75);
+		eq('일본어에 남은 표제어 표기 (사전이 ko·en 뿐이다)', tokenOf('ja'), 2_661);
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);
