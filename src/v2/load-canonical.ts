@@ -25,6 +25,7 @@ import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
+import { emptyRequiredMessage, hasAnyRow } from './schema-ops.js';
 
 const CHUNK = 1_000;
 
@@ -43,6 +44,16 @@ async function chunked<T>(
 async function main(): Promise<void> {
 	const prisma = new PrismaClient();
 	try {
+		// **살아있는 canonical 을 지우지 않기 위한 가드다**(설계 결정 4).
+		// 적재기는 빈 canonical 에만 굽는다. v2:build 가 먼저 옆으로 치워 준다.
+		//
+		// 테이블 존재가 아니라 **행 존재**로 판정한다. v2:build 3단계(DDL) 직후는
+		// canonical 이 테이블 94개·행 0개다 — 테이블 개수로 재면 그 순간에도
+		// "안 비었다"고 걸려 v2:build 자체가 못 돈다. 살아있는 판은 테이블 94개·행
+		// 152,399개이므로 행 기준이라야 갓 구운 빈 판과 살아있는 판이 갈린다.
+		// 환경변수 같은 우회로는 없다 — 조건 자체를 맞게 고쳤으니 우회가 필요 없다.
+		if (await hasAnyRow(prisma, 'canonical')) throw new Error(emptyRequiredMessage());
+
 		const snapshotId = await latestSnapshotId(prisma);
 		console.log(`스냅샷 ${snapshotId} 를 읽는다`);
 
