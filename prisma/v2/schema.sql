@@ -101,6 +101,18 @@ CREATE TABLE "canonical"."field_gap" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."build_info" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "snapshot_id" TEXT NOT NULL,
+    "code_commit" TEXT NOT NULL,
+    "authored_digest" TEXT NOT NULL,
+    "built_at" TIMESTAMPTZ(3) NOT NULL,
+    "row_count" INTEGER NOT NULL,
+
+    CONSTRAINT "build_info_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."field_source" (
     "entity" TEXT NOT NULL,
     "entity_id" TEXT NOT NULL,

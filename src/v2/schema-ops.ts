@@ -39,6 +39,27 @@ export async function tableCount(prisma: QueryClient, schema: string): Promise<n
 }
 
 /**
+ * 스키마 전 표의 행 수 합계.
+ *
+ * **`build_info` 는 뺀다.** 판 표식이 자기 행 수를 적는데 자기를 세면 쓰는 순간
+ * 값이 달라져 다음 재현 대조가 어긋난다(ADR-08).
+ *
+ * `query_to_xml` 로 표마다 실제 `count(*)` 를 돌린다 — `n_live_tup` 추정치는
+ * ANALYZE 전에 0 으로 보일 수 있어 판 표식의 근거로 못 쓴다.
+ */
+export async function liveRowCount(prisma: QueryClient, schema: string): Promise<number> {
+	const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
+		SELECT COALESCE(SUM(n), 0) AS n FROM (
+			SELECT (xpath('/row/c/text()',
+			        query_to_xml(format('SELECT count(*) AS c FROM %I.%I', schemaname, tablename),
+			                     false, true, '')))[1]::text::bigint AS n
+			  FROM pg_tables
+			 WHERE schemaname = ${schema} AND tablename <> 'build_info'
+		) t`;
+	return Number(rows[0]?.n ?? 0n);
+}
+
+/**
  * 스키마 이름도 테이블 이름도 식별자라 파라미터로 못 넘긴다. 문자열로 박아야
  * 하므로 **모양을 좁혀서 주입을 막는다.** 우리가 쓰는 이름은 소문자·숫자·
  * 밑줄뿐이다 — 스키마 이름 전용이 아니라 두 종류 다 여기를 거친다.

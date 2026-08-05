@@ -6,6 +6,7 @@
  *
  * 실행: npm run v2:canonical
  */
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { PrismaClient } from './generated/client.js';
 import { latestSnapshotId, mergeIndexes, readSource, readSourceGroup } from './source.js';
@@ -25,8 +26,8 @@ import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
-import { readAuthored, unknownRefs, type KnownIds } from './authored.js';
-import { emptyRequiredMessage, hasAnyRow } from './schema-ops.js';
+import { readAuthored, unknownRefs, authoredDigest, type KnownIds } from './authored.js';
+import { emptyRequiredMessage, hasAnyRow, liveRowCount } from './schema-ops.js';
 
 const CHUNK = 1_000;
 
@@ -40,6 +41,16 @@ async function chunked<T>(
 		n += r.count;
 	}
 	return n;
+}
+
+/**
+ * 굽는 시점의 코드 판. **더러운 작업트리면 `-dirty` 를 붙인다** — 커밋만 적으면
+ * 「그 커밋으로 구웠다」가 거짓이 된다. 재현 검사가 그 거짓 위에서 판정한다.
+ */
+function codeCommit(): string {
+	const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+	const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
+	return dirty === '' ? head : `${head}-dirty`;
 }
 
 async function main(): Promise<void> {
@@ -673,6 +684,30 @@ async function main(): Promise<void> {
 		await prisma.$executeRawUnsafe(
 			await readFile(new URL('../../prisma/v2/views.sql', import.meta.url), 'utf8'),
 		);
+
+		// 수동 제약. **파일을 따로 두는 이유는 $executeRawUnsafe 가 다중 문장을
+		// 못 받기 때문이다** — 뷰와 같은 파일에 두면 그 자리에서 깨진다.
+		await prisma.$executeRawUnsafe(
+			await readFile(new URL('../../prisma/v2/constraints.sql', import.meta.url), 'utf8'),
+		);
+
+		// ── 판 표식 ────────────────────────────────────────────────
+		// **맨 마지막이다.** 행 수가 최종값이어야 하고, 저작 지문도 이번에 실제로
+		// 쓴 것이어야 한다(ADR-08).
+		const rowCount = await liveRowCount(prisma, 'canonical');
+		const commit = codeCommit();
+		await prisma.buildInfo.create({
+			data: {
+				id: 1,
+				snapshotId,
+				codeCommit: commit,
+				authoredDigest: authoredDigest(authored),
+				builtAt: new Date(),
+				rowCount,
+			},
+		});
+		console.log('');
+		console.log(`판 표식  스냅샷 ${snapshotId} · 커밋 ${commit.slice(0, 12)} · ${rowCount.toLocaleString()}행`);
 
 		console.log('');
 		for (const [t, n] of counts) console.log(`  ${t.padEnd(22)} ${String(n).padStart(6)}`);

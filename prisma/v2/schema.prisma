@@ -177,6 +177,27 @@ model FieldGap {
   @@schema("canonical")
 }
 
+/// 이 판이 무엇에서 나왔나. **한 행만 존재한다** — CHECK (id = 1) 을
+/// `prisma/v2/constraints.sql` 이 건다. 두 행이 생기면 「어느 판이 진짜냐」에
+/// 답이 없어진다.
+///
+/// `snapshot_id` 는 `raw.snapshot` 을 가리키지만 FK 는 걸지 않는다(ADR-08).
+/// 걸면 canonical → raw 의존이 생겨 승격 때 재조준 대상이 는다(ADR-07 3.2).
+model BuildInfo {
+  id             Int      @id @default(1)
+  snapshotId     String   @map("snapshot_id")
+  /// 굽는 시점의 git HEAD. 더러운 작업트리면 뒤에 -dirty 가 붙는다
+  codeCommit     String   @map("code_commit")
+  /// app 저작 표 둘의 내용 sha256. note 는 안 들어간다
+  authoredDigest String   @map("authored_digest")
+  builtAt        DateTime @map("built_at") @db.Timestamptz(3)
+  /// 구웠을 때의 canonical 행 수. 자기 자신은 안 센다
+  rowCount       Int      @map("row_count")
+
+  @@map("build_info")
+  @@schema("canonical")
+}
+
 /// 이 값이 어느 출처에서 어떤 규칙으로 왔나. 「왜 이렇지?」를 DB 안에서 답한다.
 model FieldSource {
   entity   String
