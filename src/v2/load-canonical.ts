@@ -25,6 +25,7 @@ import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
+import { readAuthored, unknownRefs, type KnownIds } from './authored.js';
 import { emptyRequiredMessage, hasAnyRow } from './schema-ops.js';
 
 const CHUNK = 1_000;
@@ -222,19 +223,10 @@ async function main(): Promise<void> {
 			meta,
 		);
 
-		// TODO(다음 커밋): app.ref_exception · app.ego_granted_axis 에서 읽는다.
-		// 지금은 표만 만들어 뒀고 배선이 안 됐다 — 값은 그 표와 같다
-		const refException = [
-			{ kind: 'trigger', key: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
-			{ kind: 'trigger', key: 'Yurodivy Identities', refKind: 'association', refId: 'YURODIVY' },
-			{ kind: 'token', key: 'BLOODDINNER', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
-		];
-		const egoGranted = [
-			{ egoId: '20509', axisId: 'LACERATION' },
-			{ egoId: '20509', axisId: 'BREATH' },
-			{ egoId: '20109', axisId: 'VIBRATION' },
-			{ egoId: '20109', axisId: 'SINKING' },
-		];
+		// 저작 사실. **app 에 산다**(ADR-08) — 승격이 canonical 을 통째로 갈아
+		// 치우므로 재빌드의 입력은 그 밖에 있어야 한다
+		const authored = await readAuthored(prisma);
+		const { refException, egoGranted } = authored;
 
 		// ── 축 어휘와 트리거·효과 참조 ─────────────────────────────
 		// 이름 유도를 여기서 한 번 풀어 굳힌다 — 질의마다 다시 하면 오매칭이 되살아난다.
@@ -280,6 +272,24 @@ async function main(): Promise<void> {
 			},
 			meta,
 		);
+
+		// 저작이 가리키는 대상이 실재하는가. **굽기 전에 멈춘다** — 못 닿는 참조를
+		// 안고 구우면 조용히 빈 축이 나오고, 그건 검사 203건이 못 잡는 자리다.
+		// axisTables 뒤여야 axis_id 를 알 수 있다
+		const known: KnownIds = {
+			axisIds: new Set(axisTables.axis.map((a) => a.id)),
+			unitKeywordIds: new Set(identities.identityUnitKeyword.map((k) => k.keyword)),
+			associationIds: new Set(sinners.association.map((a) => a.id)),
+		};
+		const badRefs = unknownRefs(authored, known);
+		if (badRefs.length > 0) {
+			console.error('저작이 가리키는 대상이 canonical 에 없다. 굽지 않는다.');
+			for (const line of badRefs) console.error(`  ${line}`);
+			console.error('');
+			console.error('  app.ref_exception · app.ego_granted_axis 를 고치거나,');
+			console.error('  가리키는 대상이 원본에 생겼는지 확인한다.');
+			throw new Error(`저작 참조 ${badRefs.length}건이 못 닿는다`);
+		}
 
 		// 인격 축 프로파일. **egos 뒤여야 한다** — ego_granted 경로가 E.G.O 의
 		// 수감자를 보고 장착 후보 인격을 편다

@@ -1279,10 +1279,12 @@ async function main(): Promise<void> {
 		const appTables = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
 		`;
+		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 저작 사실이
+		// app 으로 내려오면서 늘었다
 		checks.push({
 			name: 'app 스키마가 섰다',
-			ok: Number(appTables[0]?.n ?? 0n) === 6,
-			detail: `${Number(appTables[0]?.n ?? 0n)} / 6`,
+			ok: Number(appTables[0]?.n ?? 0n) === 8,
+			detail: `${Number(appTables[0]?.n ?? 0n)} / 8`,
 		});
 
 		// ══ 감사에서 찾은 것 — 회귀 검사 ═══════════════════════════
