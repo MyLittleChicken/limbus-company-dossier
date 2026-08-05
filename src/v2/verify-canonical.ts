@@ -1312,6 +1312,28 @@ async function main(): Promise<void> {
 			detail: bi === null ? '없다' : `${bi.rowCount.toLocaleString()} / ${liveRows.toLocaleString()}`,
 		});
 
+		// ══ 출처 스냅샷 — M6 증분의 기준점 (ADR-08) ════════════════
+		eq('field_source snapshot_id 결손', await prisma.fieldSource.count({ where: { snapshotId: '' } }), 0);
+
+		const fsSnaps = await prisma.fieldSource.groupBy({
+			by: ['snapshotId'], _count: { _all: true },
+		});
+		const knownSnaps = new Set(
+			(await prisma.snapshot.findMany({ select: { id: true } })).map((s) => s.id),
+		);
+		checks.push({
+			name: 'field_source 의 스냅샷이 전부 raw 에 있다',
+			ok: fsSnaps.every((s) => knownSnaps.has(s.snapshotId)),
+			detail: fsSnaps.map((s) => `${s.snapshotId} ${s._count._all.toLocaleString()}`).join(' · '),
+		});
+		// 지금은 한 판을 통째로 굽는다. M6 증분이 오면 이 검사가 깨지고, 깨지는
+		// 것이 옳다 — 그때 「무엇이 갱신됐나」를 세는 검사로 바꾼다
+		checks.push({
+			name: 'field_source 가 아직 한 스냅샷에서만 왔다 (증분 전)',
+			ok: fsSnaps.length === 1,
+			detail: `${fsSnaps.length}종`,
+		});
+
 		// ══ 저작 사실 — app 에 산다 (ADR-08) ═══════════════════════
 		eq('ref_exception (trigger)', await prisma.refException.count({ where: { kind: 'trigger' } }), 2);
 		eq('ref_exception (token)', await prisma.refException.count({ where: { kind: 'token' } }), 1);

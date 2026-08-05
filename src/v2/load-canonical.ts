@@ -676,7 +676,12 @@ async function main(): Promise<void> {
 		]);
 		counts.push([
 			'field_source',
-			await chunked(meta.sources, (d) => prisma.fieldSource.createMany({ data: d })),
+			// snapshotId 는 적재 직전에 붙인다. Meta 는 어느 스냅샷을 읽는지 모르고,
+			// 알 필요도 없다 — 그건 적재기의 맥락이다
+			await chunked(
+				meta.sources.map((s) => ({ ...s, snapshotId })),
+				(d) => prisma.fieldSource.createMany({ data: d }),
+			),
 		]);
 
 		// 파생 뷰. 테이블이 다 선 뒤에 건다 — 뷰가 컬럼을 참조하므로 순서가 있다.

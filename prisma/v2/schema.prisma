@@ -200,15 +200,22 @@ model BuildInfo {
 
 /// 이 값이 어느 출처에서 어떤 규칙으로 왔나. 「왜 이렇지?」를 DB 안에서 답한다.
 model FieldSource {
-  entity   String
-  entityId String   @map("entity_id")
-  field    String
+  entity     String
+  entityId   String   @map("entity_id")
+  field      String
   /// mj-only · assets-only · loc-only · union · agreed · disagreed · game-verified · manual
-  rule     String
-  sources  String[]
+  rule       String
+  sources    String[]
+  /// 이 값이 **어느 스냅샷의 raw 에서** 왔나.
+  ///
+  /// 지금은 전 행이 같은 값이다 — 스냅샷이 하나뿐이고 한 판을 통째로 굽는다.
+  /// M6 증분이 오면 일부 필드만 새 스냅샷으로 갱신되고 나머지는 옛 값이 남아
+  /// 행마다 갈린다. 그때 이 열이 유일한 갱신 증거다(ADR-08).
+  snapshotId String   @map("snapshot_id")
 
   @@id([entity, entityId, field])
   @@index([entity, rule])
+  @@index([snapshotId])
   @@map("field_source")
   @@schema("canonical")
 }

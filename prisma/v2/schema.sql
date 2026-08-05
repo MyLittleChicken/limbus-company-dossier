@@ -119,6 +119,7 @@ CREATE TABLE "canonical"."field_source" (
     "field" TEXT NOT NULL,
     "rule" TEXT NOT NULL,
     "sources" TEXT[],
+    "snapshot_id" TEXT NOT NULL,
 
     CONSTRAINT "field_source_pkey" PRIMARY KEY ("entity","entity_id","field")
 );
@@ -1146,6 +1147,9 @@ CREATE INDEX "field_gap_entity_field_idx" ON "canonical"."field_gap"("entity", "
 
 -- CreateIndex
 CREATE INDEX "field_source_entity_rule_idx" ON "canonical"."field_source"("entity", "rule");
+
+-- CreateIndex
+CREATE INDEX "field_source_snapshot_id_idx" ON "canonical"."field_source"("snapshot_id");
 
 -- CreateIndex
 CREATE INDEX "tool_annotation_entity_entity_id_idx" ON "canonical"."tool_annotation"("entity", "entity_id");
