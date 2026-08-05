@@ -37,6 +37,7 @@
 | [10-encounter-linkage.md](10-encounter-linkage.md) | mj 전투 풀 2,525종의 정의가 리포에 없다 | 미해결 · 신규 DB 가 `field_gap` 에 기록 |
 | [11-season-label.md](11-season-label.md) | 시즌 값이 화면에 원본 정수 그대로 나간다 — 발푸르기스가 `S9104`, 콜라보가 `S8000` 로 뜬다 | 미착수 |
 | [12-v1-local-assets.md](12-v1-local-assets.md) | 매니페스트가 아는 애셋 16건이 디스크에 없다 — 출처가 지금 없는 로컬 저장소다 | 확인만 완료 · 조치 미정 |
+| [13-frontend-data-debt.md](13-frontend-data-debt.md) | 데이터층이 모르는 것을 화면이 알고 있다 — 파생값 10종이 `lib/` 에 쌓였다 | 기록 완료 · 이관 미착수 |
 
 ## 규칙
 
