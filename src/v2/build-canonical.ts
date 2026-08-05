@@ -212,12 +212,28 @@ async function main(): Promise<void> {
 			await prisma.$executeRawUnsafe(stmt);
 		}
 		const built = await tableCount(prisma, 'canonical');
+		const declared = filteredTally['CREATE TABLE "canonical".'] ?? 0;
 		const liveTableCount = await tableCount(prisma, 'canonical_hold');
-		console.log(`새 canonical 테이블 ${built}개 생성 (canonical_hold ${liveTableCount}개와 대조)`);
-		if (built !== liveTableCount) {
+		console.log(`새 canonical 테이블 ${built}개 생성 (DDL 선언 ${declared}개 · 살아있는 판 ${liveTableCount}개)`);
+
+		// **대조 상대는 살아있는 판이 아니라 방금 실행한 DDL 이다.** 살아있는 판과
+		// 견주면 「구조가 바뀌는 판」을 영영 못 굽는다 — 표를 더하는 것이 정상인
+		// 변경(ADR-08 의 build_info 가 그랬다)에서 그대로 막힌다. 여기서 잡고 싶은
+		// 것은 「내가 실행한 문장이 낸 표가 다 섰는가」이지 「구조가 그대로인가」가
+		// 아니다.
+		if (built !== declared) {
 			throw new Error(
-				`새 canonical 테이블 수(${built})가 살아있는 canonical_hold(${liveTableCount})와 다르다.`,
+				`새 canonical 테이블 수(${built})가 실행한 DDL 의 선언 수(${declared})와 다르다. ` +
+					'문장이 조용히 실패했을 수 있다.',
 			);
+		}
+
+		// 구조가 바뀐 것은 **막지 않고 알린다.** 무엇이 달라지는지는 v2:diff 가
+		// 표 집합으로 내고, 올릴지는 v2:promote 앞에서 사람이 정한다.
+		if (built !== liveTableCount) {
+			console.log('');
+			console.log(`  구조가 바뀐 판이다 — 표 ${liveTableCount}개 → ${built}개.`);
+			console.log('  승격 전에 npm run v2:diff 로 표 집합 차이를 확인해라.');
 		}
 
 		console.log('\n4. 적재 — npm run v2:canonical (canonical_hold 는 건드리지 않는다)');
