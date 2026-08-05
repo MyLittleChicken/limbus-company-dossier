@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>약지 야수파 스튜던트 — 인격 상세 시안</title>
+<link rel="stylesheet" href="../css/tokens.css"><link rel="stylesheet" href="../css/globals.css">
+<link rel="stylesheet" href="lab.css?r=689125"></head><body>
+<header class="site-header"><div class="hbar"><div class="htitle"><a href="index.html">Mirror Tracker</a><span class="sub">인격 상세 시안</span></div></div>
+<nav class="site-nav"><a href="index.html">시안 목록</a></nav></header>
+<main class="site-main">
+<section class="f-card">
+	<div class="f-art">
+		<input type="checkbox" id="awake" hidden>
+		<img class="f-art-normal" src="../assets/identities/limbus-assets/10515_normal.webp" alt="">
+		<img class="f-art-awake" src="../assets/identities/limbus-assets/10515_gacksung.webp" alt="">
+		<i class="f-mount"></i>
+		<label for="awake" title="기본 · 3 동기화 일러스트 바꾸기" aria-label="일러스트 바꾸기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8h14M15 5l3 3-3 3M20 16H6M9 13l-3 3 3 3"/></svg></label>
+	</div>
+	<div class="f-body">
+		<header class="f-head">
+			<div class="f-ident">
+				<div class="f-title">
+					<span class="f-emblem"><img src="../assets/sinners/limbus-assets/5.webp" alt="" aria-hidden="true"></span>
+					<img class="lab-rank" src="../assets/icons/limbus-assets/000.webp" alt="000">
+					<h1>약지 야수파 스튜던트<span class="f-sinner">뫼르소</span></h1>
+				</div>
+				<div class="f-affil"><span class="tag">약지</span><span class="tag">야수파</span></div>
+			</div>
+			<dl class="f-file">
+				<div><dt>NO.</dt><dd>10515</dd></div>
+				<div><dt>시즌</dt><dd>7</dd></div>
+				<div><dt>출시</dt><dd>2026-04-16</dd></div>
+			</dl>
+		</header>
+
+		<div class="f-picks">
+			<div class="f-pick f-pick--lv">
+				<span class="f-lab">레벨</span>
+				<input class="f-lv-range" type="range" min="1" max="60" value="60" id="lv">
+				<input class="f-lv-num" type="number" min="1" max="60" value="60" id="lvn" aria-label="레벨">
+			</div>
+			<div class="f-pick">
+				<span class="f-lab">동기화</span>
+				<input type="radio" name="up" id="up1"  hidden><label for="up1">Ⅰ</label><input type="radio" name="up" id="up2"  hidden><label for="up2">Ⅱ</label><input type="radio" name="up" id="up3"  hidden><label for="up3">Ⅲ</label><input type="radio" name="up" id="up4" checked hidden><label for="up4">Ⅳ</label>
+			</div>
+		</div>
+
+		<div class="f-hp">
+			<span class="f-lab">체력</span>
+			<span class="f-hp-n" id="hp" data-base="69" data-per="2.39">212</span>
+			<span class="f-hp-bar"><i style="left:70%"><b>70%</b></i><i style="left:40%"><b>40%</b></i></span>
+		</div>
+
+		<div class="f-stats">
+			<div class="f-statrow">
+				<span class="f-lab">스탯</span>
+				<div class="f-stat"><span><img src="../assets/icons/limbus-assets/offense level.webp" alt="">공격 레벨</span><b id="atklv">60</b></div>
+				<div class="f-stat"><span><img src="../assets/icons/limbus-assets/defense level.webp" alt="">방어 레벨 <em>보정 −1</em></span><b id="deflv" data-corr="-1">59</b></div>
+				<div class="f-stat"><span><img src="../assets/icons/limbus-assets/speed.webp" alt="">속도</span><b data-up="1">3–6</b><b data-up="2">3–7</b><b data-up="3">4–7</b><b data-up="4">4–7</b></div>
+			</div>
+			<div class="f-statrow">
+				<span class="f-lab">저항</span>
+				<div class="f-stat"><span><img src="../assets/icons/limbus-assets/Slash.webp" alt="">참격</span><b>×1</b></div><div class="f-stat"><span><img src="../assets/icons/limbus-assets/Pierce.webp" alt="">관통</span><b>×2</b></div><div class="f-stat"><span><img src="../assets/icons/limbus-assets/Blunt.webp" alt="">타격</span><b>×0.5</b></div>
+			</div>
+		</div>
+
+		<div class="f-tags">
+			<div><span class="f-lab">키워드</span><span class="tag tag--icon"><img src="../assets/icons/limbus-assets/Bleed.webp" alt="">출혈</span><span class="tag tag--icon"><img src="../assets/icons/limbus-assets/Sinking.webp" alt="">침잠</span></div>
+		</div>
+	</div>
+</section>
+
+<section class="panel"><div class="panel-h"><h3>스킬</h3><span class="hint">4</span></div>
+	<div class="panel-b f-skills">
+		<details class="f-skill">
+		<summary>
+			<img class="f-skill-icon" src="../assets/skills/limbus-assets/1051501.webp" alt="" loading="lazy">
+			<span class="f-skill-slot">스킬 1</span>
+			<strong data-up="1">거친 묘사</strong><strong data-up="2">거친 묘사</strong><strong data-up="3">거친 묘사</strong><strong data-up="4">거친 묘사</strong>
+			<span class="f-skill-tags">
+				<span class="coin-dots"><img src="../assets/icons/limbus-assets/coin.webp" alt=""><img src="../assets/icons/limbus-assets/coin.webp" alt=""></span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/wrath.webp" alt="">분노</span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Blunt.webp" alt="">타격</span>
+			</span>
+		</summary>
+		<div class="f-skill-body" data-up="1">
+			<div class="pm-lines"></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 1 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="2">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 6당, 코인 위력 +1 (최대 2)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 1 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="3">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 6당, 코인 위력 +1 (최대 2)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 1 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="4">
+			<div class="pm-lines"><p class="fx-line">대상의 부정적인 효과 1개당, 피해량 +5% (최대 15%)</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 6당, 코인 위력 +1 (최대 2)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 2 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 1 증가</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 횟수 1 증가</p></div></li></ol>
+		</div>
+	</details><details class="f-skill">
+		<summary>
+			<img class="f-skill-icon" src="../assets/skills/limbus-assets/1051502.webp" alt="" loading="lazy">
+			<span class="f-skill-slot">스킬 2</span>
+			<strong data-up="1">본능적인 휘갈김</strong><strong data-up="2">본능적인 휘갈김</strong><strong data-up="3">본능적인 휘갈김</strong><strong data-up="4">본능적인 휘갈김</strong>
+			<span class="f-skill-tags">
+				<span class="coin-dots"><img src="../assets/icons/limbus-assets/coin.webp" alt=""><img src="../assets/icons/limbus-assets/coin.webp" alt=""><img src="../assets/icons/limbus-assets/coin.webp" alt=""></span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/pride.webp" alt="">오만</span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Blunt.webp" alt="">타격</span>
+			</span>
+		</summary>
+		<div class="f-skill-body" data-up="1">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[사용시]</span> 대상에게 <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a>가 없으면 합 위력 +1</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅲ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 2 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="2">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[사용시]</span> 대상에게 <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a>가 없으면 합 위력 +1</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 6당, 코인 위력 +1 (최대 2)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅲ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 2 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="3">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[사용시]</span> 대상에게 <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a>가 없으면 합 위력 +1</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 6당, 코인 위력 +1 (최대 2)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅲ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 2 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="4">
+			<div class="pm-lines"><p class="fx-line">대상의 부정적인 효과 1개당, 피해량 +5% (최대 20%)</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상에게 <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a>가 없으면 합 위력 +1</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 6당, 코인 위력 +1 (최대 2)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 1 부여</p></div></li><li><span class="coin-r">Ⅲ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 2 증가</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 1 부여</p></div></li></ol>
+		</div>
+	</details><details class="f-skill">
+		<summary>
+			<img class="f-skill-icon" src="../assets/skills/limbus-assets/1051503.webp" alt="" loading="lazy">
+			<span class="f-skill-slot">스킬 3</span>
+			<strong data-up="1">야수파 - 출품작 전개 <em class="f-locked">동기화 Ⅲ 부터</em></strong><strong data-up="2">야수파 - 출품작 전개 <em class="f-locked">동기화 Ⅲ 부터</em></strong><strong data-up="3">야수파 - 출품작 전개</strong><strong data-up="4">야수파 - 출품작 전개</strong>
+			<span class="f-skill-tags">
+				<span class="coin-dots"><img src="../assets/icons/limbus-assets/coin.webp" alt=""><img src="../assets/icons/limbus-assets/coin.webp" alt=""><img src="../assets/icons/limbus-assets/coin.webp" alt=""></span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/lust.webp" alt="">색욕</span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Blunt.webp" alt="">타격</span>
+			</span>
+		</summary>
+		<div class="f-skill-body" data-up="1"><p class="absent">동기화 Ⅲ 부터 쓸 수 있다</p></div><div class="f-skill-body" data-up="2"><p class="absent">동기화 Ⅲ 부터 쓸 수 있다</p></div><div class="f-skill-body" data-up="3">
+			<div class="pm-lines"><p class="fx-line">대상의 부정적인 효과 1개당, 피해량 +10% (최대 60%)</p><p class="fx-line"><span class="fx-when">[사용시]</span> 자신의 체력이 50% 미만이거나 대상의 찢긴 색채가 5 이상이면, 스킬의 3코인이 추가되며 모든 코인이 <a class="fx-st" href="#st-SuperCoin">파괴 불가 코인</a>으로 변경됨</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 2 부여</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 2 부여</p></div></li><li><span class="coin-r">Ⅲ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 2 증가</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 횟수 2 증가</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="4">
+			<div class="pm-lines"><p class="fx-line">대상의 부정적인 효과 1개당, 피해량 +10% (최대 60%)</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합 4당, 최종 위력 +1 (최대 4)</p><p class="fx-line"><span class="fx-when">[사용시]</span> 자신의 체력이 50% 미만이거나 대상의 찢긴 색채가 5 이상이면, 스킬의 3코인이 1개 추가되고, 모든 코인이 <a class="fx-st" href="#st-SuperCoin">파괴 불가 코인</a>으로 변경됨</p><p class="fx-line">- 추가된 코인의 공격 적중 시 대상의 (찢긴 색채/3)만큼 <a class="fx-st" href="#st-Laceration">출혈</a> 또는 <a class="fx-st" href="#st-Sinking">침잠</a> 위력을 무작위로 부여 (각각 최대 3, 소수점 버림)</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 2 부여</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 2 부여</p></div></li><li><span class="coin-r">Ⅲ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 횟수 2 증가</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 횟수 2 증가</p><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a> 1 부여</p></div></li></ol>
+		</div>
+	</details>
+		<details class="f-skill">
+		<summary>
+			<img class="f-skill-icon" src="../assets/skills/limbus-assets/1051504.webp" alt="" loading="lazy">
+			<span class="f-skill-slot">방어</span>
+			<strong data-up="1">채색 준비</strong><strong data-up="2">채색 준비</strong><strong data-up="3">채색 준비</strong><strong data-up="4">채색 준비</strong>
+			<span class="f-skill-tags">
+				<span class="coin-dots"><img src="../assets/icons/limbus-assets/coin.webp" alt=""><img src="../assets/icons/limbus-assets/coin.webp" alt=""></span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/lust.webp" alt="">색욕</span>
+				<span class="tag tag-icon"><img src="../assets/icons/limbus-assets/Blunt.webp" alt="">타격</span>
+			</span>
+		</summary>
+		<div class="f-skill-body" data-up="1">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[합 가능 반격]</span></p><p class="fx-line">자신에게 <a class="fx-st" href="#st-FaubismMaskMeursault">야수파 - 마스크 드 시앵</a>이 있으면, 기본 위력 +2</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 1 부여</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="2">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[합 가능 반격]</span></p><p class="fx-line">자신에게 <a class="fx-st" href="#st-FaubismMaskMeursault">야수파 - 마스크 드 시앵</a>이 있으면, 기본 위력 +2</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 1 부여</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="3">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[합 가능 반격]</span></p><p class="fx-line">자신에게 <a class="fx-st" href="#st-FaubismMaskMeursault">야수파 - 마스크 드 시앵</a>이 있으면, 기본 위력 +2</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 1 부여</p></div></li></ol>
+		</div><div class="f-skill-body" data-up="4">
+			<div class="pm-lines"><p class="fx-line"><span class="fx-when">[합 가능 반격]</span></p><p class="fx-line">자신에게 <a class="fx-st" href="#st-FaubismMaskMeursault">야수파 - 마스크 드 시앵</a>이 있으면, 기본 위력 +2</p><p class="fx-line"><span class="fx-when">[사용시]</span> 대상의 <a class="fx-st" href="#st-Laceration">출혈</a>과 <a class="fx-st" href="#st-Sinking">침잠</a>의 합이 6 이상이면, 코인 위력 +1</p></div>
+			<ol class="pm-coins"><li><span class="coin-r">Ⅰ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Laceration">출혈</a> 1 부여</p></div></li><li><span class="coin-r">Ⅱ</span><div><p class="fx-line"><span class="fx-when">[적중시]</span> <a class="fx-st" href="#st-Sinking">침잠</a> 1 부여</p></div></li></ol>
+		</div>
+	</details>
+	</div></section>
+
+<section class="panel"><div class="panel-h"><h3>전투 패시브</h3><span class="hint">3</span></div>
+	<div class="panel-b lab-stack"><article class="lab-passive">
+	<div class="lab-skill-h"><strong>약지 야수파 스튜던트</strong>
+		<span class="lab-skill-tags"><span class="tag">전투</span><span class="tag">동기화 Ⅰ</span></span>
+	</div>
+	<div class="lab-desc"><p class="fx-line">기본 스킬 적중 시 <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a> 1 부여</p><p class="fx-line">- 이 효과는 스킬에서 부정적인 효과를 부여하는 것으로 취급됨</p><p class="fx-line">턴 종료 시 이번 전투 동안 자신이 찢긴 색채 [루주]를 10 이상 부여했으면, 야수파 - 마스크 드 시앵 얻음</p><p class="fx-line">약지 야수파 도슨트 로쟈의 ‘크리틱’ 스킬 코인 시작 시, 약지 야수파 스튜던트 뫼르소가 결점 보완 얻음</p></div>
+</article><article class="lab-passive">
+	<div class="lab-skill-h"><strong>약지 야수파 스튜던트</strong>
+		<span class="lab-skill-tags"><span class="tag">전투</span><span class="tag">동기화 Ⅱ</span></span>
+	</div>
+	<div class="lab-desc"><p class="fx-line">기본 스킬 적중 시 <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a> 1 부여</p><p class="fx-line">- 이 효과는 스킬에서 부정적인 효과를 부여하는 것으로 취급됨</p><p class="fx-line">턴 종료 시 이번 전투 동안 자신이 찢긴 색채 [루주]를 10 이상 부여했으면, 야수파 - 마스크 드 시앵 얻음</p><p class="fx-line">약지 야수파 도슨트 로쟈의 ‘크리틱’ 스킬 코인 시작 시, 약지 야수파 스튜던트 뫼르소가 결점 보완 얻음</p></div>
+</article><article class="lab-passive">
+	<div class="lab-skill-h"><strong>차오르는 영감</strong>
+		<span class="lab-skill-tags"><span class="tag">전투</span><span class="tag">동기화 Ⅱ</span></span>
+	</div>
+	<div class="lab-desc"><p class="fx-line">자신에게 <a class="fx-st" href="#st-FaubismMaskMeursault">야수파 - 마스크 드 시앵</a>이 있으면, <a class="fx-st" href="#st-BearClawWoundAlly">찢긴 색채 [루주]</a> 부여량 +1</p><p class="fx-line">자신이 찢긴 색채 [루주]를 4 부여 할 때마다, 정신력 5 회복 (턴당 2회)</p><p class="fx-line">- 이 효과로 정신력 회복 시 자신의 정신력이 최대면, 다음 턴에 타격 피해량 증가 1 얻음 (턴당 1회)</p></div>
+</article></div></section>
+<section class="panel"><div class="panel-h"><h3>서포트 패시브</h3><span class="hint">1</span></div>
+	<div class="panel-b lab-stack"><article class="lab-passive">
+	<div class="lab-skill-h"><strong>겹쳐 그린 상흔</strong>
+		<span class="lab-skill-tags"><span class="tag">서포트</span><span class="tag">동기화 Ⅲ</span></span>
+	</div>
+	<div class="lab-desc"><p class="fx-line">속도가 가장 빠른 아군 1명이 공격 적중 시 대상의 부정적인 효과 2개당 <a class="fx-st" href="#st-DefenseDown">방어 레벨 감소</a> 1 부여(턴당 최대 1회, 최대 3)</p></div>
+</article></div></section>
+<section class="panel"><div class="panel-h"><h3>이 인격이 쓰는 상태</h3><span class="hint">8</span></div>
+	<div class="panel-b st-grid"><article class="st-card" id="st-TestWaitingMeursault">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/TestWaitingMeursault.webp" alt="" loading="lazy">
+			<strong>결점 보완</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">- 가하는 피해량 +10%</p><p class="fx-line">- 약지 야수파 도슨트 로쟈의 ‘크리틱’ 스킬 코인 재사용 시 정신력 3 회복 (턴당 1회)</p><p class="fx-line">- 턴 시작 시 약지 야수파 도슨트 로쟈에게 레플렉시옹이 없으면 소멸</p></div>
+	</article><article class="st-card" id="st-DefenseDown">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/Defense Level Down.webp" alt="" loading="lazy">
+			<strong>방어 레벨 감소</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">한 턴 동안 방어 레벨이 수치에 비례하여 감소</p></div>
+	</article><article class="st-card" id="st-FaubismMaskMeursault">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/FaubismMaskMeursault.webp" alt="" loading="lazy">
+			<strong>야수파 - 마스크 드 시앵</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">- 대상의 찢긴 색채 3당, 가하는 피해량 +5% (최대 15%)</p><p class="fx-line">- 기본 스킬로 부여하는 출혈, 침잠 위력 부여량 +1</p><p class="fx-line">- 기본 스킬 적중 전 대상에게 출혈이 없으면, 대상의 출혈 횟수 2 증가 (턴당 1회)</p></div>
+	</article><article class="st-card" id="st-BearClawWoundAlly">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/BearClawWound.webp" alt="" loading="lazy">
+			<strong>찢긴 색채 [루주]</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">- 최댓값 : 9</p><p class="fx-line">- 피격 시 수치 3당 출혈 위력 1 얻음 (턴당 1회)</p><p class="fx-line">- 턴 종료 시 다음 턴에 수치 4당 방어 레벨 감소 1 얻음 (최대 2)</p><p class="fx-line">- 턴 종료 시 1 감소</p></div>
+	</article><article class="st-card" id="st-Laceration">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/Bleed.webp" alt="" loading="lazy">
+			<strong>출혈</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">공격 스킬의 코인 판정 시, 효과 위력만큼 고정 체력 피해를 받음. 공격 스킬의 코인 판정 후 횟수 1 감소</p></div>
+	</article><article class="st-card" id="st-Sinking">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/Sinking.webp" alt="" loading="lazy">
+			<strong>침잠</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">공격 스킬로 피격 시, 효과 위력만큼 고정 정신력 피해를 받음 (정신력이 없는 대상에게는 우울 속성 피해로 적용됨) 피격 후 횟수 1 감소</p></div>
+	</article><article class="st-card" id="st-HitDamageUp">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/Blunt DMG Up.webp" alt="" loading="lazy">
+			<strong>타격 피해량 증가</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">한 턴 동안 타격 속성 스킬로 가하는 피해량이 수치에 비례하여 10%씩 증가 (최대 10)</p></div>
+	</article><article class="st-card" id="st-SuperCoin">
+		<div class="st-head">
+			<img src="../assets/statuses/limbus-assets/Unbreakable Coin.webp" alt="" loading="lazy">
+			<strong>파괴 불가 코인</strong>
+		</div>
+		<div class="st-body"><p class="fx-line">- 합 패배 시 코인이 파괴되지 않음.</p><p class="fx-line">- 공격 스킬에 해당 코인이 있으면, 피격 후 해당 코인으로 공격함.</p><p class="fx-line">- 합 패배 시 파괴되지 않은 코인은 코인 위력이 1이 됨.</p></div>
+	</article></div></section>
+<script>
+/*
+	레벨은 미리 그려 둘 수 없다.
+
+	앞선 시안은 단계를 몇 개만 두고 CSS 의 :has() 로 골랐지만, 1~60 을 자유롭게 고르려면 값을
+	그때 계산해야 한다. **여기서만 자바스크립트를 쓴다** — 동기화·일러스트는 여전히 CSS 다.
+
+	체력 = 기본 체력 + 레벨당 증가 × 레벨. 게젤샤프트의 값 둘(212 · 241)과 소수점 버림까지
+	맞는 것을 확인했다.
+*/
+(() => {
+	const hp = document.getElementById('hp');
+	const range = document.getElementById('lv');
+	const num = document.getElementById('lvn');
+	const base = Number(hp.dataset.base);
+	const per = Number(hp.dataset.per);
+	const atk = document.getElementById('atklv');
+	const def = document.getElementById('deflv');
+	const corr = Number(def.dataset.corr);
+	const draw = (v) => {
+		const lv = Math.min(60, Math.max(1, Math.round(Number(v) || 1)));
+		range.value = num.value = lv;
+		hp.textContent = Math.floor(base + per * lv);
+		// 공격 레벨 = 레벨. 방어 레벨 = 레벨 + 보정. 피해 배율 = 1 + 0.03 × (공격 − 방어).
+		atk.textContent = lv;
+		def.textContent = lv + corr;
+	};
+	range.addEventListener('input', (e) => draw(e.target.value));
+	num.addEventListener('change', (e) => draw(e.target.value));
+})();
+</script>
+</main></body></html>

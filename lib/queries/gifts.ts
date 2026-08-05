@@ -21,6 +21,9 @@ export const GIFT_TIERS = ['1', '2', '3', '4', '5', 'EX'] as const;
  * 아이콘이 없다. 그래서 글자로 낸다. 표기를 새로 만든 것이 아니라 게임 표기를 따른 것이다.
  *
  * 실측 분포는 I 58 · II 139 · III 136 · IV 119 · V 2 · EX 2 다.
+ *
+ * **이 표는 데이터층에 있어야 한다** — 표시용 등급 필드가 담기면 사라진다.
+ * `docs/backlog/13-frontend-data-debt.md` 4 번.
  */
 export const GIFT_TIER_LABEL: Record<string, string> = {
 	'1': 'I',
@@ -150,6 +153,9 @@ export type GiftListItem = Awaited<ReturnType<typeof listGifts>>['items'][number
  * 실측 3 건이다(9227 귀기 서린 환도 · 9229 빛바랜 건틀릿 · 9231 그날의 기록).
  *
  * **한국어 행으로 가린다.** 화면 로케일과 무관하게 같은 셋이 나와야 하기 때문이다.
+ *
+ * **이 판정은 데이터층에 있어야 한다** — 기프트에 플래그나 짝 관계가 담기면 설명문을
+ * 뒤지지 않아도 된다. `docs/backlog/13-frontend-data-debt.md` 3 번.
  *
  * 바뀐 뒤의 축복 셋도 함께 돌려준다(9228 신검합일 · 9230 황금빛 시간 · 9232 가능성).
  * 짝을 잇는 값이 없어 **어느 저주가 어느 축복이 되는지는 말하지 않고** 같은 칸에 넣기만

@@ -99,6 +99,10 @@ export const NAV_SECONDARY = ['squad', 'recommend', 'floors', 'dungeon', 'glossa
  *   event       18   기간 한정. 명일방주 콜라보 「선의의 순례」가 여기 있다
  *   extreme     21   20 종이 하드 11~15 층 전용이다
  *
+ * **이 값은 데이터층에 있어야 한다**(`docs/backlog/13-frontend-data-debt.md`).
+ * 분류 이름표가 데이터에 담기면
+ * 이 표는 사라진다.
+ *
  * **접근 조건은 데이터에 없다.** 장 클리어 여부나 이벤트 참여 이력 같은 것은 어느 출처도
  * 담고 있지 않으므로 화면이 말하지 않는다.
  */
