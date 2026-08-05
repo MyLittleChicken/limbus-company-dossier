@@ -17,16 +17,6 @@ const AXIS_IDS = [
 	'SINKING', 'BREATH', 'CHARGE', 'BULLET',
 ] as const;
 
-/**
- * 이름 매칭이 못 푸는 것. **표로 둔다.**
- *   Bloodfiend  소속이 아니라 unit_keyword 다
- *   Yurodivy    소속은 YURODIVY 인데 표시명이 'Yurodiviye' 라 안 붙는다
- */
-const TRIGGER_EXCEPTION: Record<string, { refKind: string; refId: string }> = {
-	'Bloodfiend Identities': { refKind: 'unit_keyword', refId: 'BLOODFIEND' },
-	'Yurodivy Identities': { refKind: 'association', refId: 'YURODIVY' },
-};
-
 const ATTACK_TYPES = ['slash', 'pierce', 'blunt'] as const;
 const SKILL_KINDS = ['counter', 'guard', 'evade'] as const;
 
@@ -37,6 +27,15 @@ export interface AxisInput {
 	triggerIds: string[];
 	effectIds: string[];
 	sinIds: string[];
+	/**
+	 * 이름 매칭이 못 푸는 참조. `app.ref_exception` 에서 온다(ADR-08).
+	 *   Bloodfiend  소속이 아니라 unit_keyword 다
+	 *   Yurodivy    소속은 YURODIVY 인데 표시명이 'Yurodiviye' 라 안 붙는다
+	 *
+	 * **`kind='trigger'` 만 본다** — 같은 배열을 gift-trigger-param 도 받고
+	 * 거기서는 `kind='token'` 만 본다.
+	 */
+	refException: Array<{ kind: string; key: string; refKind: string; refId: string }>;
 }
 
 /**
@@ -129,6 +128,13 @@ export function buildAxis(input: AxisInput, meta: Meta): AxisTables {
 
 	const sins = new Set(input.sinIds);
 
+	// 예외 표를 맵으로 굳힌다. 반복문 안에서 매번 filter 하면 O(n²) 다
+	const triggerExc = new Map(
+		input.refException
+			.filter((e) => e.kind === 'trigger')
+			.map((e) => [e.key, { refKind: e.refKind, refId: e.refId }]),
+	);
+
 	// ── 트리거 참조 ────────────────────────────────────────────
 	for (const id of input.triggerIds) {
 		const evaluability = evaluabilityOf(id);
@@ -138,7 +144,7 @@ export function buildAxis(input: AxisInput, meta: Meta): AxisTables {
 		};
 
 		// 1) 예외 표가 먼저다
-		const exc = TRIGGER_EXCEPTION[id];
+		const exc = triggerExc.get(id);
 		if (exc !== undefined) { push(exc.refKind, exc.refId); continue; }
 
 		// 2) **소속이 상태 이름보다 우선한다.** 'Dawn Office Identities' 가

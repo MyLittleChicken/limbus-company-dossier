@@ -41,20 +41,6 @@ const DENOMINATOR: Array<[RegExp, string]> = [
 	[/대기 인원 포함/, 'roster'],
 ];
 
-/**
- * 축이 아닌 브래킷 토큰 중 트리거 참조로 옮겨지는 것. **저작 1행이다.**
- *
- * 9795 떨어진 한 방울 — 「[BloodDinner]을 소모하는 스킬을 보유한 인격이 3인
- * 이상」. `BloodDinner` 는 `status_category` 에 없어 축으로 못 닿지만, 이 기프트의
- * `Bloodfiend Identities` 트리거가 정확히 그 조건이다.
- *
- * **유도로 풀지 않는다** — 상태 이름과 유닛 키워드 이름이 닮았다는 것은 근거가
- * 아니다. `axis.ts` 의 `TRIGGER_EXCEPTION` 과 같은 성격이다.
- */
-const TOKEN_EXCEPTION: Record<string, { refKind: string; refId: string }> = {
-	BLOODDINNER: { refKind: 'unit_keyword', refId: 'BLOODFIEND' },
-};
-
 /** 「N인 이상」 · 「N명 이상」. 전역이므로 쓸 때마다 lastIndex 를 0 으로 되돌린다 */
 const GATE = /(\d+)\s*(?:인|명)\s*이상/g;
 /** 게이트 앞 어디까지를 조건 서술로 보는가. 실측 최장이 96자다 */
@@ -70,6 +56,19 @@ export interface GiftTriggerParamInput {
 	/** `gift_requirement` 의 kind='slots'. 배치 슬롯은 이미 구조로 있다 */
 	giftSlots: Array<{ giftId: string; slots: number[] }>;
 	axisIds: string[];
+	/**
+	 * 축이 아닌 브래킷 토큰 중 트리거 참조로 옮겨지는 것. `app.ref_exception`
+	 * 에서 온다(ADR-08). **`kind='token'` 만 본다** — 같은 배열을 axis 도 받고
+	 * 거기서는 `kind='trigger'` 만 본다.
+	 *
+	 * 9795 떨어진 한 방울 — 「[BloodDinner]을 소모하는 스킬을 보유한 인격이 3인
+	 * 이상」. `BloodDinner` 는 `status_category` 에 없어 축으로 못 닿지만, 이
+	 * 기프트의 `Bloodfiend Identities` 트리거가 정확히 그 조건이다.
+	 *
+	 * **유도로 풀지 않는다** — 상태 이름과 유닛 키워드 이름이 닮았다는 것은
+	 * 근거가 아니다.
+	 */
+	refException: Array<{ kind: string; key: string; refKind: string; refId: string }>;
 }
 
 export interface GiftTriggerParamRow {
@@ -93,12 +92,13 @@ function subjectOf(
 	ctx: string,
 	axes: Set<string>,
 	assocByName: Map<string, string>,
+	tokenExc: Map<string, { refKind: string; refId: string }>,
 ): { refKind: string; refId: string } | null {
 	let best: { refKind: string; refId: string; at: number } | null = null;
 
 	for (const m of ctx.matchAll(/\[(\w+)\]/g)) {
 		const id = (m[1] ?? '').toUpperCase();
-		const ref = axes.has(id) ? { refKind: 'axis', refId: id } : TOKEN_EXCEPTION[id];
+		const ref = axes.has(id) ? { refKind: 'axis', refId: id } : tokenExc.get(id);
 		if (ref === undefined) continue;
 		if (best === null || m.index >= best.at) best = { ...ref, at: m.index };
 	}
@@ -126,6 +126,12 @@ export function buildGiftTriggerParam(
 ): GiftTriggerParamRow[] {
 	const axes = new Set(input.axisIds);
 	const assocByName = new Map(input.associationKo.map((a) => [a.name, a.associationId]));
+	// 토큰 예외를 맵으로 굳힌다. subjectOf 가 기프트마다 불리므로 밖에서 한 번만 만든다
+	const tokenExc = new Map(
+		input.refException
+			.filter((e) => e.kind === 'token')
+			.map((e) => [e.key, { refKind: e.refKind, refId: e.refId }]),
+	);
 
 	const triggersOf = new Map<string, string[]>();
 	for (const gt of input.giftTrigger) {
@@ -171,7 +177,7 @@ export function buildGiftTriggerParam(
 
 		for (const m of g.desc.matchAll(GATE)) {
 			const ctx = g.desc.slice(Math.max(0, m.index - CONTEXT), m.index);
-			const subject = subjectOf(ctx, axes, assocByName);
+			const subject = subjectOf(ctx, axes, assocByName, tokenExc);
 			if (subject === null) {
 				// 9173 빛바랜 외투 「정신력이 -45인 **적**이 3명 이상」처럼 편성이
 				// 아니라 적을 세는 문장이 있다. 이유를 갈라 남긴다 — 「못 정했다」로

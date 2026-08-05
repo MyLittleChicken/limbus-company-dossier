@@ -33,6 +33,11 @@ function base(): GiftTriggerParamInput {
 		],
 		giftSlots: [],
 		axisIds: AXES,
+		// app.ref_exception 이 주는 것. trigger kind 도 섞어 둔다 — 여기서는 안 봐야 한다
+		refException: [
+			{ kind: 'token', key: 'BLOODDINNER', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+			{ kind: 'trigger', key: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+		],
 	};
 }
 
@@ -172,4 +177,54 @@ test('적을 세는 문장은 이유를 갈라 남긴다 — 올바른 배제와
 	i.giftDesc = [{ giftId: '9088', desc: '턴 종료 시 정신력이 -45인 적이 3명 이상이면, 다음 턴에 모든 아군이 강화' }];
 	assert.equal(buildGiftTriggerParam(i, meta).length, 0);
 	assert.match(meta.gaps.find((g) => g.entityId === '9088')?.reason ?? '', /적을 센다/);
+});
+
+test('토큰 예외는 입력으로 온다 — 상수가 아니다', () => {
+	const i = base();
+	i.giftTrigger = [{ giftId: '9795', triggerId: 'Bloodfiend Identities' }];
+	i.triggerRef = [
+		{ triggerId: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND', evaluability: 'roster' },
+	];
+	i.giftDesc = [{ giftId: '9795', desc: '[BloodDinner]을 소모하는 스킬을 보유한 인격이 3인 이상일 때 발동' }];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	assert.equal(rows.find((r) => r.kind === 'min_count')?.value, '3');
+});
+
+test('입력에 그 토큰이 없으면 게이트가 안 붙는다', () => {
+	const i = base();
+	i.giftTrigger = [{ giftId: '9795', triggerId: 'Bloodfiend Identities' }];
+	i.triggerRef = [
+		{ triggerId: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND', evaluability: 'roster' },
+	];
+	i.giftDesc = [{ giftId: '9795', desc: '[BloodDinner]을 소모하는 스킬을 보유한 인격이 3인 이상일 때 발동' }];
+	i.refException = [];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	assert.equal(rows.filter((r) => r.kind === 'min_count').length, 0);
+});
+
+test('trigger kind 는 gift-trigger-param 이 안 본다 — 자기 kind 만 거른다', () => {
+	const i = base();
+	i.giftTrigger = [{ giftId: '9795', triggerId: 'Bloodfiend Identities' }];
+	i.triggerRef = [
+		{ triggerId: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND', evaluability: 'roster' },
+	];
+	i.giftDesc = [{ giftId: '9795', desc: '[BloodDinner]을 소모하는 스킬을 보유한 인격이 3인 이상일 때 발동' }];
+	// 같은 키를 trigger kind 로만 준다. 토큰 경로는 이걸 안 봐야 한다
+	i.refException = [
+		{ kind: 'trigger', key: 'BLOODDINNER', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+	];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	assert.equal(rows.filter((r) => r.kind === 'min_count').length, 0);
+});
+
+test('DENOMINATOR 는 코드에 남는다 — 입력으로 안 받는다', () => {
+	const i = base();
+	i.giftDesc = [{ giftId: '9088', desc: '[Combustion] 스킬을 보유한 인격이 5인 이상. 대기 인원 제외' }];
+	i.refException = [];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	assert.equal(rows.find((r) => r.kind === 'denominator')?.value, 'field');
 });

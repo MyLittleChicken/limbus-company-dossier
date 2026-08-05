@@ -424,9 +424,13 @@ test('build 중단 안내 — canonical_hold 를 먼저 복귀시키라고 말�
 // 산물). 스키마가 자라면 여기도 같이 고쳐야 한다 — 그 강제가 이 테스트의 목적이다.
 const REAL_SCHEMA_SQL = readFileSync(new URL('../../prisma/v2/schema.sql', import.meta.url), 'utf8');
 
-test('진짜 schema.sql — 블록 256개 중 227개가 순수 canonical', () => {
-	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 256이 뜻을 잃는다
-	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 256);
+test('진짜 schema.sql — 블록 258개 중 227개가 순수 canonical', () => {
+	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 258이 뜻을 잃는다
+	//
+	// 256 → 258 은 app.ref_exception · app.ego_granted_axis 둘이다(ADR-08).
+	// canonical 227 이 안 움직인 것이 요점이다 — 저작을 app 으로 내리는 일은
+	// canonical 의 구조를 건드리지 않는다
+	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 258);
 	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 227);
 });
 

@@ -34,6 +34,12 @@ function input(): AxisInput {
 		],
 		effectIds: ['Inflict Burn Count', 'Deal Blunt Damage', 'Gain Buff', 'Consume Charge'],
 		sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
+		// app.ref_exception 이 주는 것. token kind 도 섞어 둔다 — axis 는 안 봐야 한다
+		refException: [
+			{ kind: 'trigger', key: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+			{ kind: 'trigger', key: 'Yurodivy Identities', refKind: 'association', refId: 'YURODIVY' },
+			{ kind: 'token', key: 'BLOODDINNER', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+		],
 	};
 }
 
@@ -114,4 +120,41 @@ test('효과도 축·죄악·공격타입으로 갈리고 mode 를 갖는다', (
 	assert.equal(charge?.mode, 'consume');
 	const buff = t.effectRef.find((x) => x.effectId === 'Gain Buff');
 	assert.equal(buff?.refKind, 'none');
+});
+
+test('예외 표는 입력으로 온다 — 상수가 아니다', () => {
+	const i = input();
+	i.refException = [
+		{ kind: 'trigger', key: 'Bloodfiend Identities', refKind: 'axis', refId: 'BURST' },
+	];
+	const t = buildAxis(i, new Meta());
+
+	const row = t.triggerRef.find((x) => x.triggerId === 'Bloodfiend Identities');
+	assert.equal(row?.refKind, 'axis');
+	assert.equal(row?.refId, 'BURST');
+});
+
+test('예외 표를 안 주면 그 트리거는 none 으로 떨어지고 결손이 남는다', () => {
+	const meta = new Meta();
+	const i = input();
+	i.refException = [];
+	const t = buildAxis(i, meta);
+
+	// Bloodfiend 는 소속 이름에 없으므로 이름 매칭으로도 못 닿는다.
+	// 행이 사라지는 게 아니라 none 으로 서고 결손이 따로 기록된다
+	const row = t.triggerRef.find((x) => x.triggerId === 'Bloodfiend Identities');
+	assert.equal(row?.refKind, 'none');
+	assert.equal(meta.gaps.filter((g) => g.entityId === 'Bloodfiend Identities').length, 1);
+});
+
+test('token kind 는 axis 가 안 본다 — 자기 kind 만 거른다', () => {
+	const i = input();
+	i.triggerIds = ['BLOODDINNER'];
+	i.refException = [
+		{ kind: 'token', key: 'BLOODDINNER', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+	];
+	const t = buildAxis(i, new Meta());
+
+	const row = t.triggerRef.find((x) => x.triggerId === 'BLOODDINNER');
+	assert.notEqual(row?.refKind, 'unit_keyword');
 });

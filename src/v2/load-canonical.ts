@@ -222,6 +222,20 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// TODO(다음 커밋): app.ref_exception · app.ego_granted_axis 에서 읽는다.
+		// 지금은 표만 만들어 뒀고 배선이 안 됐다 — 값은 그 표와 같다
+		const refException = [
+			{ kind: 'trigger', key: 'Bloodfiend Identities', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+			{ kind: 'trigger', key: 'Yurodivy Identities', refKind: 'association', refId: 'YURODIVY' },
+			{ kind: 'token', key: 'BLOODDINNER', refKind: 'unit_keyword', refId: 'BLOODFIEND' },
+		];
+		const egoGranted = [
+			{ egoId: '20509', axisId: 'LACERATION' },
+			{ egoId: '20509', axisId: 'BREATH' },
+			{ egoId: '20109', axisId: 'VIBRATION' },
+			{ egoId: '20109', axisId: 'SINKING' },
+		];
+
 		// ── 축 어휘와 트리거·효과 참조 ─────────────────────────────
 		// 이름 유도를 여기서 한 번 풀어 굳힌다 — 질의마다 다시 하면 오매칭이 되살아난다.
 		// vocab·statuses·sinners·identities 가 모두 만들어진 뒤여야 한다.
@@ -236,6 +250,7 @@ async function main(): Promise<void> {
 			triggerIds: vocab.trigger.map((t) => t.id),
 			effectIds: vocab.effect.map((e) => e.id),
 			sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
+			refException,
 		}, meta);
 
 		// ── E.G.O 계열 ─────────────────────────────────────────────
@@ -275,6 +290,7 @@ async function main(): Promise<void> {
 			axisIds: axisTables.axis.map((a) => a.id),
 			identity: identities.identity.map((i) => ({ id: i.id, sinnerId: i.sinnerId })),
 			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
+			egoGranted,
 		}, meta);
 
 		// 트리거 정량자. **level 0 만 본다** — 강화 단계는 조건 문장이 같아 중복이다.
@@ -294,6 +310,7 @@ async function main(): Promise<void> {
 				.filter((r) => r.kind === 'slots')
 				.map((r) => ({ giftId: r.giftId, slots: (r.value as number[]) ?? [] })),
 			axisIds: axisTables.axis.map((a) => a.id),
+			refException,
 		}, meta);
 
 		// ── 거울 던전 구성 ─────────────────────────────────────────
