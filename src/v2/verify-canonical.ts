@@ -730,6 +730,17 @@ async function main(): Promise<void> {
 		// 예전 3,913 은 `mirror-dungeon/loc-*` 를 안 읽어 생긴 거짓 결손 503건만큼 적었다.
 		// 결손이 0이라 수동 보정은 행을 더하지 못하고 덮기만 한다 — 되더할 것이 없다
 		eq('status_text (1,472 × 3언어)', await prisma.statusText.count(), 4_416);
+
+		// 자리표시자가 남은 설명. `Bufs` 의 desc 는 게임이 실행 중에 값을 채우는
+		// 정의문이라 `{0}` 이 그대로 있다 — 표시용인 `BattleKeywords` 를 앞에 둬서
+		// 168건이 사람이 읽는 문장으로 바뀌었다. 남는 5건은 어느 출처에도 채워진
+		// 판이 없다(현행 파이프라인도 같은 것을 보여준다).
+		//
+		// **이 수가 늘면 우선순위가 뒤집힌 것이다.** 용어집 화면이 {0} 을 그린다
+		const placeholders = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.status_text
+			 WHERE "desc" ~ '\{[0-9]\}'`;
+		eq('설명에 남은 자리표시자 (× 3언어)', Number(placeholders[0]?.n ?? 0n), 15);
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);

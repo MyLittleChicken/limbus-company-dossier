@@ -90,7 +90,15 @@ async function casesV1(): Promise<Case[]> {
  * 그것이 진행 상황 표시가 된다.
  */
 async function casesV2(): Promise<Case[]> {
-	return [];
+	const ref = await import('../lib/queries/canonical/reference.js');
+
+	return [
+		{ name: 'reference.listFloorPacks', run: () => ref.listFloorPacks('ko') },
+		{ name: 'reference.getDungeon', run: () => ref.getDungeon('ko') },
+		{ name: 'reference.listStatuses', run: () => ref.listStatuses('ko', ref.readGlossaryFilter({})) },
+		{ name: 'reference.listGlossaryAxes', run: () => ref.listGlossaryAxes('ko') },
+		{ name: 'reference.getCounts', run: () => ref.getCounts() },
+	];
 }
 
 async function capture(which: 'v1' | 'v2'): Promise<void> {
