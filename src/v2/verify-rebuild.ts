@@ -74,7 +74,22 @@ async function main(): Promise<void> {
 		console.log('');
 		console.log('  다시 굽는다 — npm run v2:build');
 		console.log('');
-		execFileSync('npm', ['run', 'v2:build'], { stdio: 'inherit' });
+		try {
+			execFileSync('npm', ['run', 'v2:build'], { stdio: 'inherit' });
+		} catch {
+			// 스택 트레이스를 그대로 뱉으면 무엇이 잘못됐는지 안 보인다.
+			// **가장 흔한 원인이 더러운 작업트리다** — 적재기가 -dirty 를 심고
+			// 검사가 그걸 실패로 세므로 build 가 거기서 죽는다
+			console.error('');
+			console.error('판정 불가 — 다시 굽기가 실패했다. 위 출력이 이유다.');
+			if (nowCommit.endsWith('-dirty')) {
+				console.error('');
+				console.error('  작업트리가 더럽다. 커밋하지 않은 코드로 구운 판은 출처가 거짓이라');
+				console.error('  재현 검사의 근거가 못 된다 — 먼저 커밋하고 다시 돌려라.');
+			}
+			process.exitCode = 1;
+			return;
+		}
 
 		// ── 4. 전수 대조 ──────────────────────────────────────────
 		console.log('');
