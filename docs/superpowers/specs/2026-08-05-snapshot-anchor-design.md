@@ -314,9 +314,16 @@ v2:verify:canonical  규칙 203건.  표본
 판정 불가        build_info 가 없거나 두 행이다
 ```
 
-대조는 `v2:diff` 의 대조부를 쓴다 — `diff-canonical.ts` 의 `entityDiff` · `tableNames`
-가 이미 두 스키마를 표 단위로 비교한다. **지금은 모듈 내부 함수라 export 가 필요하다.**
-`schema-ops.ts` 가 그랬듯 순수한 부분을 밖으로 빼서 DB 없이 테스트한다.
+~~대조는 `v2:diff` 의 대조부를 쓴다 — `entityDiff` · `tableNames` 를 export 한다.~~
+
+**구현에서 바꿨다.** `entityDiff` 는 **id 집합만** 본다. 그런데 재현 검사가 잡아야 할
+것이 「id 도 행수도 그대로인 컬럼 값 변경」이고, ADR-07 3절이 그것을 정정의 전형이라고
+적었다. 그 대조부를 그대로 쓰면 **존재 이유인 실패 모드에 눈이 먼다.**
+
+대신 표마다 **전 컬럼을 해시로 잰다**(`schema-ops.ts` 의 `tableDigest`). 행마다
+`md5(row::text)` 를 내고 정렬해 다시 md5 한다 — 행 순서에 안 흔들리고, 152,399행을
+통째로 이어 붙이지도 않는다. `tableNames` 만 `schema-ops` 로 올려 `diff-canonical` 과
+공유한다.
 
 ## 8. 기존 것에 미치는 영향
 
@@ -352,18 +359,111 @@ v2:verify:rebuild  「재현됨」이 나와야 한다.  이게 이 PR 의 산�
 **값은 안 바뀌고 구조만 바뀐다**는 것이 `v2:diff` 로 확인되어야 한다 — 표 셋이 늘고
 열 하나가 늘 뿐, 152,399행의 내용은 그대로다.
 
-## 10. 열린 것
+## 10. 구현에서 닫은 것
 
 ```
-authored_digest 를 무엇으로 재나     표 둘의 정렬된 내용을 sha256.  열 순서·정렬 기준을 못 박아야 한다
-code_commit 을 어떻게 얻나          git rev-parse HEAD.  더러운 작업트리는 어떻게 표시하나
-build_info 의 CHECK 를 어디에 두나   views.sql 옆.  v2:build 의 DDL 추출이 수동 DDL 을 어떻게 다루나
-built_at 을 build_info 에 두나      4.3 이 덤프 대조를 깬다.  걸러내는 대신 뺄 수도 있다
+authored_digest 를 무엇으로 재나
+  → 정렬된 (kind,key,refKind,refId) 와 (egoId,axisId) 를 표 이름으로 구분해 이어
+    sha256.  note 는 뺀다.  실측 확인 — note 를 고쳐도 e13a5e3a0d0b 그대로다
+
+code_commit 을 어떻게 얻나
+  → git rev-parse HEAD.  더러우면 -dirty 를 붙이고 검사가 그걸 실패로 센다.
+    빌드 전에 커밋하는 절차가 강제된다 — 안 그러면 출처가 거짓이 된다
+
+build_info 의 CHECK 를 어디에 두나
+  → prisma/v2/constraints.sql 신규.  views.sql 옆에 두려 했으나 못 한다 —
+    Prisma 의 $executeRawUnsafe 는 확장 프로토콜이라 다중 문장을 못 받고
+    views.sql 은 이미 문장 하나를 통째로 담고 있다.  적재기가 views 다음에 적용
+
+built_at 을 build_info 에 두나
+  → 둔다.  v2:reproduce 가 덤프 대조에서 타임스탬프를 걸러낸다
 ```
 
-셋 다 구현 중에 실측으로 닫는다.
+**설계에 없던 것 셋이 구현에서 드러났다.**
 
-## 11. 범위 밖 — 그다음
+```
+v2:build 가 구조가 바뀌는 판을 못 굽는다   새 표 수를 살아있는 판과 견줬다.
+                                       대조 상대를 실행한 DDL 의 선언 수로 바꿨다
+
+v2:diff 의 대조부를 못 쓴다              id 집합만 본다.  재현 검사가 잡아야 할
+                                       값 변경에 눈이 먼다.  전 컬럼 해시로 갔다
+
+「코드 배포 없이 고칠 수 있다」가 거짓     저작 1행을 늘리면 identity_axis 행 수
+                                       검사까지 깨진다.  ADR-08 7절에 적었다
+```
+
+## 11. 구현 결과
+
+결정 넷은 [ADR-08 사실은 데이터로, 규칙은 코드로](../../adr/08-authored-facts-as-data.md)
+로 옮겼다. 여기는 **이 PR 이 실제로 무엇을 만들었나**만 적는다.
+
+### 11.1 파일
+
+```
+prisma/v2/constraints.sql   신규.  build_info 의 CHECK (id = 1)
+src/v2/authored.ts          신규.  app 저작을 읽고 재는 곳.  순수부 분리
+src/v2/authored.test.ts     신규
+src/v2/rebuild-verdict.ts   신규.  판정부.  verify-rebuild 가 최상위 main 을
+                                  돌리므로 테스트가 import 하면 실행된다
+src/v2/verify-rebuild.ts    신규.  npm run v2:verify:rebuild
+src/v2/seed-authored.ts     신규.  초기 7행 심기.  skipDuplicates
+
+src/v2/canonical/axis.ts               TRIGGER_EXCEPTION 제거 → 입력
+src/v2/canonical/gift-trigger-param.ts TOKEN_EXCEPTION 제거 → 입력.  DENOMINATOR 는 남음
+src/v2/canonical/identity-axis.ts      EGO_GRANTED 제거 → 입력
+src/v2/load-canonical.ts    app 읽기 · 선검사 · build_info · field_source.snapshotId
+src/v2/schema-ops.ts        liveRowCount · tableNames · tableDigest
+src/v2/build-canonical.ts   구조가 바뀌는 판을 막던 가드 수정
+src/v2/reproduce.ts         app 행 보존 · 타임스탬프 제외
+src/v2/verify-canonical.ts  새 검사 11건 (203 → 214)
+src/v2/diff-canonical.ts    tableNames 를 schema-ops 로
+```
+
+### 11.2 검증 수치
+
+```
+검사        214건 전부 통과 (203 + 판 표식 4 + 출처 3 + 저작 4)
+테스트      458건 전부 통과(건너뜀 12) · 타입 검사 둘 다 통과
+canonical    95테이블 · 152,399행       구조만 늘고 값은 그대로
+field_source 15,534행 전부 2026-07-25
+app          8테이블 (6 + ref_exception + ego_granted_axis)
+schema.sql   블록 256 → 260 · canonical 227 → 229
+```
+
+**`v2:verify:rebuild` 세 갈래를 실제로 태웠다.**
+
+```
+재현됨       표 94개 전수 대조 · 다른 표 0개 · 종료 0
+입력이 바뀜   커밋을 바꾸고 실행 → 「코드가 달라졌다」 · 결과는 같음까지 구분 · 종료 0
+재현 실패     canonical.identity_axis 에서 1행 삭제 → 그 표를 짚음 · 종료 1
+```
+
+**선검사도 실증했다.** `ego_granted_axis` 에 `('20509','BURN')` 을 넣었는데 `BURN` 은
+축이 아니다. 굽기가 그 자리에서 멈췄고 살아있는 판은 `canonical_hold` 에 온전했다.
+
+**M1 의 미검증 항목 하나를 태웠다.** 표가 하나 늘어난 판(94 → 95)을 실제로 승격했다.
+`app` FK 재부착과 `run.difficulty` 타입 재지정까지 그대로 돌았다. 값이 바뀌는 판은
+여전히 미검증이다 — 이번 판도 152,399행 그대로였다.
+
+### 11.3 실측으로 기각한 것
+
+```
+v2:diff 의 entityDiff 재사용     id 집합만 본다.  값 변경에 눈이 먼다
+app 테이블만 남기고 재현          schema.sql 재적용이 ON_ERROR_STOP 에서 깨지고,
+                               app → canonical FK 는 어차피 CASCADE 에 딸려 사라진다.
+                               구조는 다시 만들고 행만 떠 두었다 되넣는 쪽으로 갔다
+CHECK 를 views.sql 에            $executeRawUnsafe 가 다중 문장을 못 받는다
+```
+
+### 11.4 검증하지 못한 것
+
+```
+v2:reproduce 실전       --run 을 안 돌렸다.  data/entities 재수집이 상류 상태에 걸린다
+값이 바뀌는 판의 승격     구조만 바뀐 판은 태웠다.  값 변경의 첫 실전은 다음 패치다
+저작이 늘 때의 경로       검사 214건이 canonical 의 모양을 박고 있어 검사도 같이 고쳐야 한다
+```
+
+## 12. 범위 밖 — 그다음
 
 ```
 증분 파이프라인        M6.  이 PR 은 그 기준점만 심는다
