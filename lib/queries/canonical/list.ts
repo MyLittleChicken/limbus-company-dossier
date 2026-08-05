@@ -18,6 +18,9 @@ import { egoImage, identityImage, sinnerIcon } from '@/lib/assets';
  *
  * `IdentityUnitKeyword` 가 아니다 — 그쪽은 `BASE_APPEARANCE` · `SMALL` 처럼 겉모습을
  * 가리는 다른 축이다. 실측으로 탄환 13 · 보호 15 다.
+ *
+ * **이 값은 데이터층에 있어야 한다** — 축 정의가 담기면 이 상수는 사라진다.
+ * `docs/backlog/13-frontend-data-debt.md` 7 번.
  */
 const MECHANICS = ['Bullet', 'Protection'];
 
@@ -146,6 +149,9 @@ export async function listEgosFull(locale: Locale) {
  * `Burn.webp` 이고, `Laceration` → `Bleed` · `Burst` → `Rupture` · `Vibration` → `Tremor` ·
  * `Breath` → `Poise` 로 갈린다. 표를 새로 만들지 않고 **데이터가 이미 가진 `en` 이름을
  * 그대로 파일명 열쇠로 준다** — 쓰이는 7 종 모두 이 규칙으로 찾힌다.
+ *
+ * **이 규칙은 데이터층에 있어야 한다** — 애셋 키가 필드로 있으면 필요 없다.
+ * `docs/backlog/13-frontend-data-debt.md` 6 번.
  *
  * 특수 둘은 이름도 그림도 상태 표에 있다. `sprite` 가 곧 파일명이며 탄환은 `Ammo` 로
  * 갈린다 — 여기서도 짝을 새로 만들지 않고 데이터가 가진 값을 그대로 쓴다.
