@@ -7,6 +7,8 @@
  * 실행: npm run v2:verify:canonical
  */
 import { PrismaClient } from './generated/client.js';
+import { liveRowCount } from './schema-ops.js';
+import { readAuthored, unknownRefs, type KnownIds } from './authored.js';
 
 interface Check {
 	name: string;
@@ -1279,10 +1281,81 @@ async function main(): Promise<void> {
 		const appTables = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
 		`;
+		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 저작 사실이
+		// app 으로 내려오면서 늘었다
 		checks.push({
 			name: 'app 스키마가 섰다',
-			ok: Number(appTables[0]?.n ?? 0n) === 6,
-			detail: `${Number(appTables[0]?.n ?? 0n)} / 6`,
+			ok: Number(appTables[0]?.n ?? 0n) === 8,
+			detail: `${Number(appTables[0]?.n ?? 0n)} / 8`,
+		});
+
+		// ══ 판 표식 — 이 판이 무엇에서 나왔나 (ADR-08) ═════════════
+		eq('build_info 행 수', await prisma.buildInfo.count(), 1);
+
+		const bi = await prisma.buildInfo.findFirst();
+		checks.push({
+			name: 'build_info 가 실재하는 스냅샷을 가리킨다',
+			ok: bi !== null && (await prisma.snapshot.count({ where: { id: bi.snapshotId } })) === 1,
+			detail: bi === null ? '없다' : bi.snapshotId,
+		});
+		// 더러운 트리로 구우면 「그 커밋으로 구웠다」가 거짓이 된다. 개발 중에는
+		// 걸릴 수 있고, 그때가 바로 다시 구울 때다
+		checks.push({
+			name: 'build_info 의 커밋이 더럽지 않다',
+			ok: bi !== null && !bi.codeCommit.endsWith('-dirty'),
+			detail: bi === null ? '없다' : bi.codeCommit.slice(0, 20),
+		});
+		const liveRows = await liveRowCount(prisma, 'canonical');
+		checks.push({
+			name: 'build_info 의 행 수가 실제와 같다',
+			ok: bi !== null && bi.rowCount === liveRows,
+			detail: bi === null ? '없다' : `${bi.rowCount.toLocaleString()} / ${liveRows.toLocaleString()}`,
+		});
+
+		// ══ 출처 스냅샷 — M6 증분의 기준점 (ADR-08) ════════════════
+		eq('field_source snapshot_id 결손', await prisma.fieldSource.count({ where: { snapshotId: '' } }), 0);
+
+		const fsSnaps = await prisma.fieldSource.groupBy({
+			by: ['snapshotId'], _count: { _all: true },
+		});
+		const knownSnaps = new Set(
+			(await prisma.snapshot.findMany({ select: { id: true } })).map((s) => s.id),
+		);
+		checks.push({
+			name: 'field_source 의 스냅샷이 전부 raw 에 있다',
+			ok: fsSnaps.every((s) => knownSnaps.has(s.snapshotId)),
+			detail: fsSnaps.map((s) => `${s.snapshotId} ${s._count._all.toLocaleString()}`).join(' · '),
+		});
+		// 지금은 한 판을 통째로 굽는다. M6 증분이 오면 이 검사가 깨지고, 깨지는
+		// 것이 옳다 — 그때 「무엇이 갱신됐나」를 세는 검사로 바꾼다
+		checks.push({
+			name: 'field_source 가 아직 한 스냅샷에서만 왔다 (증분 전)',
+			ok: fsSnaps.length === 1,
+			detail: `${fsSnaps.length}종`,
+		});
+
+		// ══ 저작 사실 — app 에 산다 (ADR-08) ═══════════════════════
+		eq('ref_exception (trigger)', await prisma.refException.count({ where: { kind: 'trigger' } }), 2);
+		eq('ref_exception (token)', await prisma.refException.count({ where: { kind: 'token' } }), 1);
+		eq('ego_granted_axis', await prisma.egoGrantedAxis.count(), 4);
+
+		// 저작이 가리키는 대상이 실재하는가. 적재기가 굽기 전에도 보지만,
+		// 살아있는 판에 대고도 물어야 한다 — 승격 뒤에 대상이 사라질 수 있다
+		const authoredNow = await readAuthored(prisma);
+		const knownNow: KnownIds = {
+			axisIds: new Set((await prisma.axis.findMany({ select: { id: true } })).map((a) => a.id)),
+			unitKeywordIds: new Set(
+				(await prisma.identityUnitKeyword.findMany({ select: { keyword: true } })).map((k) => k.keyword),
+			),
+			associationIds: new Set(
+				(await prisma.association.findMany({ select: { id: true } })).map((a) => a.id),
+			),
+		};
+		const badNow = unknownRefs(authoredNow, knownNow);
+		checks.push({
+			name: '저작이 가리키는 대상이 전부 canonical 에 있다',
+			ok: badNow.length === 0,
+			detail: badNow.length === 0 ? '0건' : badNow.join(' · '),
 		});
 
 		// ══ 감사에서 찾은 것 — 회귀 검사 ═══════════════════════════

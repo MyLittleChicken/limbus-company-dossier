@@ -6,6 +6,7 @@
  *
  * 실행: npm run v2:canonical
  */
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { PrismaClient } from './generated/client.js';
 import { latestSnapshotId, mergeIndexes, readSource, readSourceGroup } from './source.js';
@@ -25,7 +26,8 @@ import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
-import { emptyRequiredMessage, hasAnyRow } from './schema-ops.js';
+import { readAuthored, unknownRefs, authoredDigest, type KnownIds } from './authored.js';
+import { emptyRequiredMessage, hasAnyRow, liveRowCount } from './schema-ops.js';
 
 const CHUNK = 1_000;
 
@@ -39,6 +41,16 @@ async function chunked<T>(
 		n += r.count;
 	}
 	return n;
+}
+
+/**
+ * 굽는 시점의 코드 판. **더러운 작업트리면 `-dirty` 를 붙인다** — 커밋만 적으면
+ * 「그 커밋으로 구웠다」가 거짓이 된다. 재현 검사가 그 거짓 위에서 판정한다.
+ */
+function codeCommit(): string {
+	const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+	const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
+	return dirty === '' ? head : `${head}-dirty`;
 }
 
 async function main(): Promise<void> {
@@ -222,6 +234,11 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// 저작 사실. **app 에 산다**(ADR-08) — 승격이 canonical 을 통째로 갈아
+		// 치우므로 재빌드의 입력은 그 밖에 있어야 한다
+		const authored = await readAuthored(prisma);
+		const { refException, egoGranted } = authored;
+
 		// ── 축 어휘와 트리거·효과 참조 ─────────────────────────────
 		// 이름 유도를 여기서 한 번 풀어 굳힌다 — 질의마다 다시 하면 오매칭이 되살아난다.
 		// vocab·statuses·sinners·identities 가 모두 만들어진 뒤여야 한다.
@@ -236,6 +253,7 @@ async function main(): Promise<void> {
 			triggerIds: vocab.trigger.map((t) => t.id),
 			effectIds: vocab.effect.map((e) => e.id),
 			sinIds: ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'],
+			refException,
 		}, meta);
 
 		// ── E.G.O 계열 ─────────────────────────────────────────────
@@ -266,6 +284,24 @@ async function main(): Promise<void> {
 			meta,
 		);
 
+		// 저작이 가리키는 대상이 실재하는가. **굽기 전에 멈춘다** — 못 닿는 참조를
+		// 안고 구우면 조용히 빈 축이 나오고, 그건 검사 203건이 못 잡는 자리다.
+		// axisTables 뒤여야 axis_id 를 알 수 있다
+		const known: KnownIds = {
+			axisIds: new Set(axisTables.axis.map((a) => a.id)),
+			unitKeywordIds: new Set(identities.identityUnitKeyword.map((k) => k.keyword)),
+			associationIds: new Set(sinners.association.map((a) => a.id)),
+		};
+		const badRefs = unknownRefs(authored, known);
+		if (badRefs.length > 0) {
+			console.error('저작이 가리키는 대상이 canonical 에 없다. 굽지 않는다.');
+			for (const line of badRefs) console.error(`  ${line}`);
+			console.error('');
+			console.error('  app.ref_exception · app.ego_granted_axis 를 고치거나,');
+			console.error('  가리키는 대상이 원본에 생겼는지 확인한다.');
+			throw new Error(`저작 참조 ${badRefs.length}건이 못 닿는다`);
+		}
+
 		// 인격 축 프로파일. **egos 뒤여야 한다** — ego_granted 경로가 E.G.O 의
 		// 수감자를 보고 장착 후보 인격을 편다
 		const identityAxis = buildIdentityAxis({
@@ -275,6 +311,7 @@ async function main(): Promise<void> {
 			axisIds: axisTables.axis.map((a) => a.id),
 			identity: identities.identity.map((i) => ({ id: i.id, sinnerId: i.sinnerId })),
 			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
+			egoGranted,
 		}, meta);
 
 		// 트리거 정량자. **level 0 만 본다** — 강화 단계는 조건 문장이 같아 중복이다.
@@ -294,6 +331,7 @@ async function main(): Promise<void> {
 				.filter((r) => r.kind === 'slots')
 				.map((r) => ({ giftId: r.giftId, slots: (r.value as number[]) ?? [] })),
 			axisIds: axisTables.axis.map((a) => a.id),
+			refException,
 		}, meta);
 
 		// ── 거울 던전 구성 ─────────────────────────────────────────
@@ -638,7 +676,12 @@ async function main(): Promise<void> {
 		]);
 		counts.push([
 			'field_source',
-			await chunked(meta.sources, (d) => prisma.fieldSource.createMany({ data: d })),
+			// snapshotId 는 적재 직전에 붙인다. Meta 는 어느 스냅샷을 읽는지 모르고,
+			// 알 필요도 없다 — 그건 적재기의 맥락이다
+			await chunked(
+				meta.sources.map((s) => ({ ...s, snapshotId })),
+				(d) => prisma.fieldSource.createMany({ data: d }),
+			),
 		]);
 
 		// 파생 뷰. 테이블이 다 선 뒤에 건다 — 뷰가 컬럼을 참조하므로 순서가 있다.
@@ -646,6 +689,30 @@ async function main(): Promise<void> {
 		await prisma.$executeRawUnsafe(
 			await readFile(new URL('../../prisma/v2/views.sql', import.meta.url), 'utf8'),
 		);
+
+		// 수동 제약. **파일을 따로 두는 이유는 $executeRawUnsafe 가 다중 문장을
+		// 못 받기 때문이다** — 뷰와 같은 파일에 두면 그 자리에서 깨진다.
+		await prisma.$executeRawUnsafe(
+			await readFile(new URL('../../prisma/v2/constraints.sql', import.meta.url), 'utf8'),
+		);
+
+		// ── 판 표식 ────────────────────────────────────────────────
+		// **맨 마지막이다.** 행 수가 최종값이어야 하고, 저작 지문도 이번에 실제로
+		// 쓴 것이어야 한다(ADR-08).
+		const rowCount = await liveRowCount(prisma, 'canonical');
+		const commit = codeCommit();
+		await prisma.buildInfo.create({
+			data: {
+				id: 1,
+				snapshotId,
+				codeCommit: commit,
+				authoredDigest: authoredDigest(authored),
+				builtAt: new Date(),
+				rowCount,
+			},
+		});
+		console.log('');
+		console.log(`판 표식  스냅샷 ${snapshotId} · 커밋 ${commit.slice(0, 12)} · ${rowCount.toLocaleString()}행`);
 
 		console.log('');
 		for (const [t, n] of counts) console.log(`  ${t.padEnd(22)} ${String(n).padStart(6)}`);

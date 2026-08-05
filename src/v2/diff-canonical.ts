@@ -33,6 +33,7 @@ import {
 	formatIds,
 	ident,
 	schemaExists,
+	tableNames,
 } from './schema-ops.js';
 
 /**
@@ -48,14 +49,6 @@ const DIFF_SCOPE = [
 
 /** 개체 차를 보는 네 테이블 — 설계 7절. 전부 `id` 하나로 식별된다(문자열 PK). */
 const ENTITY_TABLES = ['gift', 'identity', 'ego', 'pack'] as const;
-
-async function tableNames(tx: Prisma.TransactionClient, schema: string): Promise<Set<string>> {
-	const rows = await tx.$queryRaw<Array<{ table_name: string }>>`
-		SELECT table_name FROM information_schema.tables
-		WHERE table_schema = ${schema} AND table_type = 'BASE TABLE'
-	`;
-	return new Set(rows.map((r) => r.table_name));
-}
 
 /**
  * `pg_stat_user_tables.n_live_tup` 은 추정치다. 통계 수집기가 DML 뒤에 갱신하는

@@ -10,25 +10,6 @@ import type { Meta } from './meta.js';
 
 const EVIDENCE = 'docs/superpowers/specs/2026-08-03-mechanic-axis-graph-design.md';
 
-/**
- * **E.G.O 장착이 축을 주는 경우는 저작이다.**
- *
- * `ego_status` 로 유도하면 안 된다 — 그것은 「이 E.G.O 가 다루는 상태」지
- * 「장착하면 그 인격이 이 축을 갖는다」가 아니다. 실측하면 `ego_status` 로 축을
- * 주는 E.G.O 가 94종인데 「인격으로 취급됨」이 명시된 것은 2종뿐이다.
- *
- * 반례 — 20705 홀리데이는 「부여하는 화상·출혈·진동·파열·침잠 위력 **+1**」인
- * 증폭기인데 `ego_status` 로는 축 7개를 전부 받는다. 어느 축의 인격도 아니다.
- *
- * 새 메카닉이 나오면 행이 는다. 게임이 「인격으로 취급됨」을 명시하므로 판별은 쉽다.
- */
-export const EGO_GRANTED: Record<string, string[]> = {
-	// 착영휘도 — 「이 인격은 [Laceration], [Breath]을 부여하는 인격으로 취급됨」
-	'20509': ['LACERATION', 'BREATH'],
-	// 엄숙한 애도 — 「이 인격은 [Vibration], [Sinking]을 부여하는 인격으로 취급됨」
-	'20109': ['VIBRATION', 'SINKING'],
-};
-
 export interface IdentityAxisInput {
 	identityKeyword: Array<{ identityId: string; keywordId: string }>;
 	identityStatus: Array<{ identityId: string; statusId: string }>;
@@ -37,6 +18,18 @@ export interface IdentityAxisInput {
 	/** E.G.O 는 인격이 아니라 **수감자**에 딸린다. 장착 가능한 인격을 여기서 편다 */
 	identity: Array<{ id: string; sinnerId: number }>;
 	ego: Array<{ id: string; sinnerId: number }>;
+	/**
+	 * **E.G.O 장착이 축을 주는 경우는 저작이다.** `app.ego_granted_axis` 에서
+	 * 온다(ADR-08).
+	 *
+	 * `ego_status` 로 유도하면 안 된다 — 그것은 「이 E.G.O 가 다루는 상태」지
+	 * 「장착하면 그 인격이 이 축을 갖는다」가 아니다. 실측하면 `ego_status` 로
+	 * 축을 주는 E.G.O 가 94종인데 「인격으로 취급됨」이 명시된 것은 2종뿐이다.
+	 *
+	 * 반례 — 20705 홀리데이는 「부여하는 화상·출혈·진동·파열·침잠 위력 **+1**」인
+	 * 증폭기인데 `ego_status` 로는 축 7개를 전부 받는다. 어느 축의 인격도 아니다.
+	 */
+	egoGranted: Array<{ egoId: string; axisId: string }>;
 }
 
 export interface IdentityAxisRow {
@@ -90,11 +83,20 @@ export function buildIdentityAxis(input: IdentityAxisInput, meta: Meta): Identit
 		else list.push(i.id);
 	}
 	const egoSinner = new Map(input.ego.map((e) => [e.id, e.sinnerId]));
-	for (const [egoId, axisIds] of Object.entries(EGO_GRANTED)) {
+
+	// E.G.O 별로 묶는다. 행 단위로 돌면 결손 보고가 축 수만큼 중복된다
+	const grantedByEgo = new Map<string, string[]>();
+	for (const g of input.egoGranted) {
+		const list = grantedByEgo.get(g.egoId);
+		if (list === undefined) grantedByEgo.set(g.egoId, [g.axisId]);
+		else list.push(g.axisId);
+	}
+
+	for (const [egoId, axisIds] of grantedByEgo) {
 		const sinnerId = egoSinner.get(egoId);
 		if (sinnerId === undefined) {
 			// 저작 표가 실물을 앞질렀다. 조용히 넘기면 축이 통째로 빈다
-			meta.gap('ego', egoId, 'axis', 'EGO_GRANTED 에 있으나 ego 에 없다', EVIDENCE);
+			meta.gap('ego', egoId, 'axis', 'app.ego_granted_axis 에 있으나 ego 에 없다', EVIDENCE);
 			continue;
 		}
 		for (const identityId of bySinner.get(sinnerId) ?? []) {

@@ -101,12 +101,25 @@ CREATE TABLE "canonical"."field_gap" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."build_info" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "snapshot_id" TEXT NOT NULL,
+    "code_commit" TEXT NOT NULL,
+    "authored_digest" TEXT NOT NULL,
+    "built_at" TIMESTAMPTZ(3) NOT NULL,
+    "row_count" INTEGER NOT NULL,
+
+    CONSTRAINT "build_info_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."field_source" (
     "entity" TEXT NOT NULL,
     "entity_id" TEXT NOT NULL,
     "field" TEXT NOT NULL,
     "rule" TEXT NOT NULL,
     "sources" TEXT[],
+    "snapshot_id" TEXT NOT NULL,
 
     CONSTRAINT "field_source_pkey" PRIMARY KEY ("entity","entity_id","field")
 );
@@ -1051,6 +1064,26 @@ CREATE TABLE "app"."field_override" (
 );
 
 -- CreateTable
+CREATE TABLE "app"."ref_exception" (
+    "kind" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "ref_kind" TEXT NOT NULL,
+    "ref_id" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+
+    CONSTRAINT "ref_exception_pkey" PRIMARY KEY ("kind","key")
+);
+
+-- CreateTable
+CREATE TABLE "app"."ego_granted_axis" (
+    "ego_id" TEXT NOT NULL,
+    "axis_id" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+
+    CONSTRAINT "ego_granted_axis_pkey" PRIMARY KEY ("ego_id","axis_id")
+);
+
+-- CreateTable
 CREATE TABLE "app"."account" (
     "id" TEXT NOT NULL,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1114,6 +1147,9 @@ CREATE INDEX "field_gap_entity_field_idx" ON "canonical"."field_gap"("entity", "
 
 -- CreateIndex
 CREATE INDEX "field_source_entity_rule_idx" ON "canonical"."field_source"("entity", "rule");
+
+-- CreateIndex
+CREATE INDEX "field_source_snapshot_id_idx" ON "canonical"."field_source"("snapshot_id");
 
 -- CreateIndex
 CREATE INDEX "tool_annotation_entity_entity_id_idx" ON "canonical"."tool_annotation"("entity", "entity_id");

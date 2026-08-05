@@ -177,17 +177,45 @@ model FieldGap {
   @@schema("canonical")
 }
 
+/// 이 판이 무엇에서 나왔나. **한 행만 존재한다** — CHECK (id = 1) 을
+/// `prisma/v2/constraints.sql` 이 건다. 두 행이 생기면 「어느 판이 진짜냐」에
+/// 답이 없어진다.
+///
+/// `snapshot_id` 는 `raw.snapshot` 을 가리키지만 FK 는 걸지 않는다(ADR-08).
+/// 걸면 canonical → raw 의존이 생겨 승격 때 재조준 대상이 는다(ADR-07 3.2).
+model BuildInfo {
+  id             Int      @id @default(1)
+  snapshotId     String   @map("snapshot_id")
+  /// 굽는 시점의 git HEAD. 더러운 작업트리면 뒤에 -dirty 가 붙는다
+  codeCommit     String   @map("code_commit")
+  /// app 저작 표 둘의 내용 sha256. note 는 안 들어간다
+  authoredDigest String   @map("authored_digest")
+  builtAt        DateTime @map("built_at") @db.Timestamptz(3)
+  /// 구웠을 때의 canonical 행 수. 자기 자신은 안 센다
+  rowCount       Int      @map("row_count")
+
+  @@map("build_info")
+  @@schema("canonical")
+}
+
 /// 이 값이 어느 출처에서 어떤 규칙으로 왔나. 「왜 이렇지?」를 DB 안에서 답한다.
 model FieldSource {
-  entity   String
-  entityId String   @map("entity_id")
-  field    String
+  entity     String
+  entityId   String   @map("entity_id")
+  field      String
   /// mj-only · assets-only · loc-only · union · agreed · disagreed · game-verified · manual
-  rule     String
-  sources  String[]
+  rule       String
+  sources    String[]
+  /// 이 값이 **어느 스냅샷의 raw 에서** 왔나.
+  ///
+  /// 지금은 전 행이 같은 값이다 — 스냅샷이 하나뿐이고 한 판을 통째로 굽는다.
+  /// M6 증분이 오면 일부 필드만 새 스냅샷으로 갱신되고 나머지는 옛 값이 남아
+  /// 행마다 갈린다. 그때 이 열이 유일한 갱신 증거다(ADR-08).
+  snapshotId String   @map("snapshot_id")
 
   @@id([entity, entityId, field])
   @@index([entity, rule])
+  @@index([snapshotId])
   @@map("field_source")
   @@schema("canonical")
 }
@@ -1934,6 +1962,40 @@ model FieldOverride {
   @@id([entity, entityId, field, locale])
   @@index([entity, field])
   @@map("field_override")
+  @@schema("app")
+}
+
+/// 이름 매칭이 못 푸는 참조. **게임의 사실이며 규칙이 아니다** — 규칙은 코드에 있다.
+///
+///   kind='trigger'  키는 트리거 표시명.  'Bloodfiend Identities'
+///   kind='token'    키는 desc 안의 브래킷 토큰.  'BLOODDINNER'
+///
+/// canonical 을 가리키지만 FK 는 걸지 않는다(ADR-08). 승격 때 재조준 대상이
+/// 늘어난다. 대신 적재기가 선검사한다 — 없는 ref_id 면 build 가 거기서 멈춘다.
+model RefException {
+  kind    String
+  key     String
+  refKind String @map("ref_kind")
+  refId   String @map("ref_id")
+  /// 왜 이 값인가. 근거를 사람 말로 남긴다
+  note    String
+
+  @@id([kind, key])
+  @@map("ref_exception")
+  @@schema("app")
+}
+
+/// 「이 인격은 [X]를 부여하는 인격으로 취급됨」을 게임이 명시한 E.G.O.
+///
+/// **증폭기는 여기 없다.** 20705 홀리데이는 ego_status 로 축 7개를 받지만
+/// 「부여하는 인격으로 취급」이 아니라 위력 +1 이다. 어느 축의 인격도 아니다.
+model EgoGrantedAxis {
+  egoId  String @map("ego_id")
+  axisId String @map("axis_id")
+  note   String
+
+  @@id([egoId, axisId])
+  @@map("ego_granted_axis")
   @@schema("app")
 }
 
