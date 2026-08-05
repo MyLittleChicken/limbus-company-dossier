@@ -7,7 +7,7 @@ import {
 	listAllGifts,
 	listCursedGiftIds,
 	listKeywords,
-} from '@/lib/queries/gifts';
+} from '@/lib/queries/canonical/gifts';
 import { keywordIcon } from '@/lib/assets';
 import { SecLabel } from '@/components/ui';
 import { UnitList, type Axis, type Section, type Unit } from '@/components/unit-list';

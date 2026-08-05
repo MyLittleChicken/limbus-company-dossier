@@ -370,10 +370,12 @@ export async function getGift(id: number, locale: Locale) {
 		exclusivePacks: gift.exclusivePacks.map((x) => ({ id: x.packId, text: packName(x.pack) })),
 		packs: gift.packs.map((x) => ({ id: x.packId, text: packName(x.pack) })),
 		recipes: gift.recipes.map((r) => ({
-			// 캐노니컬 레시피는 (giftId, index) 복합키다. 화면은 목록 키로만 쓴다
-			id: r.index,
+			// 캐노니컬 레시피는 (giftId, index) 복합키다. 현행이 쓰던 표기로 되돌린다
+			id: `${gift.id}_${r.index}`,
 			slots: r.slots.map((s) => ({
-				count: s.count,
+				// 고정 재료 자리는 캐노니컬이 count 를 안 둔다 — 하나라는 뜻이다.
+				// 현행은 그 자리에 1 을 담았다
+				count: s.count ?? 1,
 				// 고정 재료도 선택지 하나로 낸다 — 현행이 그 모양이었다(실측 178 + 7 = 185)
 				options: s.materialId === null
 					? s.options.map((o) => materialOf(o.materialId))

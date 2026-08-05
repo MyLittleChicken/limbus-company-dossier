@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { getGift } from '@/lib/queries/gifts';
+import { getGift } from '@/lib/queries/canonical/gifts';
 import { Facts, Icon, IconTag, Name, Nothing, Panel, SecLabel } from '@/components/ui';
 import { keywordIcon } from '@/lib/assets';
 
