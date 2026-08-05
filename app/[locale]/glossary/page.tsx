@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { listGlossaryAxes, listStatuses, readGlossaryFilter } from '@/lib/queries/reference';
+import { listGlossaryAxes, listStatuses, readGlossaryFilter } from '@/lib/queries/canonical/reference';
 import type { SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
 import { Empty, Icon, IconTag, Name, Nothing, Pager, Panel, SecLabel } from '@/components/ui';

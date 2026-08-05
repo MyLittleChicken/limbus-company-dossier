@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { listFloorPacks } from '@/lib/queries/reference';
+import { listFloorPacks } from '@/lib/queries/canonical/reference';
 import { Icon, Name, Panel, SecLabel } from '@/components/ui';
 
 /**

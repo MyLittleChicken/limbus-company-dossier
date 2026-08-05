@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { NAV_PRIMARY, UI } from '@/lib/ui-text';
-import { getCounts, getDataset } from '@/lib/queries/reference';
+import { getCounts, getBuildInfo } from '@/lib/queries/canonical/reference';
 import { searchAll } from '@/lib/queries/search';
 import { one, type SearchParams } from '@/lib/queries/shared';
 import { SearchBox } from '@/components/filters';
@@ -24,9 +24,9 @@ export default async function HomePage({
 	const ko = locale === 'ko';
 	const query = one(sp['q'])?.trim() ?? '';
 
-	const [counts, dataset, hits] = await Promise.all([
+	const [counts, build, hits] = await Promise.all([
 		getCounts(),
-		getDataset(),
+		getBuildInfo(),
 		query ? searchAll(query, locale) : Promise.resolve([]),
 	]);
 
@@ -122,9 +122,9 @@ export default async function HomePage({
 			</ul>
 
 			{/* 기준 버전은 /about 에만 두지 않는다 — 05-ui-foundation 10절 */}
-			{dataset ? (
+			{build ? (
 				<p className="stamp">
-					{dataset.mdVersion} · {dataset.snapshotDate.toISOString().slice(0, 10)}{' '}
+					{build.mdVersion} · {build.snapshotId}{' '}
 					{ko ? '스냅샷' : 'snapshot'}
 				</p>
 			) : null}

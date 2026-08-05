@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { getDataset, getDungeon } from '@/lib/queries/reference';
+import { getBuildInfo, getDungeon } from '@/lib/queries/canonical/reference';
 import { Facts, Nothing, Panel, SecLabel } from '@/components/ui';
 
 export default async function DungeonPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -10,7 +10,7 @@ export default async function DungeonPage({ params }: { params: Promise<{ locale
 
 	const t = UI[locale];
 	const ko = locale === 'ko';
-	const [dungeon, dataset] = await Promise.all([getDungeon(locale), getDataset()]);
+	const [dungeon, build] = await Promise.all([getDungeon(locale), getBuildInfo()]);
 
 	if (!dungeon) {
 		return (
@@ -27,7 +27,7 @@ export default async function DungeonPage({ params }: { params: Promise<{ locale
 			<SecLabel
 				title={dungeon.text?.name ?? t.nav.dungeon}
 				sub={ko ? '층 구조와 은총' : 'Floor structure and graces'}
-				hint={dataset?.snapshotDate.toISOString().slice(0, 10) ?? undefined}
+				hint={build?.snapshotId ?? undefined}
 			/>
 
 			<div className="grid2">
