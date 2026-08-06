@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { PACK_CATEGORY, PACK_DIFFICULTY, UI } from '@/lib/ui-text';
-import { getPack } from '@/lib/queries/packs';
+import { getPack } from '@/lib/queries/canonical/detail';
 import { Facts, Icon, Name, Nothing, Panel, SecLabel } from '@/components/ui';
 import { PackArt } from '@/components/pack-art';
 

@@ -36,6 +36,47 @@ import { localeRows, nameOf, textOf } from './locale';
 const tierOf = (g: { tier: number | null; tierLabel: string | null }): string =>
 	g.tierLabel ?? (g.tier === null ? '' : String(g.tier));
 
+/**
+ * 게임의 죄악 차례. `canonical.sin_info.order` 가 같은 것을 데이터로 갖고 있고
+ * `Sin` enum 의 선언 순서도 이것이다.
+ *
+ * **현행은 정렬을 안 줬다.** 원본 JSON 의 키 순서가 그대로 나와 E.G.O 마다 차례가
+ * 달랐다 — 20509 는 envy · pride · wrath 였다. 게임 차례로 못 박는다.
+ */
+const SIN_ORDER = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+
+const bySin = <T extends { sin: string }>(rows: T[]): T[] =>
+	[...rows].sort((a, b) => SIN_ORDER.indexOf(a.sin) - SIN_ORDER.indexOf(b.sin));
+
+/**
+ * 출시일. **캐노니컬은 문자열이고 현행은 `Date` 였다.**
+ *
+ * 화면이 `.toISOString().slice(0, 10)` 을 부르므로 `Date` 로 되돌린다 — 이 PR 은
+ * 화면 계약을 안 바꾼다. 원본이 `"2026-06-11"` 꼴이라 UTC 자정으로 읽힌다.
+ */
+const dateOf = (raw: string | null): Date | null => (raw === null ? null : new Date(raw));
+
+/**
+ * 인격 이름은 `title` 이다.
+ *
+ * `identity_text.name` 은 **수감자 이름**이고(10208 → 「파우스트」) 인격 이름은
+ * `title` 에 있다(「검계\n살수」). `canonical/list.ts` 가 목록에서 겪은 것과 같은
+ * 함정이며, 스키마 주석은 이 둘을 반대로 적고 있다 — 실측이 정본이다.
+ *
+ * 게임이 두 줄로 흘려 쓰는 이름이 있어 `title` 에 줄바꿈이 들어 있다 — 한 줄로 편다.
+ */
+function identityName(
+	rows: Array<{ locale: string; name: string; title: string | null }>,
+	locale: Locale,
+) {
+	const pick = rows.find((r) => r.locale === locale) ?? rows.find((r) => r.locale === 'en');
+	if (!pick) return null;
+	return {
+		name: (pick.title ?? pick.name).replace(/\s+/g, ' ').trim(),
+		fellBack: pick.locale !== locale,
+	};
+}
+
 // ── 인격 ─────────────────────────────────────────────────────────
 
 export async function getIdentity(id: number, locale: Locale) {
@@ -76,13 +117,13 @@ export async function getIdentity(id: number, locale: Locale) {
 		rarity: identity.star,
 		rarityIcon: rarityIcon(identity.star),
 		season: identity.season,
-		releaseDate: identity.releaseDate,
+		releaseDate: dateOf(identity.releaseDate),
 		hpBase: identity.hp,
 		hpPerLevel: identity.hpLevel,
 		defCorrection: identity.defCorrection,
 		// 길이가 인격마다 다르다. 배열 그대로 넘기고 화면이 길이를 가정하지 않는다.
 		breakSection: identity.stagger,
-		text: nameOf(identity.texts, locale),
+		text: identityName(identity.texts, locale),
 		images: {
 			profile: identityImage(Number(identity.id), 'profile'),
 			profileBase: identityImage(Number(identity.id), 'profileBase'),
@@ -164,8 +205,10 @@ export async function getEgo(id: number, locale: Locale) {
 		include: {
 			texts: localeRows(locale),
 			sinner: { include: { texts: localeRows(locale) } },
-			costs: true,
-			resists: true,
+			// 죄악은 enum 이라 정렬을 안 주면 선언 순서로 나오는데, 그 순서가
+			// 캐노니컬과 현행에서 다르다. 이름순으로 못 박는다
+			costs: { orderBy: { sin: 'asc' } },
+			resists: { orderBy: { sin: 'asc' } },
 			statuses: { include: { status: { include: { texts: localeRows(locale) } } } },
 			// 연결 표에 순서가 없다. passiveId 로 정렬해 실행마다 같은 차례를 낸다
 			passives: {
@@ -183,7 +226,7 @@ export async function getEgo(id: number, locale: Locale) {
 		sinner: nameOf(ego.sinner.texts, locale),
 		rank: ego.rank,
 		season: ego.season,
-		releaseDate: ego.releaseDate,
+		releaseDate: dateOf(ego.releaseDate),
 		awakenAffinity: ego.sin,
 		awakenAtkType: ego.attackType,
 		corrosionAffinity: ego.corrosionSin,
@@ -197,8 +240,8 @@ export async function getEgo(id: number, locale: Locale) {
 			erosion: egoImage(Number(ego.id), 'erosion'),
 		},
 		// 죄악 자원 소모량. E.G.O 기능의 핵심이다(02-data-model 3.4).
-		costs: ego.costs.map((c) => ({ sin: c.sin, amount: c.count })),
-		resists: ego.resists.map((r) => ({ sin: r.sin, value: r.value })),
+		costs: bySin(ego.costs).map((c) => ({ sin: c.sin, amount: c.count })),
+		resists: bySin(ego.resists).map((r) => ({ sin: r.sin, value: r.value })),
 		statuses: ego.statuses.map((s) => ({ id: s.statusId, text: nameOf(s.status.texts, locale) })),
 		// 패시브는 요약 파일에 없고 개별 상세에만 있었다(02-data-model 3.4).
 		// 캐노니컬 연결 표에 순서 열이 없어 나열 차례를 index 로 쓴다

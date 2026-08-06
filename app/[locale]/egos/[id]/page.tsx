@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { getEgo } from '@/lib/queries/egos';
+import { getEgo } from '@/lib/queries/canonical/detail';
 import { Facts, Icon, Name, Nothing, Panel, SecLabel } from '@/components/ui';
 
 export default async function EgoDetailPage({
@@ -105,7 +105,7 @@ export default async function EgoDetailPage({
 									ego.maxThreadspin ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
 								],
 								[ko ? '시즌' : 'Season', ego.season],
-								[ko ? '출시일' : 'Released', ego.releaseDate.toISOString().slice(0, 10)],
+								[ko ? '출시일' : 'Released', ego.releaseDate?.toISOString().slice(0, 10) ?? null],
 							]}
 						/>
 					</Panel>

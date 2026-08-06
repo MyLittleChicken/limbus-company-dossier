@@ -92,6 +92,8 @@ async function casesV1(): Promise<Case[]> {
 async function casesV2(): Promise<Case[]> {
 	const ref = await import('../lib/queries/canonical/reference.js');
 	const gifts = await import('../lib/queries/canonical/gifts.js');
+	const packs = await import('../lib/queries/canonical/packs.js');
+	const detail = await import('../lib/queries/canonical/detail.js');
 
 	return [
 		{ name: 'reference.listFloorPacks', run: () => ref.listFloorPacks('ko') },
@@ -106,6 +108,10 @@ async function casesV2(): Promise<Case[]> {
 		{ name: 'gifts.listSins', run: () => gifts.listSins('ko') },
 		{ name: 'gifts.getGift.9088', run: () => gifts.getGift(9088, 'ko') },
 		{ name: 'gifts.getGift.9090', run: () => gifts.getGift(9090, 'ko') },
+		{ name: 'packs.listPacks', run: () => packs.listPacks('ko', packs.readPackFilter({})) },
+		{ name: 'packs.getPack.1309', run: () => detail.getPack('1309', 'ko') },
+		{ name: 'identities.getIdentity.10208', run: () => detail.getIdentity(10208, 'ko') },
+		{ name: 'egos.getEgo.20509', run: () => detail.getEgo(20509, 'ko') },
 	];
 }
 

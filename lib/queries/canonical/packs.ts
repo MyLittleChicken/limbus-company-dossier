@@ -49,7 +49,10 @@ export async function listPacks(locale: Locale, filter: PackFilter) {
 
 	const rows = await canonical.pack.findMany({
 		where: and.length ? { AND: and } : {},
-		orderBy: [{ category: 'asc' }, { id: 'asc' }],
+		// **id 로만 정렬한다.** category 는 enum 이라 선언 순서로 정렬되는데 그 순서가
+		// 캐노니컬과 현행에서 다르다. 화면이 어차피 자기 순서를 쓰므로
+		// (`lib/pack-label.ts` 의 comparePackKind) 질의는 결정적이기만 하면 된다
+		orderBy: { id: 'asc' },
 		include: {
 			texts: localeRows(locale),
 			floors: true,

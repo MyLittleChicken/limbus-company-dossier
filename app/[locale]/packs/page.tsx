@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { listPacks, readPackFilter } from '@/lib/queries/packs';
+import { listPacks, readPackFilter } from '@/lib/queries/canonical/packs';
 import { multi, type SearchParams } from '@/lib/queries/shared';
 import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
 import { Empty, Name, SecLabel } from '@/components/ui';

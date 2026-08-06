@@ -51,7 +51,13 @@ const HIDDEN_SPRITE = 'HiddenTheme';
 
 export type PackKindInput = {
 	category: string;
-	chapter: string | null;
+	/**
+	 * 본편 장. **현행은 문자열이고 캐노니컬은 정수다.**
+	 *
+	 * 아래에서 어차피 `Number()` 로 바꿔 쓰고 표기에는 그대로 끼워 넣으므로 둘 다
+	 * 받는다. 층 전환이 끝나면 정수만 남는다.
+	 */
+	chapter: string | number | null;
 	sprite: string;
 	/** 캐노니컬 `pack_tag` 의 `Collab`. 실측 1 건이다. */
 	collab: boolean;
