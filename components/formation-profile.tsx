@@ -1,7 +1,7 @@
 'use client';
 
 import { Panel } from '@/components/ui';
-import type { SquadAxes } from '@/lib/queries/squad';
+import type { SquadAxes } from '@/lib/queries/canonical/squad';
 
 /**
  * 편성 프로필.

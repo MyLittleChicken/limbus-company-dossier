@@ -1,7 +1,7 @@
 import type { Locale } from '@prisma/client';
 import type { $Enums, Prisma } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
-import { packIcon, statusIcon } from '@/lib/assets';
+import { egoImage, giftIcon, identityImage, packIcon, statusIcon } from '@/lib/assets';
 import { multi, one, type Named, type SearchParams } from '@/lib/queries/shared';
 import { localeRows, nameOf, textOf } from './locale';
 
@@ -215,6 +215,119 @@ export async function getBuildInfo() {
 		builtAt: build?.builtAt ?? null,
 		rowCount: build?.rowCount ?? null,
 	};
+}
+
+// ── 통합 검색 ────────────────────────────────────────────────────
+
+/**
+ * 대상은 **치환된 표시용 `desc`** 이고 `descRaw` 는 쓰지 않는다(05-ui-foundation 5절).
+ * 사용자가 입력하는 것은 표시 문자열이며, 원문에는 내부 식별자와 `<noparse>` 마커가 남아 있다.
+ *
+ * 계산은 서버에서 한다(ADR-05 3.3). 표시 문자열 7,498 KB 를 클라이언트로 보내지 않는다.
+ */
+const PER_KIND = 8;
+
+export interface SearchHit {
+	kind: 'gift' | 'pack' | 'identity' | 'ego';
+	id: string;
+	href: string;
+	icon: string | null;
+	name: string | null;
+	fellBack: boolean;
+	meta: string;
+}
+
+export async function searchAll(query: string, locale: Locale): Promise<SearchHit[]> {
+	const q = query.trim();
+	if (q.length === 0) return [];
+
+	const like = { contains: q, mode: 'insensitive' as const };
+	const locales = { in: [locale, 'en'] as $Enums.Locale[] };
+
+	const [gifts, packs, identities, egos] = await Promise.all([
+		canonical.gift.findMany({
+			// 거울 던전 기프트만 찾는다 — 목록·상세와 같은 범위다
+			where: {
+				domain: 'mirror_dungeon',
+				stages: { some: { texts: { some: { locale: locales, OR: [{ name: like }, { desc: like }] } } } },
+			},
+			take: PER_KIND,
+			orderBy: { id: 'asc' },
+			include: { stages: { where: { level: 0 }, include: { texts: localeRows(locale) } } },
+		}),
+		canonical.pack.findMany({
+			where: { texts: { some: { locale: locales, name: like } } },
+			take: PER_KIND,
+			orderBy: { id: 'asc' },
+			include: { texts: localeRows(locale) },
+		}),
+		canonical.identity.findMany({
+			// 인격 이름은 title 이다 — name 은 수감자 이름이라 검색이 엉뚱하게 걸린다
+			where: { texts: { some: { locale: locales, title: like } } },
+			take: PER_KIND,
+			orderBy: { id: 'asc' },
+			include: { texts: localeRows(locale) },
+		}),
+		canonical.ego.findMany({
+			where: { presentationOnly: false, texts: { some: { locale: locales, name: like } } },
+			take: PER_KIND,
+			orderBy: { id: 'asc' },
+			include: { texts: localeRows(locale) },
+		}),
+	]);
+
+	const hits: SearchHit[] = [];
+
+	for (const g of gifts) {
+		const t = nameOf(g.stages[0]?.texts ?? [], locale);
+		hits.push({
+			kind: 'gift',
+			id: g.id,
+			href: `/${locale}/gifts/${g.id}`,
+			icon: giftIcon(g.sprite),
+			name: t?.name ?? null,
+			fellBack: t?.fellBack ?? false,
+			meta: g.tierLabel ?? (g.tier === null ? '' : String(g.tier)),
+		});
+	}
+	for (const p of packs) {
+		const t = nameOf(p.texts, locale);
+		hits.push({
+			kind: 'pack',
+			id: p.id,
+			href: `/${locale}/packs/${p.id}`,
+			icon: packIcon(p.sprite),
+			name: t?.name ?? null,
+			fellBack: t?.fellBack ?? false,
+			meta: p.category,
+		});
+	}
+	for (const i of identities) {
+		const pick = i.texts.find((r) => r.locale === locale) ?? i.texts.find((r) => r.locale === 'en');
+		hits.push({
+			kind: 'identity',
+			id: i.id,
+			href: `/${locale}/identities/${i.id}`,
+			icon: identityImage(Number(i.id), 'profile'),
+			name: pick ? (pick.title ?? pick.name).replace(/\s+/g, ' ').trim() : null,
+			fellBack: pick !== undefined && pick.locale !== locale,
+			meta: '0'.repeat(i.star),
+		});
+	}
+	for (const e of egos) {
+		const t = nameOf(e.texts, locale);
+		hits.push({
+			kind: 'ego',
+			id: e.id,
+			href: `/${locale}/egos/${e.id}`,
+			icon: egoImage(Number(e.id), 'awaken'),
+			name: t?.name ?? null,
+			fellBack: t?.fellBack ?? false,
+			meta: e.rank ?? '',
+		});
+	}
+
+	return hits;
 }
 
 /** 적재된 테이블별 행 수. 고지 화면이 데이터의 범위를 밝히는 데 쓴다. */

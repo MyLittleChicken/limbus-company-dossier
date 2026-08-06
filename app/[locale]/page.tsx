@@ -3,8 +3,8 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { NAV_PRIMARY, UI } from '@/lib/ui-text';
-import { getCounts, getBuildInfo } from '@/lib/queries/canonical/reference';
-import { searchAll } from '@/lib/queries/search';
+import { getCounts, getBuildInfo, searchAll } from '@/lib/queries/canonical/reference';
+
 import { one, type SearchParams } from '@/lib/queries/shared';
 import { SearchBox } from '@/components/filters';
 import { Empty, Icon, SecLabel } from '@/components/ui';
