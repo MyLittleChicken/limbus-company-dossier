@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { getIdentity } from '@/lib/queries/identities';
+import { getIdentity } from '@/lib/queries/canonical/detail';
 import { Facts, Icon, IconOnly, Name, Nothing, Panel, SecLabel } from '@/components/ui';
 import { UptieSkills } from '@/components/uptie-skills';
 
@@ -107,7 +107,7 @@ export default async function IdentityDetailPage({
 								[ko ? '시즌' : 'Season', identity.season],
 								[
 									ko ? '출시일' : 'Released',
-									identity.releaseDate.toISOString().slice(0, 10),
+									identity.releaseDate?.toISOString().slice(0, 10) ?? null,
 								],
 							]}
 						/>

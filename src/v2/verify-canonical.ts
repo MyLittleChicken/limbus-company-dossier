@@ -34,6 +34,28 @@ async function main(): Promise<void> {
 		eq('pack_category_path', await prisma.packCategoryPath.count(), 202);
 		eq('floor_pack', await prisma.floorPack.count(), 288);
 
+		// ── 거울 던전 판본 (앱 전환) ────────────────────────────────
+		// 층 표에서 유도한 값이다. 판본이 늘면 여기도 는다
+		eq('mirror_dungeon', await prisma.mirrorDungeon.count(), 1);
+		// loc-ko · en · ja 가 각각 MirrorDungeonName 을 낸다
+		eq('mirror_dungeon_text', await prisma.mirrorDungeonText.count(), 3);
+
+		const md = await prisma.mirrorDungeon.findFirst();
+		checks.push({
+			name: 'mirror_dungeon 이 실측과 같다 — MD7 · 15 · 5',
+			ok: md !== null && md.version === 'MD7' && md.totalFloors === 15 && md.baseFloors === 5,
+			detail: md === null
+				? '없다'
+				: `${md.version} · hard ${md.totalFloors} · normal ${md.baseFloors}`,
+		});
+		// 난이도 접미사가 붙은 이름(「… [NORMAL]」)이 새면 화면이 그걸 판본명으로 쓴다
+		const mdKo = await prisma.mirrorDungeonText.findFirst({ where: { locale: 'ko' } });
+		checks.push({
+			name: 'mirror_dungeon_text 에 난이도 표기가 안 섞였다',
+			ok: mdKo !== null && !mdKo.name.includes('['),
+			detail: mdKo === null ? '없다' : mdKo.name,
+		});
+
 		eq(
 			'tag 유일 종수',
 			(await prisma.packTag.findMany({ distinct: ['tag'], select: { tag: true } })).length,
@@ -708,6 +730,50 @@ async function main(): Promise<void> {
 		// 예전 3,913 은 `mirror-dungeon/loc-*` 를 안 읽어 생긴 거짓 결손 503건만큼 적었다.
 		// 결손이 0이라 수동 보정은 행을 더하지 못하고 덮기만 한다 — 되더할 것이 없다
 		eq('status_text (1,472 × 3언어)', await prisma.statusText.count(), 4_416);
+
+		// 자리표시자가 남은 설명. `Bufs` 의 desc 는 게임이 실행 중에 값을 채우는
+		// 정의문이라 `{0}` 이 그대로 있다 — 표시용인 `BattleKeywords` 를 앞에 둬서
+		// 168건이 사람이 읽는 문장으로 바뀌었다. 남는 5건은 어느 출처에도 채워진
+		// 판이 없다(현행 파이프라인도 같은 것을 보여준다).
+		//
+		// **이 수가 늘면 우선순위가 뒤집힌 것이다.** 용어집 화면이 {0} 을 그린다
+		// **역슬래시를 두 번 쓴다.** 템플릿 문자열이 `\{` 를 `{` 로 삼켜 SQL 에는
+		// 다른 무늬가 간다 — `\[` 를 그렇게 썼다가 `[[A-Za-z]` 라는 문자 클래스가
+		// 되어 모든 글자에 걸린 적이 있다
+		const placeholders = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.status_text
+			 WHERE "desc" ~ '\\{[0-9]\\}'`;
+		eq('설명에 남은 자리표시자 (× 3언어)', Number(placeholders[0]?.n ?? 0n), 15);
+
+		// 표제어 치환이 끝났나. `desc` 는 표시용이고 `desc_raw` 가 원문이다 —
+		// 대괄호 표기가 남으면 화면이 그것을 그대로 그린다.
+		//
+		// **0 이 아니고, 로케일마다 크게 다르다.** 이유가 셋이다.
+		//
+		//   ko  35     term 에 id 는 있으나 term_text 에 이름이 없는 표제어
+		//              (TabExplain 등 29종). 원문을 유지한다 — 지우면 문장이
+		//              무너지고 만들어내면 없는 말을 짓는 것이 된다
+		//   en  4,105  영어 문장이 원래 대괄호로 인쇄하는 표시가 있다 —
+		//              [On Use] 1,649 · [Indiscriminate] 490 · [Combat Start] 398.
+		//              표제어가 아니라 게임 표기다. 한국어는 「[사용 시]」라
+		//              영문 무늬에 안 걸린다
+		//   ja  4,331  사전이 ko·en 뿐이다. 원본이 그렇고 현행도 같다
+		//
+		// **이 수가 늘면 치환이 빠진 것이다.**
+		const tokens = await prisma.$queryRaw<Array<{ locale: string; n: bigint }>>`
+			SELECT locale, count(*)::bigint AS n FROM (
+				SELECT locale, "desc" FROM canonical.gift_stage_text
+				UNION ALL SELECT locale, "desc" FROM canonical.skill_stage_text
+				UNION ALL SELECT locale, "desc" FROM canonical.passive_text
+				UNION ALL SELECT locale, "desc" FROM canonical.ego_skill_stage_text
+				UNION ALL SELECT locale, "desc" FROM canonical.ego_passive_text
+				UNION ALL SELECT locale, "desc" FROM canonical.status_text
+			) t WHERE "desc" ~ '\\[[A-Za-z]' GROUP BY locale`;
+		const tokenOf = (locale: string) =>
+			Number(tokens.find((r) => r.locale === locale)?.n ?? 0n);
+		eq('한국어에 남은 표제어 표기 (사전에 이름이 없다)', tokenOf('ko'), 35);
+		eq('영어에 남은 표제어 표기 (게임 표기 포함)', tokenOf('en'), 4_105);
+		eq('일본어에 남은 표제어 표기 (사전이 ko·en 뿐이다)', tokenOf('ja'), 4_331);
 		eq('status_category', await prisma.statusCategory.count(), 163);
 		eq('sin_info', await prisma.sinInfo.count(), 7);
 		eq('sin_text', await prisma.sinText.count(), 14);

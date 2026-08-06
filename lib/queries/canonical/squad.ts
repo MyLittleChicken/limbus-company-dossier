@@ -1,5 +1,5 @@
 import type { Locale } from '@prisma/client';
-import { db } from '@/lib/db';
+import { canonical } from '@/lib/db-canonical';
 import {
 	egoImage,
 	egoRankIcon,
@@ -12,21 +12,21 @@ import {
 } from '@/lib/assets';
 import { statusKeyOf, type StatusKey } from '@/lib/engine/vocab';
 import { EGO_RANKS } from '@/lib/storage/schema';
-import { localeFilter, nameOf } from './shared';
+import { localeRows, nameOf } from './locale';
 
 /**
  * 편성 — 수감자 축으로 인격과 E.G.O 를 함께 보는 화면.
+ *
+ * **현행 `lib/queries/squad.ts` 를 대체한다.** 반환 모양은 같고 층만 다르다.
  *
  * **이 축이 필요한 이유는 E.G.O 가 인격이 아니라 수감자에 붙기 때문이다**(`Ego.sinnerId`).
  * 인격 상세에 E.G.O 를 싣지 않기로 했으므로(05-ui-foundation 4.3) 둘을 함께 보는 자리가
  * 따로 있어야 한다.
  *
- * **선택 축을 함께 싣는다.** 편성 칸이 표시 전용이 되고 고르는 일이 필터 모달로 나가면
- * (`reference/v1-formation-ui.md` 1절) 그 모달이 키워드·죄악·공격 타입·기믹·소속으로 걸러야
- * 한다. 다섯 축은 인격 이름 옆에 없고 관계 테이블에 있다 — 여기서 한 번에 가져온다.
- *
  * **설명문은 싣지 않는다.** 표시 문자열 7,498 KB 를 내보내지 않는다는 제약이 그대로다
  * (ADR-05 3.3). 여기서 나가는 것은 이름과 축 태그뿐이다.
+ *
+ * `statusKeyOf` 는 `lib/engine/vocab` 의 순수 어휘다 — DB 를 안 보므로 층과 무관하다.
  */
 
 /** 인격을 서술하는 축은 셋이다 — 키워드 · 소속 · 상태 기믹(05-ui-foundation 4.3). */
@@ -34,25 +34,50 @@ const MECHANIC_KEYS: readonly StatusKey[] = ['ammo', 'protection'];
 
 const isMechanic = (key: StatusKey): boolean => MECHANIC_KEYS.includes(key);
 
+/**
+ * 인격 이름은 `title` 이다 — `canonical/detail.ts` 와 같은 함정이다.
+ * `identity_text.name` 은 수감자 이름이라 그걸 쓰면 한 수감자의 카드가 전부 같아진다.
+ */
+function identityName(
+	rows: Array<{ locale: string; name: string; title: string | null }>,
+	locale: Locale,
+) {
+	const pick = rows.find((r) => r.locale === locale) ?? rows.find((r) => r.locale === 'en');
+	if (!pick) return null;
+	return {
+		name: (pick.title ?? pick.name).replace(/\s+/g, ' ').trim(),
+		fellBack: pick.locale !== locale,
+	};
+}
+
 export async function listSquad(locale: Locale) {
-	const sinners = await db.sinner.findMany({
+	const sinners = await canonical.sinner.findMany({
 		orderBy: { id: 'asc' },
 		include: {
-			texts: localeFilter(locale),
+			texts: localeRows(locale),
 			identities: {
-				orderBy: [{ rarity: 'desc' }, { id: 'asc' }],
+				orderBy: [{ star: 'desc' }, { id: 'asc' }],
 				include: {
-					texts: localeFilter(locale),
+					texts: localeRows(locale),
 					statuses: { select: { statusId: true } },
-					affiliations: { include: { affiliation: { include: { texts: localeFilter(locale) } } } },
+					associations: { include: { association: { include: { texts: localeRows(locale) } } } },
 					// 공격 스킬만 본다. 방어 스킬은 죄악 자원을 만들지 않는다.
-					skills: { where: { defType: 'attack' }, select: { affinity: true, atkType: true } },
+					skills: {
+						where: { skill: { kind: 'attack' } },
+						select: { skill: { select: { sin: true, attackType: true } } },
+					},
 				},
 			},
 			egos: {
+				/**
+				 * **연출 전용 5종을 뺀다.** 캐노니컬은 컷신에만 나오는 E.G.O 를 담는데
+				 * (`presentationOnly`) 그쪽은 등급도 각성 속성도 없다 — 플레이할 수
+				 * 없으니 편성에 못 넣는다. 현행 스키마는 그 다섯을 아예 안 담았다.
+				 */
+				where: { presentationOnly: false },
 				orderBy: [{ rank: 'asc' }, { id: 'asc' }],
 				include: {
-					texts: localeFilter(locale),
+					texts: localeRows(locale),
 					costs: true,
 					statuses: { select: { statusId: true } },
 				},
@@ -72,11 +97,11 @@ export async function listSquad(locale: Locale) {
 				if (key) keys.add(key);
 			}
 			return {
-				id: i.id,
-				rarity: i.rarity,
+				id: Number(i.id),
+				rarity: i.star,
 				season: i.season,
-				image: identityImage(i.id, 'profile'),
-				text: nameOf(i.texts, locale),
+				image: identityImage(Number(i.id), 'profile'),
+				text: identityName(i.texts, locale),
 				keywords: [...keys].filter((k) => !isMechanic(k)),
 				// 키워드와 섞지 않는다. 기프트를 나누는 분류가 아니라 인격이 공급하는 자원이다.
 				mechanics: [...keys].filter(isMechanic),
@@ -91,36 +116,43 @@ export async function listSquad(locale: Locale) {
 				 * 다르기 때문이며, 화면이 그 값을 옮겨 적는 것이 아니라는 뜻이다.
 				 */
 				skillSins: i.skills
-					.map((k) => k.affinity)
+					.map((k) => k.skill.sin)
 					.filter((v): v is NonNullable<typeof v> => v !== null),
 				atkTypes: [
 					...new Set(
-						i.skills.map((k) => k.atkType).filter((v): v is NonNullable<typeof v> => v !== null),
+						i.skills
+							.map((k) => k.skill.attackType)
+							.filter((v): v is NonNullable<typeof v> => v !== null),
 					),
 				],
-				affiliations: i.affiliations.map((a) => ({
-					id: a.affiliationId,
-					text: nameOf(a.affiliation.texts, locale),
+				affiliations: i.associations.map((a) => ({
+					id: a.associationId,
+					text: nameOf(a.association.texts, locale),
 				})),
 			};
 		}),
-		egos: s.egos.map((e) => {
+		egos: s.egos.flatMap((e) => {
+			// 등급·각성 속성이 없는 E.G.O 는 편성 카드를 못 그린다. 질의에서 이미
+			// 연출 전용을 뺐지만 타입은 그것을 모르므로 여기서 한 번 더 좁힌다 —
+			// 값이 없으면 지어내지 않고 목록에서 뺀다
+			if (e.rank === null || e.sin === null || e.attackType === null) return [];
+
 			const keys = new Set<StatusKey>();
 			for (const st of e.statuses) {
 				const key = statusKeyOf(st.statusId);
 				if (key) keys.add(key);
 			}
-			return {
-				id: e.id,
+			return [{
+				id: Number(e.id),
 				rank: e.rank,
-				image: egoImage(e.id, 'awaken'),
+				image: egoImage(Number(e.id), 'awaken'),
 				text: nameOf(e.texts, locale),
-				awakenAffinity: e.awakenAffinity,
-				awakenAtkType: e.awakenAtkType,
+				awakenAffinity: e.sin,
+				awakenAtkType: e.attackType,
 				keywords: [...keys],
 				// 죄악 자원 소모는 E.G.O 기능의 핵심이다(02-data-model 3.4).
-				costs: e.costs.map((c) => ({ sin: c.sin, amount: c.amount })),
-			};
+				costs: e.costs.map((c) => ({ sin: c.sin, amount: c.count })),
+			}];
 		}),
 	}));
 }
@@ -130,18 +162,9 @@ export type SquadIdentity = SquadSinner['identities'][number];
 export type SquadEgo = SquadSinner['egos'][number];
 
 /**
- * 필터 축의 표시 이름과 아이콘.
+ * 기믹 상태의 원본 id. 축 키와 이름이 달라 표로 잇는다.
  *
- * **이름을 우리가 짓지 않는다**(00-product 3절 · ADR-03). 키워드 10종(상태 7 + 공격 타입 3)과
- * 죄악 7종은 게임이 표기를 갖고 있어 `keyword` · `sin_info` 로케일 행에서 온다.
- *
- * 상태 기믹 둘은 그 표에 없다 — 게임의 키워드 분류가 아니라 우리가 세운 축이기 때문이다
- * (`backlog/04-status-mechanics.md`). 대신 같은 이름의 상태 행이 실재하므로 거기서 가져온다
- * (`Bullet` 탄환 · `Protection` 보호). 어느 쪽에도 없으면 **축 id 를 그대로 노출한다.**
- *
- * **아이콘 경로도 여기서 푼다.** `lib/assets.ts` 는 파일 시스템 인덱스라 서버 전용이고,
- * 편성 화면의 칸·모달·프로필은 클라이언트 컴포넌트다. 경로 해석을 한 모듈에 모은다는 제약
- * (ADR-05 6절 제약 2)이 곧 "화면이 직접 부르지 않는다"는 뜻이 된다 — 푼 값을 실어 보낸다.
+ * 캐노니컬도 같은 id 를 쓴다 — `canonical/list.ts` 의 `MECHANICS` 와 같은 둘이다.
  */
 const MECHANIC_STATUS_ID: Record<string, StatusKey> = { Bullet: 'ammo', Protection: 'protection' };
 
@@ -150,11 +173,11 @@ const RARITIES = [1, 2, 3] as const;
 
 export async function listSquadAxes(locale: Locale) {
 	const [keywords, sins, mechanics] = await Promise.all([
-		db.keyword.findMany({ orderBy: { order: 'asc' }, include: { texts: localeFilter(locale) } }),
-		db.sinInfo.findMany({ orderBy: { order: 'asc' }, include: { texts: localeFilter(locale) } }),
-		db.status.findMany({
+		canonical.keyword.findMany({ orderBy: { order: 'asc' }, include: { texts: localeRows(locale) } }),
+		canonical.sinInfo.findMany({ orderBy: { order: 'asc' }, include: { texts: localeRows(locale) } }),
+		canonical.status.findMany({
 			where: { id: { in: Object.keys(MECHANIC_STATUS_ID) } },
-			include: { texts: localeFilter(locale) },
+			include: { texts: localeRows(locale) },
 		}),
 	]);
 

@@ -42,7 +42,9 @@
     "v2:rollback": "tsx --env-file-if-exists=.env src/v2/promote-canonical.ts rollback",
     "engine:proof": "tsx --env-file-if-exists=.env src/engine-proof.ts",
     "v2:gap-report": "tsx --env-file-if-exists=.env src/v2/gap-report.ts",
-    "v2:reproduce": "tsx --env-file-if-exists=.env src/v2/reproduce.ts"
+    "v2:reproduce": "tsx --env-file-if-exists=.env src/v2/reproduce.ts",
+    "golden:capture": "tsx --env-file-if-exists=.env scripts/golden-queries.ts capture",
+    "golden:compare": "tsx --env-file-if-exists=.env scripts/golden-queries.ts compare"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

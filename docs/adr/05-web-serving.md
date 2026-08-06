@@ -34,6 +34,23 @@
 | 데이터 접근 | **Prisma Client로 PostgreSQL을 직접 질의한다.** 읽기 전용 산출물을 따로 만들지 않는다 |
 | 배포 환경 | **정하지 않는다**(3.5). 2단계의 실행 환경은 로컬이다 |
 
+> **후속 — 읽는 층이 바뀌었다** (2026-08-06 · 앱 전환)
+>
+> 이 결정은 그대로다. 바뀐 것은 **어느 스키마를 읽는가**이다.
+>
+> ```
+> 지금까지  public 52테이블.  별도 파이프라인이 채우고 lib/engine/vocab.ts 가 받쳤다
+> 이제부터  canonical 97테이블.  적재기가 굽고 검사 222건이 지키며
+>           v2:verify:rebuild 가 재현을 보증한다(ADR-08)
+> ```
+>
+> 클라이언트도 둘이다 — `lib/db.ts`(public) · `lib/db-canonical.ts`(raw·canonical·app).
+> **화면이 어느 층을 읽는지가 import 로 드러난다.**
+>
+> `public` 을 읽는 곳은 `lib/engine/load.ts` 하나만 남았다. 추천 화면이 그 엔진을
+> 통해 아직 그 층을 보며, 그것을 옮기는 것은 화면 계약이 바뀌는 작업이라 따로 간다.
+> 설계는 [`2026-08-05-app-cutover-design.md`](../superpowers/specs/2026-08-05-app-cutover-design.md).
+
 ## 3. 근거
 
 ### 3.1 Next.js

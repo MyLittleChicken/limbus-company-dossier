@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { getCounts, getDataset } from '@/lib/queries/reference';
+import { getCounts, getBuildInfo } from '@/lib/queries/canonical/reference';
 import { Facts, Panel, SecLabel } from '@/components/ui';
 
 /**
@@ -23,7 +23,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
 
 	const t = UI[locale];
 	const ko = locale === 'ko';
-	const [dataset, counts] = await Promise.all([getDataset(), getCounts()]);
+	const [build, counts] = await Promise.all([getBuildInfo(), getCounts()]);
 
 	return (
 		<>
@@ -89,15 +89,12 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
 
 				<aside>
 					<Panel title={ko ? '기준 버전' : 'Dataset'}>
-						{dataset ? (
+						{build ? (
 							<Facts
 								rows={[
-									[ko ? '게임 버전' : 'Game version', dataset.gameVersion],
-									[ko ? '거울 던전' : 'Mirror Dungeon', dataset.mdVersion ?? '—'],
-									[
-										ko ? '스냅샷' : 'Snapshot',
-										dataset.snapshotDate.toISOString().slice(0, 10),
-									],
+									[ko ? '게임 버전' : 'Game version', build.gameAnchor ?? '—'],
+									[ko ? '거울 던전' : 'Mirror Dungeon', build.mdVersion ?? '—'],
+									[ko ? '스냅샷' : 'Snapshot', build.snapshotId],
 								]}
 							/>
 						) : null}
