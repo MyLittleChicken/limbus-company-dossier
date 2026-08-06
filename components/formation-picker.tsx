@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EGO_RANKS, type EgoRank } from '@/lib/storage/schema';
-import type { SquadAxes, SquadEgo, SquadIdentity, SquadSinner } from '@/lib/queries/squad';
+import type { SquadAxes, SquadEgo, SquadIdentity, SquadSinner } from '@/lib/queries/canonical/squad';
 
 /**
  * 편성 선택 모달.

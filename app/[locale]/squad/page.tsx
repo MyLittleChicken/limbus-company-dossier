@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { listSquad, listSquadAxes } from '@/lib/queries/squad';
+import { listSquad, listSquadAxes } from '@/lib/queries/canonical/squad';
 import { Icon, IconOnly, IconTag, Name, Nothing, SecLabel } from '@/components/ui';
 import { DeckEditor } from '@/components/deck-editor';
 import { egoRankIcon, rarityIcon, sinIcon } from '@/lib/assets';

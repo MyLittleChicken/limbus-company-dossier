@@ -6,7 +6,7 @@ import { FormationPicker, type PickMode } from '@/components/formation-picker';
 import { FormationProfile, type ProfileInput } from '@/components/formation-profile';
 import { readDecks, writeDecks } from '@/lib/storage/decks';
 import { DECK_MAX, DEPLOY_MAX, EGO_RANKS, emptyDeck, type EgoRank, type StoredDeck } from '@/lib/storage/schema';
-import type { SquadAxes, SquadSinner } from '@/lib/queries/squad';
+import type { SquadAxes, SquadSinner } from '@/lib/queries/canonical/squad';
 
 /**
  * 편성 편집.

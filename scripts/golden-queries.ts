@@ -94,6 +94,7 @@ async function casesV2(): Promise<Case[]> {
 	const gifts = await import('../lib/queries/canonical/gifts.js');
 	const packs = await import('../lib/queries/canonical/packs.js');
 	const detail = await import('../lib/queries/canonical/detail.js');
+	const squad = await import('../lib/queries/canonical/squad.js');
 
 	return [
 		{ name: 'reference.listFloorPacks', run: () => ref.listFloorPacks('ko') },
@@ -112,6 +113,8 @@ async function casesV2(): Promise<Case[]> {
 		{ name: 'packs.getPack.1309', run: () => detail.getPack('1309', 'ko') },
 		{ name: 'identities.getIdentity.10208', run: () => detail.getIdentity(10208, 'ko') },
 		{ name: 'egos.getEgo.20509', run: () => detail.getEgo(20509, 'ko') },
+		{ name: 'squad.listSquad', run: () => squad.listSquad('ko') },
+		{ name: 'squad.listSquadAxes', run: () => squad.listSquadAxes('ko') },
 	];
 }
 
