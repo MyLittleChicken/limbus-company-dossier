@@ -63,7 +63,24 @@ test('ego 행이 두 출처를 합쳐 나온다', () => {
 		id: '20101', sinnerId: 1, rank: 'ZAYIN', sin: 'sloth', attackType: 'pierce',
 		season: 0, releaseDate: '2023-02-27', maxThreadspin: 5, extractable: true,
 		presentationOnly: false,
+		// 픽스처에 corrosionType 이 없다 — 침식이 없는 E.G.O 12종이 그 모양이다
+		corrosionSin: null, corrosionAttackType: null,
 	});
+});
+
+test('침식 속성은 assets corrosionType 에서 온다 — 각성과 다를 수 있다', () => {
+	const i = input();
+	const row = i.assets.get('20101');
+	assert.ok(row, '픽스처에 20101 이 있어야 한다');
+	(row as Record<string, unknown>)['corrosionType'] = { type: 'slash', affinity: 'pride' };
+
+	const t = buildEgos(i, new Meta());
+	const e = t.ego.find((x) => x.id === '20101');
+	assert.equal(e?.corrosionSin, 'pride');
+	assert.equal(e?.corrosionAttackType, 'slash');
+	// 각성 쪽은 안 바뀐다
+	assert.equal(e?.sin, 'sloth');
+	assert.equal(e?.attackType, 'pierce');
 });
 
 test('연출 전용 5건이 플래그로 갈린다', () => {
