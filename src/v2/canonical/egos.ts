@@ -67,6 +67,14 @@ export interface EgoRow {
 	maxThreadspin: number | null;
 	extractable: boolean;
 	presentationOnly: boolean;
+	/**
+	 * 침식 시 죄악 속성과 공격 타입. **각성과 다를 수 있다.**
+	 *
+	 * assets `corrosionType: {type, affinity}` 에서 온다. 침식이 없는 E.G.O 가
+	 * 12종 있어 null 이다(실측 110 중 98 이 값을 갖는다) — 현행과 같은 수다.
+	 */
+	corrosionSin: string | null;
+	corrosionAttackType: string | null;
 }
 
 export interface EgoTextRow {
@@ -323,6 +331,12 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 		const rarity = str(m, 'rarity');
 		const rank = str(a, 'rank') ?? (rarity === null ? null : rarity.toUpperCase());
 
+		// 침식 속성. assets 만 갖고 있으며 각성과 다를 수 있다
+		const corrosion = (a as Record<string, unknown>)['corrosionType'];
+		const corrosionObj = typeof corrosion === 'object' && corrosion !== null
+			? (corrosion as Record<string, unknown>)
+			: null;
+
 		t.ego.push({
 			id,
 			sinnerId,
@@ -334,6 +348,8 @@ export function buildEgos(input: EgoInput, meta: Meta): EgoTables {
 			maxThreadspin: num(a, 'maxThreadspin'),
 			extractable: bool(a, 'extractable'),
 			presentationOnly,
+			corrosionSin: corrosionObj === null ? null : str(corrosionObj, 'affinity'),
+			corrosionAttackType: corrosionObj === null ? null : str(corrosionObj, 'type'),
 		});
 		meta.source('ego', id, 'core', presentationOnly ? 'loc-only' : 'mj+assets', [
 			presentationOnly ? LOC : MJ,

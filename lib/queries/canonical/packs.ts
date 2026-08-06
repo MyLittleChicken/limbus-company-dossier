@@ -1,4 +1,9 @@
+import type { Locale } from '@prisma/client';
+import type { Prisma } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
+import { packIcon } from '@/lib/assets';
+import { one, type SearchParams } from '@/lib/queries/shared';
+import { localeRows, nameOf } from './locale';
 
 /**
  * 팩 분류 태그.
@@ -16,4 +21,56 @@ export async function listCollabPackIds(): Promise<Set<string>> {
 		select: { packId: true },
 	});
 	return new Set(rows.map((r) => r.packId));
+}
+
+export interface PackFilter {
+	q?: string | undefined;
+}
+
+export function readPackFilter(params: SearchParams): PackFilter {
+	return { q: one(params['q'])?.trim() || undefined };
+}
+
+/**
+ * 테마 팩 목록.
+ *
+ * **이 함수가 서면 팩 목록 화면이 한 층만 읽는다.** 지금까지는 이 파일의
+ * `listCollabPackIds` 와 현행 `lib/queries/packs.ts` 의 `listPacks` 를 함께 썼다.
+ */
+export async function listPacks(locale: Locale, filter: PackFilter) {
+	const and: Prisma.PackWhereInput[] = [];
+	if (filter.q) {
+		and.push({
+			texts: {
+				some: { locale: { in: [locale, 'en'] }, name: { contains: filter.q, mode: 'insensitive' } },
+			},
+		});
+	}
+
+	const rows = await canonical.pack.findMany({
+		where: and.length ? { AND: and } : {},
+		orderBy: [{ category: 'asc' }, { id: 'asc' }],
+		include: {
+			texts: localeRows(locale),
+			floors: true,
+			_count: { select: { gifts: true, exclusiveGifts: true, bosses: true } },
+		},
+	});
+
+	return rows.map((p) => ({
+		id: p.id,
+		category: p.category,
+		variant: p.variant,
+		chapter: p.chapter,
+		superposition: p.superposition,
+		extreme: p.extreme,
+		icon: packIcon(p.sprite),
+		// 카드가 봉지·보스·이름을 겹쳐 내므로 스프라이트 키 자체가 필요하다.
+		sprite: p.sprite,
+		text: nameOf(p.texts, locale),
+		giftCount: p._count.gifts,
+		exclusiveCount: p._count.exclusiveGifts,
+		bossCount: p._count.bosses,
+		floors: p.floors.map((f) => ({ difficulty: f.difficulty, range: f.floorRange })),
+	}));
 }

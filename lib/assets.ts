@@ -132,8 +132,14 @@ const capitalize = (value: string): string => value.charAt(0).toUpperCase() + va
 export const atkTypeIcon = (atkType: string): string | null =>
 	lookup('icons', capitalize(atkType));
 
-export const defTypeIcon = (defType: string): string | null =>
-	defType === 'attack' ? null : lookup('icons', capitalize(defType));
+/**
+ * 스킬 종류 아이콘.
+ *
+ * **`null` 을 받는다.** 캐노니컬의 `skill.kind` 가 nullable 이다 — 지금 1,045종
+ * 전부 차 있지만, 없을 수 있는 것을 타입이 말해야 한다(`giftIcon` 과 같은 이유).
+ */
+export const defTypeIcon = (defType: string | null): string | null =>
+	defType === null || defType === 'attack' ? null : lookup('icons', capitalize(defType));
 
 /** E.G.O 등급. enum 은 대문자이고 파일명은 소문자다. */
 export const egoRankIcon = (rank: string): string | null => lookup('icons', rank.toLowerCase());
@@ -199,12 +205,14 @@ export const uiIcon = (key: string): string | null => lookup('icons', key);
  */
 export function skillFrame(
 	affinity: string | null,
-	tier: number,
-	defType: string,
+	tier: number | null,
+	defType: string | null,
 ): { frame: string | null; background: string | null } {
 	// 방어 스킬과 죄악이 없는 스킬(131건)은 죄악별 프레임이 없다.
+	// tier·defType 이 null 인 스킬은 지금 없지만 캐노니컬 스키마가 nullable 이다 —
+	// 없으면 죄악별 프레임을 고를 근거가 없으므로 방어 프레임으로 떨어진다
 	const key =
-		defType !== 'attack' || !affinity
+		defType !== 'attack' || !affinity || tier === null
 			? 'def'
 			: // tier 4 가 1건 있으나 프레임은 3까지다. 넘치면 가장 높은 것을 쓴다.
 				`${affinity}-${Math.min(Math.max(tier, 1), 3)}`;

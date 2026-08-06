@@ -631,6 +631,8 @@ CREATE TABLE "canonical"."ego" (
     "max_threadspin" INTEGER,
     "extractable" BOOLEAN NOT NULL DEFAULT false,
     "presentation_only" BOOLEAN NOT NULL DEFAULT false,
+    "corrosion_sin" "canonical"."Sin",
+    "corrosion_attack_type" "canonical"."AtkType",
 
     CONSTRAINT "ego_pkey" PRIMARY KEY ("id")
 );

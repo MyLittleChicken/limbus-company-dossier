@@ -1222,6 +1222,11 @@ model Ego {
   extractable   Boolean  @default(false)
   /// 컷신 전용이라 플레이할 수 없다. loc 에만 있는 5건
   presentationOnly Boolean @default(false) @map("presentation_only")
+  /// 침식 시 죄악 속성. **각성과 다를 수 있다.** assets corrosionType.affinity.
+  /// 침식이 없는 E.G.O 가 12종 있다(실측 110 중 98 이 값을 갖는다)
+  corrosionSin        Sin?     @map("corrosion_sin")
+  /// 침식 시 공격 타입. assets corrosionType.type
+  corrosionAttackType AtkType? @map("corrosion_attack_type")
 
   sinner       Sinner           @relation(fields: [sinnerId], references: [id])
   texts        EgoText[]
