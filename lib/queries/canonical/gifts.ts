@@ -266,21 +266,19 @@ export async function listAllGifts(locale: Locale) {
 		include: {
 			stages: baseStage(locale),
 			keyword: { include: { texts: localeRows(locale) } },
-			_count: { select: { packs: true, exclusivePacks: true } },
+			_count: { select: { exclusivePacks: true } },
 		},
 	});
 
+	// **목록 질의보다 좁은 모양이다.** 456장을 한 번에 내려보내므로 화면이 안 쓰는
+	// 필드를 실으면 그만큼 페이로드가 는다(ADR-05 3.3).
 	return rows.map((g) => ({
 		id: Number(g.id),
 		tier: tierOf(g),
-		enhanceable: g.enhanceable,
-		hardOnly: g.hardOnly,
-		mdCost: g.cost,
 		icon: giftIcon(g.sprite),
 		text: nameOf(g.stages[0]?.texts ?? [], locale),
 		keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
 		keywordId: g.keywordId,
-		packCount: g._count.packs,
 		exclusiveCount: g._count.exclusivePacks,
 	}));
 }

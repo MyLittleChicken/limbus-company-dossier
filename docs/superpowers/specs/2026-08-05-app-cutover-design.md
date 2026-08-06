@@ -226,7 +226,85 @@ keyword           12        10   ← 둘 늘었다
 어느 것이 왜 늘었는지는 골든 대조에서 이름으로 나온다 — 그것이 백로그 01
 (특성 키워드)의 해소인지 다른 것인지 그때 판정한다.
 
-## 8. 범위 밖 — 그다음
+## 8. 구현 결과
+
+### 8.1 파일
+
+```
+lib/queries/canonical/
+  locale.ts     신규.  캐노니컬 전용 로케일 공통부
+  reference.ts  신규.  참조 화면 다섯 + 통합 검색
+  gifts.ts      신규.  기프트 목록·상세
+  detail.ts     신규.  인격·E.G.O·팩 상세
+  squad.ts      신규.  편성 편집
+  packs.ts      수정.  19줄 → 목록까지
+  list.ts       그대로
+
+lib/queries/{gifts,identities,egos,packs,reference,search,squad}.ts   삭제 (1,535줄)
+
+src/v2/canonical/mirror-dungeon.ts   신규.  판본·층수 유도
+src/v2/canonical/statuses.ts         설명 출처 우선순위
+src/v2/canonical/markup.ts           substituteTokens
+src/v2/canonical/egos.ts             침식 속성
+src/v2/load-canonical.ts             던전 적재 · 표제어 치환 후처리
+prisma/v2/schema.prisma              mirror_dungeon · mirror_dungeon_text · 침식 열 둘
+scripts/golden-queries.ts            신규.  골든 대조 도구
+```
+
+### 8.2 검증 수치
+
+```
+검사        222건 전부 통과 (218 → 222)
+테스트      473건 전부 통과(건너뜀 12)
+빌드        next build 통과.  화면 16개
+골든        20건 중 6건 완전 일치.  **반환 키 집합은 20건 전부 v1 과 같다**
+public      읽는 곳이 lib/engine/load.ts 하나로 줄었다
+```
+
+### 8.3 적재기에서 고친 것 셋
+
+**설계에 없던 것이다.** 화면을 옮기다 캐노니컬 쪽 결손이 드러났다.
+
+```
+상태 설명 출처      Bufs(정의문) 우선 → BattleKeywords(표시용) 우선
+                  자리표시자 519행 → 15행.  「{0}」이 화면에 보이던 자리
+표제어 치환        descOf 가 stripMarkup 만 하고 substituteTokens 를 안 했다
+                  다섯 표 14,954행.  「[Combustion]」이 화면에 보이던 자리
+E.G.O 침식 속성    assets corrosionType 을 안 읽어 통째로 없었다.  98/115
+```
+
+**앞 둘이 값이 바뀌는 승격을 처음 태웠다** — ADR-07 §6 의 마지막 미검증 항목이
+이 PR 에서 닫혔다.
+
+### 8.4 골든이 잡은 회귀 넷
+
+```
+은총 설명       중첩 배열을 안 폈다 — 현행은 적재 시점에 이어 붙였다
+키워드 「없음」   캐노니컬은 null 이 아니라 None 행이다.  축복 기프트 판정이 빗나갔다
+인격 이름       identity_text.name 은 수감자 이름이다.  title 이 인격 이름이다
+listAllGifts   반환 모양이 넓어졌다.  456장에 필드 넷을 더 실을 뻔했다
+```
+
+### 8.5 화면 계약이 바뀐 자리
+
+```
+dataset 표기     getBuildInfo 로.  보여주던 셋은 전부 대응이 있다
+키워드 id        burn → Combustion.  URL 필터 값이 바뀐다 (승인)
+getCounts        gifts 456→582 · affiliations 93→64.  세는 대상이 다르다
+죄악 차례        게임 차례로 고정.  현행은 원본 JSON 키 순서라 E.G.O 마다 달랐다
+연출 전용 E.G.O   편성 목록에서 뺀다.  등급도 각성 속성도 없어 카드를 못 그린다
+```
+
+### 8.6 검증하지 못한 것
+
+```
+백로그 02·07·08·09   화면은 옮겼으나 이 항목들의 해소를 골든이 못 짚었다.
+                    01(특성 키워드)만 실증됐다 — affiliations 93→64
+recommend 화면       범위 밖.  아직 public 과 레거시 엔진을 읽는다
+DROP SCHEMA public   못 한다.  읽는 곳이 하나 남았다
+```
+
+## 9. 범위 밖 — 그다음
 
 ```
 recommend 전환 · DROP SCHEMA public   M4.  화면 계약이 바뀌는 작업
