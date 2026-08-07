@@ -528,9 +528,19 @@ const MECHANIC_AXES = new Set(['BULLET', 'PROTECTION']);
 				// … 나머지는 그대로
 ```
 
-E.G.O 쪽도 `statuses` 를 쓴다. **거긴 안 바꾼다** — `ego_status` 는 축이 아니라 상태 목록이고
-`identity_axis` 같은 대응 표가 없다. `statusKeyOf` 가 사라지므로 **E.G.O 의 `keywords` 는
-빈 배열이 된다.**
+**E.G.O 쪽도 축으로 바꾼다.** 계획 초안은 「대응 표가 없으니 빈 배열로 둔다」였는데
+**Task 1 의 실측이 그것을 뒤집었다** — E.G.O 110 중 **97 이 keywords 를 갖는다.**
+비우면 실제 손실이다.
+
+대체 경로가 있다. `ego_status → status_category → axis` 로 94종이 나오고, 20106 이
+`SINKING` 으로 현행과 같다. **인격의 `special_status` 경로와 같은 유도다** — 다만
+`identity_axis` 처럼 굳혀진 표가 없어 질의에서 조인한다.
+
+```
+현행 statusKeyOf 경로   97/110
+캐노니컬 조인 경로       94/110
+차이 3                 무엇인지 Step 4 에서 확인한다
+```
 
 ```typescript
 			return [{
