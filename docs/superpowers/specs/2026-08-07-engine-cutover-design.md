@@ -276,6 +276,19 @@ public 참조      grep -rn "@/lib/db'"  → 0건.  이 PR 의 완료 조건
 덤프             4.9 MB → 저장소 밖 ../limbus-db-backups/public-retired.sql
 ```
 
+**로컬 통과가 CI 통과를 뜻하지 않았다.** CI 가 `npm run generate` 를 부르는데
+그 스크립트를 v1 스키마와 함께 지웠다. 로컬에서는 생성된 클라이언트가 이미
+있어 그 단계를 건너뛸 수 있어서 안 걸렸다.
+
+```
+지우는 작업의 검증에는 한 줄이 더 든다
+  rm -rf src/v2/generated && npm run v2:generate && npm run typecheck && npm run build
+```
+
+**「지웠다」의 검증 범위는 `grep` 이 닿는 코드보다 넓다** — CI 워크플로 ·
+npm 스크립트 · tsconfig 처럼 문자열로만 참조하는 자리는 타입 검사가 못 잡는다.
+이 PR 에서 그 셋을 다 고쳤지만, 마지막 하나는 CI 가 깨진 뒤에야 봤다.
+
 ## 10. 범위 밖 — 그다음
 
 ```
