@@ -1,4 +1,4 @@
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 import { pickLocale } from '@/lib/locale';
 
 /**

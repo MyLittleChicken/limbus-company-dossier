@@ -1,4 +1,4 @@
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 import { canonical } from '@/lib/db-canonical';
 import {
 	egoImage,

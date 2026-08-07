@@ -54,24 +54,11 @@ jobs:
           npm run v2:generate
 
       - name: 스키마 검증
-        run: |
-          npm run schema:validate
-          npm run v2:schema:validate
+        run: npm run v2:schema:validate
 
-      # prisma/schema.sql 은 schema.prisma 에서 뽑은 산출물이고 손으로 고치지 않는다
-      # (docs/adr/02-pipeline.md 3.2). 둘이 어긋난 채 병합되면 `db:ddl` 이 만든
-      # 데이터베이스가 코드가 믿는 모양과 달라진다. 재생성해서 대조한다.
-      - name: DDL 드리프트 — schema.sql 이 schema.prisma 와 동기인가
-        run: |
-          npx prisma migrate diff \
-            --from-empty \
-            --to-schema-datamodel prisma/schema.prisma \
-            --script > "$RUNNER_TEMP/schema.sql"
-          if ! diff -u prisma/schema.sql "$RUNNER_TEMP/schema.sql"; then
-            echo "::error file=prisma/schema.sql::schema.prisma 와 어긋난다. \`npm run schema:ddl\` 로 재생성해 커밋한다."
-            exit 1
-          fi
-
+      # v1 스키마의 드리프트 검사는 없어졌다. `prisma/schema.prisma` 와
+      # `prisma/schema.sql` 을 지웠기 때문이다 — 그것을 읽던 적재기·검증기도 함께
+      # 갔다. 남은 스키마는 v2 하나뿐이다.
       - name: DDL 드리프트 — v2 (raw · canonical · app)
         run: |
           npx prisma migrate diff \

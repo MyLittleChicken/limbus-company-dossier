@@ -1,4 +1,4 @@
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 
 /**
  * 목록 카드가 다는 팩 종류표.

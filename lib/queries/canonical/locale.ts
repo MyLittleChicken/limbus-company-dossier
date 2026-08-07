@@ -1,4 +1,4 @@
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 import type { $Enums } from '@/src/v2/generated/client';
 import type { Named } from '@/lib/queries/shared';
 
