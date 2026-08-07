@@ -177,7 +177,12 @@ export async function recommendForDeck(
 	// 덱 표시
 	const identities = await canonical.identity.findMany({
 		where: { id: { in: identityIds.map(String) } },
-		include: { texts: localeRows(locale), axes: { select: { axisId: true } } },
+		include: {
+			texts: localeRows(locale),
+			// `ego_granted` 는 뺀다 — 수감자의 E.G.O 가 주는 축이라 인격이 공급한다고
+			// 말하면 거짓이다. `canonical/squad.ts` 와 같은 판정이다.
+			axes: { where: { source: { not: 'ego_granted' } }, select: { axisId: true } },
+		},
 	});
 	const identityName = (rows: Array<{ locale: string; name: string; title: string | null }>) => {
 		const pick = rows.find((r) => r.locale === locale) ?? rows.find((r) => r.locale === 'en');
