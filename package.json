@@ -37,7 +37,9 @@
     "v2:gap-report": "tsx --env-file-if-exists=.env src/v2/gap-report.ts",
     "v2:reproduce": "tsx --env-file-if-exists=.env src/v2/reproduce.ts",
     "golden:capture": "tsx --env-file-if-exists=.env scripts/golden-queries.ts capture",
-    "golden:compare": "tsx --env-file-if-exists=.env scripts/golden-queries.ts compare"
+    "golden:compare": "tsx --env-file-if-exists=.env scripts/golden-queries.ts compare",
+    "public:retire": "tsx scripts/retire-public.ts retire",
+    "public:restore": "tsx scripts/retire-public.ts restore"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
