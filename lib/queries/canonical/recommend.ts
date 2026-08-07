@@ -96,7 +96,14 @@ export async function recommendForDeck(
 
 	// 편성 12 와 출전 7 은 다르다 — 분모가 갈린다(v2/types.ts Squad 주석)
 	const roster = identityIds.map((id) => ({ identityId: String(id), egoIds: [] }));
-	const field = (options.deployedIds ?? identityIds).map(String);
+	/**
+	 * **빈 배열을 「비었다」로 읽는다.** `??` 로 쓰면 안 된다 — 화면은 주소에
+	 * `deployed` 가 없을 때 `[]` 를 넘기는데 `[] ?? x` 는 `[]` 다. 그러면 출전
+	 * 분모가 0 이 되어 `Profile` 이 세는 인원이 전부 0 이 되고, 조건 판정의
+	 * 기본 분모가 출전이라 공급이 통째로 사라진다. 앱을 띄워 보고 잡았다.
+	 */
+	const deployed = options.deployedIds ?? [];
+	const field = (deployed.length > 0 ? deployed : identityIds).map(String);
 	const squad: Squad = { roster, field };
 
 	const profile = new Profile(squad, data.capabilities);
