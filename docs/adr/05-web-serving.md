@@ -51,6 +51,30 @@
 > 통해 아직 그 층을 보며, 그것을 옮기는 것은 화면 계약이 바뀌는 작업이라 따로 간다.
 > 설계는 [`2026-08-05-app-cutover-design.md`](../superpowers/specs/2026-08-05-app-cutover-design.md).
 
+> **후속 — `public` 이 물러났다** (2026-08-07 · 엔진 전환)
+>
+> 위가 「하나만 남았다」고 적은 그 하나를 없앴다. 추천 화면이 `lib/engine/v2` 로
+> 옮겨 가면서 레거시 엔진을 읽는 곳이 사라졌고, `grep -rn "@/lib/db'"` 이 0 을 낸다.
+>
+> ```
+> 지웠다   lib/engine/* 1,334줄 + 검사 281줄 · lib/queries/recommend.ts · lib/db.ts
+>          src/load.ts · src/verify.ts · src/engine-proof.ts · prisma/schema.prisma
+> 바꿨다   ALTER SCHEMA "public" RENAME TO "public_retired"
+> ```
+>
+> **클라이언트가 하나로 줄었다.** `lib/db-canonical.ts` 뿐이며, 「화면이 어느
+> 층을 읽는지가 import 로 드러난다」는 위 문장은 이제 고를 것이 없어 자명해졌다.
+>
+> **`DROP` 은 안 했다.** 덤프를 저장소 밖에 남기고 이름만 바꿨으므로 되돌리기가
+> `npm run public:restore` 한 줄이다. 화면이 아직 미완성이라 되돌릴 일이 생길 수
+> 있고, 스키마가 남아 있어도 읽는 코드가 0 이면 이 단계의 목적은 달성된다.
+>
+> `Locale` 타입이 `@prisma/client` 에서 `@/lib/locale` 로 옮겼다. v1 스키마의
+> `enum Locale` 이 그 출처였는데 스키마와 함께 사라졌다 — **데이터가 담은
+> 로케일(`ko`·`en`·`ja`)과 화면이 내보내는 로케일(`ko`·`en`)은 별개**다.
+>
+> 설계는 [`2026-08-07-engine-cutover-design.md`](../superpowers/specs/2026-08-07-engine-cutover-design.md).
+
 ## 3. 근거
 
 ### 3.1 Next.js

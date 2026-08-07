@@ -139,19 +139,144 @@ Prisma 생성   워크트리·브랜치를 바꿀 때마다 npm run v2:generate 
 골든이 지키는 것은 **나머지 20건이 안 깨졌다**는 것이며, 그중 `squad.listSquad` 와
 `squad.listSquadAxes` 가 이 PR 에서 실제로 손대는 유일한 자리다.
 
-## 8. 열린 것
+## 8. 열렸던 것 — 셋 다 실측으로 닫았다
+
+### 8.1 `public` 이름 바꾸기의 부작용 — 없었다
 
 ```
-public 이름 바꾸기의 부작용   search_path · 확장(extension) · 기본 권한이 걸릴 수 있다
-                          Prisma v1 클라이언트도 그 이름을 굳혀 갖고 있다
-추천 화면의 최소 모양        미완성 디자인이라 구조를 얼마나 건드릴지
-squad 의 축 어휘 변경        keywords 배열의 값이 burn → COMBUSTION 이 된다.
-                          화면 라벨은 listSquadAxes 가 주므로 표시는 유지될 것이나 미확인
+public 의 확장       없음.  plpgsql 은 pg_catalog 에 있어 무관하다
+search_path         "$user", public.  이름이 바뀌어도 v2 는 스키마를 명시해 질의한다
+Prisma v1 클라이언트   함께 지웠다.  그것이 부작용을 없앤 방법이다
 ```
 
-셋 다 구현 중에 실측으로 닫는다.
+**v1 클라이언트를 남겨 두는 선택지가 실은 없었다.** 스키마 이름이 바뀌는 순간
+`src/load.ts` · `src/verify.ts` · `src/engine-proof.ts` 셋이 못 돈다. 남기면
+지뢰라서 `prisma/schema.prisma` 와 함께 지웠다 — **설계가 예상한 범위보다 넓다.**
 
-## 9. 범위 밖 — 그다음
+### 8.2 추천 화면의 최소 모양 — 순위 자리를 등급 분포로
+
+```
+지웠다   rec.result.ranked (순위 · 점수 · 6성분 분해) · dropped Panel
+넣었다   팩별 tally {A,B,C} 와 A 등급 기프트 5개까지의 근거
+         충족/판정가능 · 「가능 포함」 표기 · 연쇄 홉수
+합쳤다   공급 막대 3개 → rec.supply 하나
+```
+
+**공급은 설계가 적은 3묶음이 아니라 8묶음이었다.** `v_identity_capability` 가
+`axis` · `sin` · `association` 말고도 `skill_kind` · `resonance` ·
+`unit_keyword` · `coin` · `attack_type` 을 낸다. 조건 평가가 그 전부를 보므로
+셋만 그리면 나머지 다섯은 왜 켜졌는지 설명할 자리가 없다 — 전부 그린다.
+
+### 8.3 squad 의 축 어휘 — `COMBUSTION` 이 아니라 `Combustion` 이고, 라벨은 **원래 안 붙고 있었다**
+
+설계는 「표시는 유지될 것이나 미확인」이라 적었다. 재 보니 **유지할 표시가
+없었다.**
+
+```
+레거시   listSquad 가 poise · tremor 를 냈다
+         listSquadAxes 의 라벨 표는 Breath · Vibration 로 키를 잡는다
+         → 겹치는 키가 하나도 없다.  화면이 원본 id 를 날것으로 그리고 있었다
+```
+
+축 id 는 keyword id 의 대문자일 뿐이라(`Combustion` → `COMBUSTION`) 되돌리면
+`canonical/list.ts` 와 어휘가 같아진다. 태그 9종이 전부 라벨을 얻었고, 이
+결함이 함께 닫혔다.
+
+**아이콘 9종은 여전히 `null` 이고 그것은 전과 같다.** 파일명이 영문 표시명이라
+(`Combustion` 이 아니라 `Burn.webp`) `keywordIcon(id)` 이 못 찾는다. `list.ts`
+는 `iconKey` 로 en 이름을 함께 내려 풀었다. **이 PR 에서 안 고쳤다** — 화면이
+글자로 그리고 있고 디자인 범위다.
+
+## 8.5 닫으면서 새로 연 것
+
+```
+VibrationExplosion    canonical.status_category 에 행이 아예 없다.  판정 누락이다
+                      10705 · 20503 · 20903 · 21104 가 Vibration 태그를 잃었다
+BulletLament          BULLET 로 분류돼 있으나 id 직접 대조라 안 걸린다 (20109)
+                      list.ts 가 제 주석에 적어 둔 「두 방식이 다르다」의 같은 사례
+```
+
+**이 PR 은 `canonical` 을 안 바꾸므로 여기서 안 고친다.** 관측으로 남긴다.
+
+## 9. 구현 결과
+
+41 파일 · +1,928 / −4,247.
+
+### 9.1 무엇이 오갔나
+
+```
+새로 생겼다
+  lib/queries/canonical/recommend.ts          v2 엔진을 화면에 엮는다
+  lib/queries/canonical/recommend.test.ts     rangeCovers 순수 검사 4건
+  scripts/retire-public.ts                    덤프 + 이름 바꾸기 · 되돌리기
+
+지웠다 — 앱 층
+  lib/engine/{dsl,load,pack,score,state,tuning,vocab}.ts      1,334줄
+  lib/engine/{dsl,status-key,vocab}.test.ts                     281줄
+  lib/queries/recommend.ts · lib/db.ts
+
+지웠다 — 파이프라인 층 (설계 범위 밖이었다.  8.1 절 참고)
+  src/load.ts · src/verify.ts · src/engine-proof.ts
+  prisma/schema.prisma · prisma/schema.sql
+  npm 스크립트 7개 · CI 의 v1 DDL 드리프트 단계
+
+옮겼다
+  Locale 타입   @prisma/client → @/lib/locale   (화면 14곳)
+```
+
+**`Locale` 이 집을 옮긴 이유가 설계에 없었다.** v1 스키마의 `enum Locale` 을
+화면이 가져다 쓰고 있었고 스키마를 지우면 그 출처가 사라진다. 캐노니컬
+클라이언트의 `$Enums.Locale` 은 `ja` 를 포함해 여기와 다르다 — **데이터가 담은
+로케일과 화면이 내보내는 로케일은 별개**이며, 그 차이를 타입으로 유지하려면
+좁은 쪽을 따로 적어야 한다.
+
+### 9.2 골든 대조 — 20건 중 squad 둘만 달랐다
+
+어휘 변경(`burn` → `Combustion` 류)을 벗기면 294개체 중 10건이 갈린다.
+
+```
+얻는다 3   10208 · 10304 · 10504 가 Laceration 을 얻는다
+           게임이 붙인 identity_keyword 태그인데 레거시는 상태만 봐서 놓쳤다
+
+잃는다 5   10705 · 20503 · 20903 · 21104 가 Vibration,  20109 가 Bullet
+           레거시 정규식의 부분 문자열 오탐 (VibrationExplosion · BulletLament)
+
+잃는다 2   10807 · 11007 이 Protection 을 잃는다 — BurstProtection 이었다
+           list.ts 가 이미 적어 둔 「보호 15」와 여기서 맞는다
+```
+
+### 9.3 앱 실측 — 이 단계에서 진짜 버그를 잡았다
+
+경로 20개 전부 200 · 서버 에러 0.
+
+```
+추천   팩 후보 27 · 등급 A 965 · B 698 · C 327
+       공급 8묶음.  axis COMBUSTION 7 · VIBRATION 6 · BULLET 3 · BREATH 1
+       연쇄는 보유 3개면 120건에 붙고 0개면 0건
+편성   페이로드에 keywords ["Breath"] 와 labels {"Breath":"호흡"} 이 함께 있다
+```
+
+**`[] ?? x` 는 `[]` 다.** 화면은 주소에 `deployed` 가 없으면 빈 배열을 넘기는데
+`options.deployedIds ?? identityIds` 가 그것을 값으로 받았다. 출전 분모가 0 이
+되고, 조건 판정의 기본 분모가 출전이라 `Profile` 이 세는 인원이 전부 0 이 됐다.
+공급 패널이 통째로 비었고 기프트 충족 수도 낮게 나왔다(`1/2` 로 보이던 것이
+실제 `3/4`).
+
+**질의를 직접 부르면 41건이 나오는데 화면만 0 이었다.** 호출자가 넘기는 값이
+달랐기 때문이며, **화면을 안 띄웠으면 못 봤을 자리다.** 앞 PR 에서 마지막에
+몰아 확인했다가 낡은 Prisma 클라이언트를 늦게 발견한 것과 같은 종류다.
+
+### 9.4 검증
+
+```
+public 참조      grep -rn "@/lib/db'"  → 0건.  이 PR 의 완료 조건
+검사             222건 전부 통과.  캐노니컬을 안 바꿨으니 그대로여야 한다
+단위 검사         489 → 457 (레거시 32건 삭제) · 0 실패
+타입 검사 · 빌드   통과
+덤프             4.9 MB → 저장소 밖 ../limbus-db-backups/public-retired.sql
+```
+
+## 10. 범위 밖 — 그다음
 
 ```
 팩 점수 모형        PR-B.  저울추는 이 PR 을 써 보고 정한다

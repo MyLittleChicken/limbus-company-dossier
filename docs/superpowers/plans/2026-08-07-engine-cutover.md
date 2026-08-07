@@ -54,7 +54,7 @@
 - Consumes: `scripts/golden-queries.ts` 의 `cases()` 20건
 - Produces: `build/golden/before/` 20개 JSON
 
-- [ ] **Step 1: 지금 출력을 뜬다**
+- [x] **Step 1: 지금 출력을 뜬다**
 
 ```bash
 npm run golden:capture -- before
@@ -64,7 +64,7 @@ npm run golden:capture -- before
 
 **실패하면 거기서 멈춘다.** 기준이 없으면 대조할 것이 없다.
 
-- [ ] **Step 2: squad 두 건을 따로 봐 둔다**
+- [x] **Step 2: squad 두 건을 따로 봐 둔다**
 
 이 PR 이 실제로 손대는 유일한 자리다.
 
@@ -81,7 +81,7 @@ print('mechanics', i['mechanics'])
 
 **나온 값을 받아 적는다.** Task 3 이 이것과 맞춘다.
 
-- [ ] **Step 3: 커밋할 것이 없음을 확인한다**
+- [x] **Step 3: 커밋할 것이 없음을 확인한다**
 
 ```bash
 git status --porcelain
@@ -103,7 +103,7 @@ git status --porcelain
   - `recommendForDeck(locale, options): Promise<Recommendation>`
   - `Recommendation` — 아래 Step 4 가 정의한다
 
-- [ ] **Step 1: 층별 팩 후보를 어떻게 얻는지 확인한다**
+- [x] **Step 1: 층별 팩 후보를 어떻게 얻는지 확인한다**
 
 레거시는 `packIdsForFloor(difficulty, floor)` 를 썼다. 캐노니컬에서 같은 것을 낸다.
 
@@ -120,7 +120,7 @@ docker exec limbus-postgres psql -U postgres -d limbus -tAc \
   "SELECT difficulty, floor_range, count(*) FROM canonical.floor_pack GROUP BY 1,2 ORDER BY 1,2"
 ```
 
-- [ ] **Step 2: 층 구간 판정을 순수 함수로 쓴다**
+- [x] **Step 2: 층 구간 판정을 순수 함수로 쓴다**
 
 `lib/queries/canonical/recommend.ts` 머리:
 
@@ -167,7 +167,7 @@ export function rangeCovers(range: string, floor: number): boolean {
 }
 ```
 
-- [ ] **Step 3: 순수부 테스트를 쓴다**
+- [x] **Step 3: 순수부 테스트를 쓴다**
 
 `lib/queries/canonical/recommend.test.ts`:
 
@@ -198,7 +198,7 @@ test('숫자가 아닌 구간은 아무 층도 안 담는다 — 조용히 전�
 });
 ```
 
-- [ ] **Step 4: 본체를 쓴다**
+- [x] **Step 4: 본체를 쓴다**
 
 같은 파일에 이어 쓴다.
 
@@ -383,7 +383,7 @@ export async function recommendForDeck(
 }
 ```
 
-- [ ] **Step 5: 테스트를 돌린다**
+- [x] **Step 5: 테스트를 돌린다**
 
 ```bash
 npx tsx --test lib/queries/canonical/recommend.test.ts 2>&1 | grep -E "ℹ (tests|pass|fail)"
@@ -402,7 +402,7 @@ grep -n "axes" prisma/v2/schema.prisma | head -3
 grep -n "loadEngineData" -A 2 lib/engine/v2/load.ts | head -5
 ```
 
-- [ ] **Step 6: 실제로 돌려 본다**
+- [x] **Step 6: 실제로 돌려 본다**
 
 ```bash
 npx tsx --env-file-if-exists=.env -e '
@@ -419,7 +419,7 @@ process.exit(0);
 
 **나온 수를 받아 적는다.** 후보 팩 수가 0 이면 `rangeCovers` 나 난이도가 틀린 것이다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add lib/queries/canonical/recommend.ts lib/queries/canonical/recommend.test.ts
@@ -448,7 +448,7 @@ loadEngineData → Profile → evaluateGifts → chain 을 한 자리에서 엮�
 - Consumes: `canonical.identity.axes` (`IdentityAxis[]`)
 - Produces: `SquadIdentity.keywords` · `.mechanics` 의 값이 축 id 로 바뀐다
 
-- [ ] **Step 1: 지금 값을 받아 적는다**
+- [x] **Step 1: 지금 값을 받아 적는다**
 
 Task 1 Step 2 에서 뜬 것을 다시 본다.
 
@@ -462,7 +462,7 @@ for s in a[:2]:
 "
 ```
 
-- [ ] **Step 2: 축 id 로 무엇이 나올지 미리 잰다**
+- [x] **Step 2: 축 id 로 무엇이 나올지 미리 잰다**
 
 ```bash
 docker exec limbus-postgres psql -U postgres -d limbus -tAc \
@@ -472,7 +472,7 @@ docker exec limbus-postgres psql -U postgres -d limbus -tAc \
 
 **기믹 축(`BULLET` · `PROTECTION`)이 나머지와 같은 표에 있다.** 현행은 `ammo` · `protection` 으로 갈랐으므로 같은 갈래를 축 id 로 다시 만든다.
 
-- [ ] **Step 3: 고친다**
+- [x] **Step 3: 고친다**
 
 `lib/queries/canonical/squad.ts` 의 import 에서 `statusKeyOf` 를 뺀다.
 
@@ -562,7 +562,7 @@ const MECHANIC_AXES = new Set(['BULLET', 'PROTECTION']);
 
 `statuses` include 도 E.G.O 쪽에서 뺀다.
 
-- [ ] **Step 4: 타입 검사와 대조**
+- [x] **Step 4: 타입 검사와 대조**
 
 ```bash
 npm run typecheck
@@ -583,7 +583,7 @@ E.G.O keywords 가 [] 로               예상된 결손.  대응 표가 없다
 인격 수 · 이름 · 소속이 달라짐          회귀다.  고친다
 ```
 
-- [ ] **Step 5: 축 라벨이 화면에 나오는지 확인한다**
+- [x] **Step 5: 축 라벨이 화면에 나오는지 확인한다**
 
 `listSquadAxes` 가 라벨을 준다. 축 id 가 바뀌었으니 라벨이 붙는지 본다.
 
@@ -605,7 +605,7 @@ print('쓰이는 축', len(used), '| 라벨 없는 축', missing)
 축(예: `BLOODFEAST`)이 있을 수 있다 — 무엇인지 적고, 화면이 id 를 그대로 그려도
 읽히는지 판단한다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 npm test 2>&1 | grep -E "ℹ (tests|pass|fail)"
@@ -677,7 +677,7 @@ E.G.O 가 주는 축이지 인격이 주는 축이 아니다. 빼면 남는 둘(
 - Consumes: Task 2 의 `recommendForDeck` · `Recommendation` · `PackLine` · `GiftLine`
 - Produces: 없음 (화면)
 
-- [ ] **Step 1: 지금 화면이 무엇을 그리는지 읽는다**
+- [x] **Step 1: 지금 화면이 무엇을 그리는지 읽는다**
 
 ```bash
 sed -n '1,60p' 'app/[locale]/recommend/page.tsx'
@@ -685,7 +685,7 @@ sed -n '1,60p' 'app/[locale]/recommend/page.tsx'
 
 **받아 적는다** — 어느 Panel 이 무엇을 담고 있는지. 구조를 최소로 바꾸려면 지금 구조를 알아야 한다.
 
-- [ ] **Step 2: import 와 호출을 바꾼다**
+- [x] **Step 2: import 와 호출을 바꾼다**
 
 ```typescript
 import { recommendForDeck } from '@/lib/queries/canonical/recommend';
@@ -700,7 +700,7 @@ import { recommendForDeck } from '@/lib/queries/canonical/recommend';
 	const affil = rec.supply.filter((s) => s.refKind === 'association');
 ```
 
-- [ ] **Step 3: 순위 자리를 등급 분포로 바꾼다**
+- [x] **Step 3: 순위 자리를 등급 분포로 바꾼다**
 
 `rec.result.ranked` 를 그리던 Panel 을 `rec.packs` 로 바꾼다.
 
@@ -744,7 +744,7 @@ import { recommendForDeck } from '@/lib/queries/canonical/recommend';
 
 **`dropped` Panel 은 지운다.** v2 에는 그 개념이 없다 — 후보를 거르지 않는다.
 
-- [ ] **Step 4: 덱 Panel 을 고친다**
+- [x] **Step 4: 덱 Panel 을 고친다**
 
 `rec.deck` 의 모양이 바뀌었다(`statuses`·`affiliations` → `axes`).
 
@@ -757,7 +757,7 @@ import { recommendForDeck } from '@/lib/queries/canonical/recommend';
 							))}
 ```
 
-- [ ] **Step 5: 타입 검사와 빌드**
+- [x] **Step 5: 타입 검사와 빌드**
 
 ```bash
 npm run typecheck
@@ -766,7 +766,7 @@ npm run build 2>&1 | grep -E "Compiled|error|Failed" | head -5
 
 **타입 오류가 남은 자리가 곧 화면이 옛 계약에 기대던 자리다.** 하나씩 위 모양으로 옮긴다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add 'app/[locale]/recommend/page.tsx'
@@ -795,7 +795,7 @@ association 을 그린다."
 - Delete: `prisma/schema.prisma`
 - Modify: `package.json` (v1 스크립트)
 
-- [ ] **Step 1: 남은 참조를 찾는다**
+- [x] **Step 1: 남은 참조를 찾는다**
 
 ```bash
 grep -rn "@/lib/engine/" app/ lib/ components/ scripts/ | grep -v "engine/v2"
@@ -807,7 +807,7 @@ grep -rn "@/lib/queries/recommend'" app/ lib/ components/
 
 **하나라도 나오면 거기서 멈춘다.** 무엇이 남았는지 적고 그것부터 옮긴다.
 
-- [ ] **Step 2: v1 전용 npm 스크립트를 찾는다**
+- [x] **Step 2: v1 전용 npm 스크립트를 찾는다**
 
 ```bash
 grep -n '"db:\|"fetch"\|prisma/schema.prisma' package.json
@@ -816,7 +816,7 @@ grep -n '"db:\|"fetch"\|prisma/schema.prisma' package.json
 `prisma/schema.prisma` 를 가리키는 스크립트가 있으면 **지울지 남길지 정한다** — `npm run fetch`
 는 원본 수집이라 v1 스키마와 무관할 수 있다. 실제로 무엇을 가리키는지 보고 판단한다.
 
-- [ ] **Step 3: 지운다**
+- [x] **Step 3: 지운다**
 
 ```bash
 git rm -q lib/engine/dsl.ts lib/engine/load.ts lib/engine/pack.ts lib/engine/score.ts \
@@ -828,7 +828,7 @@ git rm -q lib/engine/dsl.ts lib/engine/load.ts lib/engine/pack.ts lib/engine/sco
 `prisma/schema.prisma` 는 **Step 2 의 판단 뒤에 지운다.** 스크립트가 그것을 가리키면
 스크립트도 함께 정리해야 한다.
 
-- [ ] **Step 4: 검사**
+- [x] **Step 4: 검사**
 
 ```bash
 npm run typecheck
@@ -838,13 +838,13 @@ npm run build 2>&1 | grep -E "Compiled|Failed" | head -3
 
 **테스트 수가 준다** — 레거시 테스트 281줄을 지웠다. **줄어든 수를 받아 적고 0 fail 인지만 본다.**
 
-- [ ] **Step 5: `public` 참조가 0 임을 실측한다**
+- [x] **Step 5: `public` 참조가 0 임을 실측한다**
 
 ```bash
 grep -rln "@/lib/db'" app/ lib/ components/ scripts/ || echo "0건 — 완료 조건 달성"
 ```
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add -A
@@ -873,7 +873,7 @@ public 을 읽는 코드가 0 이다. 스키마 자체를 물러나게 하는 �
 - Consumes: 없음
 - Produces: `npm run public:retire` · `npm run public:restore`
 
-- [ ] **Step 1: 지금 상태를 잰다**
+- [x] **Step 1: 지금 상태를 잰다**
 
 ```bash
 docker exec limbus-postgres psql -U postgres -d limbus -tAc \
@@ -884,7 +884,7 @@ docker exec limbus-postgres psql -U postgres -d limbus -tAc "SHOW search_path"
 **`search_path` 를 받아 적는다.** `public` 이 거기 있으면 이름을 바꿀 때 무엇이 깨지는지
 알아야 한다.
 
-- [ ] **Step 2: 확장(extension)이 `public` 에 사는지 본다**
+- [x] **Step 2: 확장(extension)이 `public` 에 사는지 본다**
 
 ```bash
 docker exec limbus-postgres psql -U postgres -d limbus -tAc \
@@ -894,7 +894,7 @@ docker exec limbus-postgres psql -U postgres -d limbus -tAc \
 **확장이 `public` 에 있으면 이름을 못 바꾼다** — 그 경우 여기서 멈추고 보고한다.
 `plpgsql` 은 `pg_catalog` 에 있으므로 무관하다.
 
-- [ ] **Step 3: 도구를 쓴다**
+- [x] **Step 3: 도구를 쓴다**
 
 `scripts/retire-public.ts`:
 
@@ -981,7 +981,7 @@ else {
 }
 ```
 
-- [ ] **Step 4: 스크립트를 등록한다**
+- [x] **Step 4: 스크립트를 등록한다**
 
 `package.json` 의 `"golden:compare"` 뒤에 넣는다.
 
@@ -990,7 +990,7 @@ else {
 "public:restore": "tsx scripts/retire-public.ts restore"
 ```
 
-- [ ] **Step 5: 돌린다**
+- [x] **Step 5: 돌린다**
 
 ```bash
 npm run public:retire
@@ -1005,7 +1005,7 @@ docker exec limbus-postgres psql -U postgres -d limbus -tAc \
 
 기대: `app · canonical · public_retired · raw`. `public` 이 없다.
 
-- [ ] **Step 6: 앱이 도는지 확인한다**
+- [x] **Step 6: 앱이 도는지 확인한다**
 
 ```bash
 npm run v2:verify:canonical 2>&1 | tail -2
@@ -1016,7 +1016,7 @@ npm run build 2>&1 | grep -E "Compiled|Failed" | head -3
 
 **하나라도 깨지면 `npm run public:restore` 로 되돌리고 원인을 본다.**
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add scripts/retire-public.ts package.json
@@ -1038,7 +1038,7 @@ DROP 은 다음 PR 이다. 화면이 아직 미완성이라 되돌릴 일이 생
 
 **Files:** 없음
 
-- [ ] **Step 1: 개발 서버를 띄운다**
+- [x] **Step 1: 개발 서버를 띄운다**
 
 ```bash
 PORT=3210 npm run dev
@@ -1046,7 +1046,7 @@ PORT=3210 npm run dev
 
 배경으로 돌린다. 로그는 파일로 받는다.
 
-- [ ] **Step 2: 화면 전부를 두드린다**
+- [x] **Step 2: 화면 전부를 두드린다**
 
 ```bash
 for p in /ko /ko/about /ko/dungeon /ko/floors /ko/glossary /ko/identities \
@@ -1058,7 +1058,7 @@ done
 
 기대: 전부 200.
 
-- [ ] **Step 3: 추천 화면의 내용을 본다**
+- [x] **Step 3: 추천 화면의 내용을 본다**
 
 ```bash
 curl -s http://localhost:3210/ko/recommend | grep -oE "A [0-9]+ · B [0-9]+ · C [0-9]+" | head -5
@@ -1066,7 +1066,7 @@ curl -s http://localhost:3210/ko/recommend | grep -oE "A [0-9]+ · B [0-9]+ · C
 
 **등급 분포가 실제로 나오는지 본다.** 전부 `A 0 · B 0 · C n` 이면 판정이 안 붙은 것이다.
 
-- [ ] **Step 4: 서버 로그에 오류가 없는지 본다**
+- [x] **Step 4: 서버 로그에 오류가 없는지 본다**
 
 ```bash
 grep -cE "⨯|Error:" <로그파일>
@@ -1075,7 +1075,7 @@ grep -c " 500 " <로그파일>
 
 기대: 둘 다 0.
 
-- [ ] **Step 5: 서버를 멈추고 트리를 정리한다**
+- [x] **Step 5: 서버를 멈추고 트리를 정리한다**
 
 ```bash
 pkill -f "next dev"
@@ -1093,7 +1093,7 @@ git status --porcelain
 - Modify: `docs/superpowers/specs/2026-08-07-engine-cutover-design.md`
 - Modify: `docs/adr/05-web-serving.md`
 
-- [ ] **Step 1: 설계 8절을 실측으로 바꾼다**
+- [x] **Step 1: 설계 8절을 실측으로 바꾼다**
 
 「열린 것」을 「구현에서 닫은 것」으로 바꾸고 셋의 실제 답을 적는다.
 
@@ -1105,7 +1105,7 @@ squad 의 축 어휘 변경        ← Task 3 Step 5 에서 라벨이 붙었는�
 
 10절 「구현 결과」를 더한다 — 파일 목록 · 검증 수치 · 골든 대조 결과.
 
-- [ ] **Step 2: ADR-05 의 후속을 갱신한다**
+- [x] **Step 2: ADR-05 의 후속을 갱신한다**
 
 PR #27 이 넣은 후속 인용에 한 줄 더한다.
 
@@ -1114,7 +1114,7 @@ PR #27 이 넣은 후속 인용에 한 줄 더한다.
 > `public_retired` 로 바꿨다. `DROP` 은 아직 안 했다.
 ```
 
-- [ ] **Step 3: 마지막 검증**
+- [x] **Step 3: 마지막 검증**
 
 ```bash
 git status --porcelain     # 비어야 한다
@@ -1125,7 +1125,7 @@ npm run v2:verify:canonical 2>&1 | tail -2
 grep -rln "@/lib/db'" app/ lib/ components/ scripts/ || echo "public 참조 0"
 ```
 
-- [ ] **Step 4: 커밋하고 PR 을 올린다**
+- [x] **Step 4: 커밋하고 PR 을 올린다**
 
 ```bash
 git add docs/
