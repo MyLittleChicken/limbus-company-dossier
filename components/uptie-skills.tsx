@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 import type { IdentityDetail } from '@/lib/queries/canonical/detail';
 import { IconTag, Name, Nothing } from './ui';
 

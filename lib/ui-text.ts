@@ -1,4 +1,4 @@
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 
 /**
  * 화면 껍데기의 문자열.

@@ -1,17 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { Difficulty } from '@prisma/client';
+import type { $Enums } from '@/src/v2/generated/client';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { HWAJIN_DECK, recommendForDeck } from '@/lib/queries/recommend';
+import { HWAJIN_DECK, recommendForDeck } from '@/lib/queries/canonical/recommend';
 import { one, type SearchParams } from '@/lib/queries/shared';
 import { Nothing, Panel, SecLabel } from '@/components/ui';
 
 /**
  * 추천 슬라이스.
  *
- * 3단계 엔진이 실데이터 위에서 도는지 보이는 화면이다. **런 상태 입력은 없다** —
- * 그것은 4단계이고 여기서는 덱이 고정이다. 층과 보유 기프트만 주소로 받는다.
+ * **v2 엔진이 실데이터 위에서 도는지 보이는 창이다.** 제품 표면이 아니다 — 런 상태
+ * 입력도 없고 덱도 고정이다. 층과 보유 기프트만 주소로 받는다.
+ *
+ * **순위를 안 매긴다.** v2 는 「이 기프트가 얼마나 세지나」가 아니라 「켜지나」를
+ * 근거와 함께 답한다. 점수 모형이 없는데 순서를 붙이면 그 순서가 거짓말이 되므로
+ * 후보 팩을 그대로 두고 등급 A/B/C 를 센다. 점수는 다음 PR 이다.
  *
  * 검증 대상은 화진 덱(화상+진동, 새벽 사무소 3 + 엄지 4)이다. 온필드 정원 7과 맞고
  * 두 소속 조건을 동시에 만족해 조건 평가를 실제로 켜 볼 수 있다.
@@ -29,7 +33,7 @@ export default async function RecommendPage({
 	const ko = locale === 'ko';
 
 	const floor = Number(one(sp['floor']) ?? '3');
-	const difficulty = (one(sp['difficulty']) === 'normal' ? 'normal' : 'hard') as Difficulty;
+	const difficulty = (one(sp['difficulty']) === 'normal' ? 'normal' : 'hard') as $Enums.Difficulty;
 	const idList = (key: string): number[] =>
 		(one(sp[key]) ?? '')
 			.split(',')
@@ -48,9 +52,23 @@ export default async function RecommendPage({
 	});
 
 	const t = UI[locale];
-	const supply = Object.entries(rec.feature.statusSupply).sort((a, b) => b[1] - a[1]);
-	const sins = Object.entries(rec.feature.sinSupply).sort((a, b) => b[1] - a[1]);
-	const affil = Object.entries(rec.feature.affiliation.deployed).sort((a, b) => b[1] - a[1]);
+
+	/**
+	 * 공급을 축 종류로 묶는다.
+	 *
+	 * **여덟 종류를 셋으로 줄이지 않는다.** `v_identity_capability` 가 `axis` ·
+	 * `sin` · `association` 말고도 `skill_kind` · `resonance` · `unit_keyword` ·
+	 * `coin` · `attack_type` 을 낸다. 조건 평가가 그 전부를 보므로 화면도 전부
+	 * 보인다 — 셋만 그리면 나머지 다섯은 왜 켜졌는지 설명할 자리가 없어진다.
+	 */
+	const supplyGroups = [...new Set(rec.supply.map((s) => s.refKind))].map((kind) => {
+		const rows = rec.supply.filter((s) => s.refKind === kind);
+		// 막대의 분모는 그 묶음의 최대값이다. 인원으로 나누면 resonance 처럼
+		// 인격당 여럿인 축이 100% 를 넘는다.
+		const max = Math.max(...rows.map((r) => r.count));
+		return { kind, rows, max };
+	});
+
 	// 질의가 준 id 중 실제로 덱에 있는 것만 센다 — 없는 id 는 recommendForDeck 이 이미 버린다.
 	const deployedCount = deployedIds.length === 0
 		? rec.deck.length
@@ -68,8 +86,8 @@ export default async function RecommendPage({
 
 			<p className="lede">
 				{ko
-					? '3단계 추천 엔진이 실제 적재 데이터 위에서 도는지 보이는 화면이다. 런 상태를 입력하는 흐름은 4단계이며 여기에는 없다 — 덱은 고정이고 층만 바꾼다.'
-					: 'A slice showing the stage-3 engine running on real loaded data. Run-state input belongs to stage 4; the deck is fixed here.'}
+					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩에 순위를 매기지 않는다 — 점수 모형이 아직 없어서 순서를 붙이면 그 순서가 거짓말이 된다. 대신 기프트가 켜지는지를 등급 A/B/C 로 센다.'
+					: 'A slice showing the v2 engine running on canonical data. Packs are not ranked — there is no scoring model yet, so an order would be a lie. Gifts are graded A/B/C by whether they turn on.'}
 			</p>
 
 			<div className="filters">
@@ -89,57 +107,64 @@ export default async function RecommendPage({
 			<div className="grid2">
 				<div>
 					<Panel
-						title={ko ? '추천 팩' : 'Recommended packs'}
-						hint={`${ko ? '후보' : 'of'} ${rec.candidateCount}`}
+						title={ko ? '이 층의 팩 후보' : 'Packs on this floor'}
+						hint={`${rec.candidateCount}`}
 					>
-						{rec.result.ranked.length === 0 ? (
+						{rec.packs.length === 0 ? (
 							<Nothing kind="absent">{t.empty}</Nothing>
 						) : (
-							<ol className="plain rank">
-								{rec.result.ranked.map((r, i) => (
-									<li key={r.packId}>
+							<ul className="plain rank">
+								{rec.packs.map((p) => (
+									<li key={p.id}>
 										<div className="row-head">
-											<span className="coin-i">{i + 1}</span>
 											<strong>
-												<Link href={`/${locale}/packs/${r.packId}`}>{r.name}</Link>
+												<Link href={`/${locale}/packs/${p.id}`}>{p.name ?? p.id}</Link>
 											</strong>
-											<span className="tag">{r.score.toFixed(1)}</span>
+											{/* 순위가 아니라 분포다. 셋을 함께 내야 A 3 이 「12 중 3」인지 「3 중 3」인지 보인다. */}
+											<span className="tag">{`A ${p.tally.A} · B ${p.tally.B} · C ${p.tally.C}`}</span>
 										</div>
-										{/* 점수 하나로 답하지 않는다. 항목별 분해와 근거를 함께 낸다. */}
-										<ul className="comp">
-											{Object.entries(r.components)
-												.filter(([, v]) => Math.abs(v) > 0.005)
-												.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-												.map(([k, v]) => (
-													<li key={k}>
-														<span className="comp-k">{k}</span>
-														<span className="comp-v">{v.toFixed(2)}</span>
-													</li>
-												))}
-										</ul>
-										{r.reasons.length > 0 && (
-											<ul className="why">
-												{r.reasons.map((reason, j) => (
-													<li key={j}>{reason}</li>
-												))}
+										{p.tally.A === 0 ? (
+											<Nothing kind="absent">
+												{ko ? '이 편성이 켜는 기프트가 없다' : 'nothing this squad turns on'}
+											</Nothing>
+										) : (
+											<ul className="comp">
+												{p.gifts
+													.filter((g) => g.grade === 'A')
+													.slice(0, 5)
+													.map((g) => (
+														<li key={g.id}>
+															<span className="comp-k">{g.name ?? String(g.id)}</span>
+															<span className="comp-v">
+																{`${g.satisfied}/${g.decidable}`}
+																{/* 판정 가능한 것과 확실한 것이 갈리면 밝힌다 — 「가능」을 확정으로 읽히게 두지 않는다 */}
+																{g.certain < g.satisfied
+																	? ko
+																		? ' · 가능 포함'
+																		: ' · incl. possible'
+																	: ''}
+																{g.chainDepth !== null
+																	? ko
+																		? ` · 연쇄 ${g.chainDepth}홉`
+																		: ` · chain ${g.chainDepth}`
+																	: ''}
+															</span>
+														</li>
+													))}
 											</ul>
 										)}
 									</li>
 								))}
-							</ol>
+							</ul>
 						)}
 					</Panel>
 
-					{/* 조용히 버리지 않는다 — 무엇을 왜 뺐는지 보인다. */}
-					{rec.result.dropped.length > 0 && (
-						<Panel
-							title={ko ? '후보에서 뺀 팩' : 'Excluded'}
-							hint={rec.result.dropped.length}
-						>
+					{rec.owned.length > 0 && (
+						<Panel title={ko ? '보유 기프트' : 'Owned gifts'} hint={rec.owned.length}>
 							<ul className="inline-list">
-								{rec.result.dropped.map((d) => (
-									<li key={d.packId} className="tag">
-										{d.name} · {d.reason === 'hidden' ? (ko ? '히든' : 'hidden') : ko ? '기간 한정' : 'limited'}
+								{rec.owned.map((g) => (
+									<li key={g.id} className="tag">
+										{g.name ?? g.id}
 									</li>
 								))}
 							</ul>
@@ -154,9 +179,9 @@ export default async function RecommendPage({
 								<li key={i.id}>
 									<Link href={`/${locale}/identities/${i.id}`}>{i.name}</Link>
 									<span className="card-meta">
-										{i.statuses.map((s) => (
-											<span key={s} className="tag">
-												{s}
+										{i.axes.map((a) => (
+											<span key={a} className="tag">
+												{a}
 											</span>
 										))}
 									</span>
@@ -165,40 +190,14 @@ export default async function RecommendPage({
 						</ul>
 					</Panel>
 
-					{/* 덱을 단일 키워드로 요약하지 않는다. 축별 공급을 그대로 낸다. */}
-					<Panel title={ko ? '상태 공급' : 'Status supply'}>
-						<ul className="dist">
-							{supply.map(([k, v]) => (
-								<li key={k}>
-									<span className="dist-key">{k}</span>
-									<span
-										className="dist-bar"
-										style={{ width: `${Math.round((v / rec.deck.length) * 100)}%` }}
-									/>
-									<span className="dist-n">{v}</span>
-								</li>
-							))}
-						</ul>
-					</Panel>
-
-					<Panel title={ko ? '죄악 (공명 판정)' : 'Sins (resonance)'}>
-						<ul className="dist">
-							{sins.map(([k, v]) => (
-								<li key={k}>
-									<span className="dist-key">{k}</span>
-									<span
-										className="dist-bar"
-										style={{ width: `${Math.round((v / rec.deck.length) * 100)}%` }}
-									/>
-									<span className="dist-n">{v}</span>
-								</li>
-							))}
-						</ul>
-					</Panel>
-
-					{/* 조건 판정은 편성이 아니라 출전을 본다 — 어느 범위로 셌는지 밝힌다. */}
+					{/*
+					 * 덱을 단일 키워드로 요약하지 않는다. 엔진이 센 것을 그대로 낸다 —
+					 * 화면이 다시 세면 두 수가 갈리고 어느 쪽이 맞는지 알 수 없어진다.
+					 *
+					 * 조건 판정은 편성이 아니라 출전을 본다. 어느 범위로 셌는지 밝힌다.
+					 */}
 					<Panel
-						title={ko ? '소속 (조건 판정)' : 'Affiliations'}
+						title={ko ? '편성이 공급하는 것' : 'What the squad supplies'}
 						hint={
 							deployedCount === rec.deck.length
 								? ko
@@ -209,13 +208,27 @@ export default async function RecommendPage({
 									: `${deployedCount}/${rec.deck.length} deployed`
 						}
 					>
-						<ul className="inline-list">
-							{affil.map(([k, v]) => (
-								<li key={k} className="tag">
-									{k} {v}
-								</li>
-							))}
-						</ul>
+						{supplyGroups.length === 0 ? (
+							<Nothing kind="absent">{t.empty}</Nothing>
+						) : (
+							supplyGroups.map((g) => (
+								<div key={g.kind}>
+									<span className="card-meta">{g.kind}</span>
+									<ul className="dist">
+										{g.rows.map((r) => (
+											<li key={r.refId}>
+												<span className="dist-key">{r.refId}</span>
+												<span
+													className="dist-bar"
+													style={{ width: `${Math.round((r.count / g.max) * 100)}%` }}
+												/>
+												<span className="dist-n">{r.count}</span>
+											</li>
+										))}
+									</ul>
+								</div>
+							))
+						)}
 					</Panel>
 				</aside>
 			</div>
