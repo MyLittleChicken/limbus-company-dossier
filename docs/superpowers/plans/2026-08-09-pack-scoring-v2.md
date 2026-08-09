@@ -22,6 +22,7 @@
 - 주석은 한국어로 「왜 그렇게 했는가」를 적는다.
 - 테스트 실행은 `npm test`. **기준선은 472 tests / 460 pass / 0 fail / 12 skip.**
 - 타입 검사 `npm run typecheck`, 빌드 `npm run build`.
+- **`lib/engine/v2/` 를 건드린 태스크는 반드시 `npm run build` 를 돌린다.** 그 디렉터리는 앱 번들에 들어가는데, `tsc` 와 번들러의 모듈 해석이 다르다 — **값 import 에 `.js` 확장자를 쓰면 `tsc` 는 통과하고 Turbopack 만 죽는다**(실행 중 실제로 겪었다). 기존 파일이 전부 `import type` 이라 이 함정이 여태 안 드러났다. `import type` 은 컴파일 때 지워져 번들러에 안 닿는다.
 - DB 는 `docker exec limbus-postgres psql -U postgres -d limbus`.
 - **워크트리는 이미 준비돼 있다** — `.env` 복사와 `npm run v2:generate` 를 마쳤다.
 - 확인 스크립트는 **저장소 안(`scripts/`)에 둔다.** `/tmp` 에 두면 `package.json` 의 `"type": "module"` 이 안 닿아 `Top-level await is currently not supported with the "cjs" output format` 로 죽는다.
@@ -53,7 +54,7 @@
 - Consumes: `scripts/golden-queries.ts` 의 `cases()` 23건
 - Produces: `build/golden/before/` 23개 JSON
 
-- [ ] **Step 1: 지금 출력을 뜬다**
+- [x] **Step 1: 지금 출력을 뜬다**
 
 ```bash
 npm run golden:capture -- before
@@ -63,7 +64,7 @@ npm run golden:capture -- before
 
 **실패하면 거기서 멈춘다.** 기준이 없으면 대조할 것이 없다.
 
-- [ ] **Step 2: 지금 순위를 받아 적는다**
+- [x] **Step 2: 지금 순위를 받아 적는다**
 
 ```bash
 python3 -c "
@@ -75,7 +76,7 @@ for p in d['packs'][:3]: print(f\"{p['score']:.4f} {p['fit']:.3f} {p['live']:.3f
 
 기대: `0.1396 0.273 0.511 타오르는 일렁임` 이 첫 줄. 뒤 태스크가 이것과 대조한다.
 
-- [ ] **Step 3: 커밋할 것이 없음을 확인한다**
+- [x] **Step 3: 커밋할 것이 없음을 확인한다**
 
 ```bash
 git status --porcelain
@@ -95,7 +96,7 @@ git status --porcelain
 - Consumes: `lib/engine/v2/types.js` 의 `Squad` · `Capability`
 - Produces: `Profile.countInSlots(refKind: string, refId: string, slots: readonly number[]): number`
 
-- [ ] **Step 1: 검사를 먼저 쓴다**
+- [x] **Step 1: 검사를 먼저 쓴다**
 
 `lib/engine/v2/profile.test.ts` — **새 파일이다.** 기존에 `profile` 전용 검사 파일이 없다.
 
@@ -154,7 +155,7 @@ test('없는 갈래는 0 이다', () => {
 });
 ```
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/profile.test.ts
@@ -162,7 +163,7 @@ npx tsx --test lib/engine/v2/profile.test.ts
 
 기대: `countInSlots is not a function` 류로 실패.
 
-- [ ] **Step 3: `Profile` 에 자리 목록과 새 메서드를 더한다**
+- [x] **Step 3: `Profile` 에 자리 목록과 새 메서드를 더한다**
 
 `lib/engine/v2/profile.ts` 의 `Profile` 클래스를 이렇게 고친다. **`counts` 와 `count` 는 그대로 둔다.**
 
@@ -219,7 +220,7 @@ export class Profile {
 }
 ```
 
-- [ ] **Step 4: 검사가 통과하는지 본다**
+- [x] **Step 4: 검사가 통과하는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/profile.test.ts
@@ -228,7 +229,7 @@ npm run typecheck
 
 기대: 5건 전부 pass · 0 fail · 타입 통과.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add lib/engine/v2/profile.ts lib/engine/v2/profile.test.ts
@@ -257,7 +258,7 @@ git commit -m "feat(engine): Profile 이 자리 범위로 센다
 - Consumes: Task 2 의 `Profile.countInSlots`
 - Produces: `GiftVerdict.fireable: boolean`
 
-- [ ] **Step 1: 검사를 더한다**
+- [x] **Step 1: 검사를 더한다**
 
 `lib/engine/v2/evaluate.test.ts` 끝에 붙인다. **기존 검사를 건드리지 마라.** 그 파일의 기존 헬퍼와 import 를 그대로 쓴다 — 파일을 먼저 읽고 같은 방식으로 픽스처를 만든다.
 
@@ -370,7 +371,7 @@ test('자리 조건이 없으면 편성 전체로 판정한다', () => {
 
 **픽스처 타입이 기존 파일과 다르면 기존 파일 것을 따라라.** 위는 의도를 보이는 것이고, `TriggerRef` · `TriggerParam` 의 실제 필드는 `lib/engine/v2/types.ts` 가 정한다. 기존 파일이 `SQUAD` 와 `burn(id)` 같은 헬퍼를 이미 갖고 있으니 **먼저 읽고 그것을 재사용하라.**
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/evaluate.test.ts
@@ -378,7 +379,7 @@ npx tsx --test lib/engine/v2/evaluate.test.ts
 
 기대: `fireable` 관련 4건이 실패. 기존 검사는 통과.
 
-- [ ] **Step 3: `GiftVerdict` 에 `fireable` 을 더한다**
+- [x] **Step 3: `GiftVerdict` 에 `fireable` 을 더한다**
 
 `lib/engine/v2/types.ts` 의 `GiftVerdict` 에 넣는다.
 
@@ -398,7 +399,7 @@ npx tsx --test lib/engine/v2/evaluate.test.ts
 	fireable: boolean;
 ```
 
-- [ ] **Step 4: `evaluate.ts` 를 고친다**
+- [x] **Step 4: `evaluate.ts` 를 고친다**
 
 `evaluateGifts` 의 루프를 이렇게 바꾼다.
 
@@ -507,7 +508,7 @@ function judge(
 }
 ```
 
-- [ ] **Step 5: 검사가 통과하는지 본다**
+- [x] **Step 5: 검사가 통과하는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/evaluate.test.ts
@@ -516,7 +517,7 @@ npm run typecheck
 
 **타입 오류가 날 것이다** — `GiftVerdict` 에 `fireable` 이 필수라 `golden.test.ts` 나 다른 곳의 픽스처가 깨진다. 나오는 자리를 전부 고친다.
 
-- [ ] **Step 6: 전체 검사와 골든**
+- [x] **Step 6: 전체 검사와 골든**
 
 ```bash
 npm test 2>&1 | grep -E "ℹ (tests|pass|fail|skipped)"
@@ -526,7 +527,7 @@ npm run golden:compare -- before t3
 
 **추천 3건이 달라져야 한다.** 자리 판정이 엄격해졌으므로 점수가 움직인다. 나머지 20건은 같아야 한다 — 다르면 엔진을 잘못 건드린 것이다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add lib/engine/v2/
@@ -559,7 +560,7 @@ GiftVerdict 에 fireable 을 더한다. 하나라도 미충족·확정이면 이
 - Consumes: Task 3 의 `GiftVerdict.fireable`
 - Produces: `ScoreGift.fireable: boolean` · `PackLine.fireable` 은 만들지 않는다(기프트 단위다)
 
-- [ ] **Step 1: 검사를 더한다**
+- [x] **Step 1: 검사를 더한다**
 
 `lib/engine/v2/score.test.ts` 끝에 붙인다. 위쪽의 `SUPPLY` 와 `gift` 헬퍼를 그대로 쓴다.
 
@@ -597,7 +598,7 @@ test('전부 켜질 수 없으면 점수가 0 이다', () => {
 
 **`gift` 헬퍼의 기본값에 `fireable: true` 를 더해야 한다.** 헬퍼 정의를 찾아 고친다.
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -605,7 +606,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 
 기대: `fireable` 이 `ScoreGift` 에 없어 타입 오류 또는 단언 실패.
 
-- [ ] **Step 3: `ScoreGift` 와 `scorePack` 을 고친다**
+- [x] **Step 3: `ScoreGift` 와 `scorePack` 을 고친다**
 
 `lib/engine/v2/score.ts` 의 `ScoreGift` 에 더한다.
 
@@ -626,7 +627,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 	const pool = gifts.filter((g) => !g.owned && g.fireable);
 ```
 
-- [ ] **Step 4: 질의가 `fireable` 을 넘긴다**
+- [x] **Step 4: 질의가 `fireable` 을 넘긴다**
 
 `lib/queries/canonical/recommend.ts` 의 `GiftLine` 에 더한다.
 
@@ -647,7 +648,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 			fireable: g.fireable,
 ```
 
-- [ ] **Step 5: 검사와 골든**
+- [x] **Step 5: 검사와 골든**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -659,7 +660,7 @@ npm run golden:compare -- t3 t4
 
 **추천 3건이 또 달라진다.** 이번엔 후보가 줄어서다.
 
-- [ ] **Step 6: 붕괴 감시 — 생존율을 잰다**
+- [x] **Step 6: 붕괴 감시 — 생존율을 잰다**
 
 **설계 2.3 이 연 위험이다.** 너무 많이 빠지면 순위가 다시 안 갈린다.
 
@@ -684,7 +685,7 @@ rm -f scripts/survival-check.ts
 
 **기대: 생존율이 70% 아래로 떨어지지 않는다.** 설계 2.3 의 실측은 75~98% 였고, 자리 판정이 엄격해졌으니 조금 더 낮아질 수 있다. **60% 아래면 멈추고 보고하라** — 모형이 붕괴한 것이다.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add lib/engine/v2/score.ts lib/engine/v2/score.test.ts lib/queries/canonical/recommend.ts
@@ -710,7 +711,7 @@ fireable === false 는 F 에도 L 에도 안 들어간다. 목록에서 빼는 �
 - Consumes: Task 4 의 `ScoreGift`
 - Produces: `ScoreGift.exclusive: boolean` · `fitOf(keywordId, supply, exclusive)`
 
-- [ ] **Step 1: 검사를 더한다**
+- [x] **Step 1: 검사를 더한다**
 
 `lib/engine/v2/score.test.ts` 끝에 붙인다.
 
@@ -741,7 +742,7 @@ test('팩 점수가 전용 여부를 반영한다', () => {
 
 **`gift` 헬퍼의 기본값에 `exclusive: false` 를 더한다.**
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -749,7 +750,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 
 기대: `fitOf` 가 인자 셋을 안 받아 실패.
 
-- [ ] **Step 3: `fitOf` 와 `ScoreGift` 를 고친다**
+- [x] **Step 3: `fitOf` 와 `ScoreGift` 를 고친다**
 
 `lib/engine/v2/score.ts` — `fitOf` 의 주석에 한 문단을 더하고 인자를 늘린다.
 
@@ -791,7 +792,7 @@ export function fitOf(
 	const fit = pool.reduce((s, g) => s + fitOf(g.keywordId, supply, g.exclusive), 0) / pool.length;
 ```
 
-- [ ] **Step 4: 질의가 전용 표를 읽는다**
+- [x] **Step 4: 질의가 전용 표를 읽는다**
 
 `lib/queries/canonical/recommend.ts` — `packRows` 질의 **뒤에** 더한다. 후보 팩에 걸린 전용만 가져온다.
 
@@ -826,7 +827,7 @@ export function fitOf(
 			exclusive: g.exclusive,
 ```
 
-- [ ] **Step 5: 검사와 골든**
+- [x] **Step 5: 검사와 골든**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -838,7 +839,7 @@ npm run golden:compare -- t4 t5
 
 **추천 3건이 달라지고 나머지 20건은 같아야 한다.**
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add lib/engine/v2/score.ts lib/engine/v2/score.test.ts lib/queries/canonical/recommend.ts
@@ -868,7 +869,7 @@ git commit -m "feat(score): 전용 기프트를 온전히, 범용을 반으로 �
   - `Recipe` — `{ giftId: string; slots: ReadonlyArray<ReadonlyArray<string>> }`
   - `reachOf(recipe: Recipe, have: ReadonlySet<string>): number`
 
-- [ ] **Step 1: 검사를 먼저 쓴다**
+- [x] **Step 1: 검사를 먼저 쓴다**
 
 `lib/engine/v2/fusion.test.ts`:
 
@@ -914,7 +915,7 @@ test('칸이 없는 레시피는 0 이다 — 지어내지 않는다', () => {
 });
 ```
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/fusion.test.ts
@@ -922,7 +923,7 @@ npx tsx --test lib/engine/v2/fusion.test.ts
 
 기대: `Cannot find module './fusion.js'` 로 실패.
 
-- [ ] **Step 3: `fusion.ts` 를 쓴다**
+- [x] **Step 3: `fusion.ts` 를 쓴다**
 
 `lib/engine/v2/fusion.ts`:
 
@@ -978,7 +979,7 @@ export function reachOf(recipe: Recipe, have: ReadonlySet<string>): number {
 }
 ```
 
-- [ ] **Step 4: 검사가 통과하는지 본다**
+- [x] **Step 4: 검사가 통과하는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/fusion.test.ts
@@ -987,7 +988,7 @@ npm run typecheck
 
 기대: 6건 전부 pass · 0 fail · 타입 통과.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add lib/engine/v2/fusion.ts lib/engine/v2/fusion.test.ts
@@ -1025,7 +1026,7 @@ git commit -m "feat(engine): 합성 도달 — 순수 함수
   - `fusionOf(input): number`
   - `PackScore.fusion: number` · `PackLine.fusion: number`
 
-- [ ] **Step 1: 검사를 더한다**
+- [x] **Step 1: 검사를 더한다**
 
 `lib/engine/v2/score.test.ts` 끝에 붙인다.
 
@@ -1111,7 +1112,7 @@ test('점수는 (적합도 + 합성) × 켜짐이다', () => {
 
 **`import` 에 `fusionOf` 를 합쳐 넣는다.** 새 import 문을 만들지 마라.
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -1119,7 +1120,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 
 기대: `fusionOf is not exported` 류로 실패.
 
-- [ ] **Step 3: `score.ts` 에 `fusionOf` 와 `fusion` 을 더한다**
+- [x] **Step 3: `score.ts` 에 `fusionOf` 와 `fusion` 을 더한다**
 
 `lib/engine/v2/score.ts` 에 붙인다. 파일 위쪽 import 에 `import { reachOf, type Recipe } from './fusion.js';` 를 더한다.
 
@@ -1197,7 +1198,7 @@ export function scorePack(
 }
 ```
 
-- [ ] **Step 4: `load.ts` 가 합성 세 표를 싣는다**
+- [x] **Step 4: `load.ts` 가 합성 세 표를 싣는다**
 
 `lib/engine/v2/load.ts` 의 `Promise.all` 배열에 셋을 더하고 `EngineData` 에 `recipes` 를 더한다.
 
@@ -1244,7 +1245,7 @@ export function scorePack(
 
 **`fusionRecipe` 표는 안 읽는다** — `fusion_slot` 이 `gift_id` 와 `recipe_idx` 를 이미 갖고 있어 레시피를 복원할 수 있다. 칸이 하나도 없는 레시피는 도달이 0 이라 셈에 영향이 없다.
 
-- [ ] **Step 5: 질의가 `C` 를 셈해 넘긴다**
+- [x] **Step 5: 질의가 `C` 를 셈해 넘긴다**
 
 `lib/queries/canonical/recommend.ts` — `PackLine` 에 더한다.
 
@@ -1289,7 +1290,7 @@ export function scorePack(
 
 반환에 `fusion: s.fusion,` 을 더한다. 파일 위쪽 import 에 `fitOf` · `fusionOf` 를 합쳐 넣는다.
 
-- [ ] **Step 6: 검사와 골든**
+- [x] **Step 6: 검사와 골든**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -1303,7 +1304,7 @@ npm run golden:compare -- t5 t7
 
 **골든 요약에 `fusion` 을 더한다** — `scripts/golden-queries.ts` 의 `summarize` 에 `fusion: Number(p.fusion.toFixed(6)),` 를 넣는다. 안 넣으면 이 항의 회귀를 못 잡는다.
 
-- [ ] **Step 7: 상식 검사 — 서릿발 발자국**
+- [x] **Step 7: 상식 검사 — 서릿발 발자국**
 
 > **정정 (실행 중 발견)** — 아래 스크립트가 처음엔 `HWAJIN_DECK` 을 썼는데 **그것으로는 이 검사가 성립하지 않는다.** 서릿발 발자국(9410)의 키워드가 `Sinking` 이고 화진 덱은 침잠을 하나도 공급하지 않아 `resultFit` 이 0 이 된다 — 도달이 올라도 기여가 0 이라 `fusion` 이 안 움직인다. **설계 4.3 대로의 정상 동작이다**(결과물이 덱과 안 맞으면 자동으로 작아진다).
 >
@@ -1337,7 +1338,7 @@ rm -f scripts/fusion-check.ts
 
 **기대: 9409 를 보유하면 「공장 자동화」의 `fusion` 이 오른다.** 실측 `0.042002 → 0.049044`. **순위는 안 움직일 수 있다** — 이 덱에서 1004 는 이미 1위라 오를 자리가 없다. `fusion` 이 안 오르면 합성 항이 안 도는 것이다 — 멈추고 보고하라.
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 git add lib/engine/v2/ lib/queries/canonical/recommend.ts scripts/golden-queries.ts
@@ -1374,7 +1375,7 @@ fusion_recipe 표는 안 읽는다. fusion_slot 이 gift_id 와 recipe_idx 를 �
 
 **계측기다. 대충 만들고 나중에 제거한다**(설계 7절). 레이아웃·색·간격에 공들이지 않는다.
 
-- [ ] **Step 1: 모달 컴포넌트를 쓴다**
+- [x] **Step 1: 모달 컴포넌트를 쓴다**
 
 `components/gift-evidence.tsx` — **클라이언트 컴포넌트다.** `<dialog>` 를 쓰면 브라우저가 모달 동작을 준다.
 
@@ -1469,7 +1470,7 @@ export function GiftEvidence({
 }
 ```
 
-- [ ] **Step 2: 화면이 모달을 단다**
+- [x] **Step 2: 화면이 모달을 단다**
 
 `app/[locale]/recommend/page.tsx` — 위쪽 import 에 더한다.
 
@@ -1495,7 +1496,7 @@ import { GiftEvidence } from '@/components/gift-evidence';
 													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} + fusion ${p.fusion.toFixed(3)} × live ${p.live.toFixed(3)}`}
 ```
 
-- [ ] **Step 3: 타입 검사와 빌드**
+- [x] **Step 3: 타입 검사와 빌드**
 
 ```bash
 npm run typecheck
@@ -1506,7 +1507,7 @@ npm run build 2>&1 | grep -E "Compiled|error|Failed" | head -5
 
 **`GiftLine` 이 `EvidenceGift` 를 만족하는지 확인한다.** 안 맞으면 `EvidenceGift` 를 `GiftLine` 에 맞춰 좁힌다 — 화면이 질의 모양을 따른다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add components/gift-evidence.tsx "app/[locale]/recommend/page.tsx"
@@ -1529,7 +1530,7 @@ git commit -m "feat(web): 근거 모달 — 판정 전량 조회
 
 **Files:** 없음. **코드를 안 고친다.**
 
-- [ ] **Step 1: 개발 서버를 띄운다**
+- [x] **Step 1: 개발 서버를 띄운다**
 
 ```bash
 lsof -ti:3210 | xargs kill 2>/dev/null || true
@@ -1538,7 +1539,7 @@ sleep 12
 grep -E "Ready in|Error" /tmp/dev-v2.log | head -3
 ```
 
-- [ ] **Step 2: 화면 전부를 두드린다**
+- [x] **Step 2: 화면 전부를 두드린다**
 
 ```bash
 for p in /ko /ko/about /ko/dungeon /ko/floors /ko/glossary /ko/identities \
@@ -1550,7 +1551,7 @@ done
 
 기대: 전부 200.
 
-- [ ] **Step 3: 죽음바라기가 사라졌는지 본다**
+- [x] **Step 3: 죽음바라기가 사라졌는지 본다**
 
 **이 PR 의 출발점이다.** 사용자가 7층 「LCB 정기검진」 2위 팩의 근거로 봤다.
 
@@ -1569,7 +1570,7 @@ print('분해 줄', len(m), m[:2])
 
 **기대: 상위 5 근거에 죽음바라기가 0회.** 모달 안에는 「켜질 수 없음」으로 남아 있어야 하지만, 그것은 페이로드에 있고 이 추출은 서버 렌더 텍스트만 본다.
 
-- [ ] **Step 4: 모달이 실제로 열리는지 본다**
+- [x] **Step 4: 모달이 실제로 열리는지 본다**
 
 `<dialog>` 는 클라이언트에서 열린다. **HTML 에 내용이 들어 있는지**만 확인한다.
 
@@ -1579,7 +1580,7 @@ curl -s "http://localhost:3210/ko/recommend" | grep -c "전체 .*개 근거"
 
 기대: 후보 팩 수만큼(3층이면 27). 0 이면 모달이 안 달린 것이다.
 
-- [ ] **Step 5: 서버 로그와 정리**
+- [x] **Step 5: 서버 로그와 정리**
 
 ```bash
 grep -ciE "error|unhandled|⨯" /tmp/dev-v2.log
@@ -1597,7 +1598,7 @@ rm -f /tmp/dev-v2.log /tmp/rec7.html
 - Modify: `docs/superpowers/specs/2026-08-09-pack-scoring-v2-design.md`
 - Modify: `docs/superpowers/plans/2026-08-09-pack-scoring-v2.md`
 
-- [ ] **Step 1: 설계에 구현 결과를 더한다**
+- [x] **Step 1: 설계에 구현 결과를 더한다**
 
 10절 뒤에 「## 11. 구현 결과」를 더한다. **Task 1·4·7·9 에서 실제로 나온 값을 적는다.** 계획서 숫자를 옮겨 적지 마라.
 
@@ -1605,18 +1606,18 @@ rm -f /tmp/dev-v2.log /tmp/rec7.html
 
 **골든 단계별 대조가 이 PR 의 핵심 산출물이다.** 어느 변경이 순위를 얼마나 움직였는지 표로 남긴다.
 
-- [ ] **Step 2: 계획서 단계를 완료로 표시한다**
+- [x] **Step 2: 계획서 단계를 완료로 표시한다**
 
 ```bash
 python3 - <<'PY'
 p = 'docs/superpowers/plans/2026-08-09-pack-scoring-v2.md'
 s = open(p, encoding='utf-8').read()
-print('체크한 단계', s.count('- [ ] '))
-open(p, 'w', encoding='utf-8').write(s.replace('- [ ] ', '- [x] '))
+print('체크한 단계', s.count('- [x] '))
+open(p, 'w', encoding='utf-8').write(s.replace('- [x] ', '- [x] '))
 PY
 ```
 
-- [ ] **Step 3: 마지막 검증**
+- [x] **Step 3: 마지막 검증**
 
 ```bash
 npm run typecheck
@@ -1628,7 +1629,7 @@ git status --porcelain
 
 기대: 타입 통과 · 0 fail · `✓ Compiled successfully` · `검사 222건 전부 통과` · `git status` 는 커밋 뒤 비어 있다.
 
-- [ ] **Step 4: 커밋하고 PR 을 올린다**
+- [x] **Step 4: 커밋하고 PR 을 올린다**
 
 ```bash
 git add docs/
