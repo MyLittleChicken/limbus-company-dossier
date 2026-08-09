@@ -178,16 +178,16 @@ gift_requirement    획득 조건 142건.  풀에 들어오나 마나를 가르�
 ## 7. 구조
 
 ```
-lib/engine/v2/score.ts          새로 만든다.  순수 함수.  DB 를 모른다
-  fitOf(keywordId, supply)      축 공급으로 적합도
-  liveOf(verdict, chainDepth)   확정 1.0 · 가능 0.5 · 연쇄 1홉 1.0 · 2홉 0.5
-  scorePacks(input)             F · L · score
+lib/engine/v2/score.ts                        새로 만든다.  순수 함수.  DB 를 모른다
+  axisSupplyOf(rows): AxisSupply              refKind === 'axis' 만 접는다
+  fitOf(keywordId, supply): number            축 공급으로 적합도
+  liveOf(gift: ScoreGift): number             확정 1.0 · 가능 0.5 · 연쇄 1홉 1.0 · 2홉 0.5
+  scorePack(gifts, supply): PackScore         팩 하나.  호출자가 map 한다
 
-lib/engine/v2/score.test.ts     순수 검사.  DB 없이 돈다
+lib/engine/v2/score.test.ts                   순수 검사.  DB 없이 돈다
 
 lib/queries/canonical/recommend.ts
-  기프트에 keywordId 를 실어 온다 (지금 안 가져온다)
-  scorePacks 를 부르고 PackLine 에 { score, fit, live } 를 더한다
+  scorePack 을 부르고 PackLine 에 { score, fit, live } 를 더한다
   packs 를 score 내림차순으로 정렬 — 지금은 id 순이다
 
 app/[locale]/recommend/page.tsx
@@ -197,6 +197,13 @@ app/[locale]/recommend/page.tsx
 **점수 계산이 엔진에 있고 질의에 없다.** 순수 함수라 DB 없이 검사할 수 있고 저울추가
 코드로 잠긴다 — [ADR-08](../../adr/08-authored-facts-as-data.md) 의 「규칙은 코드 ·
 사실은 데이터」와 같은 자리다.
+
+**`ScoreGift` 는 기프트 id 를 안 받는다.** 셈에 필요 없고, 받으면 엔진(문자열 id)과
+화면(숫자 id) 사이의 변환이 점수 층까지 새어 든다. 보유 여부는 호출자가 `owned`
+불리언으로 표시해 넘긴다.
+
+`recommend.ts` 는 `gift` 를 `include` 로 가져오므로 **`keywordId` 가 이미 따라온다** —
+질의를 고칠 필요가 없다(실측 확인).
 
 **화면은 정렬과 한 줄뿐이다.** 정보 제공 화면의 디자인 작업이 별도로 진행 중이고,
 추천 화면은 제품 표면이 아니라 **엔진이 도는지 보이는 창**이다(PR-A 5절).
