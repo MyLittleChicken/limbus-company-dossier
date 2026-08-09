@@ -63,6 +63,8 @@ export interface GiftLine {
 	chainDepth: number | null;
 	/** 이 편성에서 켜질 수 있나. false 면 점수에 안 들어간다 */
 	fireable: boolean;
+	/** 이 팩에서만 얻을 수 있나 */
+	exclusive: boolean;
 }
 
 export interface PackLine {
@@ -167,6 +169,16 @@ export async function recommendForDeck(
 		},
 	});
 
+	/**
+	 * 이 팩에서만 얻는 기프트. **팩마다 다르다** — 같은 기프트가 A 팩 전용이면서
+	 * B 팩에서는 범용일 수 있으므로 `기프트|팩` 짝으로 담는다.
+	 */
+	const exclusiveRows = await canonical.giftExclusivePack.findMany({
+		where: { packId: { in: packIds } },
+		select: { giftId: true, packId: true },
+	});
+	const exclusiveSet = new Set(exclusiveRows.map((r) => `${r.giftId}|${r.packId}`));
+
 	// 축 공급을 먼저 접는다 — 팩마다 다시 세지 않는다
 	const supplyRows = [...new Set(data.capabilities.map((c) => `${c.refKind}|${c.refId}`))]
 		.map((k) => {
@@ -196,6 +208,7 @@ export async function recommendForDeck(
 				chainDepth: depthByGift.get(row.giftId) ?? null,
 				// 판정이 없는 기프트는 트리거가 아예 없는 것이라 켜질 수 있다고 본다 — 못 켠다는 증거가 없다
 				fireable: v?.fireable ?? true,
+				exclusive: exclusiveSet.has(`${row.giftId}|${p.id}`),
 			};
 		});
 		// 등급 · 충족 수 순. **점수가 아니라 정렬 기준이다** — 순위를 뜻하지 않는다
@@ -212,6 +225,7 @@ export async function recommendForDeck(
 			chainDepth: g.chainDepth,
 			owned: ownedSet.has(String(g.id)),
 			fireable: g.fireable,
+			exclusive: g.exclusive,
 		}));
 		const s = scorePack(scoreInput, axisSupply);
 

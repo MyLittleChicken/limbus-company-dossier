@@ -50,12 +50,20 @@ export function axisSupplyOf(
  * 없고 필요도 없다 — `canonical/squad.ts` 와 같은 판정이다.
  *
  * **축이 아닌 키워드는 0 이다.** 키워드 표에 공격 타입 3종(`Slash` · `Penetrate` ·
- * `Hit`)과 `Random` · `None` 이 섞여 있다. 그것들은 축이 아니므로 덱 적합도에
- * 기여하지 않는다.
+ * `Hit`)과 `Random` · `None` 이 섞여 있다.
+ *
+ * **범용은 반으로 친다**(설계 3.2). 아무 팩에서나 얻을 수 있는 것은 이 팩을 고를
+ * 이유가 못 된다 — 팩당 전용이 3~7개(5~9%)이고 나머지 90%는 어디서나 나온다.
+ * 아무 편성에서나 켜지는 조건이 변별을 죽인 것과 같은 구조다.
  */
-export function fitOf(keywordId: string | null, supply: AxisSupply): number {
+export function fitOf(
+	keywordId: string | null,
+	supply: AxisSupply,
+	exclusive: boolean,
+): number {
 	if (keywordId === null || supply.max === 0) return 0;
-	return (supply.counts.get(keywordId.toUpperCase()) ?? 0) / supply.max;
+	const axis = (supply.counts.get(keywordId.toUpperCase()) ?? 0) / supply.max;
+	return axis * (exclusive ? 1 : HALF);
 }
 
 /** 점수가 보는 기프트 하나. **id 를 안 받는다** — 셈에 필요 없다 */
@@ -80,6 +88,8 @@ export interface ScoreGift {
 	 * 판정을 검증할 수 없으므로 근거 모달은 그대로 보여준다.
 	 */
 	fireable: boolean;
+	/** 이 팩에서만 얻을 수 있나. 범용은 반으로 친다 */
+	exclusive: boolean;
 }
 
 /**
@@ -140,7 +150,7 @@ export function scorePack(
 		return { fit: 0, live: 0, score: 0, candidates: 0, rankable };
 	}
 
-	const fit = pool.reduce((s, g) => s + fitOf(g.keywordId, supply), 0) / pool.length;
+	const fit = pool.reduce((s, g) => s + fitOf(g.keywordId, supply, g.exclusive), 0) / pool.length;
 
 	// 발동 조건이 없는 기프트는 분모에서 빠진다. 0 으로 세지 않는다
 	const total = pool.reduce((s, g) => s + g.total, 0);

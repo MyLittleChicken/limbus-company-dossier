@@ -20,27 +20,27 @@ test('축 공급은 axis 갈래만 본다', () => {
 	assert.equal(SUPPLY.counts.has('wrath'), false);
 });
 
-test('적합도는 최대 축 공급으로 나눈 값이다', () => {
-	assert.equal(fitOf('Combustion', SUPPLY), 1);
-	assert.equal(fitOf('Vibration', SUPPLY), 6 / 7);
-	assert.equal(fitOf('Bullet', SUPPLY), 3 / 7);
+test('적합도는 최대 축 공급으로 나눈 값이다 — 전용 기준', () => {
+	assert.equal(fitOf('Combustion', SUPPLY, true), 1);
+	assert.equal(fitOf('Vibration', SUPPLY, true), 6 / 7);
+	assert.equal(fitOf('Bullet', SUPPLY, true), 3 / 7);
 });
 
 test('덱에 없는 축은 0 이다', () => {
-	assert.equal(fitOf('Sinking', SUPPLY), 0);
+	assert.equal(fitOf('Sinking', SUPPLY, true), 0);
 });
 
 test('축이 아닌 키워드는 0 이다 — 공격 타입 3종과 범용이 키워드 표에 섞여 있다', () => {
-	assert.equal(fitOf('None', SUPPLY), 0);
-	assert.equal(fitOf('Slash', SUPPLY), 0);
-	assert.equal(fitOf('Penetrate', SUPPLY), 0);
-	assert.equal(fitOf(null, SUPPLY), 0);
+	assert.equal(fitOf('None', SUPPLY, true), 0);
+	assert.equal(fitOf('Slash', SUPPLY, true), 0);
+	assert.equal(fitOf('Penetrate', SUPPLY, true), 0);
+	assert.equal(fitOf(null, SUPPLY, true), 0);
 });
 
 test('축 공급이 없는 덱은 적합도가 전부 0 이다 — 나누기 0 을 안 만든다', () => {
 	const empty = axisSupplyOf([{ refKind: 'sin', refId: 'wrath', count: 7 }]);
 	assert.equal(empty.max, 0);
-	assert.equal(fitOf('Combustion', empty), 0);
+	assert.equal(fitOf('Combustion', empty, true), 0);
 });
 
 const gift = (over: Partial<ScoreGift> = {}): ScoreGift => ({
@@ -51,6 +51,7 @@ const gift = (over: Partial<ScoreGift> = {}): ScoreGift => ({
 	chainDepth: null,
 	owned: false,
 	fireable: true,
+	exclusive: false,
 	...over,
 });
 
@@ -100,7 +101,8 @@ test('연쇄는 미충족 효과 수를 넘지 않는다 — L 이 1 을 넘으�
 test('적합도는 후보의 평균이고 켜짐은 효과 비율이다', () => {
 	const s = scorePack(
 		[
-			// 화상 · 효과 2개 다 확정 충족
+			// 화상 · 전용 · 효과 2개 다 확정 충족. 이 검사는 fit=평균/live=비율을
+			// 보는 것이지 전용 가중을 보는 게 아니므로 전용으로 둬 축 비를 그대로 쓴다
 			gift({
 				keywordId: 'Combustion',
 				total: 2,
@@ -109,6 +111,7 @@ test('적합도는 후보의 평균이고 켜짐은 효과 비율이다', () => 
 					{ verdict: 'satisfied', certainty: 'certain' },
 					{ verdict: 'satisfied', certainty: 'certain' },
 				],
+				exclusive: true,
 			}),
 			// 범용 · 효과 2개 중 하나도 안 켜짐
 			gift({
@@ -165,7 +168,8 @@ test('후보가 0 이면 점수가 0 이다 — 나누기 0 을 안 만든다', 
 });
 
 test('효과가 하나도 없는 팩은 켜짐이 0 이다 — 0 으로 세지 않고 분모에서 뺀다', () => {
-	const s = scorePack([gift({ keywordId: 'Combustion', total: 0 })], SUPPLY);
+	// 이 검사는 켜짐이 아닌 fit 계산을 보는 게 아니므로 전용으로 둬 축 비를 그대로 쓴다
+	const s = scorePack([gift({ keywordId: 'Combustion', total: 0, exclusive: true })], SUPPLY);
 	assert.equal(s.candidates, 1);
 	assert.equal(s.fit, 1);
 	assert.equal(s.live, 0);
@@ -206,11 +210,13 @@ test('켜질 수 없는 기프트는 후보에서 빠진다', () => {
 		],
 		fireable: false,
 	});
+	// 이 검사는 fireable 필터를 보는 것이지 전용 가중을 보는 게 아니므로 전용으로 둔다
 	const alive = gift({
 		keywordId: 'Vibration',
 		total: 1,
 		satisfied: 1,
 		reasons: [{ verdict: 'satisfied', certainty: 'certain' }],
+		exclusive: true,
 	});
 	const s = scorePack([dead, alive], SUPPLY);
 	// 후보는 살아있는 하나뿐이다
@@ -223,4 +229,27 @@ test('전부 켜질 수 없으면 점수가 0 이다', () => {
 	const s = scorePack([gift({ keywordId: 'Combustion', total: 1, fireable: false })], SUPPLY);
 	assert.equal(s.candidates, 0);
 	assert.equal(s.score, 0);
+});
+
+test('전용은 온전히, 범용은 반으로 친다', () => {
+	// 화상은 최대 축이라 축 비가 1.0 이다. 전용/범용만 갈린다
+	assert.equal(fitOf('Combustion', SUPPLY, true), 1);
+	assert.equal(fitOf('Combustion', SUPPLY, false), 0.5);
+});
+
+test('전용 가중은 축 비에 곱해진다 — 안 맞는 축이면 전용이어도 작다', () => {
+	assert.equal(fitOf('Bullet', SUPPLY, true), 3 / 7);
+	assert.equal(fitOf('Bullet', SUPPLY, false), 3 / 14);
+});
+
+test('덱에 없는 축은 전용이어도 0 이다', () => {
+	assert.equal(fitOf('Sinking', SUPPLY, true), 0);
+});
+
+test('팩 점수가 전용 여부를 반영한다', () => {
+	const ex = gift({ keywordId: 'Combustion', total: 1, satisfied: 1, reasons: [{ verdict: 'satisfied', certainty: 'certain' }], exclusive: true });
+	const gen = gift({ keywordId: 'Combustion', total: 1, satisfied: 1, reasons: [{ verdict: 'satisfied', certainty: 'certain' }] });
+	assert.equal(scorePack([ex], SUPPLY).fit, 1);
+	assert.equal(scorePack([gen], SUPPLY).fit, 0.5);
+	assert.equal(scorePack([ex, gen], SUPPLY).fit, 0.75);
 });
