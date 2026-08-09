@@ -50,6 +50,7 @@ const gift = (over: Partial<ScoreGift> = {}): ScoreGift => ({
 	reasons: [],
 	chainDepth: null,
 	owned: false,
+	fireable: true,
 	...over,
 });
 
@@ -192,4 +193,34 @@ test('켜짐은 1 을 안 넘는다 — 연쇄가 붙어도', () => {
 		SUPPLY,
 	);
 	assert.equal(s.live, 1);
+});
+
+test('켜질 수 없는 기프트는 후보에서 빠진다', () => {
+	const dead = gift({
+		keywordId: 'Combustion',
+		total: 2,
+		satisfied: 1,
+		reasons: [
+			{ verdict: 'satisfied', certainty: 'certain' },
+			{ verdict: 'unsatisfied', certainty: 'certain' },
+		],
+		fireable: false,
+	});
+	const alive = gift({
+		keywordId: 'Vibration',
+		total: 1,
+		satisfied: 1,
+		reasons: [{ verdict: 'satisfied', certainty: 'certain' }],
+	});
+	const s = scorePack([dead, alive], SUPPLY);
+	// 후보는 살아있는 하나뿐이다
+	assert.equal(s.candidates, 1);
+	assert.equal(s.fit, 6 / 7);
+	assert.equal(s.live, 1);
+});
+
+test('전부 켜질 수 없으면 점수가 0 이다', () => {
+	const s = scorePack([gift({ keywordId: 'Combustion', total: 1, fireable: false })], SUPPLY);
+	assert.equal(s.candidates, 0);
+	assert.equal(s.score, 0);
 });

@@ -61,6 +61,8 @@ export interface GiftLine {
 	reasons: GiftVerdict['reasons'];
 	/** 보유 기프트가 이걸 켤 수 있나. 몇 홉인지 */
 	chainDepth: number | null;
+	/** 이 편성에서 켜질 수 있나. false 면 점수에 안 들어간다 */
+	fireable: boolean;
 }
 
 export interface PackLine {
@@ -192,6 +194,8 @@ export async function recommendForDeck(
 				certain: v?.certain ?? 0,
 				reasons: v?.reasons ?? [],
 				chainDepth: depthByGift.get(row.giftId) ?? null,
+				// 판정이 없는 기프트는 트리거가 아예 없는 것이라 켜질 수 있다고 본다 — 못 켠다는 증거가 없다
+				fireable: v?.fireable ?? true,
 			};
 		});
 		// 등급 · 충족 수 순. **점수가 아니라 정렬 기준이다** — 순위를 뜻하지 않는다
@@ -207,6 +211,7 @@ export async function recommendForDeck(
 			reasons: g.reasons,
 			chainDepth: g.chainDepth,
 			owned: ownedSet.has(String(g.id)),
+			fireable: g.fireable,
 		}));
 		const s = scorePack(scoreInput, axisSupply);
 

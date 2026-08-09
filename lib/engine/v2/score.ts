@@ -73,6 +73,13 @@ export interface ScoreGift {
 	chainDepth: number | null;
 	/** 이미 보유한 기프트인가. 후보에서 뺀다 */
 	owned: boolean;
+	/**
+	 * 이 편성에서 켜질 수 있나. **false 면 F · L · C 어디에도 안 들어간다**(설계 2.2).
+	 *
+	 * 목록에서 빼는 것이 아니라 **점수에서** 빼는 것이다. 왜 빠졌는지 볼 수 없으면
+	 * 판정을 검증할 수 없으므로 근거 모달은 그대로 보여준다.
+	 */
+	fireable: boolean;
 }
 
 /**
@@ -126,7 +133,8 @@ export function scorePack(
 	gifts: ReadonlyArray<ScoreGift>,
 	supply: AxisSupply,
 ): PackScore {
-	const pool = gifts.filter((g) => !g.owned);
+	// 보유는 다시 못 얻고, 켜질 수 없는 것은 고를 이유가 없다
+	const pool = gifts.filter((g) => !g.owned && g.fireable);
 	const rankable = supply.max > 0;
 	if (pool.length === 0) {
 		return { fit: 0, live: 0, score: 0, candidates: 0, rankable };
