@@ -154,16 +154,23 @@ export default async function RecommendPage({
 													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} + fusion ${p.fusion.toFixed(3)} × live ${p.live.toFixed(3)}`}
 											</span>
 										)}
-										{p.tally.A === 0 ? (
-											<Nothing kind="absent">
-												{ko ? '이 편성이 켜는 기프트가 없다' : 'nothing this squad turns on'}
-											</Nothing>
-										) : (
-											<ul className="comp">
-												{p.gifts
-													.filter((g) => g.grade === 'A')
-													.slice(0, 5)
-													.map((g) => (
+										{/*
+										 * 등급과 fireable 은 별개다 — 등급은 「얼마나 판정 가능한가」고
+										 * fireable 은 「이 편성에서 켜질 수 있나」다. A 등급이어도 확정
+										 * 미충족 조건이 하나 있으면 이 편성에서는 영영 안 켜지므로(점수도
+										 * 이미 그렇게 센다) 「이 팩의 볼거리」 목록에선 뺀다. tally.A 는
+										 * 전량을 세는 그대로 두고(모달이 그 차이를 설명한다), 미리보기만
+										 * fireable 로 좁힌다.
+										 */}
+										{(() => {
+											const shown = p.gifts.filter((g) => g.grade === 'A' && g.fireable).slice(0, 5);
+											return shown.length === 0 ? (
+												<Nothing kind="absent">
+													{ko ? '이 편성이 켜는 기프트가 없다' : 'nothing this squad turns on'}
+												</Nothing>
+											) : (
+												<ul className="comp">
+													{shown.map((g) => (
 														<li key={g.id}>
 															<span className="comp-k">{g.name ?? String(g.id)}</span>
 															<span className="comp-v">
@@ -182,8 +189,9 @@ export default async function RecommendPage({
 															</span>
 														</li>
 													))}
-											</ul>
-										)}
+												</ul>
+											);
+										})()}
 										{/* 계측기 — 상위 5만으론 왜 이 순위인지 검증할 수 없다. 전체 근거를 모달로 낸다(설계 7절) */}
 										<GiftEvidence
 											packName={p.name ?? p.id}
