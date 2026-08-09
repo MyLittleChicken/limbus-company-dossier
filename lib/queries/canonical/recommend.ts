@@ -8,6 +8,7 @@ import { evaluateGifts } from '@/lib/engine/v2/evaluate';
 import { chain } from '@/lib/engine/v2/chain';
 import type { GiftVerdict, Squad } from '@/lib/engine/v2/types';
 import { localeRows, nameOf } from './locale';
+import { axisSupplyOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
 
 /**
  * 화면이 쓰는 추천 질의.
@@ -43,6 +44,8 @@ export interface GiftLine {
 	id: number;
 	name: string | null;
 	icon: string | null;
+	/** 기프트 분류. 덱 적합도의 재료다 — 축이 아닌 값(None · Slash …)도 그대로 낸다 */
+	keywordId: string | null;
 	grade: 'A' | 'B' | 'C';
 	/** 판정 가능한 참조 중 충족한 수 */
 	satisfied: number;
@@ -59,6 +62,12 @@ export interface PackLine {
 	id: string;
 	name: string | null;
 	icon: string | null;
+	/** `fit × live`. 순위의 근거다 */
+	score: number;
+	/** 후보 기프트의 평균 덱 적합도 */
+	fit: number;
+	/** 후보 기프트의 효과 중 살아 있는 비율 */
+	live: number;
 	/** 등급별 기프트 수 */
 	tally: { A: number; B: number; C: number };
 	gifts: GiftLine[];
@@ -74,6 +83,8 @@ export interface Recommendation {
 	owned: Array<{ id: number; name: string | null }>;
 	/** 편성이 공급하는 축과 인원. 화면의 막대 */
 	supply: Array<{ refKind: string; refId: string; count: number }>;
+	/** 순위를 매길 수 있나. 축을 안 공급하는 덱은 false 다 */
+	rankable: boolean;
 }
 
 export async function recommendForDeck(
@@ -149,6 +160,17 @@ export async function recommendForDeck(
 		},
 	});
 
+	// 축 공급을 먼저 접는다 — 팩마다 다시 세지 않는다
+	const supplyRows = [...new Set(data.capabilities.map((c) => `${c.refKind}|${c.refId}`))]
+		.map((k) => {
+			const [refKind = '', refId = ''] = k.split('|');
+			return { refKind, refId, count: profile.count(refKind, refId) };
+		})
+		.filter((s) => s.count > 0)
+		.sort((a, b) => b.count - a.count || a.refId.localeCompare(b.refId));
+	const axisSupply = axisSupplyOf(supplyRows);
+	const ownedSet = new Set(ownedIds.map(String));
+
 	const packs: PackLine[] = packRows.map((p) => {
 		const gifts: GiftLine[] = p.gifts.map((row) => {
 			const v = byGift.get(row.giftId);
@@ -156,6 +178,7 @@ export async function recommendForDeck(
 				id: Number(row.giftId),
 				name: nameOf(row.gift.stages[0]?.texts ?? [], locale)?.name ?? null,
 				icon: giftIcon(row.gift.sprite),
+				keywordId: row.gift.keywordId,
 				// 판정이 없는 기프트는 트리거가 아예 없는 것이다 — C 로 둔다
 				grade: v?.grade ?? 'C',
 				satisfied: v?.satisfied ?? 0,
@@ -168,10 +191,27 @@ export async function recommendForDeck(
 		});
 		// 등급 · 충족 수 순. **점수가 아니라 정렬 기준이다** — 순위를 뜻하지 않는다
 		gifts.sort((a, b) => a.grade.localeCompare(b.grade) || b.satisfied - a.satisfied || a.id - b.id);
+
+		// 점수는 엔진이 센다. 화면도 질의도 다시 세지 않는다.
+		// **`gifts` 를 재료로 쓴다** — `p.gifts` 를 두 번 순회하며 `byGift` 를 다시
+		// 조회하면 같은 셈이 두 벌이 되고, 한쪽만 고쳐질 때 조용히 갈린다
+		const scoreInput: ScoreGift[] = gifts.map((g) => ({
+			keywordId: g.keywordId,
+			total: g.total,
+			satisfied: g.satisfied,
+			reasons: g.reasons,
+			chainDepth: g.chainDepth,
+			owned: ownedSet.has(String(g.id)),
+		}));
+		const s = scorePack(scoreInput, axisSupply);
+
 		return {
 			id: p.id,
 			name: nameOf(p.texts, locale)?.name ?? null,
 			icon: packIcon(p.sprite),
+			score: s.score,
+			fit: s.fit,
+			live: s.live,
 			tally: {
 				A: gifts.filter((g) => g.grade === 'A').length,
 				B: gifts.filter((g) => g.grade === 'B').length,
@@ -180,6 +220,12 @@ export async function recommendForDeck(
 			gifts,
 		};
 	});
+
+	// **점수 순이다.** 순위를 못 매기는 덱이면 팩 id 순으로 둔다 — 0 점을
+	// 늘어놓은 순서가 의미 있는 것처럼 보이면 안 된다
+	packs.sort((a, b) =>
+		axisSupply.max > 0 ? b.score - a.score || a.id.localeCompare(b.id) : a.id.localeCompare(b.id),
+	);
 
 	// 덱 표시
 	const identities = await canonical.identity.findMany({
@@ -201,16 +247,6 @@ export async function recommendForDeck(
 		include: { stages: { where: { level: 0 }, include: { texts: localeRows(locale) } } },
 	});
 
-	// 공급 — Profile 이 센 것을 그대로 낸다. 화면이 다시 세지 않는다
-	const supplyKeys = [...new Set(data.capabilities.map((c) => `${c.refKind}|${c.refId}`))];
-	const supply = supplyKeys
-		.map((k) => {
-			const [refKind = '', refId = ''] = k.split('|');
-			return { refKind, refId, count: profile.count(refKind, refId) };
-		})
-		.filter((s) => s.count > 0)
-		.sort((a, b) => b.count - a.count || a.refId.localeCompare(b.refId));
-
 	return {
 		deck: identities.map((i) => ({
 			id: Number(i.id),
@@ -226,6 +262,7 @@ export async function recommendForDeck(
 			id: Number(g.id),
 			name: nameOf(g.stages[0]?.texts ?? [], locale)?.name ?? null,
 		})),
-		supply,
+		supply: supplyRows,
+		rankable: axisSupply.max > 0,
 	};
 }
