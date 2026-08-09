@@ -18,8 +18,8 @@ import { axisSupplyOf, fitOf, fusionOf, scorePack, type ScoreGift } from '@/lib/
  * 근거와 함께 답한다(설계 2절).
  *
  * **팩 점수를 내고 점수 내림차순으로 정렬해 준다.** 화면은 표시만 한다. 점수 =
- * 적합도 × 켜짐이고 계산은 `lib/engine/v2/score.ts` 가 한다 — 이 파일은 재료를
- * 모아 넘길 뿐 다시 세지 않는다.
+ * (적합도 + 합성 도달) × 켜짐이고 계산은 `lib/engine/v2/score.ts` 가 한다 — 이
+ * 파일은 재료를 모아 넘길 뿐 다시 세지 않는다.
  *
  * 편성이 축을 하나도 공급하지 않으면 `rankable` 이 false 다. 그때는 적합도가
  * 전부 0 이라 점수순이 아니라 팩 id 순으로 둔다 — 전부 0 점인데 순서를 붙이면
@@ -65,19 +65,22 @@ export interface GiftLine {
 	fireable: boolean;
 	/** 이 팩에서만 얻을 수 있나 */
 	exclusive: boolean;
+	/** 이미 보유한 기프트인가. 점수의 후보 규칙(`!owned && fireable`)과 같은 값이다 —
+	 * 화면이 후보를 다시 추릴 때 이 필드로 걸러야 점수와 화면이 갈리지 않는다 */
+	owned: boolean;
 }
 
 export interface PackLine {
 	id: string;
 	name: string | null;
 	icon: string | null;
-	/** `fit × live`. 순위의 근거다 */
+	/** `(fit + fusion) × live`. 순위의 근거다 */
 	score: number;
 	/** 후보 기프트의 평균 덱 적합도 */
 	fit: number;
 	/** 후보 기프트의 발동 조건 중 살아 있는 비율 */
 	live: number;
-	/** 합성으로 얻는 몫 */
+	/** 합성으로 얻는 몫. `fit` 과 더해진 뒤 `live` 와 곱해진다 */
 	fusion: number;
 	/** 등급별 기프트 수 */
 	tally: { A: number; B: number; C: number };
@@ -190,6 +193,7 @@ export async function recommendForDeck(
 		.filter((s) => s.count > 0)
 		.sort((a, b) => b.count - a.count || a.refId.localeCompare(b.refId));
 	const axisSupply = axisSupplyOf(supplyRows);
+	// 문자열 id 로 통일해 둔다 — 점수 재료(scoreInput)와 합성 셈(fusionOf) 양쪽이 쓴다
 	const ownedSet = new Set(ownedIds.map(String));
 
 	// 합성 결과물의 적합도. **결과물은 팩 밖에 있을 수 있다** — 합성으로만 얻는
@@ -205,7 +209,6 @@ export async function recommendForDeck(
 	const resultFit = new Map(
 		resultGifts.map((g) => [g.id, fitOf(g.keywordId, axisSupply, true)]),
 	);
-	const ownedSetStr = new Set(ownedIds.map(String));
 
 	const packs: PackLine[] = packRows.map((p) => {
 		const gifts: GiftLine[] = p.gifts.map((row) => {
@@ -226,6 +229,7 @@ export async function recommendForDeck(
 				// 판정이 없는 기프트는 트리거가 아예 없는 것이라 켜질 수 있다고 본다 — 못 켠다는 증거가 없다
 				fireable: v?.fireable ?? true,
 				exclusive: exclusiveSet.has(`${row.giftId}|${p.id}`),
+				owned: ownedSet.has(row.giftId),
 			};
 		});
 		// 등급 · 충족 수 순. **점수가 아니라 정렬 기준이다** — 순위를 뜻하지 않는다
@@ -240,17 +244,17 @@ export async function recommendForDeck(
 			satisfied: g.satisfied,
 			reasons: g.reasons,
 			chainDepth: g.chainDepth,
-			owned: ownedSet.has(String(g.id)),
+			owned: g.owned,
 			fireable: g.fireable,
 			exclusive: g.exclusive,
 		}));
 		// 보유 ∪ 이 팩. 「이 팩을 고르면 재료가 얼마나 모이나」를 묻는다
-		const have = new Set([...ownedSetStr, ...p.gifts.map((row) => row.giftId)]);
+		const have = new Set([...ownedSet, ...p.gifts.map((row) => row.giftId)]);
 		const fusion = fusionOf({
 			recipes: data.recipes,
 			resultFit,
 			have,
-			owned: ownedSetStr,
+			owned: ownedSet,
 			candidates: scoreInput.filter((g) => !g.owned && g.fireable).length,
 		});
 		const s = scorePack(scoreInput, axisSupply, fusion);
