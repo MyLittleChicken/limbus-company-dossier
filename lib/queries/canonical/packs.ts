@@ -1,4 +1,4 @@
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 import type { Prisma } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
 import { packIcon } from '@/lib/assets';

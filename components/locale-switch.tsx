@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import type { Locale } from '@prisma/client';
+import type { Locale } from '@/lib/locale';
 import { LOCALES, LOCALE_LABEL } from '@/lib/locale';
 
 /**
