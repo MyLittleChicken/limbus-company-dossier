@@ -6,9 +6,12 @@ const SUPPLY = axisSupplyOf([
 	{ refKind: 'axis', refId: 'COMBUSTION', count: 7 },
 	{ refKind: 'axis', refId: 'VIBRATION', count: 6 },
 	{ refKind: 'axis', refId: 'BULLET', count: 3 },
-	// 축이 아닌 갈래가 섞여 온다. 분모를 여기서 가져오면 축의 차이가 뭉개진다
-	{ refKind: 'sin', refId: 'wrath', count: 7 },
-	{ refKind: 'skill_kind', refId: 'attack', count: 7 },
+	// 축이 아닌 갈래가 섞여 온다. 분모를 여기서 가져오면 축의 차이가 뭉개진다.
+	// **일부러 축 최댓값(7)보다 크게 둔다.** 값이 축과 같으면(예: 7) 분모를
+	// `axis` 밖에서 잘못 가져와도 fitOf 검사가 우연히 안 깨진다 — 여기서
+	// 크게 두면 배선이 틀리는 순간 `fitOf('Combustion')` 이 1 을 벗어난다
+	{ refKind: 'sin', refId: 'wrath', count: 9 },
+	{ refKind: 'skill_kind', refId: 'attack', count: 8 },
 ]);
 
 test('축 공급은 axis 갈래만 본다', () => {
