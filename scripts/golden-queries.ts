@@ -58,6 +58,31 @@ async function cases(): Promise<Case[]> {
 	const packs = await import('../lib/queries/canonical/packs.js');
 	const detail = await import('../lib/queries/canonical/detail.js');
 	const squad = await import('../lib/queries/canonical/squad.js');
+	const recommend = await import('../lib/queries/canonical/recommend.js');
+
+	/**
+	 * **기프트 목록을 통째로 뜨지 않는다.** 후보 팩 27개에 기프트 1,990건이고
+	 * 근거까지 실으면 골든 한 건이 수 MB 가 된다 — 대조할 때 사람이 못 읽는다.
+	 * 회귀가 나는 자리는 순위와 점수이므로 그것만 남긴다.
+	 */
+	const summarize = (r: Awaited<ReturnType<typeof recommend.recommendForDeck>>) => ({
+		floor: r.floor,
+		difficulty: r.difficulty,
+		rankable: r.rankable,
+		candidateCount: r.candidateCount,
+		deck: r.deck.map((d) => ({ id: d.id, name: d.name, axes: d.axes })),
+		supply: r.supply,
+		owned: r.owned,
+		packs: r.packs.map((p) => ({
+			id: p.id,
+			name: p.name,
+			// 부동소수 꼬리가 판마다 흔들리면 대조가 시끄러워진다. 여섯 자리로 자른다
+			score: Number(p.score.toFixed(6)),
+			fit: Number(p.fit.toFixed(6)),
+			live: Number(p.live.toFixed(6)),
+			tally: p.tally,
+		})),
+	});
 
 	return [
 		{ name: 'reference.listFloorPacks', run: () => ref.listFloorPacks('ko') },
@@ -78,6 +103,22 @@ async function cases(): Promise<Case[]> {
 		{ name: 'egos.getEgo.20509', run: () => detail.getEgo(20509, 'ko') },
 		{ name: 'squad.listSquad', run: () => squad.listSquad('ko') },
 		{ name: 'squad.listSquadAxes', run: () => squad.listSquadAxes('ko') },
+		{
+			name: 'recommend.floor3.hard',
+			run: async () => summarize(await recommend.recommendForDeck('ko', { floor: 3, difficulty: 'hard' })),
+		},
+		{
+			// 보유가 후보를 줄이고 연쇄를 켜는 경로. PR-A 의 빈 배열 버그가 여기 걸린다
+			name: 'recommend.floor3.owned',
+			run: async () =>
+				summarize(
+					await recommend.recommendForDeck('ko', {
+						floor: 3,
+						difficulty: 'hard',
+						ownedIds: [9001, 9005, 9009, 9029, 9041, 9052, 9066, 9088, 9090, 9092, 9103, 9110],
+					}),
+				),
+		},
 		{ name: 'search.이상', run: () => ref.searchAll('이상', 'ko') },
 		{ name: 'search.화상', run: () => ref.searchAll('화상', 'ko') },
 	];
