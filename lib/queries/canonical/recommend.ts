@@ -71,7 +71,7 @@ export interface PackLine {
 	score: number;
 	/** 후보 기프트의 평균 덱 적합도 */
 	fit: number;
-	/** 후보 기프트의 효과 중 살아 있는 비율 */
+	/** 후보 기프트의 발동 조건 중 살아 있는 비율 */
 	live: number;
 	/** 등급별 기프트 수 */
 	tally: { A: number; B: number; C: number };

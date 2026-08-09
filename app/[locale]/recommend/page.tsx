@@ -14,7 +14,7 @@ import { Nothing, Panel, SecLabel } from '@/components/ui';
  * 입력도 없고 덱도 고정이다. 층과 보유 기프트만 주소로 받는다.
  *
  * **순위를 매긴다.** 점수 = 적합도 × 켜짐이다. 적합도는 이 팩에서 하나 뽑으면 내 덱
- * 축에 얼마나 기여하나이고, 켜짐은 이 팩 기프트의 효과 중 몇 %가 내 편성에서 사나다.
+ * 축에 얼마나 기여하나이고, 켜짐은 이 팩 기프트의 발동 조건 중 몇 %가 내 편성에서 사나다.
  * **정렬과 점수는 질의(`recommendForDeck`)가 계산해서 낸다 — 화면은 표시만 하고
  * 다시 계산하지 않는다.**
  *
@@ -91,8 +91,8 @@ export default async function RecommendPage({
 
 			<p className="lede">
 				{ko
-					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩 점수는 「이 팩이 내 덱 축과 맞는 정도」 × 「이 팩 기프트의 효과 중 실제로 켜지는 비율」이다. 이미 보유한 기프트는 후보에서 빠지고, 대신 다른 기프트를 켜는 연쇄로 센다.'
-					: 'A slice showing the v2 engine running on canonical data. A pack score is how well the pack matches the deck axes, times the share of its gift effects that actually fire. Owned gifts leave the candidate pool and count instead as chain enablers.'}
+					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩 점수는 「이 팩이 내 덱 축과 맞는 정도」 × 「이 팩 기프트의 발동 조건 중 실제로 켜지는 비율」이다. 이미 보유한 기프트는 후보에서 빠지고, 대신 다른 기프트를 켜는 연쇄로 센다.'
+					: 'A slice showing the v2 engine running on canonical data. A pack score is how well the pack matches the deck axes, times the share of its trigger conditions that actually fire. Owned gifts leave the candidate pool and count instead as chain enablers.'}
 			</p>
 
 			<div className="filters">

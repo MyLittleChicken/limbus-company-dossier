@@ -61,9 +61,12 @@ export function fitOf(keywordId: string | null, supply: AxisSupply): number {
 /** 점수가 보는 기프트 하나. **id 를 안 받는다** — 셈에 필요 없다 */
 export interface ScoreGift {
 	keywordId: string | null;
-	/** 전체 효과 수 */
+	/**
+	 * 전체 **발동 조건** 수. `gift_effect` 가 아니라 트리거 참조다 — 한 기프트가
+	 * 조건마다 다른 효과를 갖는다.
+	 */
 	total: number;
-	/** 그중 충족한 수 (확정·가능 합) */
+	/** 그중 충족한 발동 조건 수 (확정·가능 합) */
 	satisfied: number;
 	reasons: ReadonlyArray<{ verdict: RefVerdict; certainty: 'certain' | 'possible' }>;
 	/** 보유 기프트가 이걸 켜 주는가. 몇 홉인지 */
@@ -73,11 +76,11 @@ export interface ScoreGift {
 }
 
 /**
- * 이 기프트에서 살아 있는 효과의 무게.
+ * 이 기프트에서 살아 있는 발동 조건의 무게.
  *
  * **연쇄는 편성이 못 켜는 몫까지만 센다.** 안 그러면 편성으로 이미 전부 켜진
- * 기프트에 연쇄가 덧붙어 `L` 이 1 을 넘고, 「효과 중 몇 %가 사나」라는 정의와
- * 어긋난다. 연쇄는 편성이 못 켜는 것을 보유가 대신 켜 주는 경우다.
+ * 기프트에 연쇄가 덧붙어 `L` 이 1 을 넘고, 「발동 조건 중 몇 %가 사나」라는
+ * 정의와 어긋난다. 연쇄는 편성이 못 켜는 것을 보유가 대신 켜 주는 경우다.
  */
 export function liveOf(gift: ScoreGift): number {
 	let live = 0;
@@ -103,7 +106,7 @@ export function liveOf(gift: ScoreGift): number {
 export interface PackScore {
 	/** 후보 기프트의 평균 적합도. 0~1 */
 	fit: number;
-	/** 후보 기프트의 전체 효과 중 살아 있는 비율. 0~1 */
+	/** 후보 기프트의 전체 발동 조건 중 살아 있는 비율. 0~1 */
 	live: number;
 	/** `fit × live`. **순위를 매길 수 없으면 0 이다** */
 	score: number;
@@ -131,7 +134,7 @@ export function scorePack(
 
 	const fit = pool.reduce((s, g) => s + fitOf(g.keywordId, supply), 0) / pool.length;
 
-	// 효과가 없는 기프트는 분모에서 빠진다. 0 으로 세지 않는다
+	// 발동 조건이 없는 기프트는 분모에서 빠진다. 0 으로 세지 않는다
 	const total = pool.reduce((s, g) => s + g.total, 0);
 	const live = total > 0 ? pool.reduce((s, g) => s + liveOf(g), 0) / total : 0;
 
