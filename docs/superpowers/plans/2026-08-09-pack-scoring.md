@@ -48,7 +48,7 @@
 - Consumes: `scripts/golden-queries.ts` 의 `cases()` 20건
 - Produces: `build/golden/before/` 20개 JSON
 
-- [ ] **Step 1: 지금 출력을 뜬다**
+- [x] **Step 1: 지금 출력을 뜬다**
 
 ```bash
 npm run golden:capture -- before
@@ -58,7 +58,7 @@ npm run golden:capture -- before
 
 **실패하면 거기서 멈춘다.** 기준이 없으면 대조할 것이 없다.
 
-- [ ] **Step 2: 커밋할 것이 없음을 확인한다**
+- [x] **Step 2: 커밋할 것이 없음을 확인한다**
 
 ```bash
 git status --porcelain
@@ -83,7 +83,7 @@ git status --porcelain
   - `ScoreGift` — `{ keywordId, total, satisfied, reasons, chainDepth, owned }`
   - `liveOf(gift: ScoreGift): number`
 
-- [ ] **Step 1: 검사를 먼저 쓴다**
+- [x] **Step 1: 검사를 먼저 쓴다**
 
 `lib/engine/v2/score.test.ts`:
 
@@ -184,7 +184,7 @@ test('연쇄는 미충족 효과 수를 넘지 않는다 — L 이 1 을 넘으�
 });
 ```
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -192,7 +192,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 
 기대: `Cannot find module './score.js'` 로 실패.
 
-- [ ] **Step 3: `score.ts` 를 쓴다**
+- [x] **Step 3: `score.ts` 를 쓴다**
 
 `lib/engine/v2/score.ts`:
 
@@ -292,7 +292,7 @@ export function liveOf(gift: ScoreGift): number {
 }
 ```
 
-- [ ] **Step 4: 검사가 통과하는지 본다**
+- [x] **Step 4: 검사가 통과하는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -300,7 +300,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 
 기대: 9건 전부 pass · 0 fail. (전체 `npm test` 는 457 → 466)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add lib/engine/v2/score.ts lib/engine/v2/score.test.ts
@@ -332,7 +332,7 @@ git commit -m "feat(engine): 적합도와 켜짐의 순수 함수
   - `PackScore` — `{ fit: number; live: number; score: number; candidates: number; rankable: boolean }`
   - `scorePack(gifts: ReadonlyArray<ScoreGift>, supply: AxisSupply): PackScore`
 
-- [ ] **Step 1: 검사를 더한다**
+- [x] **Step 1: 검사를 더한다**
 
 `lib/engine/v2/score.test.ts` 끝에 붙인다. 위쪽의 `SUPPLY` 와 `gift` 를 그대로 쓴다.
 
@@ -440,7 +440,7 @@ test('켜짐은 1 을 안 넘는다 — 연쇄가 붙어도', () => {
 
 **`import { scorePack }` 을 파일 위쪽 import 에 합친다** — 검사 파일에 import 문이 둘이면 안 된다.
 
-- [ ] **Step 2: 검사가 깨지는지 본다**
+- [x] **Step 2: 검사가 깨지는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -448,7 +448,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 
 기대: `scorePack is not exported` 류로 실패.
 
-- [ ] **Step 3: `scorePack` 을 더한다**
+- [x] **Step 3: `scorePack` 을 더한다**
 
 `lib/engine/v2/score.ts` 끝에 붙인다.
 
@@ -506,7 +506,7 @@ export function scorePack(
 }
 ```
 
-- [ ] **Step 4: 검사가 통과하는지 본다**
+- [x] **Step 4: 검사가 통과하는지 본다**
 
 ```bash
 npx tsx --test lib/engine/v2/score.test.ts
@@ -515,7 +515,7 @@ npm run typecheck
 
 기대: 15건 전부 pass · 0 fail · 타입 통과. (전체 `npm test` 는 466 → 472)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add lib/engine/v2/score.ts lib/engine/v2/score.test.ts
@@ -543,7 +543,7 @@ git commit -m "feat(engine): scorePack — 적합도 × 켜짐
   - `Recommendation` 에 `rankable: boolean` 추가
   - `packs` 가 `score` 내림차순 정렬
 
-- [ ] **Step 1: 키워드가 이미 온다는 것을 확인한다**
+- [x] **Step 1: 키워드가 이미 온다는 것을 확인한다**
 
 `packRows` 질의가 `gift` 를 `include` 로 가져오므로 **스칼라 열이 전부 따라온다.**
 `keywordId` 를 위해 질의를 고칠 필요가 없다. 계획 작성 중 실측했다.
@@ -559,7 +559,7 @@ grep -n "include: { stages" lib/queries/canonical/recommend.ts
 
 기대: `packRows` 안에 `gift: { include: { stages: … } }` 가 보인다. **고치지 않는다.**
 
-- [ ] **Step 2: import 와 타입을 더한다**
+- [x] **Step 2: import 와 타입을 더한다**
 
 `import { localeRows, nameOf } from './locale';` 아래에 더한다.
 
@@ -592,7 +592,7 @@ import { axisSupplyOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
 	rankable: boolean;
 ```
 
-- [ ] **Step 3: 점수를 계산하고 정렬한다**
+- [x] **Step 3: 점수를 계산하고 정렬한다**
 
 `const packs: PackLine[] = packRows.map((p) => {` 블록을 통째로 갈아 끼운다.
 
@@ -674,7 +674,7 @@ import { axisSupplyOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
 		rankable: axisSupply.max > 0,
 ```
 
-- [ ] **Step 4: 타입 검사와 골든 대조**
+- [x] **Step 4: 타입 검사와 골든 대조**
 
 ```bash
 npm run typecheck
@@ -685,7 +685,7 @@ npm run golden:compare -- before after
 **20건 전부 같아야 한다.** 추천은 아직 골든에 없고 다른 질의는 안 건드렸다.
 하나라도 다르면 `supply` 계산을 옮기다 무언가 깨뜨린 것이다.
 
-- [ ] **Step 5: 순위가 상식과 맞는지 실측한다**
+- [x] **Step 5: 순위가 상식과 맞는지 실측한다**
 
 **확인 스크립트를 저장소 안에 둔다.** `/tmp` 에 두면 `package.json` 의
 `"type": "module"` 이 안 닿아 `Top-level await is currently not supported with
@@ -717,7 +717,7 @@ L 최대 0.568
 
 **숫자가 다르면 멈추고 원인을 본다.** 설계가 이 값으로 승인됐다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 rm -f scripts/rank-check.ts
@@ -747,7 +747,7 @@ PR #28 이 비워 둔 순위를 채운다. 점수 = 적합도 × 켜짐이고 �
 - Consumes: Task 4 의 `PackLine.score` · `fit` · `live`, `Recommendation.rankable`
 - Produces: 없음 (화면)
 
-- [ ] **Step 1: 순위를 못 매기는 경우를 먼저 처리한다**
+- [x] **Step 1: 순위를 못 매기는 경우를 먼저 처리한다**
 
 `<Panel title={ko ? '이 층의 팩 후보' : 'Packs on this floor'}` 의 `hint` 를 고친다.
 
@@ -773,7 +773,7 @@ PR #28 이 비워 둔 순위를 채운다. 점수 = 적합도 × 켜짐이고 �
 						)}
 ```
 
-- [ ] **Step 2: 순위 번호와 분해 한 줄을 더한다**
+- [x] **Step 2: 순위 번호와 분해 한 줄을 더한다**
 
 `{rec.packs.map((p) => (` 안의 `<div className="row-head">` 블록을 갈아 끼운다.
 
@@ -801,7 +801,7 @@ PR #28 이 비워 둔 순위를 채운다. 점수 = 적합도 × 켜짐이고 �
 
 **닫는 태그를 안 건드린다.** 기존 `{p.tally.A === 0 ? (…) : (…)}` 블록이 그대로 이어진다.
 
-- [ ] **Step 3: 설명문을 지금 상태에 맞춘다**
+- [x] **Step 3: 설명문을 지금 상태에 맞춘다**
 
 `<p className="lede">` 의 한국어·영어 문장을 갈아 끼운다.
 
@@ -813,7 +813,7 @@ PR #28 이 비워 둔 순위를 채운다. 점수 = 적합도 × 켜짐이고 �
 			</p>
 ```
 
-- [ ] **Step 4: 타입 검사와 빌드**
+- [x] **Step 4: 타입 검사와 빌드**
 
 ```bash
 npm run typecheck
@@ -822,7 +822,7 @@ npm run build 2>&1 | grep -E "Compiled|error|Failed" | head -5
 
 기대: 타입 통과 · `✓ Compiled successfully`.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add "app/[locale]/recommend/page.tsx"
@@ -850,7 +850,7 @@ git commit -m "feat(web): 추천 화면이 순위와 점수 분해를 낸다
 - Consumes: Task 4 의 `recommendForDeck` · `HWAJIN_DECK`
 - Produces: 골든 케이스 2건 — `recommend.floor3.hard` · `recommend.floor3.owned`
 
-- [ ] **Step 1: 요약만 뜨도록 케이스를 더한다**
+- [x] **Step 1: 요약만 뜨도록 케이스를 더한다**
 
 `scripts/golden-queries.ts` 의 `cases()` 안, `const squad = await import(…)` 아래에 더한다.
 
@@ -903,7 +903,7 @@ git commit -m "feat(web): 추천 화면이 순위와 점수 분해를 낸다
 		},
 ```
 
-- [ ] **Step 2: 뜨고 내용을 눈으로 본다**
+- [x] **Step 2: 뜨고 내용을 눈으로 본다**
 
 ```bash
 npm run golden:capture -- after
@@ -922,7 +922,7 @@ for p in d['packs'][:3]: print(f\"{p['score']:.4f} {p['fit']:.3f} {p['live']:.3f
 
 기대: `0.1396 0.273 0.511 타오르는 일렁임` 이 첫 줄.
 
-- [ ] **Step 3: 파일 크기를 확인한다**
+- [x] **Step 3: 파일 크기를 확인한다**
 
 ```bash
 ls -la build/golden/after/recommend.floor3.hard.json
@@ -930,7 +930,7 @@ ls -la build/golden/after/recommend.floor3.hard.json
 
 **100 KB 를 넘으면 요약이 덜 접힌 것이다** — 기프트 목록이 새어 들어갔는지 본다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add scripts/golden-queries.ts
@@ -954,7 +954,7 @@ PR #28 에서 options.deployedIds ?? identityIds 가 빈 배열을 값으로 받
 
 **Files:** 없음
 
-- [ ] **Step 1: 개발 서버를 띄운다**
+- [x] **Step 1: 개발 서버를 띄운다**
 
 ```bash
 PORT=3210 npm run dev > /tmp/dev-scoring.log 2>&1 &
@@ -962,7 +962,7 @@ sleep 12
 tail -3 /tmp/dev-scoring.log
 ```
 
-- [ ] **Step 2: 화면 전부를 두드린다**
+- [x] **Step 2: 화면 전부를 두드린다**
 
 ```bash
 for p in /ko /ko/about /ko/dungeon /ko/floors /ko/glossary /ko/identities \
@@ -974,7 +974,7 @@ done
 
 기대: 전부 200.
 
-- [ ] **Step 3: 순위가 실제로 그려지는지 본다**
+- [x] **Step 3: 순위가 실제로 그려지는지 본다**
 
 **200 은 빈 화면도 200 이다.** 내용을 본다.
 
@@ -995,7 +995,7 @@ print(t[i:i+200])
 
 기대: 분해 줄 27개 · 첫 줄이 `0.140 — 적합 0.273 × 켜짐 0.511` · 발췌 첫 팩이 「타오르는 일렁임」.
 
-- [ ] **Step 4: 서버 로그에 오류가 없는지 본다**
+- [x] **Step 4: 서버 로그에 오류가 없는지 본다**
 
 ```bash
 grep -ciE "error|unhandled|⨯" /tmp/dev-scoring.log
@@ -1003,7 +1003,7 @@ grep -ciE "error|unhandled|⨯" /tmp/dev-scoring.log
 
 기대: `0`.
 
-- [ ] **Step 5: 서버를 내린다**
+- [x] **Step 5: 서버를 내린다**
 
 ```bash
 pkill -f "next dev" || true
@@ -1018,7 +1018,7 @@ rm -f /tmp/dev-scoring.log /tmp/rec.html
 - Modify: `docs/superpowers/specs/2026-08-09-pack-scoring-design.md`
 - Modify: `docs/superpowers/plans/2026-08-09-pack-scoring.md`
 
-- [ ] **Step 1: 설계에 구현 결과를 더한다**
+- [x] **Step 1: 설계에 구현 결과를 더한다**
 
 설계 문서 끝(10절 뒤)에 절을 더한다. **실제로 나온 값을 적는다** — Task 4 Step 5 와
 Task 7 Step 3 의 출력을 옮긴다.
@@ -1042,18 +1042,18 @@ Task 7 Step 3 의 출력을 옮긴다.
 
 **Task 4 · 7 의 실제 출력이 위와 다르면 그 값을 적는다.** 계획서 숫자를 옮겨 적지 않는다.
 
-- [ ] **Step 2: 계획서 단계를 완료로 표시한다**
+- [x] **Step 2: 계획서 단계를 완료로 표시한다**
 
 ```bash
 python3 - <<'PY'
 p = 'docs/superpowers/plans/2026-08-09-pack-scoring.md'
 s = open(p, encoding='utf-8').read()
-print('체크한 단계', s.count('- [ ] '))
-open(p, 'w', encoding='utf-8').write(s.replace('- [ ] ', '- [x] '))
+print('체크한 단계', s.count('- [x] '))
+open(p, 'w', encoding='utf-8').write(s.replace('- [x] ', '- [x] '))
 PY
 ```
 
-- [ ] **Step 3: 마지막 검증**
+- [x] **Step 3: 마지막 검증**
 
 ```bash
 npm run typecheck
@@ -1066,7 +1066,7 @@ git status --porcelain
 기대: 타입 통과 · 0 fail · `✓ Compiled successfully` · `검사 222건 전부 통과` ·
 `git status` 는 커밋 뒤 비어 있다.
 
-- [ ] **Step 4: 커밋하고 PR 을 올린다**
+- [x] **Step 4: 커밋하고 PR 을 올린다**
 
 ```bash
 git add docs/
