@@ -629,18 +629,17 @@ import { axisSupplyOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
 		// 등급 · 충족 수 순. **점수가 아니라 정렬 기준이다** — 순위를 뜻하지 않는다
 		gifts.sort((a, b) => a.grade.localeCompare(b.grade) || b.satisfied - a.satisfied || a.id - b.id);
 
-		// 점수는 엔진이 센다. 화면도 질의도 다시 세지 않는다
-		const scoreInput: ScoreGift[] = p.gifts.map((row) => {
-			const v = byGift.get(row.giftId);
-			return {
-				keywordId: row.gift.keywordId,
-				total: v?.total ?? 0,
-				satisfied: v?.satisfied ?? 0,
-				reasons: v?.reasons ?? [],
-				chainDepth: depthByGift.get(row.giftId) ?? null,
-				owned: ownedSet.has(row.giftId),
-			};
-		});
+		// 점수는 엔진이 센다. 화면도 질의도 다시 세지 않는다.
+		// **`gifts` 를 재료로 쓴다** — `p.gifts` 를 두 번 순회하며 `byGift` 를 다시
+		// 조회하면 같은 셈이 두 벌이 되고, 한쪽만 고쳐질 때 조용히 갈린다
+		const scoreInput: ScoreGift[] = gifts.map((g) => ({
+			keywordId: g.keywordId,
+			total: g.total,
+			satisfied: g.satisfied,
+			reasons: g.reasons,
+			chainDepth: g.chainDepth,
+			owned: ownedSet.has(String(g.id)),
+		}));
 		const s = scorePack(scoreInput, axisSupply);
 
 		return {
