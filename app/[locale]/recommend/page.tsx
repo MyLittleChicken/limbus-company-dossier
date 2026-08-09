@@ -189,6 +189,7 @@ export default async function RecommendPage({
 											packName={p.name ?? p.id}
 											gifts={p.gifts}
 											label={ko ? `… 전체 ${p.gifts.length}개 근거` : `… all ${p.gifts.length}`}
+											ko={ko}
 										/>
 									</li>
 								))}

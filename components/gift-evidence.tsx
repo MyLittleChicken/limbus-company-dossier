@@ -30,6 +30,8 @@ export interface EvidenceGift {
 		certainty: string;
 		have: number;
 		need: number | null;
+		/** roster | field | waiting — 무엇을 분모로 셌나. 없으면 임계값이 없는 것이다 */
+		denominator: string | null;
 	}>;
 }
 
@@ -37,10 +39,12 @@ export function GiftEvidence({
 	packName,
 	gifts,
 	label,
+	ko,
 }: {
 	packName: string;
 	gifts: ReadonlyArray<EvidenceGift>;
 	label: string;
+	ko: boolean;
 }) {
 	const ref = useRef<HTMLDialogElement>(null);
 	const dead = gifts.filter((g) => !g.fireable).length;
@@ -52,22 +56,22 @@ export function GiftEvidence({
 			</button>
 			<dialog ref={ref} style={{ maxWidth: '52rem', width: '90vw' }}>
 				<form method="dialog">
-					<button type="submit" className="chip">닫기</button>
+					<button type="submit" className="chip">{ko ? '닫기' : 'Close'}</button>
 				</form>
 				<h3>{packName}</h3>
 				<p className="card-meta">
-					{`기프트 ${gifts.length} · 켜질 수 없음 ${dead}`}
+					{ko ? `기프트 ${gifts.length} · 켜질 수 없음 ${dead}` : `${gifts.length} gifts · ${dead} cannot fire`}
 				</p>
 				<ul className="plain">
 					{gifts.map((g) => (
 						<li key={g.id} style={{ marginBottom: '0.75rem' }}>
 							<strong>{`[${g.fireable ? g.grade : 'X'}] ${g.name ?? g.id}`}</strong>
 							<span className="card-meta">
-								{` ${g.satisfied}/${g.decidable} (전체 ${g.total})`}
+								{ko ? ` ${g.satisfied}/${g.decidable} (전체 ${g.total})` : ` ${g.satisfied}/${g.decidable} (total ${g.total})`}
 								{g.keywordId !== null ? ` · ${g.keywordId}` : ''}
-								{g.exclusive ? ' · 전용' : ''}
-								{g.chainDepth !== null ? ` · 연쇄 ${g.chainDepth}홉` : ''}
-								{!g.fireable ? ' · 켜질 수 없음' : ''}
+								{g.exclusive ? (ko ? ' · 전용' : ' · exclusive') : ''}
+								{g.chainDepth !== null ? (ko ? ` · 연쇄 ${g.chainDepth}홉` : ` · chain ${g.chainDepth}`) : ''}
+								{!g.fireable ? (ko ? ' · 켜질 수 없음' : ' · cannot fire') : ''}
 							</span>
 							<ul className="comp">
 								{g.reasons.map((r, i) => (
@@ -75,6 +79,7 @@ export function GiftEvidence({
 										<span className="comp-k">{`${r.triggerId} · ${r.refKind}:${r.refId}`}</span>
 										<span className="comp-v">
 											{`${r.verdict}/${r.certainty} ${r.have}${r.need !== null ? `/${r.need}` : ''}`}
+											{r.denominator !== null ? ` ${r.denominator}` : ''}
 										</span>
 									</li>
 								))}
