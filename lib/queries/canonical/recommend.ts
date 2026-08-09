@@ -245,6 +245,7 @@ export async function recommendForDeck(
 	const ownedGifts = await canonical.gift.findMany({
 		where: { id: { in: ownedIds.map(String) } },
 		include: { stages: { where: { level: 0 }, include: { texts: localeRows(locale) } } },
+		orderBy: { id: 'asc' },
 	});
 
 	return {

@@ -108,7 +108,7 @@ async function cases(): Promise<Case[]> {
 			run: async () => summarize(await recommend.recommendForDeck('ko', { floor: 3, difficulty: 'hard' })),
 		},
 		{
-			// 보유가 후보를 줄이고 연쇄를 켜는 경로. PR-A 의 빈 배열 버그가 여기 걸린다
+			// 보유가 후보를 줄이고 연쇄를 켜는 경로
 			name: 'recommend.floor3.owned',
 			run: async () =>
 				summarize(
@@ -117,6 +117,23 @@ async function cases(): Promise<Case[]> {
 						difficulty: 'hard',
 						ownedIds: [9001, 9005, 9009, 9029, 9041, 9052, 9066, 9088, 9090, 9092, 9103, 9110],
 					}),
+				),
+		},
+		{
+			/**
+			 * PR-A 의 버그가 실제로 발동하는 호출 모양. `deployedIds` 를 아예 안 넘기면
+			 * (`undefined`) `?? identityIds` 와 `.length > 0 ? … : identityIds` 가
+			 * 둘 다 `identityIds` 로 떨어져 버그 유무를 구분 못 한다 — 화면
+			 * (`app/[locale]/recommend/page.tsx`) 은 주소에 `deployed` 가 없을 때
+			 * `idList('deployed')` 가 빈 배열을 리턴해 그대로 넘기므로, 여기서도
+			 * 빈 배열을 명시적으로 넘겨야 재현이 된다. `undefined` 로 바꾸지 마라 —
+			 * 그러면 이 케이스가 `recommend.floor3.hard` 의 중복으로 보여도 실은
+			 * 다른 경로를 지킨다.
+			 */
+			name: 'recommend.floor3.emptyDeployed',
+			run: async () =>
+				summarize(
+					await recommend.recommendForDeck('ko', { floor: 3, difficulty: 'hard', deployedIds: [] }),
 				),
 		},
 		{ name: 'search.이상', run: () => ref.searchAll('이상', 'ko') },
