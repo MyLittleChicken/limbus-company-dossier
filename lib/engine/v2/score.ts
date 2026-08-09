@@ -12,7 +12,9 @@
  * **저울추가 둘뿐이다** — 확정 1.0 / 가능 0.5, 연쇄 1홉 1.0 / 2홉 0.5.
  * 같은 규칙이고(한 단계 멀어지면 반) 나머지는 전부 실측값에서 나온다.
  */
-import { reachOf, type Recipe } from './fusion.js';
+// 값 import 는 확장자를 뺀다 — tsc 는 .js 를 풀지만 번들러는 못 푼다
+import { reachOf } from './fusion';
+import type { Recipe } from './fusion.js';
 import type { RefVerdict } from './types.js';
 
 /** 한 단계 불확실해지거나 한 홉 멀어지면 반. 이 파일의 저울추 전부다 */
