@@ -51,8 +51,16 @@ export function activeCapabilities(squad: Squad, all: Capability[]): Capability[
  */
 export class Profile {
 	private readonly counts = new Map<string, Set<string>>();
+	/**
+	 * 자리 번호 → 인격 id. **출전 순서가 곧 자리 번호다.**
+	 *
+	 * 거울 던전은 편성과 전투 순서까지 정하고 진입하므로(설계 2.4) 「1번 인격」은
+	 * 추측이 아니라 확정이다. `Squad.field` 가 그 순서를 담고 있다.
+	 */
+	private readonly bySlot: string[];
 
 	constructor(squad: Squad, capabilities: Capability[]) {
+		this.bySlot = [...squad.field];
 		const denom = denominatorsOf(squad);
 		const active = activeCapabilities(squad, capabilities);
 		for (const c of active) {
@@ -69,5 +77,25 @@ export class Profile {
 	/** 분모 기본값은 `field` 다 — 실측 49/59 가 출전이고 그것이 게임의 기본이다 */
 	count(refKind: string, refId: string, denominator = 'field'): number {
 		return this.counts.get(`${refKind}|${refId}|${denominator}`)?.size ?? 0;
+	}
+
+	/**
+	 * 이 자리들에 있는 인격 중 몇이 이 갈래를 공급하나.
+	 *
+	 * **「파열 인격이 있나」가 아니라 「1·2번 자리가 파열을 주나」를 묻는다.**
+	 * 죽음바라기의 「[편성 1번, 2번 인격 전용 효과]」가 그 조건이고, 전체로는
+	 * 공급되는데 그 자리에는 없는 덱에서 켜진다고 판정하는 사고를 막는다.
+	 *
+	 * 편성보다 큰 자리 번호는 없는 자리다 — 지어내지 않고 뺀다.
+	 */
+	countInSlots(refKind: string, refId: string, slots: readonly number[]): number {
+		const members = this.counts.get(`${refKind}|${refId}|field`);
+		if (members === undefined) return 0;
+		let n = 0;
+		for (const s of slots) {
+			const id = this.bySlot[s - 1];
+			if (id !== undefined && members.has(id)) n += 1;
+		}
+		return n;
 	}
 }
