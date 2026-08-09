@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSupplyOf, fitOf, liveOf, type ScoreGift } from './score.js';
+import { axisSupplyOf, fitOf, liveOf, scorePack, type ScoreGift } from './score.js';
 
 const SUPPLY = axisSupplyOf([
 	{ refKind: 'axis', refId: 'COMBUSTION', count: 7 },
@@ -91,4 +91,102 @@ test('연쇄는 미충족 효과 수를 넘지 않는다 — L 이 1 을 넘으�
 		chainDepth: 1,
 	});
 	assert.equal(liveOf(g), 1);
+});
+
+test('적합도는 후보의 평균이고 켜짐은 효과 비율이다', () => {
+	const s = scorePack(
+		[
+			// 화상 · 효과 2개 다 확정 충족
+			gift({
+				keywordId: 'Combustion',
+				total: 2,
+				satisfied: 2,
+				reasons: [
+					{ verdict: 'satisfied', certainty: 'certain' },
+					{ verdict: 'satisfied', certainty: 'certain' },
+				],
+			}),
+			// 범용 · 효과 2개 중 하나도 안 켜짐
+			gift({
+				keywordId: 'None',
+				total: 2,
+				satisfied: 0,
+				reasons: [
+					{ verdict: 'unsatisfied', certainty: 'certain' },
+					{ verdict: 'unsatisfied', certainty: 'certain' },
+				],
+			}),
+		],
+		SUPPLY,
+	);
+	assert.equal(s.candidates, 2);
+	assert.equal(s.fit, 0.5); // (1 + 0) / 2
+	assert.equal(s.live, 0.5); // 2 / 4
+	assert.equal(s.score, 0.25);
+	assert.equal(s.rankable, true);
+});
+
+test('보유한 기프트는 후보에서 뺀다 — 다시 얻을 수 없다', () => {
+	const owned = gift({
+		keywordId: 'Combustion',
+		total: 2,
+		satisfied: 2,
+		reasons: [
+			{ verdict: 'satisfied', certainty: 'certain' },
+			{ verdict: 'satisfied', certainty: 'certain' },
+		],
+		owned: true,
+	});
+	const fresh = gift({
+		keywordId: 'None',
+		total: 2,
+		satisfied: 0,
+		reasons: [
+			{ verdict: 'unsatisfied', certainty: 'certain' },
+			{ verdict: 'unsatisfied', certainty: 'certain' },
+		],
+	});
+	const s = scorePack([owned, fresh], SUPPLY);
+	assert.equal(s.candidates, 1);
+	assert.equal(s.fit, 0);
+	assert.equal(s.live, 0);
+});
+
+test('후보가 0 이면 점수가 0 이다 — 나누기 0 을 안 만든다', () => {
+	const s = scorePack([gift({ owned: true })], SUPPLY);
+	assert.equal(s.candidates, 0);
+	assert.equal(s.fit, 0);
+	assert.equal(s.live, 0);
+	assert.equal(s.score, 0);
+});
+
+test('효과가 하나도 없는 팩은 켜짐이 0 이다 — 0 으로 세지 않고 분모에서 뺀다', () => {
+	const s = scorePack([gift({ keywordId: 'Combustion', total: 0 })], SUPPLY);
+	assert.equal(s.candidates, 1);
+	assert.equal(s.fit, 1);
+	assert.equal(s.live, 0);
+	assert.equal(s.score, 0);
+});
+
+test('축 공급이 없는 덱은 순위를 매길 수 없다', () => {
+	const empty = axisSupplyOf([{ refKind: 'sin', refId: 'wrath', count: 7 }]);
+	const s = scorePack([gift({ keywordId: 'Combustion', total: 1, satisfied: 1, reasons: [{ verdict: 'satisfied', certainty: 'certain' }] })], empty);
+	assert.equal(s.rankable, false);
+	assert.equal(s.score, 0);
+});
+
+test('켜짐은 1 을 안 넘는다 — 연쇄가 붙어도', () => {
+	const s = scorePack(
+		[
+			gift({
+				keywordId: 'Combustion',
+				total: 1,
+				satisfied: 1,
+				reasons: [{ verdict: 'satisfied', certainty: 'certain' }],
+				chainDepth: 1,
+			}),
+		],
+		SUPPLY,
+	);
+	assert.equal(s.live, 1);
 });
