@@ -13,9 +13,14 @@ import { Nothing, Panel, SecLabel } from '@/components/ui';
  * **v2 엔진이 실데이터 위에서 도는지 보이는 창이다.** 제품 표면이 아니다 — 런 상태
  * 입력도 없고 덱도 고정이다. 층과 보유 기프트만 주소로 받는다.
  *
- * **순위를 안 매긴다.** v2 는 「이 기프트가 얼마나 세지나」가 아니라 「켜지나」를
- * 근거와 함께 답한다. 점수 모형이 없는데 순서를 붙이면 그 순서가 거짓말이 되므로
- * 후보 팩을 그대로 두고 등급 A/B/C 를 센다. 점수는 다음 PR 이다.
+ * **순위를 매긴다.** 점수 = 적합도 × 켜짐이다. 적합도는 이 팩에서 하나 뽑으면 내 덱
+ * 축에 얼마나 기여하나이고, 켜짐은 이 팩 기프트의 발동 조건 중 몇 %가 내 편성에서 사나다.
+ * **정렬과 점수는 질의(`recommendForDeck`)가 계산해서 낸다 — 화면은 표시만 하고
+ * 다시 계산하지 않는다.**
+ *
+ * 축을 하나도 공급하지 않는 편성이면 적합도가 전부 0 이라 순서가 무의미하다.
+ * 그럴 때는 `rankable` 이 false 로 오고, 순위 번호와 점수를 안 붙인 채 그 사실을
+ * 적는다 — 등급 A/B/C 분포만 낸다. 0 점을 늘어놓고 순위인 척하지 않는다.
  *
  * 검증 대상은 화진 덱(화상+진동, 새벽 사무소 3 + 엄지 4)이다. 온필드 정원 7과 맞고
  * 두 소속 조건을 동시에 만족해 조건 평가를 실제로 켜 볼 수 있다.
@@ -86,8 +91,8 @@ export default async function RecommendPage({
 
 			<p className="lede">
 				{ko
-					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩에 순위를 매기지 않는다 — 점수 모형이 아직 없어서 순서를 붙이면 그 순서가 거짓말이 된다. 대신 기프트가 켜지는지를 등급 A/B/C 로 센다.'
-					: 'A slice showing the v2 engine running on canonical data. Packs are not ranked — there is no scoring model yet, so an order would be a lie. Gifts are graded A/B/C by whether they turn on.'}
+					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩 점수는 「이 팩이 내 덱 축과 맞는 정도」 × 「이 팩 기프트의 발동 조건 중 실제로 켜지는 비율」이다. 이미 보유한 기프트는 후보에서 빠지고, 대신 다른 기프트를 켜는 연쇄로 센다.'
+					: 'A slice showing the v2 engine running on canonical data. A pack score is how well the pack matches the deck axes, times the share of its trigger conditions that actually fire. Owned gifts leave the candidate pool and count instead as chain enablers.'}
 			</p>
 
 			<div className="filters">
@@ -108,21 +113,46 @@ export default async function RecommendPage({
 				<div>
 					<Panel
 						title={ko ? '이 층의 팩 후보' : 'Packs on this floor'}
-						hint={`${rec.candidateCount}`}
+						hint={
+							rec.rankable
+								? `${rec.candidateCount}`
+								: ko
+									? `${rec.candidateCount} · 순위 없음`
+									: `${rec.candidateCount} · unranked`
+						}
 					>
+						{/* 축을 안 공급하는 편성은 적합도가 전부 0 이라 순서가 무의미하다.
+						    0 점을 늘어놓고 순위인 척하지 않는다 */}
+						{!rec.rankable && (
+							<Nothing kind="absent">
+								{ko
+									? '이 편성이 상태 축을 공급하지 않아 팩 순위를 매길 수 없다. 등급 분포만 낸다.'
+									: 'This squad supplies no status axis, so packs cannot be ranked.'}
+							</Nothing>
+						)}
 						{rec.packs.length === 0 ? (
 							<Nothing kind="absent">{t.empty}</Nothing>
 						) : (
 							<ul className="plain rank">
-								{rec.packs.map((p) => (
+								{rec.packs.map((p, i) => (
 									<li key={p.id}>
 										<div className="row-head">
+											{/* 순위를 못 매기면 번호를 안 붙인다 */}
+											{rec.rankable && <span className="coin-i">{i + 1}</span>}
 											<strong>
 												<Link href={`/${locale}/packs/${p.id}`}>{p.name ?? p.id}</Link>
 											</strong>
 											{/* 순위가 아니라 분포다. 셋을 함께 내야 A 3 이 「12 중 3」인지 「3 중 3」인지 보인다. */}
 											<span className="tag">{`A ${p.tally.A} · B ${p.tally.B} · C ${p.tally.C}`}</span>
 										</div>
+										{/* 점수 하나로 답하지 않는다. 무엇을 곱해 나온 값인지 함께 낸다 */}
+										{rec.rankable && (
+											<span className="card-meta">
+												{ko
+													? `${p.score.toFixed(3)} — 적합 ${p.fit.toFixed(3)} × 켜짐 ${p.live.toFixed(3)}`
+													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} × live ${p.live.toFixed(3)}`}
+											</span>
+										)}
 										{p.tally.A === 0 ? (
 											<Nothing kind="absent">
 												{ko ? '이 편성이 켜는 기프트가 없다' : 'nothing this squad turns on'}
