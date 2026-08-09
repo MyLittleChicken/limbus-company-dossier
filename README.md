@@ -5,21 +5,28 @@
 
 ## 현재 상태
 
-**1단계(데이터베이스 구축) 완료 · 데이터베이스 전면 재설계 완료.**
+**1단계(데이터베이스 구축) 완료 · 데이터베이스 전면 재설계 완료 · 전환 완료.**
 제품의 정의와 범위는 [docs/00-product.md](docs/00-product.md)에 있다.
 
-### 데이터베이스가 둘이다 — 병존한다
-
-같은 PostgreSQL 데이터베이스(`limbus`) 안에서 두 구조가 충돌 없이 돌아간다.
+### 데이터베이스가 하나다 — 전환이 끝났다
 
 | | 스키마 | 규모 | 쓰는 곳 |
 | --- | --- | --- | --- |
-| **현행** | `public` | 52테이블 · 52,781행 | 지금 웹·엔진이 읽는다 |
-| **신규** | `raw` · `canonical` · `app` | 96테이블 · 약 170,000행 | [ADR-06](docs/adr/06-three-schema-database.md) |
+| **현행** | `raw` · `canonical` · `app` | 97테이블 | 웹과 엔진이 이것만 읽는다 |
+| ~~구판~~ | `public_retired` | 52테이블 | **아무도 안 읽는다.** 이름만 바꿔 뒀다 |
 
-신규는 [데이터 마스터북 51회차](docs/data/00-final-review.md)의 결론
-(「하나의 repo 로는 안 된다 · 단독 개념 90개 · 결손 7건」)을 담기 위해 세웠다.
-전환 여부는 별도로 판단한다.
+[데이터 마스터북 51회차](docs/data/00-final-review.md)의 결론(「하나의 repo 로는
+안 된다 · 단독 개념 90개 · 결손 7건」)을 담기 위해 세웠고, 세 단계로 옮겼다.
+
+```
+PR #25   기준점 심기 — canonical 이 자기 출처를 안다 (build_info · field_source)
+PR #27   앱 전환 — 정보 화면 15개가 canonical 을 읽는다
+PR #28   엔진 전환 — 추천 화면이 lib/engine/v2 로 가고 레거시 4,247줄 삭제
+         public → public_retired.  읽는 코드가 0 이다
+```
+
+**`DROP SCHEMA` 는 아직 안 했다.** 덤프를 저장소 밖에 남기고 이름만 바꿨으므로
+되돌리기가 `npm run public:restore` 한 줄이다.
 
 ```
 raw         원본이 준 그대로. 셋이 모순인 채로 공존       43,270행 / 스냅샷
@@ -37,10 +44,18 @@ app         재생성 대상 아님. 수동 보정 · 트래커 런 기록    6�
 npm run v2:load               raw 적재
 npm run v2:canonical          canonical 재계산 + 수동 보정 덮기
 npm run v2:verify             raw 검증 13건
-npm run v2:verify:canonical   canonical 검증 139건
+npm run v2:verify:canonical   canonical 검증 222건
 npm run v2:gap-report         결손 대장 → build/gap-report.md
 npm run v2:reproduce          재현 시험 — 지우고 다시 만들어도 같은지
+
+npm run v2:build              옆 스키마에 새로 굽는다 (canonical 은 안 건드린다)
+npm run v2:diff               구운 것과 살아있는 것을 대조한다
+npm run v2:promote            바꿔 끼운다.  v2:rollback 이 되돌린다
+npm run v2:verify:rebuild     재현 보증 — 표마다 전 컬럼을 해시로 잰다
 ```
+
+**`canonical` 은 직접 고치지 않는다.** `v2:build` → `v2:diff` → `v2:promote` 만이
+바꾸는 길이다([ADR-07](docs/adr/07-canonical-promotion.md)).
 
 **재현성을 실측으로 확인했다.** `data/entities/` 를 지우고 원격에서 다시 받아
 DB 를 통째로 재생성한 결과가 **바이트 단위로 같았다**(덤프 해시 동일 ·
@@ -83,8 +98,11 @@ DB 를 통째로 재생성한 결과가 **바이트 단위로 같았다**(덤프
 - 추천에 필요한 효과 분해와 조건 정의는 현행 DB 에 없다. 신규 DB 는 코인 토큰 26,942건을
   상태 189종으로 분해해 담았다([ADR-06](docs/adr/06-three-schema-database.md) 3.4).
 
-> 위 한계는 **현행 `public` 스키마의 것**이다. 신규 3스키마에서 해소된 것과 남은 것은
+> 위 한계는 **물러난 `public` 스키마의 것**이다. 지금 3스키마에서 해소된 것과 남은 것은
 > [ADR-06](docs/adr/06-three-schema-database.md) 5절에 있다.
+>
+> **위 표의 「검증 스크립트 40건」도 그때 수치다.** 지금은
+> `npm run v2:verify:canonical` 이 222건을 돌린다.
 
 ## 무엇을 만드는가
 
@@ -107,6 +125,26 @@ DB 를 통째로 재생성한 결과가 **바이트 단위로 같았다**(덤프
 | 4 | 추천 시스템 구축 — 런 상황 입력, 엔진 매칭, 추천과 근거 제시 |
 
 이후 버전에서 플레이 기록 수집과 로그 기반 가중치 개선, 로그인 계정, 데이터 갱신 파이프라인을 다룬다.
+
+### 데이터베이스 전환 단계 (M1–M7)
+
+위 네 단계와 **별개의 축**이다. 3스키마 DB 로 옮기는 일을 M 번호로 부르는데,
+**그 정의를 담은 파일이 이 저장소에 없다** — 설계 문서들이 「로드맵은 M4 를 …라고
+적었다」며 참조만 한다. 아래는 그 참조와 커밋 이력에서 재구성한 것이다.
+
+| | 무엇 | 상태 |
+| --- | --- | --- |
+| M1 | 3스키마 DB 와 승격 절차 ([ADR-06](docs/adr/06-three-schema-database.md) · [ADR-07](docs/adr/07-canonical-promotion.md)) | 완료 (#19 · #21 · #23) |
+| M2 | 기준점 심기 — `canonical` 이 자기 출처를 안다 | 완료 (#25) |
+| M3 | 앱 전환 — 정보 화면이 `canonical` 을 읽는다 | 완료 (#27) |
+| M4 | 추천 전환 (PR-A) + **팩 점수 모형 (PR-B)** | PR-A 완료 (#28) · **PR-B 미착수** |
+| M5 | **정의가 어디에도 없다** | ― |
+| M6 | 증분 파이프라인 | 미착수 |
+| M7 | Neo4j 투영 | 미착수 |
+
+**M2 와 M5 는 저장소 전체에서 정의를 못 찾았다.** M2 는 #25 의 내용으로 메웠고
+M5 는 비워 둔다 — 지어내지 않는다. **로드맵 원본이 저장소 밖에 있다면 여기로
+옮겨 오는 것이 다음 회차의 첫 일이다.**
 
 ## 문서
 
@@ -172,15 +210,19 @@ cp .env.example .env
 
 npm run fetch                  # 원격 5곳 → data/entities/*.json (1,749개)
 npm run db:up                  # PostgreSQL 컨테이너 기동 (준비될 때까지 대기)
-npm run db:ddl < prisma/schema.sql
-npm run convert                # 원본 → build/data/*.json (52개)
-npm run load                   # JSON → PostgreSQL
-npm run verify                 # coverage.json 과 대조
-npm run engine:proof           # 추천 엔진 슬라이스 5종 증명
+npm run db:ddl < prisma/v2/schema.sql
+npm run v2:generate            # Prisma Client 생성 (타입 검사·빌드가 이것에 기댄다)
+npm run v2:load                # 원본 → raw
+npm run v2:canonical           # raw → canonical
+npm run v2:verify              # raw 검증 13건
+npm run v2:verify:canonical    # canonical 검증 222건
 ```
 
-데이터베이스에 붙는 세 스크립트(`load` · `verify` · `engine:proof`)는 `--env-file-if-exists=.env`로
-접속 정보를 읽는다. Prisma CLI와 Next.js는 `.env`를 스스로 읽지만 tsx 스크립트는 읽지 않는다.
+**v1 경로(`npm run load` · `verify` · `engine:proof`)는 없다.** `public` 이 물러나면서
+함께 지웠다 — 위가 유일한 길이다.
+
+데이터베이스에 붙는 `v2:*` 스크립트는 `--env-file-if-exists=.env`로 접속 정보를 읽는다.
+Prisma CLI와 Next.js는 `.env`를 스스로 읽지만 tsx 스크립트는 읽지 않는다.
 **이미 설정된 환경변수가 `.env`를 이긴다** — 배포나 CI에서는 `.env` 없이 환경변수만 주면 된다.
 
 ### 웹 애플리케이션

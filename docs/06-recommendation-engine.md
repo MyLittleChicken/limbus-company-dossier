@@ -1,5 +1,22 @@
 # 추천 엔진 (Recommendation Engine)
 
+> **상태: 이 문서가 서술하는 엔진은 삭제됐다** (2026-08-09)
+>
+> `lib/engine/{dsl,load,pack,score,state,tuning,vocab}.ts` 와 `lib/queries/recommend.ts` ·
+> `src/engine-proof.ts` · `npm run engine:proof` 가 전부 없다(PR #28). **아래 본문에서
+> 그 경로를 현재형으로 가리키는 자리는 전부 과거형으로 읽어야 한다.**
+>
+> ```
+> 대체한 것   lib/engine/v2/{load,profile,evaluate,chain}   500줄
+>            lib/queries/canonical/recommend.ts
+> 층위가 다르다   레거시는 「얼마나 세지나」를 수치로 쟀고 v2 는 「켜지나」를 근거와 함께 답한다
+> 점수 모형     없다.  팩 순위가 지금 없으며 그것이 M4 의 나머지 절반(PR-B)이다
+> ```
+>
+> **이 문서를 폐기하지 않는 이유는 5·6·9절의 판정 근거가 아직 유효하기 때문이다** —
+> 무엇을 근거로 점수화할 것인가는 다시 세울 때도 여기서 출발한다. 다만 **구현 경로는
+> 전부 낡았다.** 현행 서술은 [`2026-08-07-engine-cutover-design.md`](superpowers/specs/2026-08-07-engine-cutover-design.md) 를 본다.
+
 > 상태: 초안 v0.1 / 최종 수정 2026-07-28
 > 3단계(추천 엔진) 착수 전 문서. **무엇을 근거로 팩을 점수화하는가**를 정의한다.
 > 설계의 뼈대는 이전 프로젝트(`limbus-mirror-tracker-v1`)의 `docs/03-data/master-book.md` 를 따르고,

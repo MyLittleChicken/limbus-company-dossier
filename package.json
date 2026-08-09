@@ -17,7 +17,6 @@
     "test": "tsx --test \"lib/**/*.test.ts\" \"src/**/*.test.ts\"",
     "fetch": "tsx src/fetch.ts",
     "assets": "tsx src/assets.ts",
-    "convert": "tsx src/convert.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:ddl": "docker compose exec -T postgres psql -U postgres -d limbus -v ON_ERROR_STOP=1",
