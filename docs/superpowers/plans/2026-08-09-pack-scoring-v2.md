@@ -1305,13 +1305,25 @@ npm run golden:compare -- t5 t7
 
 - [ ] **Step 7: 상식 검사 — 서릿발 발자국**
 
+> **정정 (실행 중 발견)** — 아래 스크립트가 처음엔 `HWAJIN_DECK` 을 썼는데 **그것으로는 이 검사가 성립하지 않는다.** 서릿발 발자국(9410)의 키워드가 `Sinking` 이고 화진 덱은 침잠을 하나도 공급하지 않아 `resultFit` 이 0 이 된다 — 도달이 올라도 기여가 0 이라 `fusion` 이 안 움직인다. **설계 4.3 대로의 정상 동작이다**(결과물이 덱과 안 맞으면 자동으로 작아진다).
+>
+> **침잠을 공급하는 덱으로 재야 한다.** 아래가 고친 것이다.
+
+```
+9408 귀신 들린 신발   Sinking
+9409 얼어붙은 아우성  Sinking
+9410 서릿발 발자국    Sinking   ← 덱이 침잠을 공급해야 이 항이 산다
+```
+
 ```bash
 cat > scripts/fusion-check.ts <<'EOF'
 const r = await import('../lib/queries/canonical/recommend.js');
 // 공장 자동화(1004)는 1·2층 팩이다. 보유에 얼어붙은 아우성(9409)을 넣으면
 // 이 팩으로 서릿발 발자국(9410)이 완성된다
-const withMat = await r.recommendForDeck('ko', { floor: 1, difficulty: 'hard', ownedIds: [9409] });
-const without = await r.recommendForDeck('ko', { floor: 1, difficulty: 'hard' });
+// 침잠을 공급하는 덱이라야 9410(Sinking)의 resultFit 이 산다
+const SINK = [10101, 10104, 10108, 10109, 10110, 10115, 10209];
+const withMat = await r.recommendForDeck('ko', { floor: 1, difficulty: 'hard', identityIds: SINK, ownedIds: [9409] });
+const without = await r.recommendForDeck('ko', { floor: 1, difficulty: 'hard', identityIds: SINK });
 const find = (rec: Awaited<ReturnType<typeof r.recommendForDeck>>) =>
   rec.packs.find((p) => p.id === '1004');
 console.log('보유 없음  fusion', find(without)?.fusion.toFixed(4), '· 점수', find(without)?.score.toFixed(4));
@@ -1323,7 +1335,7 @@ npx tsx --env-file-if-exists=.env scripts/fusion-check.ts
 rm -f scripts/fusion-check.ts
 ```
 
-**기대: 9409 를 보유하면 「공장 자동화」의 `fusion` 이 오르고 순위가 올라간다.** 안 오르면 합성 항이 안 도는 것이다 — 멈추고 보고하라.
+**기대: 9409 를 보유하면 「공장 자동화」의 `fusion` 이 오른다.** 실측 `0.042002 → 0.049044`. **순위는 안 움직일 수 있다** — 이 덱에서 1004 는 이미 1위라 오를 자리가 없다. `fusion` 이 안 오르면 합성 항이 안 도는 것이다 — 멈추고 보고하라.
 
 - [ ] **Step 8: 커밋**
 
