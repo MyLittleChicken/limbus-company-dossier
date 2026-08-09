@@ -8,7 +8,7 @@ import { evaluateGifts } from '@/lib/engine/v2/evaluate';
 import { chain } from '@/lib/engine/v2/chain';
 import type { GiftVerdict, Squad } from '@/lib/engine/v2/types';
 import { localeRows, nameOf } from './locale';
-import { axisSupplyOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
+import { axisSupplyOf, fitOf, fusionOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
 
 /**
  * 화면이 쓰는 추천 질의.
@@ -77,6 +77,8 @@ export interface PackLine {
 	fit: number;
 	/** 후보 기프트의 발동 조건 중 살아 있는 비율 */
 	live: number;
+	/** 합성으로 얻는 몫 */
+	fusion: number;
 	/** 등급별 기프트 수 */
 	tally: { A: number; B: number; C: number };
 	gifts: GiftLine[];
@@ -190,6 +192,21 @@ export async function recommendForDeck(
 	const axisSupply = axisSupplyOf(supplyRows);
 	const ownedSet = new Set(ownedIds.map(String));
 
+	// 합성 결과물의 적합도. **결과물은 팩 밖에 있을 수 있다** — 합성으로만 얻는
+	// 59종은 gift_pack 에 아예 없다
+	const resultIds = [...new Set(data.recipes.map((r) => r.giftId))];
+	const resultGifts = await canonical.gift.findMany({
+		where: { id: { in: resultIds } },
+		select: { id: true, keywordId: true },
+		orderBy: { id: 'asc' },
+	});
+	// 결과물의 전용 여부는 팩과 무관하게 본다 — 합성 결과는 팩에서 안 나오므로
+	// 「이 팩에서만」이라는 물음이 성립하지 않는다. 전용으로 친다
+	const resultFit = new Map(
+		resultGifts.map((g) => [g.id, fitOf(g.keywordId, axisSupply, true)]),
+	);
+	const ownedSetStr = new Set(ownedIds.map(String));
+
 	const packs: PackLine[] = packRows.map((p) => {
 		const gifts: GiftLine[] = p.gifts.map((row) => {
 			const v = byGift.get(row.giftId);
@@ -227,7 +244,16 @@ export async function recommendForDeck(
 			fireable: g.fireable,
 			exclusive: g.exclusive,
 		}));
-		const s = scorePack(scoreInput, axisSupply);
+		// 보유 ∪ 이 팩. 「이 팩을 고르면 재료가 얼마나 모이나」를 묻는다
+		const have = new Set([...ownedSetStr, ...p.gifts.map((row) => row.giftId)]);
+		const fusion = fusionOf({
+			recipes: data.recipes,
+			resultFit,
+			have,
+			owned: ownedSetStr,
+			candidates: scoreInput.filter((g) => !g.owned && g.fireable).length,
+		});
+		const s = scorePack(scoreInput, axisSupply, fusion);
 
 		return {
 			id: p.id,
@@ -236,6 +262,7 @@ export async function recommendForDeck(
 			score: s.score,
 			fit: s.fit,
 			live: s.live,
+			fusion: s.fusion,
 			tally: {
 				A: gifts.filter((g) => g.grade === 'A').length,
 				B: gifts.filter((g) => g.grade === 'B').length,

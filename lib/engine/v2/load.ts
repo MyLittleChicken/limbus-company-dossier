@@ -12,6 +12,7 @@
  */
 import { PrismaClient } from '../../../src/v2/generated/client.js';
 import type { EffectRef } from './chain.js';
+import type { Recipe } from './fusion.js';
 import type { Capability, TriggerParam, TriggerRef } from './types.js';
 
 export interface EngineData {
@@ -22,6 +23,7 @@ export interface EngineData {
 	effectRefs: Map<string, EffectRef[]>;
 	giftRefs: Map<string, Array<{ refKind: string; refId: string }>>;
 	params: TriggerParam[];
+	recipes: Recipe[];
 }
 
 function group<T, V>(rows: T[], key: (r: T) => string, val: (r: T) => V): Map<string, V[]> {
@@ -36,24 +38,33 @@ function group<T, V>(rows: T[], key: (r: T) => string, val: (r: T) => V): Map<st
 }
 
 export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> {
-	const [caps, refs, giftTrigger, giftEffect, effectRef, params] = await Promise.all([
-		prisma.$queryRaw<Capability[]>`
-			SELECT identity_id AS "identityId", ref_kind AS "refKind",
-			       ref_id AS "refId", ego_id AS "egoId"
-			FROM canonical.v_identity_capability
-		`,
-		prisma.triggerRef.findMany({
-			select: { triggerId: true, refKind: true, refId: true, evaluability: true },
-		}),
-		prisma.giftTrigger.findMany({ select: { giftId: true, triggerId: true } }),
-		prisma.giftEffect.findMany({ select: { giftId: true, effectId: true } }),
-		prisma.effectRef.findMany({
-			select: { effectId: true, refKind: true, refId: true, mode: true },
-		}),
-		prisma.giftTriggerParam.findMany({
-			select: { giftId: true, triggerId: true, kind: true, tier: true, value: true, slots: true },
-		}),
-	]);
+	const [caps, refs, giftTrigger, giftEffect, effectRef, params, fusionSlot, fusionOption] =
+		await Promise.all([
+			prisma.$queryRaw<Capability[]>`
+				SELECT identity_id AS "identityId", ref_kind AS "refKind",
+				       ref_id AS "refId", ego_id AS "egoId"
+				FROM canonical.v_identity_capability
+			`,
+			prisma.triggerRef.findMany({
+				select: { triggerId: true, refKind: true, refId: true, evaluability: true },
+			}),
+			prisma.giftTrigger.findMany({ select: { giftId: true, triggerId: true } }),
+			prisma.giftEffect.findMany({ select: { giftId: true, effectId: true } }),
+			prisma.effectRef.findMany({
+				select: { effectId: true, refKind: true, refId: true, mode: true },
+			}),
+			prisma.giftTriggerParam.findMany({
+				select: { giftId: true, triggerId: true, kind: true, tier: true, value: true, slots: true },
+			}),
+			prisma.fusionSlot.findMany({
+				select: { giftId: true, recipeIdx: true, slotIdx: true, materialId: true },
+				orderBy: [{ giftId: 'asc' }, { recipeIdx: 'asc' }, { slotIdx: 'asc' }],
+			}),
+			prisma.fusionSlotOption.findMany({
+				select: { giftId: true, recipeIdx: true, slotIdx: true, materialId: true },
+				orderBy: [{ giftId: 'asc' }, { recipeIdx: 'asc' }, { slotIdx: 'asc' }],
+			}),
+		]);
 
 	const refsByTrigger = group(refs, (r) => r.triggerId, (r) => r);
 	const giftTriggers = group(giftTrigger, (r) => r.giftId, (r) => r.triggerId);
@@ -67,6 +78,30 @@ export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> 
 		giftRefs.set(giftId, flat);
 	}
 
+	/**
+	 * 레시피를 칸 단위로 접는다.
+	 *
+	 * `material_id` 가 있으면 그 칸의 재료는 하나다. null 이면 선택지형이고
+	 * `fusion_slot_option` 이 후보를 담는다(실측 1건).
+	 */
+	const optionsBySlot = new Map<string, string[]>();
+	for (const o of fusionOption) {
+		const k = `${o.giftId}|${o.recipeIdx}|${o.slotIdx}`;
+		optionsBySlot.set(k, [...(optionsBySlot.get(k) ?? []), o.materialId]);
+	}
+	const slotsByRecipe = new Map<string, string[][]>();
+	for (const s of fusionSlot) {
+		const k = `${s.giftId}|${s.recipeIdx}`;
+		const opts = s.materialId !== null
+			? [s.materialId]
+			: optionsBySlot.get(`${s.giftId}|${s.recipeIdx}|${s.slotIdx}`) ?? [];
+		slotsByRecipe.set(k, [...(slotsByRecipe.get(k) ?? []), opts]);
+	}
+	const recipes: Recipe[] = [...slotsByRecipe].map(([k, slots]) => ({
+		giftId: k.split('|')[0] as string,
+		slots,
+	}));
+
 	return {
 		capabilities: caps,
 		refsByTrigger,
@@ -75,5 +110,6 @@ export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> 
 		effectRefs: group(effectRef, (r) => r.effectId, (r) => r),
 		giftRefs,
 		params,
+		recipes,
 	};
 }

@@ -12,6 +12,7 @@
  * **저울추가 둘뿐이다** — 확정 1.0 / 가능 0.5, 연쇄 1홉 1.0 / 2홉 0.5.
  * 같은 규칙이고(한 단계 멀어지면 반) 나머지는 전부 실측값에서 나온다.
  */
+import { reachOf, type Recipe } from './fusion.js';
 import type { RefVerdict } from './types.js';
 
 /** 한 단계 불확실해지거나 한 홉 멀어지면 반. 이 파일의 저울추 전부다 */
@@ -113,6 +114,37 @@ export function liveOf(gift: ScoreGift): number {
 }
 
 /**
+ * 합성으로 얻는 몫.
+ *
+ * **`F` 와 같은 분모(후보 기프트 수)를 쓴다.** 둘을 더해야 하고, 레시피 수로
+ * 나누면 큰 팩이 유리해지기 때문이다.
+ *
+ * **레시피 전부를 훑는다.** 도달이 0 이면 안 더해지므로 실질적으로 이 팩이
+ * 기여하는 것만 남는다.
+ */
+export function fusionOf(input: {
+	recipes: ReadonlyArray<Recipe>;
+	/** 결과물 기프트 id → 그 기프트의 fit. 덱과 안 맞으면 0 이다 */
+	resultFit: ReadonlyMap<string, number>;
+	/** 보유 ∪ 이 팩의 기프트 */
+	have: ReadonlySet<string>;
+	/** 이미 보유한 기프트. 결과물을 이미 갖고 있으면 안 센다 */
+	owned: ReadonlySet<string>;
+	candidates: number;
+}): number {
+	if (input.candidates === 0) return 0;
+	let sum = 0;
+	for (const r of input.recipes) {
+		// 이미 가진 것을 또 만들 이유가 없다
+		if (input.owned.has(r.giftId)) continue;
+		const fit = input.resultFit.get(r.giftId) ?? 0;
+		if (fit === 0) continue;
+		sum += reachOf(r, input.have) * fit;
+	}
+	return sum / input.candidates;
+}
+
+/**
  * 팩 하나의 점수.
  *
  * **곱이지 합이 아니다(설계 5.1).** 두 축이 다른 질문에 답하므로 합으로 하면
@@ -125,7 +157,9 @@ export interface PackScore {
 	fit: number;
 	/** 후보 기프트의 전체 발동 조건 중 살아 있는 비율. 0~1 */
 	live: number;
-	/** `fit × live`. **순위를 매길 수 없으면 0 이다** */
+	/** 합성으로 얻는 몫. `fit` 과 같은 분모다 */
+	fusion: number;
+	/** `(fit + fusion) × live`. **순위를 매길 수 없으면 0 이다** */
 	score: number;
 	/** 보유를 뺀 기프트 수 */
 	candidates: number;
@@ -142,12 +176,14 @@ export interface PackScore {
 export function scorePack(
 	gifts: ReadonlyArray<ScoreGift>,
 	supply: AxisSupply,
+	/** `fusionOf` 가 낸 값. 호출자가 미리 셈해 넘긴다 — 레시피가 팩 밖의 것이라서다 */
+	fusion = 0,
 ): PackScore {
 	// 보유는 다시 못 얻고, 켜질 수 없는 것은 고를 이유가 없다
 	const pool = gifts.filter((g) => !g.owned && g.fireable);
 	const rankable = supply.max > 0;
 	if (pool.length === 0) {
-		return { fit: 0, live: 0, score: 0, candidates: 0, rankable };
+		return { fit: 0, live: 0, fusion: 0, score: 0, candidates: 0, rankable };
 	}
 
 	const fit = pool.reduce((s, g) => s + fitOf(g.keywordId, supply, g.exclusive), 0) / pool.length;
@@ -159,7 +195,10 @@ export function scorePack(
 	return {
 		fit,
 		live,
-		score: rankable ? fit * live : 0,
+		fusion,
+		// **안쪽은 합, 바깥은 곱**(설계 5절). F 와 C 는 둘 다 「이 팩에서 무엇을
+		// 얻나」를 답하고, L 은 「그것이 내 편성에서 도나」라 성격이 다르다
+		score: rankable ? (fit + fusion) * live : 0,
 		candidates: pool.length,
 		rankable,
 	};

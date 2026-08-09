@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSupplyOf, fitOf, liveOf, scorePack, type ScoreGift } from './score.js';
+import { axisSupplyOf, fitOf, fusionOf, liveOf, scorePack, type ScoreGift } from './score.js';
 
 const SUPPLY = axisSupplyOf([
 	{ refKind: 'axis', refId: 'COMBUSTION', count: 7 },
@@ -252,4 +252,82 @@ test('팩 점수가 전용 여부를 반영한다', () => {
 	assert.equal(scorePack([ex], SUPPLY).fit, 1);
 	assert.equal(scorePack([gen], SUPPLY).fit, 0.5);
 	assert.equal(scorePack([ex, gen], SUPPLY).fit, 0.75);
+});
+
+test('합성 항은 도달과 결과물 적합도의 곱이다', () => {
+	const recipes = [{ giftId: 'R', slots: [['a'], ['b']] }];
+	// 결과물 R 은 화상 전용이라 fit 1.0
+	const resultFit = new Map([['R', 1]]);
+	// 이 팩에 a 가 있고 보유에 b 가 있다 → 완성
+	const c = fusionOf({
+		recipes,
+		resultFit,
+		have: new Set(['a', 'b']),
+		owned: new Set<string>(),
+		candidates: 2,
+	});
+	assert.equal(c, 0.5); // (1.0 도달 × 1.0 fit) / 후보 2
+});
+
+test('절반만 모이면 절반만 친다', () => {
+	const c = fusionOf({
+		recipes: [{ giftId: 'R', slots: [['a'], ['b']] }],
+		resultFit: new Map([['R', 1]]),
+		have: new Set(['a']),
+		owned: new Set<string>(),
+		candidates: 1,
+	});
+	assert.equal(c, 0.5);
+});
+
+test('이미 보유한 결과물은 안 센다 — 다시 만들 이유가 없다', () => {
+	const c = fusionOf({
+		recipes: [{ giftId: 'R', slots: [['a'], ['b']] }],
+		resultFit: new Map([['R', 1]]),
+		have: new Set(['a', 'b']),
+		owned: new Set(['R']),
+		candidates: 1,
+	});
+	assert.equal(c, 0);
+});
+
+test('결과물이 덱과 안 맞으면 도달해도 작다', () => {
+	const c = fusionOf({
+		recipes: [{ giftId: 'R', slots: [['a'], ['b']] }],
+		resultFit: new Map([['R', 0]]),
+		have: new Set(['a', 'b']),
+		owned: new Set<string>(),
+		candidates: 1,
+	});
+	assert.equal(c, 0);
+});
+
+test('후보가 0 이면 0 이다 — 나누기 0 을 안 만든다', () => {
+	const c = fusionOf({
+		recipes: [{ giftId: 'R', slots: [['a'], ['b']] }],
+		resultFit: new Map([['R', 1]]),
+		have: new Set(['a', 'b']),
+		owned: new Set<string>(),
+		candidates: 0,
+	});
+	assert.equal(c, 0);
+});
+
+test('점수는 (적합도 + 합성) × 켜짐이다', () => {
+	const g = gift({
+		keywordId: 'Combustion',
+		total: 2,
+		satisfied: 1,
+		reasons: [
+			{ verdict: 'satisfied', certainty: 'certain' },
+			{ verdict: 'unsatisfied', certainty: 'possible' },
+		],
+		exclusive: true,
+	});
+	// fit 1.0 · live 1/2 · fusion 0.25 → (1 + 0.25) × 0.5
+	const s = scorePack([g], SUPPLY, 0.25);
+	assert.equal(s.fit, 1);
+	assert.equal(s.live, 0.5);
+	assert.equal(s.fusion, 0.25);
+	assert.equal(s.score, 0.625);
 });
