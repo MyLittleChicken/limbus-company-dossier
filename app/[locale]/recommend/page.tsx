@@ -6,6 +6,7 @@ import { UI } from '@/lib/ui-text';
 import { HWAJIN_DECK, recommendForDeck } from '@/lib/queries/canonical/recommend';
 import { one, type SearchParams } from '@/lib/queries/shared';
 import { Nothing, Panel, SecLabel } from '@/components/ui';
+import { GiftEvidence } from '@/components/gift-evidence';
 
 /**
  * 추천 슬라이스.
@@ -149,8 +150,8 @@ export default async function RecommendPage({
 										{rec.rankable && (
 											<span className="card-meta">
 												{ko
-													? `${p.score.toFixed(3)} — 적합 ${p.fit.toFixed(3)} × 켜짐 ${p.live.toFixed(3)}`
-													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} × live ${p.live.toFixed(3)}`}
+													? `${p.score.toFixed(3)} — 적합 ${p.fit.toFixed(3)} + 합성 ${p.fusion.toFixed(3)} × 켜짐 ${p.live.toFixed(3)}`
+													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} + fusion ${p.fusion.toFixed(3)} × live ${p.live.toFixed(3)}`}
 											</span>
 										)}
 										{p.tally.A === 0 ? (
@@ -183,6 +184,12 @@ export default async function RecommendPage({
 													))}
 											</ul>
 										)}
+										{/* 계측기 — 상위 5만으론 왜 이 순위인지 검증할 수 없다. 전체 근거를 모달로 낸다(설계 7절) */}
+										<GiftEvidence
+											packName={p.name ?? p.id}
+											gifts={p.gifts}
+											label={ko ? `… 전체 ${p.gifts.length}개 근거` : `… all ${p.gifts.length}`}
+										/>
 									</li>
 								))}
 							</ul>
