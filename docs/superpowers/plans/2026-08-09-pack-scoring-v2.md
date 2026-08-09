@@ -956,9 +956,10 @@ export interface Recipe {
 }
 
 /**
- * 이 레시피에 얼마나 가까운가. 0 · 0.25 · 0.5 · 1.0.
+ * 이 레시피에 얼마나 가까운가. 0 또는 `0.5 ** 모자란칸수`.
  *
- * **모자란 칸 수만큼 반씩 깎는다** — 완성 1.0, 하나 모자람 0.5, 둘 모자람 0.25.
+ * **모자란 칸 수만큼 반씩 깎는다** — 완성 1.0, 하나 모자람 0.5, 둘 모자람 0.25,
+ * 셋 모자람 0.125. 레시피가 최대 4칸이므로 0.125 까지 난다.
  * 새 저울추가 아니라 「한 단계 멀어지면 반」의 거듭제곱이다.
  *
  * **하나도 안 모였으면 0 이다.** 거듭제곱을 끝까지 밀면 재료 넷짜리에서 0.0625 가
@@ -1015,6 +1016,7 @@ git commit -m "feat(engine): 합성 도달 — 순수 함수
 - Modify: `lib/engine/v2/score.ts`
 - Modify: `lib/engine/v2/score.test.ts`
 - Modify: `lib/queries/canonical/recommend.ts`
+- Modify: `scripts/golden-queries.ts` (Step 6 — `summarize` 에 `fusion` 추가)
 
 **Interfaces:**
 - Consumes: Task 6 의 `Recipe` · `reachOf`, Task 5 의 `fitOf`
