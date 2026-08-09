@@ -298,7 +298,7 @@ export function liveOf(gift: ScoreGift): number {
 npx tsx --test lib/engine/v2/score.test.ts
 ```
 
-기대: 10건 전부 pass · 0 fail.
+기대: 9건 전부 pass · 0 fail. (전체 `npm test` 는 457 → 466)
 
 - [ ] **Step 5: 커밋**
 
@@ -513,7 +513,7 @@ npx tsx --test lib/engine/v2/score.test.ts
 npm run typecheck
 ```
 
-기대: 16건 전부 pass · 0 fail · 타입 통과.
+기대: 15건 전부 pass · 0 fail · 타입 통과. (전체 `npm test` 는 466 → 472)
 
 - [ ] **Step 5: 커밋**
 
@@ -1030,7 +1030,7 @@ Task 7 Step 3 의 출력을 옮긴다.
 파일        lib/engine/v2/score.ts (신규) · score.test.ts (신규)
            lib/queries/canonical/recommend.ts · app/[locale]/recommend/page.tsx
            scripts/golden-queries.ts
-검사        순수 16건 추가.  전체 457 → 473 · 0 실패
+검사        순수 15건 추가.  전체 457 → 472 · 0 실패
 골든        20 → 22건.  기존 20건 변화 없음
 앱          경로 18개 200 · 서버 에러 0
 순위        1위 타오르는 일렁임 0.1396 (적합 0.273 × 켜짐 0.511)
