@@ -1,5 +1,24 @@
 # 추천 시스템 (Recommendation System)
 
+> **상태: 9절의 소유 경계와 10절의 검증 수단이 낡았다** (2026-08-09)
+>
+> ```
+> lib/engine/**            없다.  삭제됐다 (PR #28)
+> src/engine-proof.ts      없다.  npm run engine:proof 도 없다
+> npm run verify           없다.  v1 검증기였고 v2:verify:canonical 이 그 자리다
+> lib/queries/recommend.ts 없다.  lib/queries/canonical/recommend.ts 가 대체했다
+> ```
+>
+> **9절의 「웹 / 엔진」 두 소유자 구도가 성립하지 않는다.** 엔진을 별도 브랜치에서
+> 병행 개선하는 전제였는데, 엔진이 `lib/engine/v2/**` 하나로 합쳐졌고 그것을 부르는
+> 자리도 `lib/queries/canonical/recommend.ts` 하나다. **경계를 다시 그을 일이 생기면
+> 그때 세운다** — 지금은 병행 작업이 없다.
+>
+> 10절의 「`engine:proof` 슬라이스 4의 팩 순위·점수와 대조」는 **대조할 대상이 없다.**
+> v2 에는 점수 모형이 없어 팩 순위를 안 매긴다(M4 PR-B 의 몫).
+>
+> 5·6·7·8절(런 추적 · 편성 · 덱 코드 · 결손 표기)은 그대로 유효하다.
+
 > 상태: 초안 v0.1 / 최종 수정 2026-07-28
 > 4단계(추천 시스템) 착수 전 문서. **사용자가 자기 런 상황을 입력해 추천을 받는 흐름**을 정의한다.
 > 3단계가 만든 엔진(`06-recommendation-engine.md`)은 그대로 쓰고, 이 문서는 엔진을 건드리지 않는다.

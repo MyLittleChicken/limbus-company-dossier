@@ -190,13 +190,49 @@ Prisma v1 클라이언트   함께 지웠다.  그것이 부작용을 없앤 방
 ## 8.5 닫으면서 새로 연 것
 
 ```
-VibrationExplosion    canonical.status_category 에 행이 아예 없다.  판정 누락이다
-                      10705 · 20503 · 20903 · 21104 가 Vibration 태그를 잃었다
+VibrationExplosion    canonical.status_category 에 행이 아예 없다
 BulletLament          BULLET 로 분류돼 있으나 id 직접 대조라 안 걸린다 (20109)
                       list.ts 가 제 주석에 적어 둔 「두 방식이 다르다」의 같은 사례
 ```
 
 **이 PR 은 `canonical` 을 안 바꾸므로 여기서 안 고친다.** 관측으로 남긴다.
+
+> **정정 (2026-08-09) — 앞의 첫 줄에 「판정 누락이다」라고 적었던 것은 틀렸다.**
+>
+> 결손이 아니라 **원본 그대로**다. `status_category` 는 우리가 유도하는 표가
+> 아니라 게임 자산의 `categoryKeywordList` 를 옮긴 것이고(`canonical/statuses.ts`),
+> 원본을 열어 보면 이렇다.
+>
+> ```
+> Combustion           ["SIN", "COMBUSTION"]      태그 있음
+> Vibration            ["SIN", "VIBRATION"]       태그 있음
+> VibrationExplosion   (없음)                      게임이 안 붙였다
+> ```
+>
+> **게임의 분류가 우리 8축보다 촘촘하다.** 진동 파생을 `VIBRATION_CONVERTED`
+> (9종) · `VIBRATION_MERGED`(1종)로 따로 묶고, 진동 폭발에는 아무것도 안 붙인다.
+> 「`status_category` 의 카테고리 중 **트리거가 참조하는 8종만** 축」이라는
+> 규칙은 `canonical/axis.ts` 에 적힌 의도된 선택이며, 주살(`BURSTREACTIVE`) ·
+> 마탄(`FREISHUTZ_OUTIS_EGO_BULLET`) · 원호 방어도 같은 이유로 축이 아니다.
+>
+> **태그를 잃은 넷은 회귀가 아니라 교정이었다.** 10705 를 게임은
+> `Burst` · `Sinking` 인격으로 태그한다 — 진동 폭발을 걸어도 진동 인격이
+> 아니다. 레거시 정규식이 `VibrationExplosion` 을 부분 문자열로 집어
+> 없는 축을 붙이고 있었다.
+>
+> **이 판정은 이미 두 번 적혀 있었다.**
+>
+> ```
+> 08-gimmick-keywords.md 4.1   「①이 기프트 조건 카운트의 판정 기준이다」
+>                              ① 은 게임이 붙인 키워드다.  같은 문서의 표가
+>                              10705 을 ① rupture·sinking / ③ tremor 로 갈라 적었다
+> 2026-08-03-…-design.md       「status_category 0행 → 축 NULL」
+> ```
+>
+> **확립된 판정을 다시 열어 「누락」이라 부른 것이 이 문서의 잘못이다.**
+>
+> 그대로 뒀으면 다음 회차가 없는 결손을 메우려 들어 `canonical` 을 원본과
+> 어긋나게 만들었을 것이다.
 
 ## 9. 구현 결과
 

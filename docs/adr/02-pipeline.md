@@ -7,6 +7,34 @@
 >
 > **범위** — 이 문서는 현행 `public` 스키마의 결정이다. 신규 3스키마에서는 재생성 범위가 `raw`·`canonical` 로 한정되고 `app` 은 제외된다 → [`06-three-schema-database.md`](06-three-schema-database.md).
 
+> **후속 — 이 문서가 정한 파이프라인은 더 이상 돌지 않는다** (2026-08-09 · PR #28)
+>
+> `public` 스키마가 물러나면서 그것을 채우던 프로그램을 지웠다.
+>
+> ```
+> 지웠다   src/load.ts · src/verify.ts · prisma/schema.prisma · prisma/schema.sql
+>          npm run load · verify · generate · schema:validate · schema:format · schema:ddl
+>          CI 의 v1 DDL 드리프트 단계
+>
+>          src/convert.ts · text.ts · report.ts · manifest-lf.ts · entities/ 6개  2,290줄
+>          npm run convert
+> 남았다   src/fetch.ts · src/assets.ts · src/io.ts — 원본 수집이라 스키마와 무관하다
+> ```
+>
+> **변환기는 한 발 늦게 지웠다.** PR #28 이 「`convert` 는 원본 수집이라 무관하다」고
+> 적었는데 틀렸다 — 수집은 `fetch` 이고 `convert` 는 그 원본을 v1 적재기가 먹을
+> 모양(`build/data/*.json`)으로 바꾸는 일이었다. **적재기를 지운 순간 산출물을 읽는
+> 곳이 0 이 됐다.** `v2:load` 는 `data/entities/` 를 직접 읽는다.
+>
+> 지운 2,290줄에 검사가 하나도 없었고 검사 수가 457 그대로다 — 죽어 있었다는 방증이다.
+>
+> **3절의 결정(TypeScript · Prisma Client · 마이그레이션 러너 없음 · 전체 재생성)은
+> 그대로 유효하다** — `src/v2/` 가 같은 결정 위에 서 있다. 낡은 것은 그 결정을
+> 적용한 **대상**이다. 55행의 「`prisma generate` 사용」도 v2 스키마 하나에만 해당한다.
+>
+> 이 결정의 현행 적용은 [`06-three-schema-database.md`](06-three-schema-database.md) 와
+> [`07-canonical-promotion.md`](07-canonical-promotion.md) 를 본다.
+
 ## 1. 맥락 — 변환이 실제로 해야 하는 일
 
 | 항목 | 규모 |

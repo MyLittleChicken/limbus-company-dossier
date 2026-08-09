@@ -1,5 +1,16 @@
 # 기믹 키워드 — 인격 · E.G.O · 기프트의 관계 (Gimmick Keywords)
 
+> **후속 — 구현 경로가 낡았다. 판정은 그대로다** (2026-08-09 · PR #28)
+>
+> `lib/engine/vocab.ts` · `lib/engine/dsl.ts` · `prisma/schema.prisma` 를 현재형으로
+> 가리키는 자리(31 · 213 · 244 · 246 · 595행)는 **전부 없는 파일이다.** 그 어휘 판정은
+> `canonical.identity_axis` (628행) · `canonical.status_category` 가 데이터로 갖고 있다.
+>
+> **4.1 절의 판정 기준이 오히려 더 중요해졌다** — 「①(게임이 붙인 키워드)이 기프트 조건
+> 카운트의 판정 기준이다」는 지금 엔진이 실제로 따르는 규칙이다. 4절 표의 ③(상태에서
+> 유도한 것)은 참고이지 판정이 아니며, `VibrationExplosion` 처럼 게임이 축 태그를
+> 안 붙인 상태를 정규식으로 집어 축을 붙이면 틀린다.
+
 > 상태: 초안 v0.1 / 작성 2026-07-29 · 스냅샷 2026-07-25
 > 데이터 마스터북 회차 1(`limbus-data-mj/identities.json`) 인터뷰 중 발견한 내용을 분리해 정리한다.
 > 엔티티 정의는 `02-data-model.md`, 정본 배정은 `adr/04-source-authority.md`, 추천 판정은

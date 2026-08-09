@@ -655,11 +655,18 @@ E.G.O 가 주는 축이지 인격이 주는 축이 아니다. 빼면 남는 둘(
            list.ts 가 이미 「보호 15」로 적어 둔 수와 여기서 맞는다
 ```
 
-**`VibrationExplosion` 은 `status_category` 에 행이 아예 없다.** 판정 누락이지
-설계가 아니다 — **캐노니컬의 결손으로 기록한다.** PR-A 는 캐노니컬을 안 바꾸므로
-여기서 고치지 않고 다음 회차로 넘긴다. `BulletLament` 은 `BULLET` 로 분류돼
-있으나 id 직접 대조라 안 걸리며, 이는 `list.ts` 가 제 주석에 이미 적어 둔
-「두 방식이 같지 않다」의 같은 사례다.
+**`VibrationExplosion` 은 `status_category` 에 행이 아예 없다.** ~~판정 누락이지
+설계가 아니다 — 캐노니컬의 결손으로 기록한다.~~ **틀린 판정이었다. 아래를 본다.**
+`BulletLament` 은 `BULLET` 로 분류돼 있으나 id 직접 대조라 안 걸리며, 이는
+`list.ts` 가 제 주석에 이미 적어 둔 「두 방식이 같지 않다」의 같은 사례다.
+
+> **정정 (2026-08-09)** — 결손이 아니라 **원본 그대로**다. `status_category` 는
+> 게임 자산의 `categoryKeywordList` 를 옮긴 표이고, 원본이 `Combustion` ·
+> `Vibration` 에는 태그를 붙이고 `VibrationExplosion` 에는 안 붙인다. 게임의
+> 분류가 우리 8축보다 촘촘해서 진동 파생을 `VIBRATION_CONVERTED` 로 따로 묶는다.
+>
+> **태그를 잃은 넷은 교정이었다.** 10705 를 게임은 `Burst` · `Sinking` 인격으로
+> 태그한다 — 진동이 아니다. 설계 8.5 절에 자세히 적었다.
 
 **아이콘은 9종 전부 `null` 이고 그것은 전과 같다.** 파일명이 영문 표시명이라
 (`Combustion` 이 아니라 `Burn.webp`) `keywordIcon(id)` 이 못 찾는다. `list.ts` 는
