@@ -137,9 +137,12 @@ test('실측 등급 — A 146 · B 219 · C 86', DB, () => {
 	assert.deepEqual(n, { A: 146, B: 219, C: 86 });
 });
 
-test('전부 충족 95 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', DB, () => {
+test('전부 충족 93 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', DB, () => {
+	// 자리 한정을 씌우기 전엔 95였다. 9143·9210 이 「편성 1·2번」 자리 조건과
+	// 무기 갈래 조건을 각각 갖는데, 자리 한정 전에는 무기 갈래를 편성 전체로
+	// 세어 충족으로 잘못 잡혔다 — 죽음바라기와 같은 결의 오판정이다
 	const fired = verdicts.filter((v) => v.grade === 'A' && v.satisfied === v.total);
 	const sure = fired.filter((v) => v.certain === v.total);
-	assert.equal(fired.length, 95);
+	assert.equal(fired.length, 93);
 	assert.equal(sure.length, 50);
 });
