@@ -137,39 +137,45 @@ const AXIS_GRANT = [
 		note: '착영휘도 — 「[검계 우두머리 뫼르소 전용 상시 효과] … 이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」. 10508 은 keyword 가 Breath 뿐이라 이 효과로 출혈이 는다',
 	},
 
-	// ── 스킬 취급 부여 2건 · 4행 · 조건 없음(2026-08-10, 사용자 확정) ─────
+	// ── 스킬 취급 부여 2건 · 4행 · status_held 게이트(2026-08-10, 되살림) ────
 	// 태그(「이 인격은 화상, 출혈을 부여하는 인격으로 취급됨」)는 조건이 없고
 	// identity_keyword 가 이미 담았다(10814·11115 둘 다 Combustion·Laceration).
-	// status_held 게이트(열선·봉인 해제)는 뗐다 — 조건이 서기 전에도 태그는 이미
-	// 화상·출혈이고, 조건이 서면 「어느 스킬이 그 취급을 받는가」만 바뀔 뿐이다.
-	// 「이 인격은 화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄도 무방하다.
+	//
+	// status_held 게이트를 한 번 뗐다가(ea436ea) 되살렸다(사용자 확정) — 결론은
+	// 같지만 사실이 있어야 할 자리가 다르다. 「열선 보유 시 …로 취급됨」은 게임이
+	// 말한 메카니즘이고, 인격 정보 화면이 그 메카니즘을 원문 그대로 보여줘야
+	// 한다. 게이트를 코드/note 문자열로만 남기면 정보 화면이 그걸 다시 파싱해야
+	// 한다 — 메카니즘은 데이터에 두고, 「전투 중 상태라 거울 던전 추적 범위 밖」
+	// 이라는 판단은 엔진(`lib/engine/v2/profile.ts` 의 `status_held` 게이트 평가)
+	// 이 진다. 추천 근거는 그 판단을 적용한 뒤의 결론(「화상·출혈 부여 스킬 보유」)
+	// 으로 말한다.
 	{
 		id: '1081402:COMBUSTION', sourceKind: 'passive', sourceId: '1081402', mode: 'add',
 		targetKind: 'self', targetId: '10814', axisId: 'COMBUSTION', affects: 'skill',
-		gateKind: 'always', gateRef: '', gateMin: null,
+		gateKind: 'status_held', gateRef: 'HeatRay', gateMin: null,
 		note: '「열선 효과를 보유하고 있을 시, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
-			' 태그는 조건 없이 이미 화상·출혈이다 — 열선 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
+			' 인격 정보 화면은 이 원문 그대로 보여준다 — 전투 중 상태라 거울 던전 추적 범위 밖이라는 판단은 엔진이 한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1081402:LACERATION', sourceKind: 'passive', sourceId: '1081402', mode: 'add',
 		targetKind: 'self', targetId: '10814', axisId: 'LACERATION', affects: 'skill',
-		gateKind: 'always', gateRef: '', gateMin: null,
+		gateKind: 'status_held', gateRef: 'HeatRay', gateMin: null,
 		note: '「열선 효과를 보유하고 있을 시, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
-			' 태그는 조건 없이 이미 화상·출혈이다 — 열선 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
+			' 인격 정보 화면은 이 원문 그대로 보여준다 — 전투 중 상태라 거울 던전 추적 범위 밖이라는 판단은 엔진이 한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1111502:COMBUSTION', sourceKind: 'passive', sourceId: '1111502', mode: 'add',
 		targetKind: 'self', targetId: '11115', axisId: 'COMBUSTION', affects: 'skill',
-		gateKind: 'always', gateRef: '', gateMin: null,
+		gateKind: 'status_held', gateRef: 'SwordUnseal', gateMin: null,
 		note: '「자신의 검이 1단계 봉인 해제, 2단계 봉인 해제 상태면, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
-			' 태그는 조건 없이 이미 화상·출혈이다 — 봉인 해제 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
+			' 인격 정보 화면은 이 원문 그대로 보여준다 — 전투 중 상태라 거울 던전 추적 범위 밖이라는 판단은 엔진이 한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1111502:LACERATION', sourceKind: 'passive', sourceId: '1111502', mode: 'add',
 		targetKind: 'self', targetId: '11115', axisId: 'LACERATION', affects: 'skill',
-		gateKind: 'always', gateRef: '', gateMin: null,
+		gateKind: 'status_held', gateRef: 'SwordUnseal', gateMin: null,
 		note: '「자신의 검이 1단계 봉인 해제, 2단계 봉인 해제 상태면, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
-			' 태그는 조건 없이 이미 화상·출혈이다 — 봉인 해제 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
+			' 인격 정보 화면은 이 원문 그대로 보여준다 — 전투 중 상태라 거울 던전 추적 범위 밖이라는 판단은 엔진이 한다(2026-08-10, 사용자 확정)',
 	},
 
 	// ── 기프트 부여 1건 · 2행 · 소속 단위 ────────────────────────

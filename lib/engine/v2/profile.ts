@@ -37,9 +37,12 @@ export function denominatorsOf(squad: Squad): Denominators {
  * 이상인가」를 묻는데, 그 인원은 조건 없는 능력에서 나온다. 그래서 조건 없는
  * 것을 먼저 세고, 그 수를 근거로 조건부를 판정한다.
  *
- * `status_held` 는 전투 중에만 아는 조건이다. 편성만 보고는 켜졌다고 할 수
- * 없으므로 **세지 않는다** — 다만 「켜질 수 없다」는 뜻은 아니다. 이 값을
- * 근거로 기프트를 죽이지 않도록 소비자가 조심해야 한다.
+ * `status_held` 는 전투 중에만 아는 조건이다(2026-08-10, 사용자 확정으로 되살림).
+ * 거울 던전 추적은 편성과 기프트 선택까지를 다루고 전투 안을 보지 않으므로,
+ * 이 조건은 **판정 범위 밖**이다. 범위 밖의 조건을 「아니다」로 읽으면 실제로는
+ * 켜지는 것을 죽인다 — `threshold` 가 없을 때 배제하지 않는 것과 같은 원칙이라
+ * `open()` 은 `status_held` 를 **연다**(`true`). 어휘에 없는 게이트(`default`)는
+ * 계속 닫는다 — 모르는 값이 조용히 통과하면 과대 판정이 된다.
  */
 export function activeCapabilities(
 	squad: Squad,
@@ -73,8 +76,11 @@ export function activeCapabilities(
 			case 'ego_equipped': return equipped.get(c.identityId)?.has(c.gateRef) === true;
 			case 'gift_held': return held.has(c.gateRef);
 			case 'roster_count': return rosterCount(c.gateRef) >= (c.gateMin ?? 1);
-			// 전투 중에만 안다. 편성만 보고 켰다고 하지 않는다
-			case 'status_held': return false;
+			// 전투 중에만 아는 상태다. 거울 던전 추적은 편성·기프트 선택까지만 다루고
+			// 전투 안을 보지 않으므로 이 조건은 판정 범위 밖이다. 범위 밖을 「아니다」로
+			// 읽으면 실제로는 켜지는 것을 죽인다 — threshold 가 없을 때 배제하지 않는
+			// 것과 같은 원칙이라 배제 근거로 쓰지 않는다(연다)
+			case 'status_held': return true;
 			// 모르는 게이트는 켜지 않는다 — 조용히 통과시키면 과대 판정이 된다
 			default: return false;
 		}

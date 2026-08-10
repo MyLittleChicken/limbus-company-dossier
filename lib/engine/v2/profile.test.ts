@@ -92,11 +92,14 @@ test('roster_count 는 그 소속 인원이 문턱을 넘어야 켜진다', () =
 	assert.equal(new Profile(SQUAD, [...dawn2, gated]).count('axis', 'VIBRATION', 'field'), 0);
 });
 
-test('status_held 는 전투 중에만 아는 조건이라 세지 않는다', () => {
+test('status_held 는 전투 중 상태라 판정 범위 밖이다 — 배제 근거로 안 쓴다(연다)', () => {
+	// 거울 던전 추적은 편성·기프트 선택까지만 다루고 전투 안(상태 보유 여부)을
+	// 안 본다. 그 조건을 「아니다」로 읽으면 실제로는 켜지는 것을 죽이므로
+	// threshold 미상일 때 배제하지 않는 것과 같은 원칙으로 연다(2026-08-10, 사용자 확정)
 	const caps: Capability[] = [
 		{ identityId: 'A', refKind: 'axis', refId: 'COMBUSTION', gateKind: 'status_held', gateRef: 'HeatRay', gateMin: null, affects: 'both' },
 	];
-	assert.equal(new Profile(SQUAD, caps).count('axis', 'COMBUSTION', 'field'), 0);
+	assert.equal(new Profile(SQUAD, caps).count('axis', 'COMBUSTION', 'field'), 1);
 });
 
 // ── 채널: 인격 취급(tag)과 스킬 취급(skill)이 갈린다 ──────────────
