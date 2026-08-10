@@ -854,20 +854,24 @@ async function main(): Promise<void> {
 			await prisma.identityAxis.count({ where: { source: 'granted' } }), 14);
 
 		// ── 저작 축 부여·제한 (Task 3, ADR-08) ────────────────────────
-		eq('axis_grant (저작, app 스키마)', await prisma.axisGrant.count(), 17);
-		eq('axis_restrict', await prisma.axisRestrict.count(), 7);
+		// 18 = 17 + 1. 새 행 10104:SINKING(restrict) 은 sourceKind='system' 이다 —
+		// 게임 텍스트에 근거가 없는 유저 관측이라는 사실을 데이터가 스스로 말한다
+		// (2026-08-10, 사용자 확정)
+		eq('axis_grant (저작, app 스키마)', await prisma.axisGrant.count(), 18);
+		eq('axis_restrict', await prisma.axisRestrict.count(), 8);
 
 		// affects 칸 값 — v2:diff 는 표 집합·행수·엔티티 id 만 보고 칸 값 변경은
 		// 못 잡는다. 제한 패시브 넷 중 둘(1010902·1110902)만 스킬 취급까지 부정해
 		// affects='both' 고, 나머지 둘(1041502·1091603)은 인격 취급만 제한해 'tag' 다
-		// (f2901af, 2026-08-10). 저작 원본 axis_grant 도 같은 사각이라 함께 지킨다
+		// (f2901af, 2026-08-10). 10104:SINKING 도 스킬 부정 문장이 없어 'tag' 다 —
+		// tag 5→6. 저작 원본 axis_grant 도 같은 사각이라 함께 지킨다
 		const restrictAffects = await prisma.axisRestrict.groupBy({
 			by: ['affects'], _count: { _all: true },
 		});
 		const raMap = Object.fromEntries(restrictAffects.map((r) => [r.affects, r._count._all]));
 		checks.push({
-			name: 'axis_restrict 의 affects 분포 (tag 5 · both 2)',
-			ok: raMap['tag'] === 5 && raMap['both'] === 2 && Object.keys(raMap).length === 2,
+			name: 'axis_restrict 의 affects 분포 (tag 6 · both 2)',
+			ok: raMap['tag'] === 6 && raMap['both'] === 2 && Object.keys(raMap).length === 2,
 			detail: JSON.stringify(raMap),
 		});
 		const grantAffects = await prisma.axisGrant.groupBy({
@@ -875,8 +879,8 @@ async function main(): Promise<void> {
 		});
 		const gaMap = Object.fromEntries(grantAffects.map((r) => [r.affects, r._count._all]));
 		checks.push({
-			name: 'axis_grant 의 affects 분포 (tag 5 · skill 4 · both 8)',
-			ok: gaMap['tag'] === 5 && gaMap['skill'] === 4 && gaMap['both'] === 8
+			name: 'axis_grant 의 affects 분포 (tag 6 · skill 4 · both 8)',
+			ok: gaMap['tag'] === 6 && gaMap['skill'] === 4 && gaMap['both'] === 8
 				&& Object.keys(gaMap).length === 3,
 			detail: JSON.stringify(gaMap),
 		});
@@ -899,19 +903,25 @@ async function main(): Promise<void> {
 		// (나) 제한이 실제로 걸렸는가 — canonical.keyword 어휘가 표현하는 축으로 한정한다.
 		// 어휘를 하드코딩하지 않고 keyword 테이블을 질의해 대조한다. 어휘 밖 축(BULLET)은
 		// 제한이 손대지 않으므로(identity-axis.ts 39-44행) 이 검사 밖에 둔다 — 안 그러면
-		// 10916 이 BULLET 을 갖고 있다는 사실만으로 반드시 실패한다
+		// 10916 이 BULLET 을 갖고 있다는 사실만으로 반드시 실패한다.
+		// `affects='both'` 로 한정한다 — 10104 는 restrict 가 SINKING 만 명시적으로
+		// 적었지만 VIBRATION 도 살아남는다(스킬 채널까지는 안 막아서 좁혀질 뿐 안
+		// 지워진다, Task 3 채널 좁히기). affects 가 원래 값 'both' 그대로 살아남았다면
+		// 그건 좁혀지지도 않은 것이라 restrict 가 전혀 안 걸렸다는 뜻이고, 그때만 진짜
+		// 누수다. 축이 좁혀졌는지(affects≠'both')는 아래 10104 전용 검사가 따로 잰다
 		const leaked = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			WITH vocab AS (SELECT upper(id) AS axis_id FROM canonical.keyword)
 			SELECT count(*)::bigint AS n
 			FROM canonical.identity_axis ia
 			JOIN vocab v ON v.axis_id = ia.axis_id
-			WHERE EXISTS (SELECT 1 FROM canonical.axis_restrict r WHERE r.identity_id = ia.identity_id)
+			WHERE ia.affects = 'both'
+			  AND EXISTS (SELECT 1 FROM canonical.axis_restrict r WHERE r.identity_id = ia.identity_id)
 			  AND NOT EXISTS (
 				SELECT 1 FROM canonical.axis_restrict r
 				WHERE r.identity_id = ia.identity_id AND r.axis_id = ia.axis_id)
 		`;
 		checks.push({
-			name: '제한 밖의 축이 identity_axis 에 없다 (어휘 안 축으로 한정)',
+			name: '제한 밖의 축이 좁혀지지 않은 채 남지 않는다 (어휘 안 축으로 한정)',
 			ok: Number(leaked[0]?.n ?? 1n) === 0,
 			detail: `${Number(leaked[0]?.n ?? 0n)} / 0`,
 		});
@@ -928,9 +938,12 @@ async function main(): Promise<void> {
 			detail: `${bulletHolders.length}명 · ${[...new Set(bulletHolders.map((r) => r.source))].join(',')}`,
 		});
 
-		// (다) 제한 넷의 축 실측 대조 — 게임 문장에서 온 값이다. 10916 은 BULLET 이
-		// 어휘 밖이라 제한이 안 닿아 여전히 갖는다(설계 41-44행)
+		// (다) 제한 넷 + 1 의 축 실측 대조 — 게임 문장(넷)과 유저 관측(10104)에서 온
+		// 값이다. 10916 은 BULLET 이 어휘 밖이라 제한이 안 닿아 여전히 갖는다(설계
+		// 41-44행). 10104 는 원문에 근거가 없는 미문서화 예외다(2026-08-10, 사용자
+		// 확정) — SINKING·VIBRATION 축 집합 자체는 그대로 남고 affects 만 갈린다
 		const RESTRICTED_EXPECTED: Record<string, string[]> = {
+			'10104': ['SINKING', 'VIBRATION'],
 			'10109': ['LACERATION'],
 			'10415': ['BREATH', 'COMBUSTION', 'LACERATION'],
 			'10916': ['BULLET', 'COMBUSTION', 'VIBRATION'],
@@ -947,6 +960,19 @@ async function main(): Promise<void> {
 				detail: `${uniq.join(' ')} / ${want.join(' ')}`,
 			});
 		}
+
+		// 10104 는 축 집합이 아니라 채널이 갈리는 첫 실사례다 — SINKING 은 원문이
+		// 직접 말하는 축이라 both 로 남고, VIBRATION 은 restrict 가 tag 채널만 막아
+		// 태그에서는 빠지고 스킬 채널로 좁혀진다(사라지지 않는다, Task 3 채널 좁히기)
+		const dongbaek = await prisma.identityAxis.findMany({
+			where: { identityId: '10104' }, select: { axisId: true, affects: true },
+		});
+		const dongbaekMap = Object.fromEntries(dongbaek.map((r) => [r.axisId, r.affects]));
+		checks.push({
+			name: '10104 개화 E.G.O::동백 이상 — SINKING both · VIBRATION skill(좁혀짐)',
+			ok: dongbaekMap['SINKING'] === 'both' && dongbaekMap['VIBRATION'] === 'skill',
+			detail: JSON.stringify(dongbaekMap),
+		});
 
 		// 게이트 어휘 — identity_axis.gate_kind 는 다섯 갈래 밖으로 안 샌다
 		const badGate = await prisma.identityAxis.count({

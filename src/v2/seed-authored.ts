@@ -36,7 +36,7 @@ const EGO_GRANTED_AXIS = [
 ];
 
 /**
- * 축 부여·제한 — 출처 9건 · 17행.
+ * 축 부여·제한 — 출처 10건 · 18행.
  *
  * 「취급」 문형을 ko 전수로 뽑아(패시브 703 · 에고 패시브 113 · 기프트 793 ·
  * 에고 스킬 611 → 31행) 축에 해당하는 것만 남겼다. 소속을 바꾸는 9280·9841 과
@@ -44,9 +44,13 @@ const EGO_GRANTED_AXIS = [
  *
  * 10814·11115 는 태그 부분을 `identity_keyword` 가 이미 담고 있어(둘 다
  * Combustion·Laceration) 스킬 취급만 적는다.
+ *
+ * 10104 한 행은 `sourceKind='system'` 이다 — 게임 텍스트가 아니라 유저 관측이
+ * 근거다(2026-08-10, 사용자 확정). 나머지 아홉은 전부 게임 텍스트(패시브·에고
+ * 패시브·기프트)가 근거라 `sourceKind` 가 그 종류를 그대로 딴다.
  */
 const AXIS_GRANT = [
-	// ── 제한 4건 · 7행 ──────────────────────────────────────────
+	// ── 제한 5건 · 8행 ──────────────────────────────────────────
 	{
 		id: '1091603:COMBUSTION', sourceKind: 'passive', sourceId: '1091603', mode: 'restrict',
 		targetKind: 'self', targetId: '10916', axisId: 'COMBUSTION', affects: 'tag',
@@ -96,6 +100,12 @@ const AXIS_GRANT = [
 		note: '「이 인격은 출혈을 부여하는 인격으로만 취급됨. 랜덤으로 화상, 출혈, 진동, 파열, 침잠을 부여하는 스킬이 이 효과로 인해서 해당 키워드를 부여하는 스킬로 취급되지 않음.」' +
 			' 스킬 취급까지 명시적으로 부정한다 — both 다(2026-08-10, 사용자 확정)',
 	},
+	{
+		id: '10104:SINKING', sourceKind: 'system', sourceId: '10104', mode: 'restrict',
+		targetKind: 'self', targetId: '10104', axisId: 'SINKING', affects: 'tag',
+		gateKind: 'always', gateRef: '', gateMin: null,
+		note: '개화 E.G.O::동백 이상 — 진동을 부여하는 인격으로 취급되지 않는다. 게임 텍스트에 근거가 없는 미문서화 예외이고 유저 관측으로 알려졌다(패시브는 「만개」·「알싸한 봄바람」뿐). 태그에서만 빼고 스킬 채널은 남긴다 — 「진동 인격 5인 이상」에는 안 들지만 「진동을 부여하는 스킬 사용시」 효과는 받는다',
+	},
 
 	// ── E.G.O 장착 부여 2건 · 4행 ────────────────────────────────
 	// **인격 전용이다.** 원문이 「…전용 상시 효과」라 못 박는다. 폐기하는
@@ -127,32 +137,39 @@ const AXIS_GRANT = [
 		note: '착영휘도 — 「[검계 우두머리 뫼르소 전용 상시 효과] … 이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」. 10508 은 keyword 가 Breath 뿐이라 이 효과로 출혈이 는다',
 	},
 
-	// ── 상태 조건 부여 2건 · 4행 · 스킬 취급만 ───────────────────
+	// ── 스킬 취급 부여 2건 · 4행 · 조건 없음(2026-08-10, 사용자 확정) ─────
 	// 태그(「이 인격은 화상, 출혈을 부여하는 인격으로 취급됨」)는 조건이 없고
 	// identity_keyword 가 이미 담았다(10814·11115 둘 다 Combustion·Laceration).
+	// status_held 게이트(열선·봉인 해제)는 뗐다 — 조건이 서기 전에도 태그는 이미
+	// 화상·출혈이고, 조건이 서면 「어느 스킬이 그 취급을 받는가」만 바뀔 뿐이다.
+	// 「이 인격은 화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄도 무방하다.
 	{
 		id: '1081402:COMBUSTION', sourceKind: 'passive', sourceId: '1081402', mode: 'add',
 		targetKind: 'self', targetId: '10814', axisId: 'COMBUSTION', affects: 'skill',
-		gateKind: 'status_held', gateRef: 'HeatRay', gateMin: null,
-		note: '「열선 효과를 보유하고 있을 시, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」',
+		gateKind: 'always', gateRef: '', gateMin: null,
+		note: '「열선 효과를 보유하고 있을 시, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
+			' 태그는 조건 없이 이미 화상·출혈이다 — 열선 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1081402:LACERATION', sourceKind: 'passive', sourceId: '1081402', mode: 'add',
 		targetKind: 'self', targetId: '10814', axisId: 'LACERATION', affects: 'skill',
-		gateKind: 'status_held', gateRef: 'HeatRay', gateMin: null,
-		note: '「열선 효과를 보유하고 있을 시, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」',
+		gateKind: 'always', gateRef: '', gateMin: null,
+		note: '「열선 효과를 보유하고 있을 시, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
+			' 태그는 조건 없이 이미 화상·출혈이다 — 열선 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1111502:COMBUSTION', sourceKind: 'passive', sourceId: '1111502', mode: 'add',
 		targetKind: 'self', targetId: '11115', axisId: 'COMBUSTION', affects: 'skill',
-		gateKind: 'status_held', gateRef: 'SwordUnseal', gateMin: null,
-		note: '「자신의 검이 1단계 봉인 해제, 2단계 봉인 해제 상태면, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」',
+		gateKind: 'always', gateRef: '', gateMin: null,
+		note: '「자신의 검이 1단계 봉인 해제, 2단계 봉인 해제 상태면, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
+			' 태그는 조건 없이 이미 화상·출혈이다 — 봉인 해제 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1111502:LACERATION', sourceKind: 'passive', sourceId: '1111502', mode: 'add',
 		targetKind: 'self', targetId: '11115', axisId: 'LACERATION', affects: 'skill',
-		gateKind: 'status_held', gateRef: 'SwordUnseal', gateMin: null,
-		note: '「자신의 검이 1단계 봉인 해제, 2단계 봉인 해제 상태면, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」',
+		gateKind: 'always', gateRef: '', gateMin: null,
+		note: '「자신의 검이 1단계 봉인 해제, 2단계 봉인 해제 상태면, 출혈을 부여하는 스킬이 이 효과로 인해서 화상과 출혈을 부여하는 스킬로 취급됨.」' +
+			' 태그는 조건 없이 이미 화상·출혈이다 — 봉인 해제 조건은 스킬 취급만 바꾸므로 「화상과 출혈을 부여하는 스킬을 가졌다」로 다뤄 게이트를 뗀다(2026-08-10, 사용자 확정)',
 	},
 
 	// ── 기프트 부여 1건 · 2행 · 소속 단위 ────────────────────────
