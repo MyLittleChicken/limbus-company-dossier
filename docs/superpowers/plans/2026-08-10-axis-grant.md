@@ -1454,12 +1454,21 @@ git commit -m "feat(engine): 게이트 2단계 평가 — 장착 · 보유 · �
 
 ```typescript
 /**
- * 축 제한·부여 골든 — 적재된 `canonical` 로 실제 편성을 판정한다.
+ * 축 제한·부여 골든 — 적재된 `canonical` 로 실제 편성의 **축 공급**을 잰다.
  *
- * 사용자가 지적한 오판정이 이 자리에서 났다. 9073 엔도르핀 키트는 「스킬
- * 효과로 호흡 위력을 획득할 때마다」 켜지는데, 화상·진동 덱의 유일한 호흡
- * 공급원인 10916 은 패시브 1091603 이 「화상, 진동을 부여하는 인격으로만
- * 취급됨」이라 못 박는다. 호흡을 얻지만 호흡 인격이 아니다.
+ * **기프트 판정은 여기서 단정하지 않는다.** 이 PR 은 「이 인격이 어느 축의
+ * 인격인가」(태그 층)를 옳게 만들 뿐이고, 기프트 조건이 태그를 묻는지 스킬을
+ * 묻는지 가릴 칸(`supply`)이 아직 없다.
+ *
+ * 9073 엔도르핀 키트가 그 경계를 정확히 보여준다.
+ *   조건    「스킬 효과로 호흡 위력을 획득할 때마다」 — **스킬 층**을 묻는다
+ *   10916   호흡 인격은 아니다(패시브 1091603 이 화상·진동으로 제한)
+ *           그러나 스킬 1091606 이 Breath 5 를 준다(coin_token, uptie 1~5 전부)
+ *   따라서  덱 A 에서 9073 은 **켜지는 것이 맞다**
+ *
+ * 지금 엔진은 공급을 무조건 태그 층에서 세므로 이 기프트를 죽인다. 그 답이
+ * 옳아지려면 조건에 `supply` 가 있어야 하고, 그것은 기프트 능력 PR 의 몫이다.
+ * 여기서 `fireable` 을 단정하면 틀린 답을 골든으로 굳히게 된다.
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -1487,13 +1496,21 @@ test('덱 A — 10916 은 호흡 인격이 아니다 (패시브 1091603 이 제�
 	assert.ok(p.count('axis', 'VIBRATION', 'field') > 0);
 });
 
-test('덱 A — 9073 엔도르핀 키트가 죽는다', DB, () => {
-	const verdicts = evaluateGifts({
-		squad: DECK_A, profile: new Profile(DECK_A, data!.capabilities),
-		giftTriggers: data!.giftTriggers, refsByTrigger: data!.refsByTrigger, params: data!.params,
-	});
-	const v = verdicts.find((x) => x.giftId === '9073');
-	assert.equal(v?.fireable, false);
+test('덱 A — 축 공급 실측', DB, () => {
+	const p = new Profile(DECK_A, data!.capabilities);
+	// 이 PR 이 책임지는 것은 여기까지다 — 「이 편성이 어느 축의 인격을 몇 명 갖는가」
+	assert.equal(p.count('axis', 'COMBUSTION', 'field'), 6);
+	assert.equal(p.count('axis', 'VIBRATION', 'field'), 6);
+	assert.equal(p.count('axis', 'BULLET', 'field'), 2);
+	assert.equal(p.count('axis', 'LACERATION', 'field'), 0);
+});
+
+test('덱 A — 10104 동백은 진동 인격이 아니다 (스킬 채널은 남는다)', DB, () => {
+	const solo: Squad = { roster: [{ identityId: '10104', egoIds: [] }], field: ['10104'] };
+	const p = new Profile(solo, data!.capabilities);
+	assert.equal(p.count('axis', 'SINKING', 'field'), 1);
+	// affects='skill' 인 행은 인격 수에 안 잡힌다. 「진동 인격 5인 이상」에 안 든다
+	assert.equal(p.count('axis', 'VIBRATION', 'field'), 0);
 });
 
 test('덱 C — 착영휘도(20509)는 검계 우두머리 뫼르소(10508) 전용이다', DB, () => {
@@ -1536,7 +1553,9 @@ npx tsx --test lib/engine/v2/axis-grant-golden.test.ts
 Expected: 전부 PASS.
 
 그 다음 `src/v2/canonical/identity-axis.ts` 의 `applyRestrict(fromKeyword, input.restrict)` 를 잠시 `fromKeyword` 로 되돌리고 `npm run v2:canonical` 을 다시 돌린 뒤 같은 테스트를 돌린다.
-Expected: **「덱 A — 9073 이 죽는다」와 「제한 인격 넷」이 실패해야 한다.** 실패하지 않으면 골든이 아무것도 안 지키고 있는 것이다 — 멈추고 원인을 밝힌다.
+Expected: **「덱 A — 축 공급 실측」과 「제한 인격 넷」이 실패해야 한다.** 실패하지 않으면 골든이 아무것도 안 지키고 있는 것이다 — 멈추고 원인을 밝힌다.
+
+Task 6 에서 이미 한 번 확인했다(`applyRestrict` 호출을 빼고 구우니 누수 검사가 `1/0` 으로 실패했다). 여기서는 골든 쪽도 같은 방식으로 확인한다.
 
 확인 뒤 코드를 되돌리고 `npm run v2:canonical` 을 다시 돌린다.
 
@@ -1604,7 +1623,7 @@ Expected: 전부 통과. 실패 0.
 
 ```bash
 git add lib/engine/v2/axis-grant-golden.test.ts lib/engine/v2/golden.test.ts src/v2/canonical/axis-golden.test.ts scripts/axis-diff.ts
-git commit -m "test(engine): 축 제한 골든 — 9073 이 화상·진동 덱에서 죽는다"
+git commit -m "test(engine): 축 제한·게이트·채널 골든"
 ```
 
 ---
@@ -1735,7 +1754,7 @@ git commit -m "docs: ego_granted_axis 폐기 표시 · 다루지 못한 것을 �
 | §6 폐기 표시 | Task 9 Step 1-2 |
 | §7 결손 기록 | Task 9 Step 3 |
 | §8 적재 검증 | Task 6 |
-| §8 골든 (덱 A · 덱 C) | Task 8 Step 1-2 |
+| §8 골든 (덱 A · 덱 C) | Task 8 Step 1-2. **9073 의 fireable 은 단정하지 않는다** — 조건이 스킬 층을 묻는데 엔진에 `supply` 칸이 없다. 결손으로 기록하고 기프트 능력 PR 로 넘긴다 |
 | §8 회귀 폭 측정 | Task 8 Step 3 |
 
 **2. 자리표시자** — 없다. 모든 코드 단계에 실제 코드가 있다. Task 5 Step 2 의 `identityAssociation` 필드명만 확인이 필요한데, 확인 방법과 대처를 함께 적었다.
