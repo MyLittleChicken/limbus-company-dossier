@@ -853,6 +853,123 @@ async function main(): Promise<void> {
 		eq('identity_axis (granted)',
 			await prisma.identityAxis.count({ where: { source: 'granted' } }), 14);
 
+		// ── 저작 축 부여·제한 (Task 3, ADR-08) ────────────────────────
+		eq('axis_grant (저작, app 스키마)', await prisma.axisGrant.count(), 17);
+		eq('axis_restrict', await prisma.axisRestrict.count(), 7);
+
+		// affects 칸 값 — v2:diff 는 표 집합·행수·엔티티 id 만 보고 칸 값 변경은
+		// 못 잡는다. 제한 패시브 넷 중 둘(1010902·1110902)만 스킬 취급까지 부정해
+		// affects='both' 고, 나머지 둘(1041502·1091603)은 인격 취급만 제한해 'tag' 다
+		// (f2901af, 2026-08-10). 저작 원본 axis_grant 도 같은 사각이라 함께 지킨다
+		const restrictAffects = await prisma.axisRestrict.groupBy({
+			by: ['affects'], _count: { _all: true },
+		});
+		const raMap = Object.fromEntries(restrictAffects.map((r) => [r.affects, r._count._all]));
+		checks.push({
+			name: 'axis_restrict 의 affects 분포 (tag 5 · both 2)',
+			ok: raMap['tag'] === 5 && raMap['both'] === 2 && Object.keys(raMap).length === 2,
+			detail: JSON.stringify(raMap),
+		});
+		const grantAffects = await prisma.axisGrant.groupBy({
+			by: ['affects'], _count: { _all: true },
+		});
+		const gaMap = Object.fromEntries(grantAffects.map((r) => [r.affects, r._count._all]));
+		checks.push({
+			name: 'axis_grant 의 affects 분포 (tag 5 · skill 4 · both 8)',
+			ok: gaMap['tag'] === 5 && gaMap['skill'] === 4 && gaMap['both'] === 8
+				&& Object.keys(gaMap).length === 3,
+			detail: JSON.stringify(gaMap),
+		});
+
+		// (가) 지운 불변식의 대체 — 원래 ego_id 를 보던 원시 SQL 검사가 칸이 없어지며
+		// 함께 지워졌다. 실제로 구운 293행 전체에 걸어 되살린다.
+		// keyword·special_status 경로는 identity-axis.ts 가 항상 always/'' 로 적는다
+		// (조건이 없다는 뜻). 조건부 게이트(ego_equipped 등)는 granted 에만 있다
+		const conditionalNonGranted = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.identity_axis
+			WHERE source IN ('keyword', 'special_status')
+			  AND NOT (gate_kind = 'always' AND gate_ref = '')
+		`;
+		checks.push({
+			name: 'keyword·special_status 는 항상 always/무조건이다 (0이어야 한다)',
+			ok: Number(conditionalNonGranted[0]?.n ?? 1n) === 0,
+			detail: `${Number(conditionalNonGranted[0]?.n ?? 0n)} / 0`,
+		});
+
+		// (나) 제한이 실제로 걸렸는가 — canonical.keyword 어휘가 표현하는 축으로 한정한다.
+		// 어휘를 하드코딩하지 않고 keyword 테이블을 질의해 대조한다. 어휘 밖 축(BULLET)은
+		// 제한이 손대지 않으므로(identity-axis.ts 39-44행) 이 검사 밖에 둔다 — 안 그러면
+		// 10916 이 BULLET 을 갖고 있다는 사실만으로 반드시 실패한다
+		const leaked = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			WITH vocab AS (SELECT upper(id) AS axis_id FROM canonical.keyword)
+			SELECT count(*)::bigint AS n
+			FROM canonical.identity_axis ia
+			JOIN vocab v ON v.axis_id = ia.axis_id
+			WHERE EXISTS (SELECT 1 FROM canonical.axis_restrict r WHERE r.identity_id = ia.identity_id)
+			  AND NOT EXISTS (
+				SELECT 1 FROM canonical.axis_restrict r
+				WHERE r.identity_id = ia.identity_id AND r.axis_id = ia.axis_id)
+		`;
+		checks.push({
+			name: '제한 밖의 축이 identity_axis 에 없다 (어휘 안 축으로 한정)',
+			ok: Number(leaked[0]?.n ?? 1n) === 0,
+			detail: `${Number(leaked[0]?.n ?? 0n)} / 0`,
+		});
+
+		// BULLET 을 가진 인격 13명 — 전부 special_status 출처다 (어휘 밖 축이라
+		// keyword 로는 절대 못 얻는다)
+		const bulletHolders = await prisma.identityAxis.findMany({
+			where: { axisId: 'BULLET' },
+			select: { source: true },
+		});
+		checks.push({
+			name: 'BULLET 을 가진 인격 13명, 전부 source=special_status',
+			ok: bulletHolders.length === 13 && bulletHolders.every((r) => r.source === 'special_status'),
+			detail: `${bulletHolders.length}명 · ${[...new Set(bulletHolders.map((r) => r.source))].join(',')}`,
+		});
+
+		// (다) 제한 넷의 축 실측 대조 — 게임 문장에서 온 값이다. 10916 은 BULLET 이
+		// 어휘 밖이라 제한이 안 닿아 여전히 갖는다(설계 41-44행)
+		const RESTRICTED_EXPECTED: Record<string, string[]> = {
+			'10109': ['LACERATION'],
+			'10415': ['BREATH', 'COMBUSTION', 'LACERATION'],
+			'10916': ['BULLET', 'COMBUSTION', 'VIBRATION'],
+			'11109': ['LACERATION'],
+		};
+		for (const [identityId, want] of Object.entries(RESTRICTED_EXPECTED)) {
+			const got = (await prisma.identityAxis.findMany({
+				where: { identityId }, select: { axisId: true },
+			})).map((r) => r.axisId);
+			const uniq = [...new Set(got)].sort();
+			checks.push({
+				name: `제한 인격 ${identityId} 의 축`,
+				ok: JSON.stringify(uniq) === JSON.stringify(want),
+				detail: `${uniq.join(' ')} / ${want.join(' ')}`,
+			});
+		}
+
+		// 게이트 어휘 — identity_axis.gate_kind 는 다섯 갈래 밖으로 안 샌다
+		const badGate = await prisma.identityAxis.count({
+			where: { gateKind: { notIn: ['always', 'ego_equipped', 'gift_held', 'roster_count', 'status_held'] } },
+		});
+		checks.push({
+			name: 'identity_axis 의 gate_kind 어휘 (0이어야 한다)',
+			ok: badGate === 0,
+			detail: `${badGate} / 0`,
+		});
+
+		// gate_min 은 roster_count 게이트에만 있다 — 다른 게이트 종류에 값이 있거나
+		// roster_count 인데 값이 없으면 게이트 계약이 깨진 것이다
+		const badMin = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.identity_axis
+			WHERE (gate_kind = 'roster_count') <> (gate_min IS NOT NULL)
+		`;
+		checks.push({
+			name: 'gate_min 은 roster_count 일 때만 있다 (0이어야 한다)',
+			ok: Number(badMin[0]?.n ?? 1n) === 0,
+			detail: `${Number(badMin[0]?.n ?? 0n)} / 0`,
+		});
+
 		// **소속 트리거가 상태에 걸리면 안 된다.** 이름 매칭에서 실재하는 오매칭이다 —
 		// 'Dawn Office Identities' 가 DawnTeam(Dawn Office) 상태에,
 		// 'N Corp. Fanatic Identities' 가 AssemblePersonality(Fanatic) 에 걸린다

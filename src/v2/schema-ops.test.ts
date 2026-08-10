@@ -424,8 +424,8 @@ test('build 중단 안내 — canonical_hold 를 먼저 복귀시키라고 말�
 // 산물). 스키마가 자라면 여기도 같이 고쳐야 한다 — 그 강제가 이 테스트의 목적이다.
 const REAL_SCHEMA_SQL = readFileSync(new URL('../../prisma/v2/schema.sql', import.meta.url), 'utf8');
 
-test('진짜 schema.sql — 블록 263개 중 232개가 순수 canonical', () => {
-	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 263이 뜻을 잃는다
+test('진짜 schema.sql — 블록 268개 중 235개가 순수 canonical', () => {
+	// splitDdlBlocks 를 공유한다 — 사본을 들면 분할 규칙이 바뀔 때 이 268이 뜻을 잃는다
 	//
 	// 256 → 260 은 ADR-08 이었다.
 	//   app.ref_exception · app.ego_granted_axis   +2   (canonical 밖)
@@ -435,15 +435,23 @@ test('진짜 schema.sql — 블록 263개 중 232개가 순수 canonical', () =>
 	// 260 → 263 은 앱 전환이다. canonical 에 없던 유일한 결손을 메웠다.
 	//   canonical.mirror_dungeon · mirror_dungeon_text   +2
 	//   그 둘 사이의 FK                                   +1
-	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 263);
-	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 232);
+	//
+	// 263 → 268 은 축 부여·제한이다(ae2feb9, task-6 축 그래프).
+	//   canonical.axis_restrict 표                  +1   (canonical, +3에 포함)
+	//   axis_restrict 의 FK 둘(identity·axis)        +2   (canonical, +3에 포함)
+	//   app.axis_grant 표                            +1   (canonical 밖)
+	//   axis_grant 의 색인 하나                       +1   (app, canonical 밖)
+	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 268);
+	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 235);
 });
 
 test('진짜 schema.sql — 종류별 집계가 실측과 같다', () => {
 	const tally = tallyCanonicalDdl(REAL_SCHEMA_SQL);
-	assert.equal(tally['CREATE TABLE "canonical".'], 97);
+	// 97 → 98 은 canonical.axis_restrict 다. app.axis_grant 는 canonical 밖이라 안 늘린다
+	assert.equal(tally['CREATE TABLE "canonical".'], 98);
 	assert.equal(tally['CREATE INDEX ... ON "canonical"'], 37);
-	assert.equal(tally['ALTER TABLE "canonical".'], 86);
+	// 86 → 88 은 axis_restrict 의 FK 둘(identity_id · axis_id)이다
+	assert.equal(tally['ALTER TABLE "canonical".'], 88);
 	assert.equal(tally['CREATE TYPE "canonical".'], 11);
 });
 
