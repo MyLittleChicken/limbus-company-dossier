@@ -49,45 +49,52 @@ const AXIS_GRANT = [
 	// ── 제한 4건 · 7행 ──────────────────────────────────────────
 	{
 		id: '1091603:COMBUSTION', sourceKind: 'passive', sourceId: '1091603', mode: 'restrict',
-		targetKind: 'self', targetId: '10916', axisId: 'COMBUSTION', affects: 'both',
+		targetKind: 'self', targetId: '10916', axisId: 'COMBUSTION', affects: 'tag',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '보냐텔리 가문의 수치 — 「이 인격은 화상, 진동을 부여하는 인격으로만 취급됨」',
+		note: '보냐텔리 가문의 수치 — 「이 인격은 화상, 진동을 부여하는 인격으로만 취급됨」. ' +
+			'스킬 취급을 부정하는 문장이 없다 — tag 만 제한한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1091603:VIBRATION', sourceKind: 'passive', sourceId: '1091603', mode: 'restrict',
-		targetKind: 'self', targetId: '10916', axisId: 'VIBRATION', affects: 'both',
+		targetKind: 'self', targetId: '10916', axisId: 'VIBRATION', affects: 'tag',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '보냐텔리 가문의 수치 — 「이 인격은 화상, 진동을 부여하는 인격으로만 취급됨」',
+		note: '보냐텔리 가문의 수치 — 「이 인격은 화상, 진동을 부여하는 인격으로만 취급됨」. ' +
+			'스킬 취급을 부정하는 문장이 없다 — tag 만 제한한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1041502:BREATH', sourceKind: 'passive', sourceId: '1041502', mode: 'restrict',
-		targetKind: 'self', targetId: '10415', axisId: 'BREATH', affects: 'both',
+		targetKind: 'self', targetId: '10415', axisId: 'BREATH', affects: 'tag',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '「이 인격은 화상, 출혈, 호흡을 부여하는 인격으로만 취급됨」',
+		note: '「이 인격은 화상, 출혈, 호흡을 부여하는 인격으로만 취급됨」. ' +
+			'스킬 취급을 부정하는 문장이 없다 — tag 만 제한한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1041502:COMBUSTION', sourceKind: 'passive', sourceId: '1041502', mode: 'restrict',
-		targetKind: 'self', targetId: '10415', axisId: 'COMBUSTION', affects: 'both',
+		targetKind: 'self', targetId: '10415', axisId: 'COMBUSTION', affects: 'tag',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '「이 인격은 화상, 출혈, 호흡을 부여하는 인격으로만 취급됨」',
+		note: '「이 인격은 화상, 출혈, 호흡을 부여하는 인격으로만 취급됨」. ' +
+			'스킬 취급을 부정하는 문장이 없다 — tag 만 제한한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1041502:LACERATION', sourceKind: 'passive', sourceId: '1041502', mode: 'restrict',
-		targetKind: 'self', targetId: '10415', axisId: 'LACERATION', affects: 'both',
+		targetKind: 'self', targetId: '10415', axisId: 'LACERATION', affects: 'tag',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '「이 인격은 화상, 출혈, 호흡을 부여하는 인격으로만 취급됨」',
+		note: '「이 인격은 화상, 출혈, 호흡을 부여하는 인격으로만 취급됨」. ' +
+			'스킬 취급을 부정하는 문장이 없다 — tag 만 제한한다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1010902:LACERATION', sourceKind: 'passive', sourceId: '1010902', mode: 'restrict',
 		targetKind: 'self', targetId: '10109', axisId: 'LACERATION', affects: 'both',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '「이 인격은 출혈을 부여하는 인격으로만 취급됨. 랜덤으로 화상, 출혈, 진동, 파열, 침잠을 부여하는 스킬이 이 효과로 인해서 해당 키워드를 부여하는 스킬로 취급되지 않음.」',
+		note: '「이 인격은 출혈을 부여하는 인격으로만 취급됨. 랜덤으로 화상, 출혈, 진동, 파열, 침잠을 부여하는 스킬이 이 효과로 인해서 해당 키워드를 부여하는 스킬로 취급되지 않음.」' +
+			' 스킬 취급까지 명시적으로 부정한다 — both 다(2026-08-10, 사용자 확정)',
 	},
 	{
 		id: '1110902:LACERATION', sourceKind: 'passive', sourceId: '1110902', mode: 'restrict',
 		targetKind: 'self', targetId: '11109', axisId: 'LACERATION', affects: 'both',
 		gateKind: 'always', gateRef: '', gateMin: null,
-		note: '「이 인격은 출혈을 부여하는 인격으로만 취급됨. 랜덤으로 화상, 출혈, 진동, 파열, 침잠을 부여하는 스킬이 이 효과로 인해서 해당 키워드를 부여하는 스킬로 취급되지 않음.」',
+		note: '「이 인격은 출혈을 부여하는 인격으로만 취급됨. 랜덤으로 화상, 출혈, 진동, 파열, 침잠을 부여하는 스킬이 이 효과로 인해서 해당 키워드를 부여하는 스킬로 취급되지 않음.」' +
+			' 스킬 취급까지 명시적으로 부정한다 — both 다(2026-08-10, 사용자 확정)',
 	},
 
 	// ── E.G.O 장착 부여 2건 · 4행 ────────────────────────────────
