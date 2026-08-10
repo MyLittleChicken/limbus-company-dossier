@@ -305,6 +305,16 @@ async function main(): Promise<void> {
 			throw new Error(`저작 참조 ${badRefs.length}건이 못 닿는다`);
 		}
 
+		// 제한·special_status 를 가르는 같은 잣대 — keyword 어휘가 표현하는 축만.
+		// 「…을 부여하는 인격으로만 취급됨」은 부여 키워드(화상·출혈·진동·호흡·충전 등)에
+		// 대한 말이지 축 전체에 대한 말이 아니다. BULLET(가속탄)은 어휘에 없어 이 밖이고,
+		// 제한도 special_status 보강도 둘 다 이 집합만 본다(2026-08-10, 사용자 확정).
+		// 두 빌더에 같은 Set 을 넘겨 기준이 갈라지지 않게 한다
+		const axisIdSet = new Set(axisTables.axis.map((a) => a.id));
+		const restrictScope = new Set(
+			vocab.keyword.map((k) => k.id.toUpperCase()).filter((a) => axisIdSet.has(a)),
+		);
+
 		// 저작 축 부여·제한을 인격 행으로 편다. 제한은 여기서 이미 적용된다
 		const axisGrant = buildAxisGrant({
 			axisGrant: authored.axisGrant,
@@ -316,6 +326,7 @@ async function main(): Promise<void> {
 			identityUnitKeyword: identities.identityUnitKeyword.map((k) => ({
 				identityId: k.identityId, keyword: k.keyword,
 			})),
+			restrictScope,
 		}, meta);
 
 		// 인격 축 프로파일. keyword 가 정본이고, keyword 어휘가 못 담는 축(BULLET)만
@@ -324,7 +335,7 @@ async function main(): Promise<void> {
 			identityKeyword: identities.identityKeyword.map((k) => ({
 				identityId: k.identityId, keywordId: k.keywordId,
 			})),
-			keywordVocabulary: vocab.keyword.map((k) => k.id),
+			restrictScope,
 			identityStatus: identities.identityStatus.map((s) => ({
 				identityId: s.identityId, statusId: s.statusId,
 			})),

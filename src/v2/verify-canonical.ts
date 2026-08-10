@@ -841,13 +841,15 @@ async function main(): Promise<void> {
 		eq('axis', await prisma.axis.count(), 8);
 		eq('trigger_ref', await prisma.triggerRef.count(), 150);
 		eq('effect_ref', await prisma.effectRef.count(), 55);
-		// 292 = keyword 266 + special_status(BULLET 하나) 12 + granted 14(axis-grant 설계).
+		// 293 = keyword 266 + special_status(BULLET 하나) 13 + granted 14(axis-grant 설계).
 		// ego_id·ego_granted 경로는 폐기됐다 — app.axis_grant 17행이 정본이다(ADR-08).
-		// special_status 는 keyword 어휘가 못 담는 축(BULLET)만 보강한다 — 13짝 중 10916 은
-		// 제한(1091603 「화상·진동으로만」)이 지워 12만 남는다.
-		eq('identity_axis', await prisma.identityAxis.count(), 292);
+		// special_status 는 keyword 어휘가 못 담는 축(BULLET)만 보강한다. 제한의 사정거리는
+		// keyword 가 표현하는 축까지다(2026-08-10, 사용자 확정) — 「화상, 진동으로만
+		// 취급됨」은 부여 키워드에 대한 말이지 가속탄(자원, 어휘 밖)에 대한 말이 아니라
+		// 10916 도 BULLET 13짝에 포함된다.
+		eq('identity_axis', await prisma.identityAxis.count(), 293);
 		eq('identity_axis (special_status)',
-			await prisma.identityAxis.count({ where: { source: 'special_status' } }), 12);
+			await prisma.identityAxis.count({ where: { source: 'special_status' } }), 13);
 		eq('identity_axis (granted)',
 			await prisma.identityAxis.count({ where: { source: 'granted' } }), 14);
 

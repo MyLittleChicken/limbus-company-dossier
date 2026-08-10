@@ -35,6 +35,13 @@
  *
  * 세 경로 전부에 `restrict` 를 건다. mj 가 앞으로도 반영해 준다는 보장은 없고,
  * 제한은 최종 방어선이어야 한다.
+ *
+ * **제한의 사정거리도 같은 잣대로 좁힌다(2026-08-10, 사용자 확정).** 「…을 부여하는
+ * 인격으로만 취급됨」은 부여 키워드(=`keyword` 어휘가 표현하는 축)에 대한 말이지
+ * 인격의 축 전체에 대한 말이 아니다. 10916 로쟈는 「화상·진동으로만」(1091603)이지만
+ * 동시에 `AccelBullet` 을 39회 굴리는 가속탄 인격이다 — BULLET 은 어휘 밖이라 제한이
+ * 안 닿고, 로쟈는 여전히 BULLET 을 가져야 한다. `restrictScope`(=`keywordAxes`, 여기
+ * 이 함수가 계산하는 값)를 `applyRestrict` 에 그대로 넘겨 이 사정거리를 강제한다.
  */
 import type { Meta } from './meta.js';
 import { applyRestrict, type AxisRestrictRow, type GrantedAxisRow } from './axis-grant.js';
@@ -43,8 +50,12 @@ const EVIDENCE = 'docs/superpowers/specs/2026-08-10-axis-grant-design.md';
 
 export interface IdentityAxisInput {
 	identityKeyword: Array<{ identityId: string; keywordId: string }>;
-	/** canonical.keyword 의 id 전부. 이 어휘가 표현 못 하는 축을 가려내는 데 쓴다 */
-	keywordVocabulary: string[];
+	/**
+	 * 제한이 미치는 축(= `keyword` 가 표현하는 축). `buildAxisGrant` 에 넘기는
+	 * `restrictScope` 와 같은 값이어야 한다 — special_status 를 쓸지 가르는
+	 * 잣대와도 같다. load-canonical.ts 한 곳에서 계산해 둘 다에 넘긴다
+	 */
+	restrictScope: Set<string>;
 	identityStatus: Array<{ identityId: string; statusId: string }>;
 	statusCategory: Array<{ statusId: string; category: string }>;
 	axisIds: string[];
@@ -66,12 +77,9 @@ export interface IdentityAxisRow {
 export function buildIdentityAxis(input: IdentityAxisInput, meta: Meta): IdentityAxisRow[] {
 	const axes = new Set(input.axisIds);
 
-	// keyword 어휘가 표현 가능한 축 — 이 집합에 든 축은 special_status 를 안 쓴다
-	const keywordAxes = new Set<string>();
-	for (const w of input.keywordVocabulary) {
-		const axisId = w.toUpperCase();
-		if (axes.has(axisId)) keywordAxes.add(axisId);
-	}
+	// keyword 어휘가 표현 가능한 축 — special_status 를 쓸지, 제한이 미칠지를
+	// 가르는 같은 잣대다(load-canonical.ts 가 계산해 넘긴다)
+	const keywordAxes = input.restrictScope;
 
 	// ── keyword 경로 ───────────────────────────────────────────
 	const fromKeyword: GrantedAxisRow[] = [];
@@ -108,10 +116,10 @@ export function buildIdentityAxis(input: IdentityAxisInput, meta: Meta): Identit
 
 	// 제한은 세 경로 모두에 건다. granted 는 buildAxisGrant 가 이미 걸었지만
 	// 두 번 걸어도 결과가 같다(교집합은 멱등이다) — 여기서도 걸어 최종
-	// 방어선으로 삼는다
-	const keyword = applyRestrict(fromKeyword, input.restrict);
-	const specialStatus = applyRestrict(fromSpecialStatus, input.restrict);
-	const granted = applyRestrict(input.granted, input.restrict);
+	// 방어선으로 삼는다. restrictScope 밖의 축(BULLET)은 세 경로 다 손대지 않는다
+	const keyword = applyRestrict(fromKeyword, input.restrict, input.restrictScope);
+	const specialStatus = applyRestrict(fromSpecialStatus, input.restrict, input.restrictScope);
+	const granted = applyRestrict(input.granted, input.restrict, input.restrictScope);
 
 	const seen = new Set<string>();
 	const rows: IdentityAxisRow[] = [];

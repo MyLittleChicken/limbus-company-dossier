@@ -6,7 +6,19 @@
  *
  * **제한은 여기서 이미 적용한다.** `identity_axis` 를 읽는 쪽이 교집합을 다시
  * 취하지 않아도 옳게 만든다. 게임이 「이 인격은 화상, 진동을 부여하는 인격으로만
- * 취급됨」(1091603)이라 말하면 그 인격의 축은 둘뿐이다.
+ * 취급됨」(1091603)이라 말하면 그 인격의 화상·진동 관련 축은 둘뿐이다.
+ *
+ * **제한의 사정거리는 `keyword` 가 표현하는 축까지다(2026-08-10, 사용자 확정).**
+ * 「…을 부여하는 인격으로만 취급됨」은 죄악속성에 대비되는 **부여 키워드**(화상·
+ * 출혈·진동·호흡·충전 등, `canonical.keyword` 어휘)에 대한 말이다. 10916 로쟈의
+ * 패시브(1091603)가 「화상, 진동으로만」이라 적었다고 해서 로쟈가 가속탄(BULLET)을
+ * 쓰는 인격이라는 사실까지 지워지는 건 아니다 — 가속탄은 적에게 거는 것이 아니라
+ * 로쟈 자신이 소모하는 **자원**이라 애초에 부여 키워드가 아니고, `canonical.keyword`
+ * 어휘 12종에도 없다. 그래서 로쟈는 「탄환을 소모하는 인격이며, 키워드는 화상과
+ * 진동으로만 취급된다」가 옳다 — 제한과 BULLET 은 서로 다른 층이라 부딪히지 않는다.
+ * `restrictScope`(keyword 가 표현하는 축)가 이 사정거리를 나타낸다. `identity-axis.ts`
+ * 가 `special_status` 를 쓸지 가르는 잣대와 **같은 집합**이다 — 한쪽(제한)엔 안 걸리고
+ * 다른 쪽(special_status)엔 걸리는, 정확히 대칭인 규칙이다.
  */
 import type { Meta } from './meta.js';
 import type { AxisGrantRow } from '../authored.js';
@@ -19,6 +31,11 @@ export interface AxisGrantInput {
 	identityIds: string[];
 	identityAssociation: Array<{ identityId: string; associationId: string }>;
 	identityUnitKeyword: Array<{ identityId: string; keyword: string }>;
+	/**
+	 * 제한이 미치는 축 — `canonical.keyword` 어휘가 표현하는 축만. 이 밖의 축
+	 * (지금은 BULLET 하나)은 제한이 손대지 않고 그대로 통과한다
+	 */
+	restrictScope: Set<string>;
 }
 
 export interface GrantedAxisRow {
@@ -103,7 +120,7 @@ export function buildAxisGrant(
 		}
 	}
 
-	return { granted: applyRestrict(granted, restrict), restrict };
+	return { granted: applyRestrict(granted, restrict, input.restrictScope), restrict };
 }
 
 /**
@@ -111,10 +128,18 @@ export function buildAxisGrant(
  *
  * 제한이 있는 인격은 그 축들만 남는다. `affects` 가 겹칠 때만 건다 —
  * 태그 제한이 스킬 부여를 지우지 않는다.
+ *
+ * **`restrictScope` 밖의 축은 손대지 않는다.** 제한은 `keyword` 어휘가 표현하는
+ * 축(화상·출혈·진동·호흡·충전 등)에 대한 말이지, 인격이 가질 수 있는 축 전체에
+ * 대한 말이 아니다. BULLET(가속) 처럼 어휘 밖의 축은 그 인격이 화상·진동으로만
+ * 취급된다는 패시브 문장과 무관하게 별도 사실로 남는다 — 10916 로쟈는 「화상·
+ * 진동으로만」이면서 동시에 「탄환을 소모하는 인격」이다.
  */
 export function applyRestrict(
 	granted: GrantedAxisRow[],
 	restrict: AxisRestrictRow[],
+	/** 제한이 미치는 축. 여기 없는 축은 제한이 손대지 않는다 */
+	restrictScope: Set<string>,
 ): GrantedAxisRow[] {
 	if (restrict.length === 0) return granted;
 	/** 인격 → 그 인격이 남길 수 있는 축 (affects 별) */
@@ -135,6 +160,11 @@ export function applyRestrict(
 	 */
 	const out: GrantedAxisRow[] = [];
 	for (const g of granted) {
+		// 사정거리 밖의 축(BULLET)은 채널 검사 자체를 건너뛰고 원본 그대로 남긴다
+		if (!restrictScope.has(g.axisId)) {
+			out.push(g);
+			continue;
+		}
 		const channels = expand(g.affects);
 		const survived = channels.filter((a) => {
 			const set = allow.get(`${g.identityId}|${a}`);

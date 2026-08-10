@@ -45,6 +45,8 @@ function input(): AxisGrantInput {
 			{ identityId: '11002', associationId: 'DAWN' },
 		],
 		identityUnitKeyword: [],
+		// 이 표본의 네 축 전부가 keyword 로 표현된다고 가정한다 — 제한이 평소처럼 걸린다
+		restrictScope: new Set(['COMBUSTION', 'VIBRATION', 'BREATH', 'LACERATION']),
 	};
 }
 
@@ -107,6 +109,10 @@ test('저작이 실물을 앞질러도 던지지 않고 결손으로 남는다',
 // applyRestrict 는 채널별로 좁혀야 한다 — .some() 은 한 채널만 막혔을 때
 // 원본 'both' 를 통째로 살려 막힌 채널로 새어나간다.
 
+// 아래 넷은 restrictScope 가 두 축(BREATH·COMBUSTION) 모두를 담아 사정거리
+// 안이라고 가정한다 — 기존 채널별 좁히기 동작을 그대로 지킨다
+const CHANNEL_SCOPE = new Set(['BREATH', 'COMBUSTION']);
+
 test("제한이 tag 하나뿐이고 부여가 both 인데 축이 제한 밖이면 affects 가 skill 로 좁혀진다", () => {
 	const granted: GrantedAxisRow[] = [
 		{ identityId: '10916', axisId: 'BREATH', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
@@ -114,7 +120,7 @@ test("제한이 tag 하나뿐이고 부여가 both 인데 축이 제한 밖이�
 	const restrict: AxisRestrictRow[] = [
 		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'tag', sourceId: 'x' },
 	];
-	const out = applyRestrict(granted, restrict);
+	const out = applyRestrict(granted, restrict, CHANNEL_SCOPE);
 	assert.deepEqual(out, [
 		{ identityId: '10916', axisId: 'BREATH', affects: 'skill', gateKind: 'always', gateRef: '', gateMin: null },
 	]);
@@ -127,7 +133,7 @@ test("같은 상황에서 축이 제한 안이면 both 그대로 남는다", () 
 	const restrict: AxisRestrictRow[] = [
 		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'tag', sourceId: 'x' },
 	];
-	const out = applyRestrict(granted, restrict);
+	const out = applyRestrict(granted, restrict, CHANNEL_SCOPE);
 	assert.deepEqual(out, [
 		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
 	]);
@@ -140,6 +146,48 @@ test("제한이 both 이고 축이 제한 밖이면 행이 사라진다", () => 
 	const restrict: AxisRestrictRow[] = [
 		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', sourceId: 'x' },
 	];
-	const out = applyRestrict(granted, restrict);
+	const out = applyRestrict(granted, restrict, CHANNEL_SCOPE);
 	assert.deepEqual(out, []);
+});
+
+// ── restrictScope — 제한의 사정거리(2026-08-10, 사용자 확정) ────────────────
+// 「…을 부여하는 인격으로만 취급됨」은 keyword 어휘가 표현하는 축에 대한 말이다.
+// BULLET(가속탄)처럼 어휘 밖의 축은 제한과 무관한 별도 사실이라 손대면 안 된다.
+
+test('restrictScope 밖의 축은 제한이 있어도 살아남는다 — 10916 의 BULLET', () => {
+	const granted: GrantedAxisRow[] = [
+		{ identityId: '10916', axisId: 'BULLET', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	];
+	const restrict: AxisRestrictRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', sourceId: '1091603' },
+		{ identityId: '10916', axisId: 'VIBRATION', affects: 'both', sourceId: '1091603' },
+	];
+	// BULLET 은 scope 밖 — keyword 어휘에 없다
+	const out = applyRestrict(granted, restrict, new Set(['COMBUSTION', 'VIBRATION']));
+	assert.deepEqual(out, granted);
+});
+
+test('restrictScope 안의 축은 지금처럼 지워진다', () => {
+	const granted: GrantedAxisRow[] = [
+		{ identityId: '10916', axisId: 'BREATH', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	];
+	const restrict: AxisRestrictRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', sourceId: '1091603' },
+	];
+	// BREATH 도 COMBUSTION 도 scope 안 — 제한이 평소대로 BREATH 를 지운다
+	const out = applyRestrict(granted, restrict, new Set(['COMBUSTION', 'VIBRATION', 'BREATH']));
+	assert.deepEqual(out, []);
+});
+
+test('채널별 좁히기가 restrictScope 안에서 그대로 동작한다', () => {
+	const granted: GrantedAxisRow[] = [
+		{ identityId: '10916', axisId: 'BREATH', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	];
+	const restrict: AxisRestrictRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'tag', sourceId: 'x' },
+	];
+	const out = applyRestrict(granted, restrict, new Set(['COMBUSTION', 'BREATH']));
+	assert.deepEqual(out, [
+		{ identityId: '10916', axisId: 'BREATH', affects: 'skill', gateKind: 'always', gateRef: '', gateMin: null },
+	]);
 });

@@ -13,8 +13,8 @@ function input(): IdentityAxisInput {
 			{ identityId: '10916', keywordId: 'Poise' },
 			{ identityId: '11001', keywordId: 'Laceration' },
 		],
-		// BULLET 은 이 어휘에 없다 — special_status 로만 닿을 수 있는 축이다
-		keywordVocabulary: ['Combustion', 'Vibration', 'Breath', 'Laceration'],
+		// BULLET 은 이 사정거리 밖이다 — special_status 로만 닿을 수 있고, 제한도 안 미친다
+		restrictScope: new Set(['COMBUSTION', 'VIBRATION', 'BREATH', 'LACERATION']),
 		identityStatus: [
 			// BULLET 은 keyword 어휘에 없다 — 11003 은 이 경로로만 축을 얻는다.
 			// 상태 둘(Bullet · BulletLament)이 같은 축을 가리켜도 한 행으로 합쳐진다
@@ -22,7 +22,8 @@ function input(): IdentityAxisInput {
 			{ identityId: '11003', statusId: 'BulletLament' },
 			// COMBUSTION 은 keyword 어휘에 있다 — 상태로 와도 special_status 를 안 만든다
 			{ identityId: '11001', statusId: 'SomeCombustionStatus' },
-			// 10916 은 restrict 가 COMBUSTION·VIBRATION 뿐이라 BULLET 상태가 있어도 제한에 깎인다
+			// 10916 은 restrict 가 COMBUSTION·VIBRATION 뿐이지만 BULLET 은 restrictScope 밖이라
+			// 제한이 안 미친다 — 로쟈는 「화상·진동으로만」이면서 동시에 가속탄 인격이다
 			{ identityId: '10916', statusId: 'Bullet' },
 		],
 		statusCategory: [
@@ -89,12 +90,17 @@ test('keyword 어휘에 있는 축은 special_status 로 안 들어온다 — �
 	assert.equal(rows.some((r) => r.source === 'special_status' && r.axisId === 'COMBUSTION'), false);
 });
 
-test('제한이 special_status 행도 깎는다', () => {
+// special_status 는 애초에 restrictScope 밖의 축(keyword 가 못 담는 축)에만 생기므로
+// (위 keywordAxes.has() 가드) 「제한이 special_status 를 깎는지」는 사실상 언제나
+// 「restrictScope 밖이라 안 깎인다」로 귀결된다 — 채널별 좁히기까지 포함한 일반적인
+// scope 동작은 axis-grant.test.ts 의 applyRestrict 직접 테스트가 이미 담당한다.
+test('제한이 restrictScope 밖의 special_status 행은 안 깎는다 — 10916 은 BULLET 을 그대로 갖는다', () => {
 	const rows = buildIdentityAxis(input(), new Meta());
-	// 10916 은 restrict 가 COMBUSTION·VIBRATION 뿐이다 — BULLET 상태가 있어도 살아남지 못한다
+	// 10916 은 restrict 가 COMBUSTION·VIBRATION 뿐이고 BULLET 은 restrictScope 밖이라
+	// 제한이 안 닿는다 — 「화상·진동으로만」과 「가속탄을 쓴다」는 서로 다른 층이다
 	assert.equal(
-		rows.some((r) => r.identityId === '10916' && r.axisId === 'BULLET'),
-		false,
+		rows.some((r) => r.identityId === '10916' && r.axisId === 'BULLET' && r.source === 'special_status'),
+		true,
 	);
 });
 
