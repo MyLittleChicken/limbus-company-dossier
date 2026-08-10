@@ -450,35 +450,64 @@ model Axis {
   /// 갖지 않는 것 등. 재적재에도 남아야 다음 사람이 다시 헤매지 않는다
   note String?
 
-  identities IdentityAxis[]
+  identities    IdentityAxis[]
+  axisRestricts AxisRestrict[]
 
   @@map("axis")
   @@schema("canonical")
 }
 
-/// 인격이 가진 축. 세 경로를 한 관계로 통일한다.
+/// 인격이 가진 축.
 ///
-/// keyword         identity_keyword → axis            mj 가 특수 키워드 파생과
-///                                                    「~로만 취급됨」을 이미 반영했다
-/// special_status  identity_status → status_category → axis   홍매화 → LACERATION
-/// ego_granted     **저작 2행.** 「인격으로 취급됨」이 명시된 E.G.O 만이다.
-///                 `ego_status` 는 「다루는 상태」지 「주는 축」이 아니다 —
-///                 20705 홀리데이는 5축을 증폭하지만 어느 축의 인격도 아니다
+/// **제한이 이미 적용된 결과다.** 게임이 「…으로만 취급됨」이라 말하면 그
+/// 축들만 남는다(axis_restrict 참조).
 model IdentityAxis {
   identityId String @map("identity_id")
   axisId     String @map("axis_id")
+  /// keyword  identity_keyword → axis (정본. mj 가 제한을 이미 반영해 담았다)
+  /// granted  app.axis_grant 의 add 행
+  ///
+  /// special_status 는 없앴다 — keyword 의 진상위집합이면서 게임의 제한을
+  /// 무너뜨렸다. 보태는 것 0 · 과대 34짝(2026-08-10 실측)
   source     String
-  /// ego_granted 일 때 어느 E.G.O 가 주는가. 그 외 경로는 빈 문자열이다.
-  /// NULL 로 두면 PK 에 못 들어가고, E.G.O 둘이 같은 인격에 같은 축을 줄 때
-  /// 뒤엣것이 조용히 사라진다. `TriggerRef.refId` 와 같은 처리다
-  egoId      String @default("") @map("ego_id")
+  /// tag · skill · both. keyword 경로는 언제나 both
+  affects    String
+  /// always · ego_equipped · gift_held · roster_count · status_held
+  gateKind   String @default("always") @map("gate_kind")
+  /// gateKind 가 가리키는 대상. always 면 ''
+  gateRef    String @default("")       @map("gate_ref")
+  /// roster_count 일 때의 최소 인원
+  gateMin    Int?                      @map("gate_min")
 
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
   axis     Axis     @relation(fields: [axisId], references: [id], onDelete: Cascade)
 
-  @@id([identityId, axisId, source, egoId])
+  @@id([identityId, axisId, source, gateKind, gateRef])
   @@index([axisId])
   @@map("identity_axis")
+  @@schema("canonical")
+}
+
+/// 이 인격은 이 축들로만 취급된다.
+///
+/// `identity_axis` 는 이 제한을 **이미 적용한 결과**다 — 소비자가 교집합을
+/// 다시 취할 필요가 없다. 이 표는 스킬 공급(coin_token)에 같은 제한을 걸려는
+/// 소비자를 위해 남긴다. 10916 의 스킬은 실제로 호흡을 주지만 게임이 그것을
+/// 호흡 부여로 치지 않는다(1010902 는 「해당 키워드를 부여하는 스킬로
+/// 취급되지 않음」이라 명시한다).
+model AxisRestrict {
+  identityId String @map("identity_id")
+  axisId     String @map("axis_id")
+  /// tag · skill · both
+  affects    String
+  /// 어느 패시브가 말했는가
+  sourceId   String @map("source_id")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  axis     Axis     @relation(fields: [axisId], references: [id], onDelete: Cascade)
+
+  @@id([identityId, axisId, affects])
+  @@map("axis_restrict")
   @@schema("canonical")
 }
 
@@ -1042,17 +1071,18 @@ model Identity {
   /// 출시일. assets date
   releaseDate      String? @map("release_date")
 
-  sinner       Sinner                @relation(fields: [sinnerId], references: [id])
-  texts        IdentityText[]
-  resists      IdentityResist[]
-  speed        IdentitySpeed[]
-  skills       IdentitySkill[]
-  passives     IdentityPassive[]
-  associations IdentityAssociation[]
-  keywords     IdentityKeyword[]
-  unitKeywords IdentityUnitKeyword[]
-  statuses     IdentityStatus[]
-  axes         IdentityAxis[]
+  sinner        Sinner                @relation(fields: [sinnerId], references: [id])
+  texts         IdentityText[]
+  resists       IdentityResist[]
+  speed         IdentitySpeed[]
+  skills        IdentitySkill[]
+  passives      IdentityPassive[]
+  associations  IdentityAssociation[]
+  keywords      IdentityKeyword[]
+  unitKeywords  IdentityUnitKeyword[]
+  statuses      IdentityStatus[]
+  axes          IdentityAxis[]
+  axisRestricts AxisRestrict[]
 
   @@index([sinnerId])
   @@index([star])
@@ -2040,6 +2070,45 @@ model EgoGrantedAxis {
 
   @@id([egoId, axisId])
   @@map("ego_granted_axis")
+  @@schema("app")
+}
+
+/// 축을 인격에 주거나 제한하는 효과. 패시브 · 에고 패시브 · 기프트가 같은 구조를 쓴다.
+///
+/// 게임이 「…을 부여하는 인격으로 취급됨」 · 「…으로만 취급됨」이라 말하는 자리다.
+/// 「취급」 문형을 전수로 뽑아(패시브 703 · 에고 패시브 113 · 기프트 793 ·
+/// 에고 스킬 611 → 31행) 축에 해당하는 출처 9건을 저작 17행으로 굳혔다.
+///
+/// 축 하나가 한 행이다 — 「화상, 진동으로만 취급」은 두 행이 된다.
+model AxisGrant {
+  /// `<sourceId>:<axisId>` — 저작이라 사람이 읽을 수 있어야 한다
+  id         String  @id
+  /// passive · ego_passive · gift
+  sourceKind String  @map("source_kind")
+  /// 1091603 · 2050911 · 9282
+  sourceId   String  @map("source_id")
+  /// add       이 축을 더한다
+  /// restrict  **이 축들로만** 취급한다 — 나머지를 덜어낸다
+  mode       String
+  /// self          그 패시브를 가진 인격 (targetId 는 그 인격 id)
+  /// association   그 소속의 인격 전부
+  /// unit_keyword  그 유닛 키워드를 가진 인격 전부
+  targetKind String  @map("target_kind")
+  targetId   String  @map("target_id")
+  axisId     String  @map("axis_id")
+  /// tag(인격 취급) · skill(스킬 취급) · both
+  affects    String
+  /// always · ego_equipped · gift_held · roster_count · status_held
+  gateKind   String  @map("gate_kind")
+  /// gateKind 가 가리키는 대상. always 면 ''
+  gateRef    String  @map("gate_ref")
+  /// roster_count 일 때의 최소 인원. 아니면 null
+  gateMin    Int?    @map("gate_min")
+  /// 원문 한 줄. 검수가 대조할 근거다. 지문에는 안 들어간다
+  note       String
+
+  @@index([sourceKind, sourceId])
+  @@map("axis_grant")
   @@schema("app")
 }
 
