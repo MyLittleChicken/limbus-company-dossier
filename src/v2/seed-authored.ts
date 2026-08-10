@@ -28,6 +28,9 @@ const REF_EXCEPTION = [
 	},
 ];
 
+// **폐기됨 (2026-08-10)** — `app.axis_grant` 가 대신한다. 대상과 조건을 구별하지
+// 못해 E.G.O 수감자의 인격 전부로 펴졌다(62행 중 58행 과대, 스키마 주석 참고).
+// 행은 지우지 않는다 — 출처가 말한 사실이다. 빌더만 이 표를 다시 읽지 않는다.
 const EGO_GRANTED_AXIS = [
 	{ egoId: '20509', axisId: 'LACERATION', note: '착영휘도 — 「이 인격은 [Laceration], [Breath]을 부여하는 인격으로 취급됨」' },
 	{ egoId: '20509', axisId: 'BREATH', note: '착영휘도 — 「이 인격은 [Laceration], [Breath]을 부여하는 인격으로 취급됨」' },

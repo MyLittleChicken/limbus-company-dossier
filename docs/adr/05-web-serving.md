@@ -40,7 +40,7 @@
 >
 > ```
 > 지금까지  public 52테이블.  별도 파이프라인이 채우고 lib/engine/vocab.ts 가 받쳤다
-> 이제부터  canonical 97테이블.  적재기가 굽고 검사 222건이 지키며
+> 이제부터  canonical 98테이블.  적재기가 굽고 검사 222건이 지키며
 >           v2:verify:rebuild 가 재현을 보증한다(ADR-08)
 > ```
 >

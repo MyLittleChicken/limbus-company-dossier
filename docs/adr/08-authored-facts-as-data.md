@@ -56,6 +56,16 @@ app.ego_granted_axis     ego_id · axis_id · note                        4행
   20109 엄숙한 애도 → VIBRATION · SINKING
 ```
 
+> **후속 — `app.axis_grant` 가 `ego_granted_axis` 를 흡수했다** (2026-08-10)
+>
+> - `app.axis_grant`(18행) — 축 부여·제한. 「이 인격은 …으로만 취급됨」은 게임이
+>   정한 사실이므로 데이터다. `app.ego_granted_axis`(4행)를 흡수했다. 출처가 게임
+>   텍스트가 아니라 플레이어 관측인 행은 `source_kind='system'` 으로 구별한다.
+>
+> `ego_granted_axis` 는 지우지 않았다 — 대상과 조건을 구별하지 못해 과대 폈다는
+> 사실 자체는 출처가 말한 사실이라 행을 남긴다. 자세한 사정은
+> `prisma/v2/schema.prisma` 의 `EgoGrantedAxis` 모델 주석에 있다.
+
 **코드에 남은 것 — `DENOMINATOR` 정규식 6개** (`gift-trigger-param.ts`).
 
 기프트 desc 산문에 정규식을 걸어 분모를 뽑는 파싱 규칙이고 **순서가 의미를 갖는다** —

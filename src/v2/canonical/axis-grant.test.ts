@@ -1,10 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
 	buildAxisGrant, applyRestrict,
 	type AxisGrantInput, type GrantedAxisRow, type AxisRestrictRow,
 } from './axis-grant.js';
 import { Meta } from './meta.js';
+
+// 폐기된 app.ego_granted_axis 는 대상과 조건을 구별하지 못해 E.G.O 수감자의
+// 인격 전부로 펴졌다(62행 중 58행 과대). app.axis_grant 가 대신하니 빌더가
+// 다시 그 표를 읽으면 같은 과대가 되살아난다 — 회귀를 여기서 막는다.
+test('빌더는 폐기된 ego_granted_axis 를 읽지 않는다', () => {
+	for (const f of ['src/v2/canonical/identity-axis.ts', 'src/v2/canonical/axis-grant.ts']) {
+		const src = readFileSync(f, 'utf8');
+		assert.equal(src.includes('egoGranted'), false, `${f} 가 egoGranted 를 다시 읽고 있다`);
+	}
+});
 
 function input(): AxisGrantInput {
 	return {

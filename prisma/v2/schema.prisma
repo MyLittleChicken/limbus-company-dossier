@@ -2059,10 +2059,18 @@ model RefException {
   @@schema("app")
 }
 
-/// 「이 인격은 [X]를 부여하는 인격으로 취급됨」을 게임이 명시한 E.G.O.
+/// **폐기됨 (2026-08-10)** — `app.axis_grant` 가 대신한다.
 ///
-/// **증폭기는 여기 없다.** 20705 홀리데이는 ego_status 로 축 7개를 받지만
-/// 「부여하는 인격으로 취급」이 아니라 위력 +1 이다. 어느 축의 인격도 아니다.
+/// E.G.O 장착이 축을 주는 경우만 담았다. 「대상」과 「조건」을 다른 칸으로
+/// 두지 못해, E.G.O 를 장착하면 축을 받는다는 사실이 그 E.G.O 수감자의
+/// 인격 전부로 펴졌다 — 20109 엄숙한 애도 → 이상 16인격, 20509 착영휘도 →
+/// 뫼르소 15인격. 62행 중 58행이 과대였다. 원문은 「[로보토미 E.G.O::엄숙한
+/// 애도 이상 전용 상시 효과]」처럼 인격 하나를 콕 집는데, 이 표는 그것을
+/// 담을 자리가 없었다. `app.axis_grant` 는 `target_id` 와 `gate_kind` 를
+/// 다른 칸으로 두어 이 문제를 없앴다.
+///
+/// 행은 남긴다 — 출처가 말한 사실을 지우지 않는다. 빌더만 읽지 않는다
+/// (`src/v2/canonical/axis-grant.test.ts` 가 지킨다).
 model EgoGrantedAxis {
   egoId  String @map("ego_id")
   axisId String @map("axis_id")
@@ -2083,7 +2091,9 @@ model EgoGrantedAxis {
 model AxisGrant {
   /// `<sourceId>:<axisId>` — 저작이라 사람이 읽을 수 있어야 한다
   id         String  @id
-  /// passive · ego_passive · gift
+  /// passive · ego_passive · gift · system
+  /// system  게임 텍스트에 근거가 없고 플레이어 관측으로만 알려진 사실.
+  ///         10104 개화 — E.G.O::동백 이상의 진동 예외가 그것이다(2026-08-10 확정)
   sourceKind String  @map("source_kind")
   /// 1091603 · 2050911 · 9282
   sourceId   String  @map("source_id")

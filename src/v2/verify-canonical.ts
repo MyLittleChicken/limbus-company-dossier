@@ -140,10 +140,21 @@ async function main(): Promise<void> {
 		//         없다. 태그 층(축 제한·부여)만 옳게 만드는 이 PR 의 몫이 아니라
 		//         결손으로 남긴다(Task 8, identity-axis.ts 끝).
 		//         1,158 + 1 = 1,159
+		//   +6    Task 9 — 폐기 표시와 함께, 「없다는 것조차 기록하지 않은 것」을 여섯
+		//         자리 더 적는다.
+		//           passive.effect(*)              패시브 효과-상태 구조화 표가 없다
+		//           gift.association_grant(9280)    소속 자체를 바꾸는 효과를 못 담는다
+		//           gift.association_grant(9841)    같은 종류
+		//           passive.skill_kind_grant(1021504·1061404) 둘   스킬 분류를 바꾸는
+		//           effect 를 못 담는다(2행)
+		//           coin_token.skill_possession(*)  강화·추가·변신 형태 스킬은 「보유」
+		//           판정에서 빠진다는 사실을 coin_token 이 구별 못 해 과대 계산이다
+		//           (이번 조사에서 새로 앎, 실측 21건 중 일부의 근거)
+		//         1,159 + 6 = 1,165
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_159,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,159`,
+			ok: gapTotal + overrideCount === 1_165,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,165`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
