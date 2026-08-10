@@ -318,11 +318,17 @@ async function main(): Promise<void> {
 			})),
 		}, meta);
 
-		// 인격 축 프로파일
+		// 인격 축 프로파일. keyword 가 정본이고, keyword 어휘가 못 담는 축(BULLET)만
+		// special_status(identity_status → status_category)로 보강한다
 		const identityAxis = buildIdentityAxis({
 			identityKeyword: identities.identityKeyword.map((k) => ({
 				identityId: k.identityId, keywordId: k.keywordId,
 			})),
+			keywordVocabulary: vocab.keyword.map((k) => k.id),
+			identityStatus: identities.identityStatus.map((s) => ({
+				identityId: s.identityId, statusId: s.statusId,
+			})),
+			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
 			axisIds: axisTables.axis.map((a) => a.id),
 			identityIds: identities.identity.map((i) => i.id),
 			granted: axisGrant.granted,

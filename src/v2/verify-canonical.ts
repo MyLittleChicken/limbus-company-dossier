@@ -132,10 +132,13 @@ async function main(): Promise<void> {
 		//   +3    gift.denominator — 9220·9270·9829 가 분모 어휘를 안 적었다.
 		//         셋 다 중지 소속 게이트다. 추측해 채우지 않고 결손으로 남긴다
 		//         1,142 + 15 = 1,157
+		//   +1    identity_axis.special_status — keyword 어휘가 BULLET 을 못 담는다는
+		//         설계 결손을 한 행으로 고정 기록한다(entity_id='*', identity-axis.ts).
+		//         1,157 + 1 = 1,158
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_157,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,157`,
+			ok: gapTotal + overrideCount === 1_158,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,158`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -838,9 +841,13 @@ async function main(): Promise<void> {
 		eq('axis', await prisma.axis.count(), 8);
 		eq('trigger_ref', await prisma.triggerRef.count(), 150);
 		eq('effect_ref', await prisma.effectRef.count(), 55);
-		// 280 = keyword 266 + granted 14(Task 5, axis-grant 설계). ego_id·ego_granted
-		// 경로는 폐기됐다 — app.axis_grant 17행이 정본이다(ADR-08).
-		eq('identity_axis', await prisma.identityAxis.count(), 280);
+		// 292 = keyword 266 + special_status(BULLET 하나) 12 + granted 14(axis-grant 설계).
+		// ego_id·ego_granted 경로는 폐기됐다 — app.axis_grant 17행이 정본이다(ADR-08).
+		// special_status 는 keyword 어휘가 못 담는 축(BULLET)만 보강한다 — 13짝 중 10916 은
+		// 제한(1091603 「화상·진동으로만」)이 지워 12만 남는다.
+		eq('identity_axis', await prisma.identityAxis.count(), 292);
+		eq('identity_axis (special_status)',
+			await prisma.identityAxis.count({ where: { source: 'special_status' } }), 12);
 		eq('identity_axis (granted)',
 			await prisma.identityAxis.count({ where: { source: 'granted' } }), 14);
 
@@ -1335,12 +1342,12 @@ async function main(): Promise<void> {
 		const appTables = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
 		`;
-		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 저작 사실이
-		// app 으로 내려오면서 늘었다
+		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 8 → 9 는 axis_grant 다
+		// (Task 3, 저작 17행). 저작 사실이 app 으로 내려오면서 늘었다
 		checks.push({
 			name: 'app 스키마가 섰다',
-			ok: Number(appTables[0]?.n ?? 0n) === 8,
-			detail: `${Number(appTables[0]?.n ?? 0n)} / 8`,
+			ok: Number(appTables[0]?.n ?? 0n) === 9,
+			detail: `${Number(appTables[0]?.n ?? 0n)} / 9`,
 		});
 
 		// ══ 판 표식 — 이 판이 무엇에서 나왔나 (ADR-08) ═════════════
