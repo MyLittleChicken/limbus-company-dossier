@@ -131,7 +131,10 @@ export async function recommendForDeck(
 	const field = (deployed.length > 0 ? deployed : identityIds).map(String);
 	const squad: Squad = { roster, field };
 
-	const profile = new Profile(squad, data.capabilities);
+	// gift_held 게이트를 판정하려면 보유 기프트가 필요하다. chain() 에 넘기는
+	// 것과 같은 값이다 — 둘이 갈리면 「켜진다」가 두 가지 답을 낸다
+	const heldGiftIds = ownedIds.map(String);
+	const profile = new Profile(squad, data.capabilities, heldGiftIds);
 	const verdicts = evaluateGifts({
 		squad,
 		profile,
@@ -142,7 +145,7 @@ export async function recommendForDeck(
 	const byGift = new Map(verdicts.map((v) => [v.giftId, v]));
 
 	const links = chain({
-		heldGiftIds: ownedIds.map(String),
+		heldGiftIds,
 		giftEffects: data.giftEffects,
 		effectRefs: data.effectRefs,
 		giftRefs: data.giftRefs,
@@ -287,9 +290,17 @@ export async function recommendForDeck(
 		where: { id: { in: identityIds.map(String) } },
 		include: {
 			texts: localeRows(locale),
-			// `ego_granted` 는 뺀다 — 수감자의 E.G.O 가 주는 축이라 인격이 공급한다고
-			// 말하면 거짓이다. `canonical/squad.ts` 와 같은 판정이다.
-			axes: { where: { source: { not: 'ego_granted' } }, select: { axisId: true } },
+			// `gate_kind = 'always'` 인 것만, `affects` 는 tag·both 만 — `canonical/squad.ts`
+			// 와 같은 판정이다. 이 자리는 「이 인격이 어느 축의 인격인가」를 보이는 자리이지
+			// 장착·보유·편성 인원에 달린 조건을 묻는 자리가 아니고, 스킬 취급 전용 행
+			// (`affects='skill'`, 예: 10104 의 VIBRATION)도 「그 인격이 그 축이다」는 뜻이
+			// 아니다. (예전엔 폐기된 `source: 'ego_granted'` 를 뺐는데 그 값이 `granted`
+			// 로 바뀌며 필터가 무연산이 됐다 — 조건부 축이 무조건 축으로 새던 회귀였다.
+			// 2026-08-10 실측.)
+			axes: {
+				where: { gateKind: 'always', affects: { in: ['tag', 'both'] } },
+				select: { axisId: true },
+			},
 		},
 	});
 	const identityName = (rows: Array<{ locale: string; name: string; title: string | null }>) => {

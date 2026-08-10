@@ -236,9 +236,22 @@ CREATE TABLE "canonical"."identity_axis" (
     "identity_id" TEXT NOT NULL,
     "axis_id" TEXT NOT NULL,
     "source" TEXT NOT NULL,
-    "ego_id" TEXT NOT NULL DEFAULT '',
+    "affects" TEXT NOT NULL,
+    "gate_kind" TEXT NOT NULL DEFAULT 'always',
+    "gate_ref" TEXT NOT NULL DEFAULT '',
+    "gate_min" INTEGER,
 
-    CONSTRAINT "identity_axis_pkey" PRIMARY KEY ("identity_id","axis_id","source","ego_id")
+    CONSTRAINT "identity_axis_pkey" PRIMARY KEY ("identity_id","axis_id","source","gate_kind","gate_ref")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."axis_restrict" (
+    "identity_id" TEXT NOT NULL,
+    "axis_id" TEXT NOT NULL,
+    "affects" TEXT NOT NULL,
+    "source_id" TEXT NOT NULL,
+
+    CONSTRAINT "axis_restrict_pkey" PRIMARY KEY ("identity_id","axis_id","affects")
 );
 
 -- CreateTable
@@ -1104,6 +1117,24 @@ CREATE TABLE "app"."ego_granted_axis" (
 );
 
 -- CreateTable
+CREATE TABLE "app"."axis_grant" (
+    "id" TEXT NOT NULL,
+    "source_kind" TEXT NOT NULL,
+    "source_id" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "target_kind" TEXT NOT NULL,
+    "target_id" TEXT NOT NULL,
+    "axis_id" TEXT NOT NULL,
+    "affects" TEXT NOT NULL,
+    "gate_kind" TEXT NOT NULL,
+    "gate_ref" TEXT NOT NULL,
+    "gate_min" INTEGER,
+    "note" TEXT NOT NULL,
+
+    CONSTRAINT "axis_grant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "app"."account" (
     "id" TEXT NOT NULL,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1277,6 +1308,9 @@ CREATE INDEX "enemy_part_enemy_id_idx" ON "canonical"."enemy_part"("enemy_id");
 CREATE INDEX "field_override_entity_field_idx" ON "app"."field_override"("entity", "field");
 
 -- CreateIndex
+CREATE INDEX "axis_grant_source_kind_source_id_idx" ON "app"."axis_grant"("source_kind", "source_id");
+
+-- CreateIndex
 CREATE INDEX "run_account_id_idx" ON "app"."run"("account_id");
 
 -- CreateIndex
@@ -1320,6 +1354,12 @@ ALTER TABLE "canonical"."identity_axis" ADD CONSTRAINT "identity_axis_identity_i
 
 -- AddForeignKey
 ALTER TABLE "canonical"."identity_axis" ADD CONSTRAINT "identity_axis_axis_id_fkey" FOREIGN KEY ("axis_id") REFERENCES "canonical"."axis"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."axis_restrict" ADD CONSTRAINT "axis_restrict_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "canonical"."identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."axis_restrict" ADD CONSTRAINT "axis_restrict_axis_id_fkey" FOREIGN KEY ("axis_id") REFERENCES "canonical"."axis"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."trigger_ref" ADD CONSTRAINT "trigger_ref_trigger_id_fkey" FOREIGN KEY ("trigger_id") REFERENCES "canonical"."trigger"("id") ON DELETE CASCADE ON UPDATE CASCADE;

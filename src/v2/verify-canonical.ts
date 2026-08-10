@@ -132,10 +132,38 @@ async function main(): Promise<void> {
 		//   +3    gift.denominator — 9220·9270·9829 가 분모 어휘를 안 적었다.
 		//         셋 다 중지 소속 게이트다. 추측해 채우지 않고 결손으로 남긴다
 		//         1,142 + 15 = 1,157
+		//   +1    identity_axis.special_status — keyword 어휘가 BULLET 을 못 담는다는
+		//         설계 결손을 한 행으로 고정 기록한다(entity_id='*', identity-axis.ts).
+		//         1,157 + 1 = 1,158
+		//   +1    gift.supply — 9073 엔도르핀 키트. 조건이 스킬 층(「스킬 효과로 호흡
+		//         위력을 획득할 때마다」)을 묻는데 기프트 조건에 그 층을 적을 칸이
+		//         없다. 태그 층(축 제한·부여)만 옳게 만드는 이 PR 의 몫이 아니라
+		//         결손으로 남긴다(Task 8, identity-axis.ts 끝).
+		//         1,158 + 1 = 1,159
+		//   +6    Task 9 — 폐기 표시와 함께, 「없다는 것조차 기록하지 않은 것」을 여섯
+		//         자리 더 적는다.
+		//           passive.effect(*)              패시브 효과-상태 구조화 표가 없다
+		//           gift.association_grant(9280)    소속 자체를 바꾸는 효과를 못 담는다
+		//           gift.association_grant(9841)    같은 종류
+		//           passive.skill_kind_grant(1021504·1061404) 둘   스킬 분류를 바꾸는
+		//           effect 를 못 담는다(2행)
+		//           coin_token.skill_possession(*)  강화·추가·변신 형태 스킬은 「보유」
+		//           판정에서 빠진다는 사실을 coin_token 이 구별 못 해 과대 계산이다
+		//           (이번 조사에서 새로 앎, 실측 21건 중 일부의 근거)
+		//         1,159 + 6 = 1,165
+		//   +1    gift.gate_conjunction — 9282 날개 모양 양초. 발동 조건이 「기프트
+		//         보유」 AND 「새벽 사무소 3인 이상」인데 `gate_kind` 가 행당 하나뿐이라
+		//         `roster_count` 만 적었다. 게이트를 배열로 넓히는 것은 기프트 능력
+		//         PR 의 몫이라 결손으로 남긴다(identity-axis.ts, 2026-08-10 전체 검토).
+		//         1,165 + 1 = 1,166
+		//   +0    identity_axis.affects_collision — PK(identityId·axisId·source·
+		//         gateKind·gateRef)가 affects 를 안 봐서 조용히 접힐 수 있는 자리를
+		//         감지하는 결손이다. 지금 데이터(축 부여·제한 저작 18행 전건 대조)엔
+		//         충돌이 없어 0건 — 나지 않을 수 있는 결손이라고 실측 전에 이미 적어 뒀다.
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_157,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,157`,
+			ok: gapTotal + overrideCount === 1_166,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,166`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -838,22 +866,181 @@ async function main(): Promise<void> {
 		eq('axis', await prisma.axis.count(), 8);
 		eq('trigger_ref', await prisma.triggerRef.count(), 150);
 		eq('effect_ref', await prisma.effectRef.count(), 55);
-		// 566 = keyword 266 + special_status 300. 여기에 ego_granted 62 가 더해진다 —
-		// 착영휘도(20509)·엄숙한 애도(20109) 가 수감자 5(15인)·1(16인) 소속이라 (15+16)×2
-		eq('identity_axis', await prisma.identityAxis.count(), 628);
-		eq('identity_axis (ego_granted)',
-			await prisma.identityAxis.count({ where: { source: 'ego_granted' } }), 62);
+		// 293 = keyword 266 + special_status(BULLET 하나) 13 + granted 14(axis-grant 설계).
+		// ego_id·ego_granted 경로는 폐기됐다 — app.axis_grant 18행이 정본이다(ADR-08).
+		// special_status 는 keyword 어휘가 못 담는 축(BULLET)만 보강한다. 제한의 사정거리는
+		// keyword 가 표현하는 축까지다(2026-08-10, 사용자 확정) — 「화상, 진동으로만
+		// 취급됨」은 부여 키워드에 대한 말이지 가속탄(자원, 어휘 밖)에 대한 말이 아니라
+		// 10916 도 BULLET 13짝에 포함된다.
+		eq('identity_axis', await prisma.identityAxis.count(), 293);
+		eq('identity_axis (special_status)',
+			await prisma.identityAxis.count({ where: { source: 'special_status' } }), 13);
+		eq('identity_axis (granted)',
+			await prisma.identityAxis.count({ where: { source: 'granted' } }), 14);
 
-		// ego_granted 만 ego_id 를 갖는다. 반대로 새면 무조건 축이 되어
-		// 착영휘도를 안 낀 이상까지 출혈 인격이 된다
-		const egoIdLeak = await prisma.$queryRaw<Array<{ n: bigint }>>`
+		// ── 저작 축 부여·제한 (Task 3, ADR-08) ────────────────────────
+		// 18 = 17 + 1. 새 행 10104:SINKING(restrict) 은 sourceKind='system' 이다 —
+		// 게임 텍스트에 근거가 없는 유저 관측이라는 사실을 데이터가 스스로 말한다
+		// (2026-08-10, 사용자 확정)
+		eq('axis_grant (저작, app 스키마)', await prisma.axisGrant.count(), 18);
+		eq('axis_restrict', await prisma.axisRestrict.count(), 8);
+
+		// affects 칸 값 — v2:diff 는 표 집합·행수·엔티티 id 만 보고 칸 값 변경은
+		// 못 잡는다. 제한 패시브 넷 중 둘(1010902·1110902)만 스킬 취급까지 부정해
+		// affects='both' 고, 나머지 둘(1041502·1091603)은 인격 취급만 제한해 'tag' 다
+		// (f2901af, 2026-08-10). 10104:SINKING 도 스킬 부정 문장이 없어 'tag' 다 —
+		// tag 5→6. 저작 원본 axis_grant 도 같은 사각이라 함께 지킨다
+		const restrictAffects = await prisma.axisRestrict.groupBy({
+			by: ['affects'], _count: { _all: true },
+		});
+		const raMap = Object.fromEntries(restrictAffects.map((r) => [r.affects, r._count._all]));
+		checks.push({
+			name: 'axis_restrict 의 affects 분포 (tag 6 · both 2)',
+			ok: raMap['tag'] === 6 && raMap['both'] === 2 && Object.keys(raMap).length === 2,
+			detail: JSON.stringify(raMap),
+		});
+		const grantAffects = await prisma.axisGrant.groupBy({
+			by: ['affects'], _count: { _all: true },
+		});
+		const gaMap = Object.fromEntries(grantAffects.map((r) => [r.affects, r._count._all]));
+		checks.push({
+			name: 'axis_grant 의 affects 분포 (tag 6 · skill 4 · both 8)',
+			ok: gaMap['tag'] === 6 && gaMap['skill'] === 4 && gaMap['both'] === 8
+				&& Object.keys(gaMap).length === 3,
+			detail: JSON.stringify(gaMap),
+		});
+
+		// (가) 지운 불변식의 대체 — 원래 ego_id 를 보던 원시 SQL 검사가 칸이 없어지며
+		// 함께 지워졌다. 실제로 구운 293행 전체에 걸어 되살린다.
+		// keyword·special_status 경로는 identity-axis.ts 가 항상 always/'' 로 적는다
+		// (조건이 없다는 뜻). 조건부 게이트(ego_equipped 등)는 granted 에만 있다
+		const conditionalNonGranted = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM canonical.identity_axis
-			WHERE (source = 'ego_granted') <> (ego_id <> '')
+			WHERE source IN ('keyword', 'special_status')
+			  AND NOT (gate_kind = 'always' AND gate_ref = '')
 		`;
 		checks.push({
-			name: 'ego_id 는 ego_granted 에만 있다 (0이어야 한다)',
-			ok: Number(egoIdLeak[0]?.n ?? 1n) === 0,
-			detail: `${Number(egoIdLeak[0]?.n ?? 0n)} / 0`,
+			name: 'keyword·special_status 는 항상 always/무조건이다 (0이어야 한다)',
+			ok: Number(conditionalNonGranted[0]?.n ?? 1n) === 0,
+			detail: `${Number(conditionalNonGranted[0]?.n ?? 0n)} / 0`,
+		});
+
+		// (나) 제한이 실제로 걸렸는가 — canonical.keyword 어휘가 표현하는 축으로 한정한다.
+		// 어휘를 하드코딩하지 않고 keyword 테이블을 질의해 대조한다. 어휘 밖 축(BULLET)은
+		// 제한이 손대지 않으므로(identity-axis.ts 39-44행) 이 검사 밖에 둔다 — 안 그러면
+		// 10916 이 BULLET 을 갖고 있다는 사실만으로 반드시 실패한다.
+		//
+		// **채널마다 따진다.** `affects='both'` 인 행만 보면(예전 판) 좁혀진 행(10104
+		// 의 VIBRATION 처럼 tag 는 막히고 skill 은 남는 행)이 검사 밖으로 빠진다 —
+		// `applyRestrict` 가 두 채널을 다 막아야 하는데 한 채널로만 좁혀 내보내는
+		// 버그가 생겨도 이 검사가 못 잡는다는 뜻이다. 이 PR 이 지키려는 불변식이
+		// 정확히 그것이니 검사가 채널 단위로 덮어야 한다.
+		//
+		// 행이 주장하는 채널(both → tag·skill 둘, 그 밖 → 자기 자신)마다 「그 채널을
+		// 덮는 axis_restrict 가 있는데 이 축은 그 인격의 그 채널 허용 목록에 없다」를
+		// 찾는다. `r.affects = 'both'` 인 restrict 행은 tag·skill 두 채널을 다 덮는다.
+		const leaked = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			WITH vocab AS (SELECT upper(id) AS axis_id FROM canonical.keyword),
+			     ch AS (
+			       SELECT ia.identity_id, ia.axis_id,
+			              unnest(CASE WHEN ia.affects = 'both'
+			                          THEN ARRAY['tag','skill'] ELSE ARRAY[ia.affects] END) AS channel
+			       FROM canonical.identity_axis ia
+			       JOIN vocab v ON v.axis_id = ia.axis_id
+			     )
+			SELECT count(*)::bigint AS n
+			FROM ch
+			WHERE EXISTS (
+			        SELECT 1 FROM canonical.axis_restrict r
+			        WHERE r.identity_id = ch.identity_id
+			          AND (r.affects = ch.channel OR r.affects = 'both'))
+			  AND NOT EXISTS (
+			        SELECT 1 FROM canonical.axis_restrict r
+			        WHERE r.identity_id = ch.identity_id
+			          AND (r.affects = ch.channel OR r.affects = 'both')
+			          AND r.axis_id = ch.axis_id)
+		`;
+		checks.push({
+			name: '어느 채널에서도 제한 밖 축이 남지 않는다 (어휘 안 축으로 한정)',
+			ok: Number(leaked[0]?.n ?? 1n) === 0,
+			detail: `${Number(leaked[0]?.n ?? 0n)} / 0`,
+		});
+
+		// special_status 로 온 축 13행 — **축 이름을 하드코딩하지 않는다.** `canonical.keyword`
+		// 를 질의해 「special_status 로 온 축 ∩ 어휘 = ∅」로 잰다(위 leaked 검사와 같은
+		// 방식). 지금은 그 교집합이 비는 유일한 축이 BULLET 이라 결과가 같지만, 어휘가
+		// 늘거나 축이 늘어도 이 검사는 자동으로 따라간다. 행수 단정(13)만 남긴다
+		const specialStatusRows = await prisma.identityAxis.findMany({
+			where: { source: 'special_status' },
+			select: { axisId: true },
+		});
+		const keywordAxisIds = new Set(
+			(await prisma.keyword.findMany({ select: { id: true } })).map((k) => k.id.toUpperCase()),
+		);
+		const specialStatusInVocab = specialStatusRows.filter((r) => keywordAxisIds.has(r.axisId));
+		checks.push({
+			name: 'special_status 로 온 축 13행 — keyword 어휘와 교집합이 없다',
+			ok: specialStatusRows.length === 13 && specialStatusInVocab.length === 0,
+			detail: `${specialStatusRows.length}행 · 어휘와 겹침 ${specialStatusInVocab.length} · ` +
+				`축 ${[...new Set(specialStatusRows.map((r) => r.axisId))].join(',')}`,
+		});
+
+		// (다) 제한 넷 + 1 의 축 실측 대조 — 게임 문장(넷)과 유저 관측(10104)에서 온
+		// 값이다. 10916 은 BULLET 이 어휘 밖이라 제한이 안 닿아 여전히 갖는다(설계
+		// 41-44행). 10104 는 원문에 근거가 없는 미문서화 예외다(2026-08-10, 사용자
+		// 확정) — SINKING·VIBRATION 축 집합 자체는 그대로 남고 affects 만 갈린다
+		const RESTRICTED_EXPECTED: Record<string, string[]> = {
+			'10104': ['SINKING', 'VIBRATION'],
+			'10109': ['LACERATION'],
+			'10415': ['BREATH', 'COMBUSTION', 'LACERATION'],
+			'10916': ['BULLET', 'COMBUSTION', 'VIBRATION'],
+			'11109': ['LACERATION'],
+		};
+		for (const [identityId, want] of Object.entries(RESTRICTED_EXPECTED)) {
+			const got = (await prisma.identityAxis.findMany({
+				where: { identityId }, select: { axisId: true },
+			})).map((r) => r.axisId);
+			const uniq = [...new Set(got)].sort();
+			checks.push({
+				name: `제한 인격 ${identityId} 의 축`,
+				ok: JSON.stringify(uniq) === JSON.stringify(want),
+				detail: `${uniq.join(' ')} / ${want.join(' ')}`,
+			});
+		}
+
+		// 10104 는 축 집합이 아니라 채널이 갈리는 첫 실사례다 — SINKING 은 원문이
+		// 직접 말하는 축이라 both 로 남고, VIBRATION 은 restrict 가 tag 채널만 막아
+		// 태그에서는 빠지고 스킬 채널로 좁혀진다(사라지지 않는다, Task 3 채널 좁히기)
+		const dongbaek = await prisma.identityAxis.findMany({
+			where: { identityId: '10104' }, select: { axisId: true, affects: true },
+		});
+		const dongbaekMap = Object.fromEntries(dongbaek.map((r) => [r.axisId, r.affects]));
+		checks.push({
+			name: '10104 개화 E.G.O::동백 이상 — SINKING both · VIBRATION skill(좁혀짐)',
+			ok: dongbaekMap['SINKING'] === 'both' && dongbaekMap['VIBRATION'] === 'skill',
+			detail: JSON.stringify(dongbaekMap),
+		});
+
+		// 게이트 어휘 — identity_axis.gate_kind 는 다섯 갈래 밖으로 안 샌다
+		const badGate = await prisma.identityAxis.count({
+			where: { gateKind: { notIn: ['always', 'ego_equipped', 'gift_held', 'roster_count', 'status_held'] } },
+		});
+		checks.push({
+			name: 'identity_axis 의 gate_kind 어휘 (0이어야 한다)',
+			ok: badGate === 0,
+			detail: `${badGate} / 0`,
+		});
+
+		// gate_min 은 roster_count 게이트에만 있다 — 다른 게이트 종류에 값이 있거나
+		// roster_count 인데 값이 없으면 게이트 계약이 깨진 것이다
+		const badMin = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.identity_axis
+			WHERE (gate_kind = 'roster_count') <> (gate_min IS NOT NULL)
+		`;
+		checks.push({
+			name: 'gate_min 은 roster_count 일 때만 있다 (0이어야 한다)',
+			ok: Number(badMin[0]?.n ?? 1n) === 0,
+			detail: `${Number(badMin[0]?.n ?? 0n)} / 0`,
 		});
 
 		// **소속 트리거가 상태에 걸리면 안 된다.** 이름 매칭에서 실재하는 오매칭이다 —
@@ -897,11 +1084,10 @@ async function main(): Promise<void> {
 			detail: Object.entries(ed).map(([k, v]) => `${k} ${v}`).join(' · '),
 		});
 
-		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. 홍매화(특수 출혈)가
-		// status_category 로 LACERATION 에 닿는 것이 이 설계의 핵심 발견이다
+		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. mj 의 keyword 가
+		// 홍매화(특수 출혈)를 이미 반영해 담아 keyword 경로만으로 LACERATION 에 닿는다
 		const faust = await prisma.identityAxis.findMany({
-			// ego_granted 를 뺀다 — 이 골든은 **무조건** 축을 재는 것이다
-			where: { identityId: '10208', NOT: { source: 'ego_granted' } },
+			where: { identityId: '10208' },
 			select: { axisId: true },
 		});
 		const faustAxes = [...new Set(faust.map((r) => r.axisId))].sort().join(' · ');
@@ -911,16 +1097,17 @@ async function main(): Promise<void> {
 			detail: faustAxes,
 		});
 
-		// 골든 — 착영휘도(20509)를 낀 이상은 「출혈·호흡을 부여하는 인격으로 취급됨」이다.
-		// 수감자 5 인격 전부가 후보이며, 실제 축 여부는 편성의 E.G.O 선택이 가른다
+		// 골든 — 착영휘도(20509)는 「검계 우두머리 뫼르소(10508) 전용 상시 효과」다.
+		// app.axis_grant 가 대상을 그 인격 하나로 콕 집으므로(ADR-08), 축은 20509 를
+		// 장착했을 때만 서는 조건부 행 하나씩으로 남는다
 		const yisang = await prisma.identityAxis.findMany({
-			where: { identityId: '10501', source: 'ego_granted' },
-			select: { axisId: true, egoId: true },
+			where: { identityId: '10508', source: 'granted' },
+			select: { axisId: true, gateKind: true, gateRef: true },
 		});
-		const yisangAxes = yisang.map((r) => `${r.axisId}:${r.egoId}`).sort().join(' · ');
+		const yisangAxes = yisang.map((r) => `${r.axisId}:${r.gateKind}:${r.gateRef}`).sort().join(' · ');
 		checks.push({
-			name: '10501 이상 + 착영휘도 = BREATH · LACERATION (조건부)',
-			ok: yisangAxes === 'BREATH:20509 · LACERATION:20509',
+			name: '10508 뫼르소 + 착영휘도(20509) = BREATH · LACERATION (ego_equipped 게이트)',
+			ok: yisangAxes === 'BREATH:ego_equipped:20509 · LACERATION:ego_equipped:20509',
 			detail: yisangAxes,
 		});
 
@@ -1347,12 +1534,12 @@ async function main(): Promise<void> {
 		const appTables = await prisma.$queryRaw<Array<{ n: bigint }>>`
 			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
 		`;
-		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 저작 사실이
-		// app 으로 내려오면서 늘었다
+		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 8 → 9 는 axis_grant 다
+		// (Task 3, 저작 18행). 저작 사실이 app 으로 내려오면서 늘었다
 		checks.push({
 			name: 'app 스키마가 섰다',
-			ok: Number(appTables[0]?.n ?? 0n) === 8,
-			detail: `${Number(appTables[0]?.n ?? 0n)} / 8`,
+			ok: Number(appTables[0]?.n ?? 0n) === 9,
+			detail: `${Number(appTables[0]?.n ?? 0n)} / 9`,
 		});
 
 		// ══ 판 표식 — 이 판이 무엇에서 나왔나 (ADR-08) ═════════════

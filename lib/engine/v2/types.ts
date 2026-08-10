@@ -33,8 +33,20 @@ export interface Capability {
 	identityId: string;
 	refKind: string;
 	refId: string;
-	/** 조건부 축이면 그것을 주는 E.G.O. 무조건이면 빈 문자열 */
-	egoId: string;
+	/** 게이트 종류. always · ego_equipped · gift_held · roster_count · status_held */
+	gateKind: string;
+	/** 게이트가 보는 값(E.G.O id · 기프트 id · 소속 id …). 무조건이면 빈 문자열 */
+	gateRef: string;
+	/** roster_count 게이트의 문턱. 그 외는 null */
+	gateMin: number | null;
+	/**
+	 * 이 능력이 어느 취급에 미치나 — tag(인격 취급) · skill(스킬 취급) · both.
+	 *
+	 * `identity_axis` 만 실제 값을 갖는다. 예: 10104(개화 E.G.O::동백 이상)는
+	 * VIBRATION 이 `skill` 이라 「진동 인격 5인」같은 인격 수 조건에는 안 들지만,
+	 * 「진동을 부여하는 스킬 사용 시」조건은 받는다. 나머지 갈래는 늘 `both` 다.
+	 */
+	affects: string;
 }
 
 /** `canonical.trigger_ref` 한 행 */

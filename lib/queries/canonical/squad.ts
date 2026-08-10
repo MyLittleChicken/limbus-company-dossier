@@ -27,7 +27,7 @@ import { localeRows, nameOf } from './locale';
  *
  * **축은 캐노니컬이 판정한 것을 읽는다.** 현행은 `lib/engine/vocab` 의 정규식 10개로
  * 상태 id 1,472종을 접었는데, 그 접기가 이미 데이터로 있다 —
- * `identity_axis` 628행이며 적재기가 축 어휘로 판정한 결과다. 검사 203건이 지킨다.
+ * `identity_axis` 293행이며 적재기가 축 어휘로 판정한 결과다. 검사 203건이 지킨다.
  *
  * **어휘는 `keyword.id` 로 통일한다** — `Combustion` 이지 `COMBUSTION` 도 `burn` 도
  * 아니다. 레거시는 `poise` · `tremor` 를 냈는데 `listSquadAxes` 의 라벨 표는
@@ -83,12 +83,23 @@ export async function listSquad(locale: Locale) {
 				include: {
 					texts: localeRows(locale),
 					/**
-					 * **`ego_granted` 는 뺀다.** 그 62행은 수감자의 E.G.O 가 주는 축이지
-					 * 인격이 주는 축이 아니다 — 인격 카드에 실으면 없는 공급을 있다고
-					 * 말하게 된다. 남는 둘(`keyword` 266 · `special_status` 300)이
-					 * 레거시 `statusKeyOf` 가 세던 것과 같은 집합이다.
+					 * **`gate_kind = 'always'` 인 것만 남긴다.** 화면은 「이 인격이 어느 축의
+					 * 인격인가」를 보이는 자리이지 「지금 이 조건이 충족됐는가」를 보이는
+					 * 자리가 아니다 — `ego_equipped`(장착) · `gift_held`(보유) ·
+					 * `roster_count`(편성 인원) · `status_held`(전투 중 상태)에 달린 축은
+					 * 그 물음의 답이 아니다. (예전엔 폐기된 `source: 'ego_granted'` 를
+					 * 뺐는데 이 브랜치가 그 값을 `granted` 로 바꾸며 필터가 무연산이
+					 * 됐다 — 조건부 축 14행이 무조건 축으로 새던 회귀였다. 2026-08-10 실측.)
+					 *
+					 * **`affects: { in: ['tag', 'both'] }` 도 건다.** `skill` 전용 행은 「그
+					 * 축을 부여하는 스킬을 쓴다」는 뜻이지 「그 인격이 그 축이다」는 뜻이
+					 * 아니다 — 10104 개화 E.G.O::동백 이상의 VIBRATION 이 그 예다(미문서화
+					 * 예외, 태그 채널에서만 빠지고 스킬 채널은 남는다).
 					 */
-					axes: { where: { source: { not: 'ego_granted' } }, select: { axisId: true } },
+					axes: {
+						where: { gateKind: 'always', affects: { in: ['tag', 'both'] } },
+						select: { axisId: true },
+					},
 					// 기믹은 축 표에 `PROTECTION` 이 없어 상태에서 직접 읽는다
 					statuses: { where: { statusId: { in: MECHANICS } }, select: { statusId: true } },
 					associations: { include: { association: { include: { texts: localeRows(locale) } } } },

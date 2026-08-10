@@ -20,6 +20,7 @@ import { buildIdentities } from './canonical/identities.js';
 import { buildEgos } from './canonical/egos.js';
 import { buildStatuses } from './canonical/statuses.js';
 import { buildAxis } from './canonical/axis.js';
+import { buildAxisGrant } from './canonical/axis-grant.js';
 import { buildIdentityAxis } from './canonical/identity-axis.js';
 import { buildGiftTriggerParam } from './canonical/gift-trigger-param.js';
 import { parseCoinTokens } from './canonical/tokens.js';
@@ -239,7 +240,7 @@ async function main(): Promise<void> {
 		// 저작 사실. **app 에 산다**(ADR-08) — 승격이 canonical 을 통째로 갈아
 		// 치우므로 재빌드의 입력은 그 밖에 있어야 한다
 		const authored = await readAuthored(prisma);
-		const { refException, egoGranted } = authored;
+		const { refException } = authored;
 
 		// ── 축 어휘와 트리거·효과 참조 ─────────────────────────────
 		// 이름 유도를 여기서 한 번 풀어 굳힌다 — 질의마다 다시 하면 오매칭이 되살아난다.
@@ -304,16 +305,45 @@ async function main(): Promise<void> {
 			throw new Error(`저작 참조 ${badRefs.length}건이 못 닿는다`);
 		}
 
-		// 인격 축 프로파일. **egos 뒤여야 한다** — ego_granted 경로가 E.G.O 의
-		// 수감자를 보고 장착 후보 인격을 편다
+		// 제한·special_status 를 가르는 같은 잣대 — keyword 어휘가 표현하는 축만.
+		// 「…을 부여하는 인격으로만 취급됨」은 부여 키워드(화상·출혈·진동·호흡·충전 등)에
+		// 대한 말이지 축 전체에 대한 말이 아니다. BULLET(가속탄)은 어휘에 없어 이 밖이고,
+		// 제한도 special_status 보강도 둘 다 이 집합만 본다(2026-08-10, 사용자 확정).
+		// 두 빌더에 같은 Set 을 넘겨 기준이 갈라지지 않게 한다
+		const axisIdSet = new Set(axisTables.axis.map((a) => a.id));
+		const restrictScope = new Set(
+			vocab.keyword.map((k) => k.id.toUpperCase()).filter((a) => axisIdSet.has(a)),
+		);
+
+		// 저작 축 부여·제한을 인격 행으로 편다. 제한은 여기서 이미 적용된다
+		const axisGrant = buildAxisGrant({
+			axisGrant: authored.axisGrant,
+			axisIds: axisTables.axis.map((a) => a.id),
+			identityIds: identities.identity.map((i) => i.id),
+			identityAssociation: identities.identityAssociation.map((a) => ({
+				identityId: a.identityId, associationId: a.associationId,
+			})),
+			identityUnitKeyword: identities.identityUnitKeyword.map((k) => ({
+				identityId: k.identityId, keyword: k.keyword,
+			})),
+			restrictScope,
+		}, meta);
+
+		// 인격 축 프로파일. keyword 가 정본이고, keyword 어휘가 못 담는 축(BULLET)만
+		// special_status(identity_status → status_category)로 보강한다
 		const identityAxis = buildIdentityAxis({
-			identityKeyword: identities.identityKeyword.map((k) => ({ identityId: k.identityId, keywordId: k.keywordId })),
-			identityStatus: identities.identityStatus,
+			identityKeyword: identities.identityKeyword.map((k) => ({
+				identityId: k.identityId, keywordId: k.keywordId,
+			})),
+			restrictScope,
+			identityStatus: identities.identityStatus.map((s) => ({
+				identityId: s.identityId, statusId: s.statusId,
+			})),
 			statusCategory: statuses.statusCategory.map((s) => ({ statusId: s.statusId, category: s.category })),
 			axisIds: axisTables.axis.map((a) => a.id),
-			identity: identities.identity.map((i) => ({ id: i.id, sinnerId: i.sinnerId })),
-			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
-			egoGranted,
+			identityIds: identities.identity.map((i) => i.id),
+			granted: axisGrant.granted,
+			restrict: axisGrant.restrict,
 		}, meta);
 
 		// 트리거 정량자. **level 0 만 본다** — 강화 단계는 조건 문장이 같아 중복이다.
@@ -544,7 +574,7 @@ async function main(): Promise<void> {
 			         canonical.choice_event, canonical.achievement, canonical.reward,
 			         canonical.adversity, canonical.grace, canonical.encounter, canonical.enemy,
 			         canonical.enemy_part,
-			         canonical.axis, canonical.identity_axis, canonical.trigger_ref,
+			         canonical.axis, canonical.identity_axis, canonical.axis_restrict, canonical.trigger_ref,
 			         canonical.effect_ref, canonical.gift_trigger_param,
 			         canonical.field_gap, canonical.field_source,
 			         canonical.tool_annotation CASCADE
@@ -692,6 +722,8 @@ async function main(): Promise<void> {
 		counts.push(['identity', await chunked(identities.identity, (d) => prisma.identity.createMany({ data: d }))]);
 		// identity_axis 는 identity·axis 둘 다 FK 로 걸어 여기서 적재한다 — axis 는 이미 위에서 섰다.
 		counts.push(['identity_axis', await chunked(identityAxis, (d) => prisma.identityAxis.createMany({ data: d }))]);
+		// axis_restrict 도 identity·axis 둘 다 FK 이므로 이 자리가 맞다.
+		counts.push(['axis_restrict', await chunked(axisGrant.restrict, (d) => prisma.axisRestrict.createMany({ data: d }))]);
 		counts.push(['identity_text', await chunked(identities.identityText, (d) => prisma.identityText.createMany({ data: d as never }))]);
 		counts.push(['identity_resist', await chunked(identities.identityResist, (d) => prisma.identityResist.createMany({ data: d as never }))]);
 		counts.push(['identity_speed', await chunked(identities.identitySpeed, (d) => prisma.identitySpeed.createMany({ data: d }))]);

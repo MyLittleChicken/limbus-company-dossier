@@ -6,131 +6,148 @@ import { Meta } from './meta.js';
 function input(): IdentityAxisInput {
 	return {
 		identityKeyword: [
-			{ identityId: '10208', keywordId: 'Laceration' },
-			{ identityId: '10208', keywordId: 'Breath' },
+			// 10916 — 패시브 1091603 이 화상·진동으로만 제한한다. mj 가 이미 반영했다
+			{ identityId: '10916', keywordId: 'Combustion' },
+			{ identityId: '10916', keywordId: 'Vibration' },
+			// 축이 아닌 키워드는 무시된다
+			{ identityId: '10916', keywordId: 'Poise' },
+			{ identityId: '11001', keywordId: 'Laceration' },
 		],
+		// BULLET 은 이 사정거리 밖이다 — special_status 로만 닿을 수 있고, 제한도 안 미친다
+		restrictScope: new Set(['COMBUSTION', 'VIBRATION', 'BREATH', 'LACERATION']),
 		identityStatus: [
-			// 홍매화 — 특수 출혈. status_category 로 LACERATION 에 닿는다
-			{ identityId: '10208', statusId: 'RedApricotBlossom' },
-			// 축이 아닌 상태는 무시된다
-			{ identityId: '10208', statusId: 'Binding' },
+			// BULLET 은 keyword 어휘에 없다 — 11003 은 이 경로로만 축을 얻는다.
+			// 상태 둘(Bullet · BulletLament)이 같은 축을 가리켜도 한 행으로 합쳐진다
+			{ identityId: '11003', statusId: 'Bullet' },
+			{ identityId: '11003', statusId: 'BulletLament' },
+			// COMBUSTION 은 keyword 어휘에 있다 — 상태로 와도 special_status 를 안 만든다
+			{ identityId: '11001', statusId: 'SomeCombustionStatus' },
+			// 10916 은 restrict 가 COMBUSTION·VIBRATION 뿐이지만 BULLET 은 restrictScope 밖이라
+			// 제한이 안 미친다 — 로쟈는 「화상·진동으로만」이면서 동시에 가속탄 인격이다
+			{ identityId: '10916', statusId: 'Bullet' },
 		],
 		statusCategory: [
-			{ statusId: 'RedApricotBlossom', category: 'LACERATION' },
-			{ statusId: 'Binding', category: 'IGNORE_CHECED_CORRECTION_EXCLUSION' },
+			{ statusId: 'Bullet', category: 'BULLET' },
+			{ statusId: 'BulletLament', category: 'BULLET' },
+			{ statusId: 'SomeCombustionStatus', category: 'COMBUSTION' },
 		],
-		axisIds: ['COMBUSTION', 'LACERATION', 'VIBRATION', 'BURST', 'SINKING', 'BREATH', 'CHARGE', 'BULLET'],
-		// 20509 착영휘도는 수감자 5(이상). 같은 수감자 인격 둘 · 다른 수감자 하나
-		identity: [
-			{ id: '10208', sinnerId: 5 },
-			{ id: '10508', sinnerId: 5 },
-			{ id: '10109', sinnerId: 1 },
+		axisIds: ['COMBUSTION', 'VIBRATION', 'BREATH', 'LACERATION', 'BULLET'],
+		identityIds: ['10916', '11001', '11002', '11003'],
+		granted: [
+			// 착영휘도를 끼면 호흡·출혈. 10916 은 제한이 있어 살아남지 못한다
+			{ identityId: '10916', axisId: 'BREATH', affects: 'both',
+				gateKind: 'ego_equipped', gateRef: '20509', gateMin: null },
+			{ identityId: '11001', axisId: 'BREATH', affects: 'both',
+				gateKind: 'ego_equipped', gateRef: '20509', gateMin: null },
 		],
-		ego: [
-			{ id: '20509', sinnerId: 5 },
-			// 20705 홀리데이 — 증폭기. 저작 표에 없으므로 행이 없어야 한다
-			{ id: '20705', sinnerId: 7 },
-		],
-		// app.ego_granted_axis 가 주는 것. ego 목록에 있는 20509 만 둔다 —
-		// 20109 를 같이 두면 실물이 없어 모든 테스트에 결손이 하나씩 낀다
-		egoGranted: [
-			{ egoId: '20509', axisId: 'LACERATION' },
-			{ egoId: '20509', axisId: 'BREATH' },
+		restrict: [
+			{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', sourceId: '1091603' },
+			{ identityId: '10916', axisId: 'VIBRATION', affects: 'both', sourceId: '1091603' },
 		],
 	};
 }
 
-test('키워드 경로 — 대문자 축으로 옮긴다', () => {
+test('keyword 경로 — 축인 것만, affects 는 both, 조건 없음', () => {
 	const rows = buildIdentityAxis(input(), new Meta());
-	const kw = rows.filter((r) => r.source === 'keyword').map((r) => r.axisId).sort();
-	assert.deepEqual(kw, ['BREATH', 'LACERATION']);
+	const kw = rows.filter((r) => r.source === 'keyword' && r.identityId === '10916');
+	assert.deepEqual(kw.map((r) => r.axisId).sort(), ['COMBUSTION', 'VIBRATION']);
+	assert.ok(kw.every((r) => r.affects === 'both' && r.gateKind === 'always' && r.gateRef === ''));
 });
 
-test('특수 상태 경로 — 홍매화가 LACERATION 으로 닿는다', () => {
-	const rows = buildIdentityAxis(input(), new Meta());
-	const sp = rows.filter((r) => r.source === 'special_status');
-	assert.deepEqual(sp.map((r) => r.axisId), ['LACERATION']);
-});
-
-test('축이 아닌 상태는 행을 만들지 않는다', () => {
-	const rows = buildIdentityAxis(input(), new Meta());
-	assert.equal(rows.filter((r) => r.axisId === 'IGNORE_CHECED_CORRECTION_EXCLUSION').length, 0);
-});
-
-test('ego_granted — 같은 수감자 인격 전부에 행이 선다', () => {
-	const rows = buildIdentityAxis(input(), new Meta());
-	const eg = rows
-		.filter((r) => r.source === 'ego_granted')
-		.map((r) => `${r.identityId}|${r.axisId}|${r.egoId}`)
-		.sort();
-	// 수감자 5 인격 둘 × 착영휘도 축 둘
-	assert.deepEqual(eg, [
-		'10208|BREATH|20509',
-		'10208|LACERATION|20509',
-		'10508|BREATH|20509',
-		'10508|LACERATION|20509',
-	]);
-});
-
-test('ego_granted — 다른 수감자 인격에는 안 선다', () => {
-	const rows = buildIdentityAxis(input(), new Meta());
-	assert.equal(rows.filter((r) => r.identityId === '10109').length, 0);
-});
-
-test('ego_granted 는 저작 표에 있는 E.G.O 만 만든다 — ego_status 로 유도하지 않는다', () => {
-	// 20705 홀리데이는 ego_status 로 축 7개를 주지만 「부여하는 위력 +1」인 증폭기다.
-	// 어느 축의 인격도 아니므로 행이 없어야 한다
+test('제한이 keyword 도 깎는다 — 제한 밖의 축은 남지 않는다', () => {
 	const i = input();
-	assert.equal(i.egoGranted.filter((g) => g.egoId === '20705').length, 0);
-
+	// mj 가 반영을 안 한 경우를 가정한다. 제한이 최종 방어선이어야 한다
+	i.identityKeyword.push({ identityId: '10916', keywordId: 'Breath' });
 	const rows = buildIdentityAxis(i, new Meta());
-	assert.equal(rows.filter((r) => r.egoId === '20705').length, 0);
+	assert.equal(rows.some((r) => r.identityId === '10916' && r.axisId === 'BREATH'), false);
 });
 
-test('축을 주는 E.G.O 는 입력으로 온다 — 상수가 아니다', () => {
-	const i = input();
-	// 저작을 바꾸면 결과가 따라 바뀐다. 상수였다면 안 바뀐다
-	i.egoGranted = [{ egoId: '20509', axisId: 'BULLET' }];
-
-	const rows = buildIdentityAxis(i, new Meta());
-	const eg = [...new Set(rows.filter((r) => r.source === 'ego_granted').map((r) => r.axisId))];
-	assert.deepEqual(eg, ['BULLET']);
+test('granted 경로 — 제한이 없는 인격은 살아남는다', () => {
+	const rows = buildIdentityAxis(input(), new Meta());
+	const g = rows.filter((r) => r.source === 'granted');
+	assert.deepEqual(g.map((r) => r.identityId), ['11001']);
+	assert.equal(g[0]?.axisId, 'BREATH');
+	assert.equal(g[0]?.gateKind, 'ego_equipped');
+	assert.equal(g[0]?.gateRef, '20509');
 });
 
-test('입력이 비면 ego_granted 행이 없다', () => {
-	const i = input();
-	i.egoGranted = [];
-
-	const rows = buildIdentityAxis(i, new Meta());
-	assert.equal(rows.filter((r) => r.source === 'ego_granted').length, 0);
+test('keyword 어휘에 없는 축은 special_status 로 들어온다 — BULLET', () => {
+	const rows = buildIdentityAxis(input(), new Meta());
+	const sp = rows.filter((r) => r.source === 'special_status' && r.identityId === '11003');
+	// Bullet · BulletLament 둘 다 BULLET 이라 한 행으로 합쳐진다
+	assert.deepEqual(sp.map((r) => r.axisId), ['BULLET']);
+	assert.ok(sp.every((r) => r.affects === 'both' && r.gateKind === 'always' && r.gateRef === ''));
 });
 
-test('한 E.G.O 의 축이 여럿이어도 결손 보고는 한 번뿐이다', () => {
-	const meta = new Meta();
-	const i = input();
-	i.ego = [];
-	i.egoGranted = [
-		{ egoId: '20109', axisId: 'VIBRATION' },
-		{ egoId: '20109', axisId: 'SINKING' },
-	];
-
-	buildIdentityAxis(i, meta);
-	assert.equal(meta.gaps.filter((g) => g.entityId === '20109').length, 1);
+test('keyword 어휘에 있는 축은 special_status 로 안 들어온다 — 제한이 무너지지 않는다', () => {
+	const rows = buildIdentityAxis(input(), new Meta());
+	// 11001 은 SomeCombustionStatus(→COMBUSTION) 상태를 가졌지만 COMBUSTION 은
+	// keyword 어휘에 있으므로 special_status 가 만들어지지 않는다
+	assert.equal(
+		rows.some((r) => r.source === 'special_status' && r.identityId === '11001'),
+		false,
+	);
+	assert.equal(rows.some((r) => r.source === 'special_status' && r.axisId === 'COMBUSTION'), false);
 });
 
-test('ego_granted 는 축 결손 판정에 안 들어간다', () => {
-	// 10508 은 keyword·special_status 가 없다. 착영휘도로 축을 받아도
-	// 「E.G.O 없이는 트리거에 안 걸린다」는 그대로여야 한다
+// special_status 는 애초에 restrictScope 밖의 축(keyword 가 못 담는 축)에만 생기므로
+// (위 keywordAxes.has() 가드) 「제한이 special_status 를 깎는지」는 사실상 언제나
+// 「restrictScope 밖이라 안 깎인다」로 귀결된다 — 채널별 좁히기까지 포함한 일반적인
+// scope 동작은 axis-grant.test.ts 의 applyRestrict 직접 테스트가 이미 담당한다.
+test('제한이 restrictScope 밖의 special_status 행은 안 깎는다 — 10916 은 BULLET 을 그대로 갖는다', () => {
+	const rows = buildIdentityAxis(input(), new Meta());
+	// 10916 은 restrict 가 COMBUSTION·VIBRATION 뿐이고 BULLET 은 restrictScope 밖이라
+	// 제한이 안 닿는다 — 「화상·진동으로만」과 「가속탄을 쓴다」는 서로 다른 층이다
+	assert.equal(
+		rows.some((r) => r.identityId === '10916' && r.axisId === 'BULLET' && r.source === 'special_status'),
+		true,
+	);
+});
+
+test('source 어휘가 셋이다 — keyword · special_status · granted', () => {
+	const rows = buildIdentityAxis(input(), new Meta());
+	assert.deepEqual(
+		[...new Set(rows.map((r) => r.source))].sort(),
+		['granted', 'keyword', 'special_status'],
+	);
+});
+
+test('축이 하나도 없는 인격은 결손으로 남는다 — granted 는 안 센다', () => {
 	const meta = new Meta();
 	buildIdentityAxis(input(), meta);
-	assert.equal(meta.gaps.filter((g) => g.entityId === '10508' && g.field === 'axis').length, 1);
+	// 11002 는 keyword 도 special_status 도 granted 도 없다
+	assert.ok(meta.gaps.some((g) => g.entity === 'identity' && g.entityId === '11002' && g.field === 'axis'));
+	// 11001 은 keyword 가 있으므로 결손이 아니다
+	assert.equal(meta.gaps.some((g) => g.entity === 'identity' && g.entityId === '11001'), false);
+	// 11003 은 special_status 만으로도 결손이 아니다
+	assert.equal(meta.gaps.some((g) => g.entity === 'identity' && g.entityId === '11003'), false);
 });
 
-test('저작 표에 있으나 ego 에 없으면 결손으로 남는다', () => {
-	const meta = new Meta();
+test('같은 행이 두 번 나오지 않는다', () => {
 	const i = input();
-	i.ego = i.ego.filter((e) => e.id !== '20509');
+	i.identityKeyword.push({ identityId: '10916', keywordId: 'Combustion' });
+	const rows = buildIdentityAxis(i, new Meta());
+	const keys = rows.map((r) => `${r.identityId}|${r.axisId}|${r.source}|${r.gateKind}|${r.gateRef}`);
+	assert.equal(keys.length, new Set(keys).size);
+});
+
+test('같은 키인데 affects 가 다르면 결손으로 남기고 첫 행을 유지한다 — PK 는 affects 를 안 본다', () => {
+	const i = input();
+	// 11001 은 granted 로 BREATH/both/ego_equipped/20509 를 이미 갖는다(위 input()).
+	// PK(identityId|axisId|source|gateKind|gateRef)는 같고 affects 만 다른 행을 더한다
+	i.granted.push({
+		identityId: '11001', axisId: 'BREATH', affects: 'skill',
+		gateKind: 'ego_equipped', gateRef: '20509', gateMin: null,
+	});
+	const meta = new Meta();
 	const rows = buildIdentityAxis(i, meta);
-	assert.equal(rows.filter((r) => r.source === 'ego_granted').length, 0);
-	assert.equal(meta.gaps.filter((g) => g.entityId === '20509').length, 1);
+	const kept = rows.filter(
+		(r) => r.identityId === '11001' && r.axisId === 'BREATH' && r.source === 'granted',
+	);
+	assert.equal(kept.length, 1, '조용히 접히지 않고 하나만 남아야 한다');
+	assert.equal(kept[0]?.affects, 'both', '먼저 온 행을 유지한다');
+	assert.ok(
+		meta.gaps.some((g) => g.entity === 'identity_axis' && g.field === 'affects_collision'),
+		'충돌을 결손으로 남겨야 한다',
+	);
 });

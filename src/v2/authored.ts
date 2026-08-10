@@ -10,9 +10,16 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from './generated/client.js';
 
+export interface AxisGrantRow {
+	id: string; sourceKind: string; sourceId: string; mode: string;
+	targetKind: string; targetId: string; axisId: string; affects: string;
+	gateKind: string; gateRef: string; gateMin: number | null;
+}
+
 export interface Authored {
 	refException: Array<{ kind: string; key: string; refKind: string; refId: string }>;
 	egoGranted: Array<{ egoId: string; axisId: string }>;
+	axisGrant: AxisGrantRow[];
 }
 
 export interface KnownIds {
@@ -22,13 +29,21 @@ export interface KnownIds {
 }
 
 export async function readAuthored(prisma: PrismaClient): Promise<Authored> {
-	const [refException, egoGranted] = await Promise.all([
+	const [refException, egoGranted, axisGrant] = await Promise.all([
 		prisma.refException.findMany({
 			select: { kind: true, key: true, refKind: true, refId: true },
 		}),
 		prisma.egoGrantedAxis.findMany({ select: { egoId: true, axisId: true } }),
+		prisma.axisGrant.findMany({
+			select: {
+				id: true, sourceKind: true, sourceId: true, mode: true,
+				targetKind: true, targetId: true, axisId: true, affects: true,
+				gateKind: true, gateRef: true, gateMin: true,
+			},
+			orderBy: { id: 'asc' },
+		}),
 	]);
-	return { refException, egoGranted };
+	return { refException, egoGranted, axisGrant };
 }
 
 /**
@@ -63,6 +78,37 @@ export function unknownRefs(a: Authored, known: KnownIds): string[] {
 		}
 	}
 
+	const SOURCE_KINDS = new Set(['passive', 'ego_passive', 'gift', 'system']);
+	const MODES = new Set(['add', 'restrict']);
+	const TARGETS = new Set(['self', 'association', 'unit_keyword']);
+	const AFFECTS = new Set(['tag', 'skill', 'both']);
+	const GATES = new Set(['always', 'ego_equipped', 'gift_held', 'roster_count', 'status_held']);
+
+	for (const g of a.axisGrant) {
+		if (!known.axisIds.has(g.axisId)) {
+			out.push(`axis_grant ${g.id} — axis '${g.axisId}' 가 canonical 에 없다`);
+		}
+		if (!SOURCE_KINDS.has(g.sourceKind)) {
+			out.push(`axis_grant ${g.id} — 모르는 source_kind '${g.sourceKind}'`);
+		}
+		if (!MODES.has(g.mode)) out.push(`axis_grant ${g.id} — 모르는 mode '${g.mode}'`);
+		if (!TARGETS.has(g.targetKind)) out.push(`axis_grant ${g.id} — 모르는 target_kind '${g.targetKind}'`);
+		if (!AFFECTS.has(g.affects)) out.push(`axis_grant ${g.id} — 모르는 affects '${g.affects}'`);
+		if (!GATES.has(g.gateKind)) out.push(`axis_grant ${g.id} — 모르는 gate_kind '${g.gateKind}'`);
+		if (g.targetKind === 'association' && !known.associationIds.has(g.targetId)) {
+			out.push(`axis_grant ${g.id} — association '${g.targetId}' 가 canonical 에 없다`);
+		}
+		if (g.targetKind === 'unit_keyword' && !known.unitKeywordIds.has(g.targetId)) {
+			out.push(`axis_grant ${g.id} — unit_keyword '${g.targetId}' 가 canonical 에 없다`);
+		}
+		if (g.mode === 'restrict' && g.targetKind !== 'self') {
+			out.push(`axis_grant ${g.id} — restrict 는 target_kind='self' 여야 한다`);
+		}
+		if ((g.gateKind === 'roster_count') !== (g.gateMin !== null)) {
+			out.push(`axis_grant ${g.id} — gate_min 은 roster_count 일 때만 있어야 한다`);
+		}
+	}
+
 	return out;
 }
 
@@ -78,6 +124,12 @@ export function authoredDigest(a: Authored): string {
 		.map((e) => `${e.kind} ${e.key} ${e.refKind} ${e.refId}`)
 		.sort();
 	const egos = a.egoGranted.map((g) => `${g.egoId} ${g.axisId}`).sort();
-	const text = `ref_exception\n${refs.join('\n')}\nego_granted_axis\n${egos.join('\n')}\n`;
-	return createHash('sha256').update(text).digest('hex');
+	const h = createHash('sha256');
+	h.update(`ref_exception\n${refs.join('\n')}\nego_granted_axis\n${egos.join('\n')}\n`);
+	for (const g of [...a.axisGrant].sort((x, y) => x.id.localeCompare(y.id))) {
+		h.update(`axis_grant\t${g.id}\t${g.sourceKind}\t${g.sourceId}\t${g.mode}\t` +
+			`${g.targetKind}\t${g.targetId}\t${g.axisId}\t${g.affects}\t` +
+			`${g.gateKind}\t${g.gateRef}\t${g.gateMin ?? ''}\n`);
+	}
+	return h.digest('hex');
 }

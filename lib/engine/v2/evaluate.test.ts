@@ -20,17 +20,17 @@ const SQUAD: Squad = {
 };
 
 const burn = (id: string): Capability =>
-	({ identityId: id, refKind: 'axis', refId: 'COMBUSTION', egoId: '' });
+	({ identityId: id, refKind: 'axis', refId: 'COMBUSTION', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' });
 
 const CAPS: Capability[] = [
 	...['A', 'B', 'C', 'D', 'E'].map(burn),
 	// 대기 인원도 화상이다 — 분모를 틀리면 6으로 세어진다
 	burn('W1'),
 	// 조건부. W2 가 착영휘도를 꼈으므로 유효하다
-	{ identityId: 'W2', refKind: 'axis', refId: 'LACERATION', egoId: '20509' },
+	{ identityId: 'W2', refKind: 'axis', refId: 'LACERATION', gateKind: 'ego_equipped', gateRef: '20509', gateMin: null, affects: 'both' },
 	// A 는 안 꼈으므로 무효여야 한다
-	{ identityId: 'A', refKind: 'axis', refId: 'LACERATION', egoId: '20509' },
-	...['A', 'B', 'C'].map((id) => ({ identityId: id, refKind: 'resonance', refId: 'wrath', egoId: '' })),
+	{ identityId: 'A', refKind: 'axis', refId: 'LACERATION', gateKind: 'ego_equipped', gateRef: '20509', gateMin: null, affects: 'both' },
+	...['A', 'B', 'C'].map((id) => ({ identityId: id, refKind: 'resonance', refId: 'wrath', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' })),
 ];
 
 const REFS = new Map<string, TriggerRef[]>([
@@ -182,7 +182,7 @@ test('하나라도 미충족·확정이면 켜질 수 없다', () => {
 	// 조건 둘: 하나는 충족, 하나는 편성에 없어 확정 미충족
 	const squad: Squad = { roster: [{ identityId: 'A', egoIds: [] }], field: ['A'] };
 	const profile = new Profile(squad, [
-		{ identityId: 'A', refKind: 'sin', refId: 'wrath', egoId: '' },
+		{ identityId: 'A', refKind: 'sin', refId: 'wrath', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
 	const out = evaluateGifts({
 		squad,
@@ -202,7 +202,7 @@ test('하나라도 미충족·확정이면 켜질 수 없다', () => {
 test('미충족이 없으면 켜질 수 있다', () => {
 	const squad: Squad = { roster: [{ identityId: 'A', egoIds: [] }], field: ['A'] };
 	const profile = new Profile(squad, [
-		{ identityId: 'A', refKind: 'sin', refId: 'wrath', egoId: '' },
+		{ identityId: 'A', refKind: 'sin', refId: 'wrath', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
 	const out = evaluateGifts({
 		squad,
@@ -243,7 +243,7 @@ test('자리 조건이 있으면 다른 조건을 그 자리로만 판정한다'
 		field: ['A', 'B', 'C'],
 	};
 	const profile = new Profile(squad, [
-		{ identityId: 'C', refKind: 'axis', refId: 'BURST', egoId: '' },
+		{ identityId: 'C', refKind: 'axis', refId: 'BURST', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
 	const out = evaluateGifts({
 		squad,
@@ -267,7 +267,7 @@ test('자리 조건이 없으면 편성 전체로 판정한다', () => {
 		field: ['A', 'C'],
 	};
 	const profile = new Profile(squad, [
-		{ identityId: 'C', refKind: 'axis', refId: 'BURST', egoId: '' },
+		{ identityId: 'C', refKind: 'axis', refId: 'BURST', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
 	const out = evaluateGifts({
 		squad,

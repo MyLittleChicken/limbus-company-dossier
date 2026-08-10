@@ -4,7 +4,7 @@
 >
 > `lib/engine/vocab.ts` · `lib/engine/dsl.ts` · `prisma/schema.prisma` 를 현재형으로
 > 가리키는 자리(31 · 213 · 244 · 246 · 595행)는 **전부 없는 파일이다.** 그 어휘 판정은
-> `canonical.identity_axis` (628행) · `canonical.status_category` 가 데이터로 갖고 있다.
+> `canonical.identity_axis` (293행) · `canonical.status_category` 가 데이터로 갖고 있다.
 >
 > **4.1 절의 판정 기준이 오히려 더 중요해졌다** — 「①(게임이 붙인 키워드)이 기프트 조건
 > 카운트의 판정 기준이다」는 지금 엔진이 실제로 따르는 규칙이다. 4절 표의 ③(상태에서
