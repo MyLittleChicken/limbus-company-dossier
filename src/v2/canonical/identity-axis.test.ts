@@ -130,3 +130,24 @@ test('같은 행이 두 번 나오지 않는다', () => {
 	const keys = rows.map((r) => `${r.identityId}|${r.axisId}|${r.source}|${r.gateKind}|${r.gateRef}`);
 	assert.equal(keys.length, new Set(keys).size);
 });
+
+test('같은 키인데 affects 가 다르면 결손으로 남기고 첫 행을 유지한다 — PK 는 affects 를 안 본다', () => {
+	const i = input();
+	// 11001 은 granted 로 BREATH/both/ego_equipped/20509 를 이미 갖는다(위 input()).
+	// PK(identityId|axisId|source|gateKind|gateRef)는 같고 affects 만 다른 행을 더한다
+	i.granted.push({
+		identityId: '11001', axisId: 'BREATH', affects: 'skill',
+		gateKind: 'ego_equipped', gateRef: '20509', gateMin: null,
+	});
+	const meta = new Meta();
+	const rows = buildIdentityAxis(i, meta);
+	const kept = rows.filter(
+		(r) => r.identityId === '11001' && r.axisId === 'BREATH' && r.source === 'granted',
+	);
+	assert.equal(kept.length, 1, '조용히 접히지 않고 하나만 남아야 한다');
+	assert.equal(kept[0]?.affects, 'both', '먼저 온 행을 유지한다');
+	assert.ok(
+		meta.gaps.some((g) => g.entity === 'identity_axis' && g.field === 'affects_collision'),
+		'충돌을 결손으로 남겨야 한다',
+	);
+});

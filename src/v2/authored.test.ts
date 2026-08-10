@@ -143,6 +143,22 @@ test('axis_grant — restrict 는 self 여야 한다', () => {
 	assert.match(out[0] as string, /restrict 는 target_kind='self'/);
 });
 
+test('axis_grant — source_kind 어휘 밖이면 잡는다', () => {
+	const a: Authored = {
+		refException: [], egoGranted: [],
+		axisGrant: [{
+			id: 'z:COMBUSTION', sourceKind: 'nope', sourceId: 'z', mode: 'add',
+			targetKind: 'self', targetId: 'z', axisId: 'COMBUSTION',
+			affects: 'both', gateKind: 'always', gateRef: '', gateMin: null,
+		}],
+	};
+	const known = {
+		axisIds: new Set(['COMBUSTION']), unitKeywordIds: new Set<string>(),
+		associationIds: new Set<string>(),
+	};
+	assert.match(unknownRefs(a, known)[0] as string, /모르는 source_kind 'nope'/);
+});
+
 test('axis_grant — gate_min 은 roster_count 일 때만 있다', () => {
 	const a: Authored = {
 		refException: [], egoGranted: [],

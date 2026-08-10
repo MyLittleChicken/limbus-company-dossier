@@ -144,10 +144,12 @@ test('전부 충족 89 · 그중 확정 49 — roster_gated 를 확정으로 세
 	// 6번). 자리 한정 전에는 무기 갈래를 편성 전체로 세어 충족으로 잘못
 	// 잡혔다 — 죽음바라기(9120, 슬롯은 {1,2}로 다르다)와 같은 결의 오판정이다
 	//
-	// 채널(affects) 을 세기 전엔 93·50 이었다. `identity_axis` 의 몇 행이
-	// `affects='skill'`(스킬 취급 전용)인데도 인격 수 조건에 잘못 섞여
-	// 들어가 있었다 — 10104 가 그 예다. 걸러내자 문턱에 걸려 있던 4건이
-	// 「전부 충족」에서 빠졌다.
+	// 93·50 이었던 값이 89·49 로 줄었다. **채널(affects) 필터 탓이 아니다** — 모든
+	// capability 를 `affects: 'both'` 로 강제해도, 모든 게이트를 열어도 여전히
+	// 89·49 였다(재실측, 2026-08-10). 실제 원인은 `identity_axis` 의 `special_status`
+	// 출처 행수가 300 → 13(BULLET 전용)으로 좁혀진 데이터 변화다 — 게임의 「…으로만
+	// 취급됨」을 무너뜨리던 과대 special_status 축이 빠지면서 그 축에 기대던 몇 편성이
+	// 「전부 충족」 문턱에서 떨어졌다.
 	const fired = verdicts.filter((v) => v.grade === 'A' && v.satisfied === v.total);
 	const sure = fired.filter((v) => v.certain === v.total);
 	assert.equal(fired.length, 89);

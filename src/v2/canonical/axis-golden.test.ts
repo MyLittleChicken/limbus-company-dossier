@@ -90,9 +90,16 @@ test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_c
 			                WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id)
 		) x
 	`;
-	// 150 중 116 이 어휘로 닿는다. hit 은 게이트 재설계(Task 6) 전 67 이었는데
-	// 채널 인식 제한이 10104 의 VIBRATION 을 'skill' 로 좁히는 등 태그 층 적중이
-	// 줄어 63 이 됐다(실측, 2026-08-10)
+	// 150 중 116 이 어휘로 닿는다. hit 은 이 PR 이전(옛 `ego_granted_axis` 시절) 67
+	// 이었는데 63 으로 줄었다. **채널(affects) 탓이 아니다** — 이 SQL 은 `affects` 를
+	// 아예 읽지 않고, 채널 좁히기가 걸리는 10104 는 이 SQUAD 에 없다. 실제 원인은
+	// `special_status` 출처가 300 → 13(BULLET 전용)으로 좁혀진 데이터 변화다 —
+	// 10916 은 `Breath` 상태(category=BREATH)를 갖지만 제한(1091603 「화상·진동으로만」)
+	// 이 걸린 인격이라 옛 special_status 경로였다면 과대(BREATH 부여)로 잡혔을
+	// 자리다. 좁히면서 10916 이 BREATH 를 더는 안 갖게 됐고, BREATH 를 가리키는
+	// trigger_ref 가 정확히 4행(`Allies have Poise` · `Allies have Poise Skill` ·
+	// `Poise E.G.O Skill Used` · `Poise Skill Used`)이라 67-63=4 와 실측이 맞아떨어진다
+	// (2026-08-10, DB 대조로 확인)
 	assert.equal(Number(rows[0]?.backed ?? 0n), 116);
 	assert.equal(Number(rows[0]?.hit ?? 0n), 63);
 });

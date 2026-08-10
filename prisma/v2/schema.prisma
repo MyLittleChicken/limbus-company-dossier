@@ -464,11 +464,14 @@ model Axis {
 model IdentityAxis {
   identityId String @map("identity_id")
   axisId     String @map("axis_id")
-  /// keyword  identity_keyword → axis (정본. mj 가 제한을 이미 반영해 담았다)
-  /// granted  app.axis_grant 의 add 행
-  ///
-  /// special_status 는 없앴다 — keyword 의 진상위집합이면서 게임의 제한을
-  /// 무너뜨렸다. 보태는 것 0 · 과대 34짝(2026-08-10 실측)
+  /// keyword         identity_keyword → axis (정본. mj 가 제한을 이미 반영해 담았다)
+  /// special_status   identity_status → status_category (**BULLET 하나만.** keyword
+  ///                  어휘 12종이 축 8종 중 BULLET 을 못 담는다 — 가속탄은 부여
+  ///                  키워드가 아니라 자원 계열이다. 어휘가 표현 못 하는 축에
+  ///                  한해서만 쓴다. 완전히 없애면 BULLET 보유 인격이 13명에서
+  ///                  0명이 된다(2026-08-10 실측). keyword 로 표현되는 나머지
+  ///                  일곱 축에는 여전히 안 쓴다 — 얹으면 과대 34짝이 생긴다)
+  /// granted          app.axis_grant 의 add 행
   source     String
   /// tag · skill · both. keyword 경로는 언제나 both
   affects    String
@@ -2085,7 +2088,7 @@ model EgoGrantedAxis {
 ///
 /// 게임이 「…을 부여하는 인격으로 취급됨」 · 「…으로만 취급됨」이라 말하는 자리다.
 /// 「취급」 문형을 전수로 뽑아(패시브 703 · 에고 패시브 113 · 기프트 793 ·
-/// 에고 스킬 611 → 31행) 축에 해당하는 출처 9건을 저작 17행으로 굳혔다.
+/// 에고 스킬 611 → 31행) 축에 해당하는 출처 10건을 저작 18행으로 굳혔다.
 ///
 /// 축 하나가 한 행이다 — 「화상, 진동으로만 취급」은 두 행이 된다.
 model AxisGrant {

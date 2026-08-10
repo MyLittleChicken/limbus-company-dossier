@@ -28,8 +28,9 @@
  *
  * 그래서 규칙을 좁힌다: **`keyword` 어휘가 표현할 수 없는 축에 한해서만**
  * `special_status` 를 쓴다. 어느 축이 그런지는 코드가 매번 어휘와 대조해 가려낸다
- * (`keywordVocabulary` 를 대문자화해 축과 겹치는 것을 뺀 나머지) — 지금은 BULLET
- * 하나지만, 다음에 axis 가 늘거나 keyword 어휘가 늘면 이 교집합이 자동으로 갱신된다.
+ * (축 전체에서 `restrictScope`—keyword 어휘를 대문자화해 축과 겹치는 것—를 뺀
+ * 나머지) — 지금은 BULLET 하나지만, 다음에 axis 가 늘거나 keyword 어휘가 늘면
+ * 이 교집합이 자동으로 갱신된다.
  * `keyword` 로 표현되는 나머지 일곱 축에는 여전히 `special_status` 를 안 쓴다 —
  * 얹으면 과대 34짝이 생겨(실측) 게임의 「…으로만 취급됨」이 무너진다.
  *
@@ -121,12 +122,26 @@ export function buildIdentityAxis(input: IdentityAxisInput, meta: Meta): Identit
 	const specialStatus = applyRestrict(fromSpecialStatus, input.restrict, input.restrictScope);
 	const granted = applyRestrict(input.granted, input.restrict, input.restrictScope);
 
-	const seen = new Set<string>();
+	// **키는 PK(`identityId|axisId|source|gateKind|gateRef`)와 같고 `affects` 는
+	// 안 들었다.** PK 를 바꾸는 것은 DDL 변경(재적재 위험)이라 이 PR 범위 밖이다.
+	// 대신 같은 키에 `affects` 가 다른 두 행이 들어오면(조용히 하나로 접힐 자리)
+	// 결손으로 남기고 먼저 온 행을 유지한다 — 지금 데이터에선 안 일어난다
+	const seen = new Map<string, string>();
 	const rows: IdentityAxisRow[] = [];
 	const push = (r: GrantedAxisRow, source: string): void => {
 		const key = `${r.identityId}|${r.axisId}|${source}|${r.gateKind}|${r.gateRef}`;
-		if (seen.has(key)) return;
-		seen.add(key);
+		const keptAffects = seen.get(key);
+		if (keptAffects !== undefined) {
+			if (keptAffects !== r.affects) {
+				meta.gap('identity_axis', key, 'affects_collision',
+					`같은 키(identityId|axisId|source|gateKind|gateRef)인데 affects 가 다른 ` +
+					`두 행이 들어왔다 — 먼저 온 '${keptAffects}' 를 남기고 '${r.affects}' 는 ` +
+					`버렸다. PK 가 affects 를 포함하지 않아 조용히 하나로 접힐 수 있는 자리다`,
+					EVIDENCE);
+			}
+			return;
+		}
+		seen.set(key, r.affects);
 		rows.push({ ...r, source });
 	};
 	for (const r of keyword) push(r, 'keyword');
@@ -175,6 +190,19 @@ export function buildIdentityAxis(input: IdentityAxisInput, meta: Meta): Identit
 			'스킬 분류를 바꾸는 효과를 담을 자리가 없다 — 「기본 공격 스킬과 합 가능 반격 스킬이 ' +
 			'충전 횟수를 얻는 스킬로 취급됨」', EVIDENCE);
 	}
+
+	// ── 9282 날개 모양 양초 — 게이트가 논리곱인데 한쪽만 적힌다 ────────────
+	// 원문은 「날개 모양 양초를 보유」 그리고 「새벽 사무소 소속 인격이 3인 이상」
+	// 이다(AND). `gate_kind` 가 행당 하나뿐이라 `roster_count` 만 적었고, 기프트
+	// 보유 조건(gift_held)은 담을 칸이 없다 — 기프트를 뽑지 않아도 DAWN 인원만
+	// 3인을 채우면 축이 붙는다(실측 순증 1짝: 11009 VIBRATION). 게이트를
+	// 배열로 넓히는 것은 기프트 능력 PR 의 몫이라 지금은 결손으로만 남긴다
+	meta.gap('gift', '9282', 'gate_conjunction',
+		'발동 조건이 「날개 모양 양초 보유」 AND 「새벽 사무소 소속 3인 이상」인데 ' +
+		'gate_kind 는 행당 하나뿐이라 roster_count 만 적었다. 기프트를 보유하지 ' +
+		'않아도 편성 인원만 차면 축이 붙는다(실측 순증 1짝: 11009 VIBRATION). ' +
+		'게이트를 배열로 넓히는 것은 기프트 능력 PR 의 몫이다',
+		EVIDENCE);
 
 	// ── coin_token 의 스킬 공급 과대 — 이번 조사에서 새로 알게 된 것 ────────
 	// 키워드 인격 판정은 「그 키워드를 부여/획득하는 공격 스킬 보유」이고 강화·추가·

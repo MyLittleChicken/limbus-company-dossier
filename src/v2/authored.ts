@@ -78,6 +78,7 @@ export function unknownRefs(a: Authored, known: KnownIds): string[] {
 		}
 	}
 
+	const SOURCE_KINDS = new Set(['passive', 'ego_passive', 'gift', 'system']);
 	const MODES = new Set(['add', 'restrict']);
 	const TARGETS = new Set(['self', 'association', 'unit_keyword']);
 	const AFFECTS = new Set(['tag', 'skill', 'both']);
@@ -86,6 +87,9 @@ export function unknownRefs(a: Authored, known: KnownIds): string[] {
 	for (const g of a.axisGrant) {
 		if (!known.axisIds.has(g.axisId)) {
 			out.push(`axis_grant ${g.id} — axis '${g.axisId}' 가 canonical 에 없다`);
+		}
+		if (!SOURCE_KINDS.has(g.sourceKind)) {
+			out.push(`axis_grant ${g.id} — 모르는 source_kind '${g.sourceKind}'`);
 		}
 		if (!MODES.has(g.mode)) out.push(`axis_grant ${g.id} — 모르는 mode '${g.mode}'`);
 		if (!TARGETS.has(g.targetKind)) out.push(`axis_grant ${g.id} — 모르는 target_kind '${g.targetKind}'`);

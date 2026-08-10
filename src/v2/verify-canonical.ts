@@ -151,10 +151,19 @@ async function main(): Promise<void> {
 		//           판정에서 빠진다는 사실을 coin_token 이 구별 못 해 과대 계산이다
 		//           (이번 조사에서 새로 앎, 실측 21건 중 일부의 근거)
 		//         1,159 + 6 = 1,165
+		//   +1    gift.gate_conjunction — 9282 날개 모양 양초. 발동 조건이 「기프트
+		//         보유」 AND 「새벽 사무소 3인 이상」인데 `gate_kind` 가 행당 하나뿐이라
+		//         `roster_count` 만 적었다. 게이트를 배열로 넓히는 것은 기프트 능력
+		//         PR 의 몫이라 결손으로 남긴다(identity-axis.ts, 2026-08-10 전체 검토).
+		//         1,165 + 1 = 1,166
+		//   +0    identity_axis.affects_collision — PK(identityId·axisId·source·
+		//         gateKind·gateRef)가 affects 를 안 봐서 조용히 접힐 수 있는 자리를
+		//         감지하는 결손이다. 지금 데이터(축 부여·제한 저작 18행 전건 대조)엔
+		//         충돌이 없어 0건 — 나지 않을 수 있는 결손이라고 실측 전에 이미 적어 뒀다.
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_165,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,165`,
+			ok: gapTotal + overrideCount === 1_166,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,166`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -858,7 +867,7 @@ async function main(): Promise<void> {
 		eq('trigger_ref', await prisma.triggerRef.count(), 150);
 		eq('effect_ref', await prisma.effectRef.count(), 55);
 		// 293 = keyword 266 + special_status(BULLET 하나) 13 + granted 14(axis-grant 설계).
-		// ego_id·ego_granted 경로는 폐기됐다 — app.axis_grant 17행이 정본이다(ADR-08).
+		// ego_id·ego_granted 경로는 폐기됐다 — app.axis_grant 18행이 정본이다(ADR-08).
 		// special_status 는 keyword 어휘가 못 담는 축(BULLET)만 보강한다. 제한의 사정거리는
 		// keyword 가 표현하는 축까지다(2026-08-10, 사용자 확정) — 「화상, 진동으로만
 		// 취급됨」은 부여 키워드에 대한 말이지 가속탄(자원, 어휘 밖)에 대한 말이 아니라
@@ -957,16 +966,23 @@ async function main(): Promise<void> {
 			detail: `${Number(leaked[0]?.n ?? 0n)} / 0`,
 		});
 
-		// BULLET 을 가진 인격 13명 — 전부 special_status 출처다 (어휘 밖 축이라
-		// keyword 로는 절대 못 얻는다)
-		const bulletHolders = await prisma.identityAxis.findMany({
-			where: { axisId: 'BULLET' },
-			select: { source: true },
+		// special_status 로 온 축 13행 — **축 이름을 하드코딩하지 않는다.** `canonical.keyword`
+		// 를 질의해 「special_status 로 온 축 ∩ 어휘 = ∅」로 잰다(위 leaked 검사와 같은
+		// 방식). 지금은 그 교집합이 비는 유일한 축이 BULLET 이라 결과가 같지만, 어휘가
+		// 늘거나 축이 늘어도 이 검사는 자동으로 따라간다. 행수 단정(13)만 남긴다
+		const specialStatusRows = await prisma.identityAxis.findMany({
+			where: { source: 'special_status' },
+			select: { axisId: true },
 		});
+		const keywordAxisIds = new Set(
+			(await prisma.keyword.findMany({ select: { id: true } })).map((k) => k.id.toUpperCase()),
+		);
+		const specialStatusInVocab = specialStatusRows.filter((r) => keywordAxisIds.has(r.axisId));
 		checks.push({
-			name: 'BULLET 을 가진 인격 13명, 전부 source=special_status',
-			ok: bulletHolders.length === 13 && bulletHolders.every((r) => r.source === 'special_status'),
-			detail: `${bulletHolders.length}명 · ${[...new Set(bulletHolders.map((r) => r.source))].join(',')}`,
+			name: 'special_status 로 온 축 13행 — keyword 어휘와 교집합이 없다',
+			ok: specialStatusRows.length === 13 && specialStatusInVocab.length === 0,
+			detail: `${specialStatusRows.length}행 · 어휘와 겹침 ${specialStatusInVocab.length} · ` +
+				`축 ${[...new Set(specialStatusRows.map((r) => r.axisId))].join(',')}`,
 		});
 
 		// (다) 제한 넷 + 1 의 축 실측 대조 — 게임 문장(넷)과 유저 관측(10104)에서 온
@@ -1519,7 +1535,7 @@ async function main(): Promise<void> {
 			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
 		`;
 		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 8 → 9 는 axis_grant 다
-		// (Task 3, 저작 17행). 저작 사실이 app 으로 내려오면서 늘었다
+		// (Task 3, 저작 18행). 저작 사실이 app 으로 내려오면서 늘었다
 		checks.push({
 			name: 'app 스키마가 섰다',
 			ok: Number(appTables[0]?.n ?? 0n) === 9,
