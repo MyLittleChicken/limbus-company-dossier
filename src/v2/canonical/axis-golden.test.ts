@@ -77,8 +77,10 @@ test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_c
 });
 
 test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가 LACERATION 으로 닿는다', DB, async () => {
+	// egoId 삭제(Task 5) — 최소 수정으로 컴파일만 맞춘다. 이 골든의 실측 재조정은
+	// 다음 태스크 몫이다(task-5-report.md)
 	const rows = await prisma.identityAxis.findMany({
-		where: { identityId: '10208', egoId: '' },
+		where: { identityId: '10208' },
 		select: { axisId: true, source: true },
 	});
 	const axes = [...new Set(rows.map((r) => r.axisId))].sort();

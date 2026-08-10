@@ -838,23 +838,11 @@ async function main(): Promise<void> {
 		eq('axis', await prisma.axis.count(), 8);
 		eq('trigger_ref', await prisma.triggerRef.count(), 150);
 		eq('effect_ref', await prisma.effectRef.count(), 55);
-		// 566 = keyword 266 + special_status 300. 여기에 ego_granted 62 가 더해진다 —
-		// 착영휘도(20509)·엄숙한 애도(20109) 가 수감자 5(15인)·1(16인) 소속이라 (15+16)×2
-		eq('identity_axis', await prisma.identityAxis.count(), 628);
-		eq('identity_axis (ego_granted)',
-			await prisma.identityAxis.count({ where: { source: 'ego_granted' } }), 62);
-
-		// ego_granted 만 ego_id 를 갖는다. 반대로 새면 무조건 축이 되어
-		// 착영휘도를 안 낀 이상까지 출혈 인격이 된다
-		const egoIdLeak = await prisma.$queryRaw<Array<{ n: bigint }>>`
-			SELECT count(*)::bigint AS n FROM canonical.identity_axis
-			WHERE (source = 'ego_granted') <> (ego_id <> '')
-		`;
-		checks.push({
-			name: 'ego_id 는 ego_granted 에만 있다 (0이어야 한다)',
-			ok: Number(egoIdLeak[0]?.n ?? 1n) === 0,
-			detail: `${Number(egoIdLeak[0]?.n ?? 0n)} / 0`,
-		});
+		// 280 = keyword 266 + granted 14(Task 5, axis-grant 설계). ego_id·ego_granted
+		// 경로는 폐기됐다 — app.axis_grant 17행이 정본이다(ADR-08).
+		eq('identity_axis', await prisma.identityAxis.count(), 280);
+		eq('identity_axis (granted)',
+			await prisma.identityAxis.count({ where: { source: 'granted' } }), 14);
 
 		// **소속 트리거가 상태에 걸리면 안 된다.** 이름 매칭에서 실재하는 오매칭이다 —
 		// 'Dawn Office Identities' 가 DawnTeam(Dawn Office) 상태에,
@@ -897,11 +885,10 @@ async function main(): Promise<void> {
 			detail: Object.entries(ed).map(([k, v]) => `${k} ${v}`).join(' · '),
 		});
 
-		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. 홍매화(특수 출혈)가
-		// status_category 로 LACERATION 에 닿는 것이 이 설계의 핵심 발견이다
+		// 골든 표본 — 검계 살수 파우스트(10208)는 출혈·호흡 인격이다. mj 의 keyword 가
+		// 홍매화(특수 출혈)를 이미 반영해 담아 keyword 경로만으로 LACERATION 에 닿는다
 		const faust = await prisma.identityAxis.findMany({
-			// ego_granted 를 뺀다 — 이 골든은 **무조건** 축을 재는 것이다
-			where: { identityId: '10208', NOT: { source: 'ego_granted' } },
+			where: { identityId: '10208' },
 			select: { axisId: true },
 		});
 		const faustAxes = [...new Set(faust.map((r) => r.axisId))].sort().join(' · ');
@@ -911,16 +898,17 @@ async function main(): Promise<void> {
 			detail: faustAxes,
 		});
 
-		// 골든 — 착영휘도(20509)를 낀 이상은 「출혈·호흡을 부여하는 인격으로 취급됨」이다.
-		// 수감자 5 인격 전부가 후보이며, 실제 축 여부는 편성의 E.G.O 선택이 가른다
+		// 골든 — 착영휘도(20509)는 「검계 우두머리 뫼르소(10508) 전용 상시 효과」다.
+		// app.axis_grant 가 대상을 그 인격 하나로 콕 집으므로(ADR-08), 축은 20509 를
+		// 장착했을 때만 서는 조건부 행 하나씩으로 남는다
 		const yisang = await prisma.identityAxis.findMany({
-			where: { identityId: '10501', source: 'ego_granted' },
-			select: { axisId: true, egoId: true },
+			where: { identityId: '10508', source: 'granted' },
+			select: { axisId: true, gateKind: true, gateRef: true },
 		});
-		const yisangAxes = yisang.map((r) => `${r.axisId}:${r.egoId}`).sort().join(' · ');
+		const yisangAxes = yisang.map((r) => `${r.axisId}:${r.gateKind}:${r.gateRef}`).sort().join(' · ');
 		checks.push({
-			name: '10501 이상 + 착영휘도 = BREATH · LACERATION (조건부)',
-			ok: yisangAxes === 'BREATH:20509 · LACERATION:20509',
+			name: '10508 뫼르소 + 착영휘도(20509) = BREATH · LACERATION (ego_equipped 게이트)',
+			ok: yisangAxes === 'BREATH:ego_equipped:20509 · LACERATION:ego_equipped:20509',
 			detail: yisangAxes,
 		});
 
