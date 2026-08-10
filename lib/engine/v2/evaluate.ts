@@ -67,6 +67,8 @@ function judge(
 	gate: Gate,
 	profile: Profile,
 	squad: Squad,
+	/** 이 기프트의 자리 한정. 비어 있으면 편성 전체로 본다 */
+	scope: readonly number[],
 ): { verdict: RefVerdict; have: number; need: number | null } {
 	if (ref.evaluability === 'always') return { verdict: 'satisfied', have: 0, need: null };
 	if (ref.evaluability === 'runtime' || ref.evaluability === 'unclassified') {
@@ -86,8 +88,15 @@ function judge(
 
 	// 공명 — `Any Resonance` 는 refId 가 비어 있어 죄악별 최댓값을 봐야 한다
 	const have = ref.refKind === 'resonance' && ref.refId === ''
-		? Math.max(...SINS.map((s) => profile.count('resonance', s, denom)))
-		: profile.count(ref.refKind, ref.refId, denom);
+		? Math.max(...SINS.map((s) =>
+			scope.length > 0
+				? profile.countInSlots('resonance', s, scope)
+				: profile.count('resonance', s, denom)))
+		// **자리 한정이 있으면 그 자리 인격만 센다**(설계 2.4). 분모 지정보다 우선한다 —
+		// 「1·2번 자리」가 「출전 전체」보다 좁은 한정이기 때문이다
+		: scope.length > 0
+			? profile.countInSlots(ref.refKind, ref.refId, scope)
+			: profile.count(ref.refKind, ref.refId, denom);
 
 	const need = gate.need ?? (ref.refKind === 'resonance' ? RESONANCE_MIN : 1);
 	return { verdict: have >= need ? 'satisfied' : 'unsatisfied', have, need };
@@ -98,12 +107,26 @@ export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
 	const out: GiftVerdict[] = [];
 
 	for (const [giftId, triggerIds] of input.giftTriggers) {
+		/**
+		 * **자리 범위를 먼저 모은다.** 자리 조건은 독립 효과가 아니라 다른 조건에
+		 * 씌우는 한정자다 — 「[편성 1번, 2번 인격 전용 효과] 파열 … 을 부여하는
+		 * 공격 스킬」이 한 문장이기 때문이다.
+		 *
+		 * **이것은 추론이다**(설계 2.5). `gift_effect` 와 `gift_trigger` 를 잇는
+		 * 표가 없어 어느 조건이 어느 효과를 켜는지 데이터가 답하지 않는다.
+		 */
+		const scope: number[] = [];
+		for (const triggerId of triggerIds) {
+			const g = gates.get(`${giftId}|${triggerId}`);
+			if (g !== undefined && g.slots.length > 0) scope.push(...g.slots);
+		}
+
 		const reasons: Reason[] = [];
 		for (const triggerId of triggerIds) {
 			const gate = gates.get(`${giftId}|${triggerId}`)
 				?? { need: null, denominator: null, slots: [] };
 			for (const ref of input.refsByTrigger.get(triggerId) ?? []) {
-				const j = judge(ref, gate, input.profile, input.squad);
+				const j = judge(ref, gate, input.profile, input.squad, scope);
 				reasons.push({
 					triggerId, refKind: ref.refKind, refId: ref.refId,
 					verdict: j.verdict,
@@ -125,8 +148,15 @@ export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
 		// 참조가 하나도 없는 기프트는 C 다 — 「전부 판정 가능」이 아니라 「셀 것이 없다」
 		const grade = reasons.length > 0 && decidable === reasons.length ? 'A'
 			: decidable > 0 ? 'B' : 'C';
+		// 하나라도 확정 미충족이면 이 편성에서 영영 안 켜진다
+		const fireable = !reasons.some(
+			(r) => r.verdict === 'unsatisfied' && r.certainty === 'certain',
+		);
 
-		out.push({ giftId, grade, decidable, satisfied, certain, total: reasons.length, reasons });
+		out.push({
+			giftId, grade, decidable, satisfied, certain,
+			total: reasons.length, reasons, fireable,
+		});
 	}
 	return out;
 }

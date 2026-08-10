@@ -80,6 +80,7 @@ async function cases(): Promise<Case[]> {
 			score: Number(p.score.toFixed(6)),
 			fit: Number(p.fit.toFixed(6)),
 			live: Number(p.live.toFixed(6)),
+			fusion: Number(p.fusion.toFixed(6)),
 			tally: p.tally,
 		})),
 	});

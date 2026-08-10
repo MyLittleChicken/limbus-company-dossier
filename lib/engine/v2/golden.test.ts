@@ -137,9 +137,14 @@ test('실측 등급 — A 146 · B 219 · C 86', DB, () => {
 	assert.deepEqual(n, { A: 146, B: 219, C: 86 });
 });
 
-test('전부 충족 95 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', DB, () => {
+test('전부 충족 93 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', DB, () => {
+	// 자리 한정을 씌우기 전엔 95였다. 9143·9210 이 「편성 4·5번」 자리 조건과
+	// 무기 갈래 조건(각각 pierce · blunt)을 갖는데, 이 골든 편성의 4·5번은
+	// 10916 · 10716 이고 둘 다 그 무기 갈래가 없다(pierce 는 3번, blunt 는
+	// 6번). 자리 한정 전에는 무기 갈래를 편성 전체로 세어 충족으로 잘못
+	// 잡혔다 — 죽음바라기(9120, 슬롯은 {1,2}로 다르다)와 같은 결의 오판정이다
 	const fired = verdicts.filter((v) => v.grade === 'A' && v.satisfied === v.total);
 	const sure = fired.filter((v) => v.certain === v.total);
-	assert.equal(fired.length, 95);
+	assert.equal(fired.length, 93);
 	assert.equal(sure.length, 50);
 });

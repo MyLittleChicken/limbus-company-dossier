@@ -177,3 +177,106 @@ test('roster_gated 불충족은 확정이다 — 편성에 없으면 전투 중�
 	assert.equal(v?.reasons[0]?.verdict, 'unsatisfied');
 	assert.equal(v?.reasons[0]?.certainty, 'certain');
 });
+
+test('하나라도 미충족·확정이면 켜질 수 없다', () => {
+	// 조건 둘: 하나는 충족, 하나는 편성에 없어 확정 미충족
+	const squad: Squad = { roster: [{ identityId: 'A', egoIds: [] }], field: ['A'] };
+	const profile = new Profile(squad, [
+		{ identityId: 'A', refKind: 'sin', refId: 'wrath', egoId: '' },
+	]);
+	const out = evaluateGifts({
+		squad,
+		profile,
+		giftTriggers: new Map([['g1', ['t-sin', 't-axis']]]),
+		refsByTrigger: new Map([
+			['t-sin', [{ triggerId: 't-sin', refKind: 'sin', refId: 'wrath', evaluability: 'roster_gated' }]],
+			['t-axis', [{ triggerId: 't-axis', refKind: 'axis', refId: 'BURST', evaluability: 'roster_gated' }]],
+		]),
+		params: [],
+	});
+	const v = out[0]!;
+	assert.equal(v.satisfied, 1);
+	assert.equal(v.fireable, false);
+});
+
+test('미충족이 없으면 켜질 수 있다', () => {
+	const squad: Squad = { roster: [{ identityId: 'A', egoIds: [] }], field: ['A'] };
+	const profile = new Profile(squad, [
+		{ identityId: 'A', refKind: 'sin', refId: 'wrath', egoId: '' },
+	]);
+	const out = evaluateGifts({
+		squad,
+		profile,
+		giftTriggers: new Map([['g1', ['t-sin']]]),
+		refsByTrigger: new Map([
+			['t-sin', [{ triggerId: 't-sin', refKind: 'sin', refId: 'wrath', evaluability: 'roster_gated' }]],
+		]),
+		params: [],
+	});
+	assert.equal(out[0]!.fireable, true);
+});
+
+test('판정 불가만 있으면 켜질 수 있다 — 모른다와 못 켠다는 다르다', () => {
+	const squad: Squad = { roster: [{ identityId: 'A', egoIds: [] }], field: ['A'] };
+	const profile = new Profile(squad, []);
+	const out = evaluateGifts({
+		squad,
+		profile,
+		giftTriggers: new Map([['g1', ['t-rt']]]),
+		refsByTrigger: new Map([
+			['t-rt', [{ triggerId: 't-rt', refKind: 'axis', refId: 'BURST', evaluability: 'runtime' }]],
+		]),
+		params: [],
+	});
+	assert.equal(out[0]!.reasons[0]!.verdict, 'unknown');
+	assert.equal(out[0]!.fireable, true);
+});
+
+test('자리 조건이 있으면 다른 조건을 그 자리로만 판정한다', () => {
+	// 파열은 3번 자리에만 있다. slots {1,2} 기프트는 켜질 수 없어야 한다
+	const squad: Squad = {
+		roster: [
+			{ identityId: 'A', egoIds: [] },
+			{ identityId: 'B', egoIds: [] },
+			{ identityId: 'C', egoIds: [] },
+		],
+		field: ['A', 'B', 'C'],
+	};
+	const profile = new Profile(squad, [
+		{ identityId: 'C', refKind: 'axis', refId: 'BURST', egoId: '' },
+	]);
+	const out = evaluateGifts({
+		squad,
+		profile,
+		giftTriggers: new Map([['g1', ['t-slot', 't-axis']]]),
+		refsByTrigger: new Map([
+			['t-slot', [{ triggerId: 't-slot', refKind: 'deployment', refId: '', evaluability: 'roster_gated' }]],
+			['t-axis', [{ triggerId: 't-axis', refKind: 'axis', refId: 'BURST', evaluability: 'roster_gated' }]],
+		]),
+		params: [{ giftId: 'g1', triggerId: 't-slot', kind: 'slot', tier: 0, value: '', slots: [1, 2] }],
+	});
+	const v = out[0]!;
+	const axis = v.reasons.find((r) => r.refKind === 'axis')!;
+	assert.equal(axis.verdict, 'unsatisfied');
+	assert.equal(v.fireable, false);
+});
+
+test('자리 조건이 없으면 편성 전체로 판정한다', () => {
+	const squad: Squad = {
+		roster: [{ identityId: 'A', egoIds: [] }, { identityId: 'C', egoIds: [] }],
+		field: ['A', 'C'],
+	};
+	const profile = new Profile(squad, [
+		{ identityId: 'C', refKind: 'axis', refId: 'BURST', egoId: '' },
+	]);
+	const out = evaluateGifts({
+		squad,
+		profile,
+		giftTriggers: new Map([['g1', ['t-axis']]]),
+		refsByTrigger: new Map([
+			['t-axis', [{ triggerId: 't-axis', refKind: 'axis', refId: 'BURST', evaluability: 'roster_gated' }]],
+		]),
+		params: [],
+	});
+	assert.equal(out[0]!.reasons[0]!.verdict, 'satisfied');
+});

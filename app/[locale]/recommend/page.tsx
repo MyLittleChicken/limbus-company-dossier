@@ -6,6 +6,7 @@ import { UI } from '@/lib/ui-text';
 import { HWAJIN_DECK, recommendForDeck } from '@/lib/queries/canonical/recommend';
 import { one, type SearchParams } from '@/lib/queries/shared';
 import { Nothing, Panel, SecLabel } from '@/components/ui';
+import { GiftEvidence } from '@/components/gift-evidence';
 
 /**
  * 추천 슬라이스.
@@ -13,10 +14,11 @@ import { Nothing, Panel, SecLabel } from '@/components/ui';
  * **v2 엔진이 실데이터 위에서 도는지 보이는 창이다.** 제품 표면이 아니다 — 런 상태
  * 입력도 없고 덱도 고정이다. 층과 보유 기프트만 주소로 받는다.
  *
- * **순위를 매긴다.** 점수 = 적합도 × 켜짐이다. 적합도는 이 팩에서 하나 뽑으면 내 덱
- * 축에 얼마나 기여하나이고, 켜짐은 이 팩 기프트의 발동 조건 중 몇 %가 내 편성에서 사나다.
- * **정렬과 점수는 질의(`recommendForDeck`)가 계산해서 낸다 — 화면은 표시만 하고
- * 다시 계산하지 않는다.**
+ * **순위를 매긴다.** 점수 = (적합도 + 합성 도달) × 켜짐이다. 적합도는 이 팩에서
+ * 하나 뽑으면 내 덱 축에 얼마나 기여하나이고, 합성 도달은 이 팩의 기프트로 합성
+ * 재료를 얼마나 채우나이며, 켜짐은 이 팩 기프트의 발동 조건 중 몇 %가 내 편성에서
+ * 사나다. **정렬과 점수는 질의(`recommendForDeck`)가 계산해서 낸다 — 화면은 표시만
+ * 하고 다시 계산하지 않는다.**
  *
  * 축을 하나도 공급하지 않는 편성이면 적합도가 전부 0 이라 순서가 무의미하다.
  * 그럴 때는 `rankable` 이 false 로 오고, 순위 번호와 점수를 안 붙인 채 그 사실을
@@ -91,8 +93,8 @@ export default async function RecommendPage({
 
 			<p className="lede">
 				{ko
-					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩 점수는 「이 팩이 내 덱 축과 맞는 정도」 × 「이 팩 기프트의 발동 조건 중 실제로 켜지는 비율」이다. 이미 보유한 기프트는 후보에서 빠지고, 대신 다른 기프트를 켜는 연쇄로 센다.'
-					: 'A slice showing the v2 engine running on canonical data. A pack score is how well the pack matches the deck axes, times the share of its trigger conditions that actually fire. Owned gifts leave the candidate pool and count instead as chain enablers.'}
+					? 'v2 추천 엔진이 캐노니컬 위에서 도는지 보이는 화면이다. 팩 점수는 「이 팩에서 직접 얻는 것」과 「합성으로 얻는 것」을 더한 뒤, 그것이 내 편성에서 실제로 켜지는 비율을 곱한 값이다. 이미 보유한 기프트는 후보에서 빠지고, 대신 다른 기프트를 켜는 연쇄로 센다.'
+					: 'A slice showing the v2 engine running on canonical data. A pack score adds what this pack yields directly to what it yields through fusion, then multiplies by the share of trigger conditions that actually fire in this squad. Owned gifts leave the candidate pool and count instead as chain enablers.'}
 			</p>
 
 			<div className="filters">
@@ -149,20 +151,35 @@ export default async function RecommendPage({
 										{rec.rankable && (
 											<span className="card-meta">
 												{ko
-													? `${p.score.toFixed(3)} — 적합 ${p.fit.toFixed(3)} × 켜짐 ${p.live.toFixed(3)}`
-													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} × live ${p.live.toFixed(3)}`}
+													? `${p.score.toFixed(3)} — 적합 ${p.fit.toFixed(3)} + 합성 ${p.fusion.toFixed(3)} × 켜짐 ${p.live.toFixed(3)}`
+													: `${p.score.toFixed(3)} — fit ${p.fit.toFixed(3)} + fusion ${p.fusion.toFixed(3)} × live ${p.live.toFixed(3)}`}
 											</span>
 										)}
-										{p.tally.A === 0 ? (
-											<Nothing kind="absent">
-												{ko ? '이 편성이 켜는 기프트가 없다' : 'nothing this squad turns on'}
-											</Nothing>
-										) : (
-											<ul className="comp">
-												{p.gifts
-													.filter((g) => g.grade === 'A')
-													.slice(0, 5)
-													.map((g) => (
+										{/*
+										 * 등급 · fireable · owned 는 서로 다른 질문에 답한다 — 등급은
+										 * 「얼마나 판정 가능한가」, fireable 은 「이 편성에서 켜질 수
+										 * 있나」, owned 는 「이미 갖고 있나」다. 점수의 후보 규칙은
+										 * `!owned && fireable` 인데(score.ts `scorePack` 의 `pool`),
+										 * 화면이 이 셋 중 하나라도 덜 보면 점수가 뺀 것을 화면이 다시
+										 * 보여주는 구멍이 생긴다 — 실제로 fireable 을 빼먹었을 때(등급
+										 * A 인 죽음바라기가 미리보기에 떴다) 한 번, owned 를 빼먹었을
+										 * 때(이미 가진 기프트가 「이 팩의 볼거리」로 떴다) 또 한 번,
+										 * 같은 자리에서 두 번 샜다. 그래서 여기서는 점수의 후보 규칙과
+										 * 똑같이 셋을 다 본다 — 등급 A 이고, fireable 이고, owned 가
+										 * 아닌 것만 미리보기에 올린다. tally.A 는 전량을 세는 그대로
+										 * 두고(모달이 그 차이를 설명한다), 미리보기만 후보 규칙으로 좁힌다.
+										 */}
+										{(() => {
+											const shown = p.gifts
+												.filter((g) => g.grade === 'A' && g.fireable && !g.owned)
+												.slice(0, 5);
+											return shown.length === 0 ? (
+												<Nothing kind="absent">
+													{ko ? '이 편성이 켜는 기프트가 없다' : 'nothing this squad turns on'}
+												</Nothing>
+											) : (
+												<ul className="comp">
+													{shown.map((g) => (
 														<li key={g.id}>
 															<span className="comp-k">{g.name ?? String(g.id)}</span>
 															<span className="comp-v">
@@ -181,8 +198,16 @@ export default async function RecommendPage({
 															</span>
 														</li>
 													))}
-											</ul>
-										)}
+												</ul>
+											);
+										})()}
+										{/* 계측기 — 상위 5만으론 왜 이 순위인지 검증할 수 없다. 전체 근거를 모달로 낸다(설계 7절) */}
+										<GiftEvidence
+											packName={p.name ?? p.id}
+											gifts={p.gifts}
+											label={ko ? `… 전체 ${p.gifts.length}개 근거` : `… all ${p.gifts.length}`}
+											ko={ko}
+										/>
 									</li>
 								))}
 							</ul>

@@ -76,6 +76,8 @@ test('편성으로 이미 충족된 참조는 사슬에서 뺀다', () => {
 			triggerId: 't', refKind: 'axis', refId: 'SINKING',
 			verdict: 'satisfied', certainty: 'certain', have: 5, need: 5, denominator: 'field',
 		}],
+		// 확정 미충족이 없으므로 켜질 수 있다
+		fireable: true,
 	};
 	i.verdicts = [v];
 	// mid 는 이미 켜져 있으므로 사슬이 줄 것이 없다. far 도 따라서 안 나온다
