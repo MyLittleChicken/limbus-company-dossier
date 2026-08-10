@@ -42,7 +42,9 @@ export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> 
 		await Promise.all([
 			prisma.$queryRaw<Capability[]>`
 				SELECT identity_id AS "identityId", ref_kind AS "refKind",
-				       ref_id AS "refId", ego_id AS "egoId"
+				       ref_id AS "refId", gate_kind AS "gateKind",
+				       gate_ref AS "gateRef", gate_min AS "gateMin",
+				       affects AS "affects"
 				FROM canonical.v_identity_capability
 			`,
 			prisma.triggerRef.findMany({

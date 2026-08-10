@@ -137,14 +137,29 @@ test('실측 등급 — A 146 · B 219 · C 86', DB, () => {
 	assert.deepEqual(n, { A: 146, B: 219, C: 86 });
 });
 
-test('전부 충족 93 · 그중 확정 50 — roster_gated 를 확정으로 세면 과대다', DB, () => {
+test('전부 충족 89 · 그중 확정 49 — roster_gated 를 확정으로 세면 과대다', DB, () => {
 	// 자리 한정을 씌우기 전엔 95였다. 9143·9210 이 「편성 4·5번」 자리 조건과
 	// 무기 갈래 조건(각각 pierce · blunt)을 갖는데, 이 골든 편성의 4·5번은
 	// 10916 · 10716 이고 둘 다 그 무기 갈래가 없다(pierce 는 3번, blunt 는
 	// 6번). 자리 한정 전에는 무기 갈래를 편성 전체로 세어 충족으로 잘못
 	// 잡혔다 — 죽음바라기(9120, 슬롯은 {1,2}로 다르다)와 같은 결의 오판정이다
+	//
+	// 채널(affects) 을 세기 전엔 93·50 이었다. `identity_axis` 의 몇 행이
+	// `affects='skill'`(스킬 취급 전용)인데도 인격 수 조건에 잘못 섞여
+	// 들어가 있었다 — 10104 가 그 예다. 걸러내자 문턱에 걸려 있던 4건이
+	// 「전부 충족」에서 빠졌다.
 	const fired = verdicts.filter((v) => v.grade === 'A' && v.satisfied === v.total);
 	const sure = fired.filter((v) => v.certain === v.total);
-	assert.equal(fired.length, 93);
-	assert.equal(sure.length, 50);
+	assert.equal(fired.length, 89);
+	assert.equal(sure.length, 49);
+});
+
+test('10104(개화 E.G.O::동백 이상) 만 넣은 편성 — 침잠 인격이지 진동 인격이 아니다', DB, () => {
+	// VIBRATION 은 이 인격에서 affects='skill' 이다(유저가 발견한 미문서화
+	// 예외 — 「진동 인격 5인」조건에는 안 들지만 「진동 부여 스킬」조건은
+	// 받는다). SINKING 은 affects='both' 라 인격 취급 그대로다
+	const squad: Squad = { roster: [{ identityId: '10104', egoIds: [] }], field: ['10104'] };
+	const profile = new Profile(squad, data.capabilities);
+	assert.equal(profile.count('axis', 'SINKING', 'field'), 1);
+	assert.equal(profile.count('axis', 'VIBRATION', 'field'), 0);
 });

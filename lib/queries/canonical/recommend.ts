@@ -131,7 +131,10 @@ export async function recommendForDeck(
 	const field = (deployed.length > 0 ? deployed : identityIds).map(String);
 	const squad: Squad = { roster, field };
 
-	const profile = new Profile(squad, data.capabilities);
+	// gift_held 게이트를 판정하려면 보유 기프트가 필요하다. chain() 에 넘기는
+	// 것과 같은 값이다 — 둘이 갈리면 「켜진다」가 두 가지 답을 낸다
+	const heldGiftIds = ownedIds.map(String);
+	const profile = new Profile(squad, data.capabilities, heldGiftIds);
 	const verdicts = evaluateGifts({
 		squad,
 		profile,
@@ -142,7 +145,7 @@ export async function recommendForDeck(
 	const byGift = new Map(verdicts.map((v) => [v.giftId, v]));
 
 	const links = chain({
-		heldGiftIds: ownedIds.map(String),
+		heldGiftIds,
 		giftEffects: data.giftEffects,
 		effectRefs: data.effectRefs,
 		giftRefs: data.giftRefs,

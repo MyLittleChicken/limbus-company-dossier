@@ -23,28 +23,33 @@
 -- 행은 그 조건(에고 장착 · 기프트 보유 · 로스터 인원 · 상태 보유)이 실제로
 -- 충족됐을 때만 유효하므로 소비자가 걸러야 한다. 무조건 세면 조건을
 -- 충족하지 않은 이상까지 해당 축의 인격이 된다.
+--
+-- identity_axis 갈래만 `affects` 도 실제 값을 갖는다 — 인격 취급(tag)과
+-- 스킬 취급(skill)이 갈리는 자리가 거기뿐이다(예: 10104는 VIBRATION이
+-- skill이라 「진동 인격 5인」조건에는 안 들지만 「진동 부여 스킬」조건은
+-- 받는다). 나머지 갈래는 그 구분이 없으므로 `both` 로 둔다.
 CREATE OR REPLACE VIEW canonical.v_identity_capability AS
         SELECT identity_id, 'axis'::text AS ref_kind, axis_id AS ref_id,
-               gate_kind, gate_ref, gate_min
+               gate_kind, gate_ref, gate_min, affects
           FROM canonical.identity_axis
   UNION SELECT identity_id, 'association', association_id,
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_association
   UNION SELECT identity_id, 'unit_keyword', keyword,
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_unit_keyword
   UNION SELECT isk.identity_id, 'sin', lower(s.sin::text),
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_skill isk
           JOIN canonical.skill s ON s.id = isk.skill_id
          WHERE s.sin IS NOT NULL
   UNION SELECT isk.identity_id, 'attack_type', lower(s.attack_type::text),
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_skill isk
           JOIN canonical.skill s ON s.id = isk.skill_id
          WHERE s.attack_type IS NOT NULL
   UNION SELECT isk.identity_id, 'skill_kind', lower(s.kind::text),
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_skill isk
           JOIN canonical.skill s ON s.id = isk.skill_id
          WHERE s.kind IS NOT NULL
@@ -54,7 +59,7 @@ CREATE OR REPLACE VIEW canonical.v_identity_capability AS
   -- `Any Resonance` · `Any Absolute Resonance` 둘은 ref_id 가 비어 있다 —
   -- 죄악별 수의 **최댓값**을 봐야 해서 이 조인으로는 안 닿는다. 평가기 몫이다.
   UNION SELECT isk.identity_id, 'resonance', lower(s.sin::text),
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_skill isk
           JOIN canonical.skill s ON s.id = isk.skill_id
          WHERE s.sin IS NOT NULL AND isk.role = 'attack'
@@ -62,12 +67,12 @@ CREATE OR REPLACE VIEW canonical.v_identity_capability AS
   -- unbreakable/normal 이라 다른 축이다
   UNION SELECT isk.identity_id, 'coin',
                CASE WHEN ss.coin_value > 0 THEN 'plus' ELSE 'minus' END,
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_skill isk
           JOIN canonical.skill_stage ss ON ss.skill_id = isk.skill_id
          WHERE ss.coin_value IS NOT NULL AND ss.coin_value <> 0
   UNION SELECT isk.identity_id, 'coin', 'single',
-               'always'::text, ''::text, NULL::integer
+               'always'::text, ''::text, NULL::integer, 'both'::text
           FROM canonical.identity_skill isk
           JOIN (SELECT skill_id, uptie FROM canonical.skill_coin
                  WHERE locale = 'ko' GROUP BY 1, 2 HAVING count(*) = 1) c
