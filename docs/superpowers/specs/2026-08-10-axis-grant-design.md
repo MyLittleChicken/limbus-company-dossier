@@ -97,6 +97,24 @@ keyword 가 없는 5인격의 special_status 짝   0
 20509 착영휘도     → BREATH · LACERATION
 ```
 
+**게다가 그 4행이 대상을 너무 넓게 잡았다.** E.G.O 는 수감자에 딸리므로 빌더가 그 수감자의 인격 전부로 폈다 — 20109 가 이상 16인격, 20509 가 뫼르소 15인격, 합쳐 62행. 그런데 원문은 인격 하나를 콕 집는다.
+
+```
+2010911  [로보토미 E.G.O::엄숙한 애도 이상 전용 상시 효과]
+           이 인격은 진동, 침잠을 부여하는 인격으로 취급됨
+2050911  [검계 우두머리 뫼르소 전용 상시 효과]
+           이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨
+```
+
+「…전용」이다. 10110(이상 · 로보토미 E.G.O:: 엄숙한 애도)과 10508(뫼르소 · 검계 우두머리) 하나씩이다. **62행 중 58행이 과대였다.** 새 모형은 `targetKind='self'` 에 그 인격 id 를 적고 `gateKind='ego_equipped'` 로 장착 조건을 건다 — 대상과 조건이 서로 다른 칸이라 둘 다 정확히 적힌다.
+
+각 인격의 기본 축과 견주면 E.G.O 가 무엇을 더하는지가 드러난다.
+
+```
+10110  keyword = Sinking   → 20109 를 끼면 VIBRATION 이 는다
+10508  keyword = Breath    → 20509 를 끼면 LACERATION 이 는다
+```
+
 같은 일을 하는 다른 출처가 더 있는데 표현할 자리가 없다. 전수로 뽑았다(`취급` 문형, ko).
 
 ```
@@ -263,8 +281,8 @@ gate 충족
   1110902  11109      LACERATION
 
 부여 · E.G.O 장착 · 출처 2건 → 4행
-  2010911  ego_passive 20109  SINKING VIBRATION    gate=ego_equipped:20109  affects=both
-  2050911  ego_passive 20509  BREATH LACERATION    gate=ego_equipped:20509  affects=both
+  2010911  target=10110  SINKING VIBRATION   gate=ego_equipped:20109  affects=both
+  2050911  target=10508  BREATH LACERATION   gate=ego_equipped:20509  affects=both
 
 부여 · 그 밖의 조건 · 출처 3건 → 6행
   1081402  passive     COMBUSTION LACERATION  gate=status_held:열선     affects=both
@@ -348,10 +366,11 @@ identity_axis 짝이 266 + granted 분이다 (지금 300 에서 special_status 3
      tag 공급과 skill 공급 **양쪽에서** 0 이어야 한다
      지금은 유효로 판정한다 — 되돌리면 실패해야 한다
 
-덱 C  E.G.O 장착 대조
-  20509 착영휘도를 낀 뫼르소 → BREATH · LACERATION 이 생긴다
-  안 낀 같은 편성        → 안 생긴다
-     gate_kind='ego_equipped' 가 실제로 사는지 본다
+덱 C  E.G.O 장착 대조 — 10508 검계 우두머리 뫼르소
+  20509 착영휘도를 끼면  → LACERATION 이 생긴다
+  안 끼면               → 안 생긴다 (BREATH 는 keyword 라 양쪽 다 있다)
+  같은 E.G.O 를 낀 다른 뫼르소 인격(10512) → 안 생긴다
+     2050911 은 「검계 우두머리 뫼르소 전용」이다. 수감자 전체가 아니다
 ```
 
 **되돌려 확인한다.** 골든이 자기가 존재하는 이유인 버그를 못 잡은 전례가 있다.

@@ -292,29 +292,33 @@ const AXIS_GRANT = [
 	},
 
 	// ── E.G.O 장착 부여 2건 · 4행 ────────────────────────────────
+	// **인격 전용이다.** 원문이 「…전용 상시 효과」라 못 박는다. 폐기하는
+	// app.ego_granted_axis 는 이것을 그 E.G.O 수감자의 인격 전부로 폈고
+	// (20109 → 이상 16인격 · 20509 → 뫼르소 15인격 = 62행) 그중 58행이 과대였다.
+	// 대상(targetId)과 조건(gateKind)이 서로 다른 칸이라 둘 다 정확히 적힌다
 	{
 		id: '2010911:SINKING', sourceKind: 'ego_passive', sourceId: '2010911', mode: 'add',
-		targetKind: 'self', targetId: '', axisId: 'SINKING', affects: 'both',
+		targetKind: 'self', targetId: '10110', axisId: 'SINKING', affects: 'both',
 		gateKind: 'ego_equipped', gateRef: '20109', gateMin: null,
-		note: '엄숙한 애도 — 「이 인격은 진동, 침잠을 부여하는 인격으로 취급됨」',
+		note: '엄숙한 애도 — 「[로보토미 E.G.O::엄숙한 애도 이상 전용 상시 효과] … 이 인격은 진동, 침잠을 부여하는 인격으로 취급됨」. 10110 은 keyword 가 Sinking 뿐이라 이 효과로 진동이 는다',
 	},
 	{
 		id: '2010911:VIBRATION', sourceKind: 'ego_passive', sourceId: '2010911', mode: 'add',
-		targetKind: 'self', targetId: '', axisId: 'VIBRATION', affects: 'both',
+		targetKind: 'self', targetId: '10110', axisId: 'VIBRATION', affects: 'both',
 		gateKind: 'ego_equipped', gateRef: '20109', gateMin: null,
-		note: '엄숙한 애도 — 「이 인격은 진동, 침잠을 부여하는 인격으로 취급됨」',
+		note: '엄숙한 애도 — 「[로보토미 E.G.O::엄숙한 애도 이상 전용 상시 효과] … 이 인격은 진동, 침잠을 부여하는 인격으로 취급됨」',
 	},
 	{
 		id: '2050911:BREATH', sourceKind: 'ego_passive', sourceId: '2050911', mode: 'add',
-		targetKind: 'self', targetId: '', axisId: 'BREATH', affects: 'both',
+		targetKind: 'self', targetId: '10508', axisId: 'BREATH', affects: 'both',
 		gateKind: 'ego_equipped', gateRef: '20509', gateMin: null,
-		note: '착영휘도 — 「이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」',
+		note: '착영휘도 — 「[검계 우두머리 뫼르소 전용 상시 효과] … 이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」. 10508 은 keyword 에 Breath 가 이미 있다',
 	},
 	{
 		id: '2050911:LACERATION', sourceKind: 'ego_passive', sourceId: '2050911', mode: 'add',
-		targetKind: 'self', targetId: '', axisId: 'LACERATION', affects: 'both',
+		targetKind: 'self', targetId: '10508', axisId: 'LACERATION', affects: 'both',
 		gateKind: 'ego_equipped', gateRef: '20509', gateMin: null,
-		note: '착영휘도 — 「이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」',
+		note: '착영휘도 — 「[검계 우두머리 뫼르소 전용 상시 효과] … 이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」. 10508 은 keyword 가 Breath 뿐이라 이 효과로 출혈이 는다',
 	},
 
 	// ── 상태 조건 부여 2건 · 4행 · 스킬 취급만 ───────────────────
@@ -534,9 +538,7 @@ git commit -m "feat(data): 축 부여·제한 저작 17행 — 출처 9건"
 export interface AxisGrantInput {
 	axisGrant: AxisGrantRow[];
 	axisIds: string[];
-	/** 인격 id 와 그 수감자. E.G.O 는 수감자에 딸리므로 장착 후보를 여기서 편다 */
-	identity: Array<{ id: string; sinnerId: number }>;
-	ego: Array<{ id: string; sinnerId: number }>;
+	identityIds: string[];
 	identityAssociation: Array<{ identityId: string; associationId: string }>;
 	identityUnitKeyword: Array<{ identityId: string; keyword: string }>;
 }
@@ -576,24 +578,26 @@ function input(): AxisGrantInput {
 			{ id: '9282:VIBRATION', sourceKind: 'gift', sourceId: '9282', mode: 'add',
 				targetKind: 'association', targetId: 'DAWN', axisId: 'VIBRATION', affects: 'both',
 				gateKind: 'roster_count', gateRef: 'DAWN', gateMin: 3 },
-			// 부여 — self 인데 targetId 가 비어 있다(에고 장착형).
-			// 그 E.G.O 수감자(5)의 인격만 후보가 되어야 한다
+			// 부여 — 인격 하나 전용이면서 E.G.O 장착이 조건이다.
+			// 10916 을 대상으로 두어 제한이 부여를 이기는지 본다
 			{ id: '2050911:BREATH', sourceKind: 'ego_passive', sourceId: '2050911', mode: 'add',
-				targetKind: 'self', targetId: '', axisId: 'BREATH', affects: 'both',
+				targetKind: 'self', targetId: '10916', axisId: 'BREATH', affects: 'both',
+				gateKind: 'ego_equipped', gateRef: '20509', gateMin: null },
+			// 같은 조건인데 제한이 없는 인격 — 살아남아야 한다
+			{ id: '2050911:LACERATION', sourceKind: 'ego_passive', sourceId: '2050911', mode: 'add',
+				targetKind: 'self', targetId: '11001', axisId: 'LACERATION', affects: 'both',
 				gateKind: 'ego_equipped', gateRef: '20509', gateMin: null },
 			// 축이 아닌 것 — 조용히 버리지 않고 결손으로 남아야 한다
 			{ id: 'zz:NOT_AN_AXIS', sourceKind: 'passive', sourceId: 'zz', mode: 'add',
 				targetKind: 'self', targetId: '10916', axisId: 'NOT_AN_AXIS', affects: 'both',
 				gateKind: 'always', gateRef: '', gateMin: null },
+			// self 인데 대상이 없다 — 결손으로 남고 버려져야 한다
+			{ id: 'ww:BREATH', sourceKind: 'passive', sourceId: 'ww', mode: 'add',
+				targetKind: 'self', targetId: '', axisId: 'BREATH', affects: 'both',
+				gateKind: 'always', gateRef: '', gateMin: null },
 		],
 		axisIds: ['COMBUSTION', 'VIBRATION', 'BREATH', 'LACERATION'],
-		// 10916·11001 은 수감자 5, 11002 는 9. 20509 는 수감자 5 의 E.G.O 다
-		identity: [
-			{ id: '10916', sinnerId: 5 },
-			{ id: '11001', sinnerId: 5 },
-			{ id: '11002', sinnerId: 9 },
-		],
-		ego: [{ id: '20509', sinnerId: 5 }],
+		identityIds: ['10916', '11001', '11002'],
 		identityAssociation: [
 			{ identityId: '11001', associationId: 'DAWN' },
 			{ identityId: '11002', associationId: 'DAWN' },
@@ -618,11 +622,12 @@ test('소속 단위 부여는 그 소속 인격 전부로 펴진다', () => {
 	assert.equal(dawn[0].gateMin, 3);
 });
 
-test('E.G.O 장착형은 그 수감자의 인격만 후보가 된다', () => {
+test('E.G.O 장착형은 적힌 인격 하나에만 걸린다', () => {
 	const { granted } = buildAxisGrant(input(), new Meta());
 	const ego = granted.filter((g) => g.gateRef === '20509');
-	// 11002 는 수감자 9 라 20509 를 낄 수 없다. 10916 은 후보였으나 제한이 지운다
-	assert.deepEqual(ego.map((g) => g.identityId).sort(), ['11001']);
+	// 10916 도 후보였으나 제한이 지운다. 11001 만 남는다
+	assert.deepEqual(ego.map((g) => g.identityId), ['11001']);
+	assert.equal(ego[0].gateKind, 'ego_equipped');
 });
 
 test('제한은 부여보다 세다 — 제한 밖의 축은 granted 에서도 빠진다', () => {
@@ -631,13 +636,11 @@ test('제한은 부여보다 세다 — 제한 밖의 축은 granted 에서도 �
 	assert.equal(granted.some((g) => g.identityId === '10916' && g.axisId === 'BREATH'), false);
 });
 
-test('E.G.O 가 실물에 없으면 던지지 않고 결손으로 남는다', () => {
-	const i = input();
-	i.ego = [];
+test("target_kind='self' 인데 대상이 없으면 결손으로 남고 버려진다", () => {
 	const meta = new Meta();
-	const { granted } = buildAxisGrant(i, meta);
-	assert.equal(granted.some((g) => g.gateRef === '20509'), false);
-	assert.ok(meta.gaps.some((g) => g.entityId === '2050911:BREATH' && g.field === 'gate_ref'));
+	const { granted } = buildAxisGrant(input(), meta);
+	assert.equal(granted.some((g) => g.axisId === 'BREATH' && g.gateKind === 'always'), false);
+	assert.ok(meta.gaps.some((g) => g.entityId === 'ww:BREATH' && g.field === 'target_id'));
 });
 
 test('모르는 축은 조용히 버리지 않고 결손으로 남는다', () => {
@@ -688,8 +691,7 @@ const EVIDENCE = 'docs/superpowers/specs/2026-08-10-axis-grant-design.md';
 export interface AxisGrantInput {
 	axisGrant: AxisGrantRow[];
 	axisIds: string[];
-	identity: Array<{ id: string; sinnerId: number }>;
-	ego: Array<{ id: string; sinnerId: number }>;
+	identityIds: string[];
 	identityAssociation: Array<{ identityId: string; associationId: string }>;
 	identityUnitKeyword: Array<{ identityId: string; keyword: string }>;
 }
@@ -713,11 +715,14 @@ export interface AxisRestrictRow {
 /**
  * 저작 한 행이 어느 인격들에 걸리는가.
  *
- * `targetKind='self'` 이면서 `targetId` 가 빈 것은 E.G.O 장착형이다.
- * **전 인격이 아니라 그 E.G.O 를 낄 수 있는 인격만** 후보다 — E.G.O 는
- * 수감자에 딸리므로 같은 수감자의 인격 전부가 후보이고, 실제로 끼는지는
- * 게이트가 정한다. 여기서 수감자로 좁히지 않으면 184 인격 전부에 행이 생겨
- * 편성에 없는 인격이 축을 갖는 것처럼 보인다.
+ * **대상과 조건은 다른 칸이다.** 2050911 은 「[검계 우두머리 뫼르소 전용 상시
+ * 효과] … 이 인격은 출혈, 호흡을 부여하는 인격으로 취급됨」이라 말한다 —
+ * 대상은 10508 하나이고, 조건은 「20509 를 장착했는가」다. 폐기하는
+ * `app.ego_granted_axis` 는 이 둘을 구별하지 못해 E.G.O 수감자의 인격 전부로
+ * 폈고 62행 중 58행이 과대였다.
+ *
+ * 그래서 `targetKind='self'` 이면 `targetId` 가 반드시 있어야 한다. 비어 있으면
+ * 대상을 정할 수 없으므로 결손으로 남기고 버린다.
  */
 function targetsOf(g: AxisGrantRow, input: AxisGrantInput, meta: Meta): string[] {
 	if (g.targetKind === 'association') {
@@ -730,21 +735,12 @@ function targetsOf(g: AxisGrantRow, input: AxisGrantInput, meta: Meta): string[]
 			.filter((k) => k.keyword === g.targetId)
 			.map((k) => k.identityId);
 	}
-	if (g.targetId !== '') return [g.targetId];
-
-	if (g.gateKind !== 'ego_equipped') {
+	if (g.targetId === '') {
 		meta.gap('axis_grant', g.id, 'target_id',
-			`target_id 가 비었는데 gate_kind 가 '${g.gateKind}' 다 — 대상을 정할 수 없다`, EVIDENCE);
+			"target_kind='self' 인데 target_id 가 비었다 — 대상을 정할 수 없다", EVIDENCE);
 		return [];
 	}
-	const sinnerId = input.ego.find((e) => e.id === g.gateRef)?.sinnerId;
-	if (sinnerId === undefined) {
-		// 저작이 실물을 앞질렀다. 조용히 넘기면 축이 통째로 빈다
-		meta.gap('axis_grant', g.id, 'gate_ref',
-			`E.G.O '${g.gateRef}' 가 canonical 에 없다`, EVIDENCE);
-		return [];
-	}
-	return input.identity.filter((i) => i.sinnerId === sinnerId).map((i) => i.id);
+	return [g.targetId];
 }
 
 export function buildAxisGrant(
@@ -752,7 +748,7 @@ export function buildAxisGrant(
 	meta: Meta,
 ): { granted: GrantedAxisRow[]; restrict: AxisRestrictRow[] } {
 	const axes = new Set(input.axisIds);
-	const ids = new Set(input.identity.map((i) => i.id));
+	const ids = new Set(input.identityIds);
 	const granted: GrantedAxisRow[] = [];
 	const restrict: AxisRestrictRow[] = [];
 
@@ -1086,8 +1082,7 @@ import { buildAxisGrant } from './canonical/axis-grant.js';
 		const axisGrant = buildAxisGrant({
 			axisGrant: authored.axisGrant,
 			axisIds: axisTables.axis.map((a) => a.id),
-			identity: identities.identity.map((i) => ({ id: i.id, sinnerId: i.sinnerId })),
-			ego: egos.ego.map((e) => ({ id: e.id, sinnerId: e.sinnerId })),
+			identityIds: identities.identity.map((i) => i.id),
 			identityAssociation: identities.identityAssociation.map((a) => ({
 				identityId: a.identityId, associationId: a.associationId,
 			})),
@@ -1107,7 +1102,7 @@ import { buildAxisGrant } from './canonical/axis-grant.js';
 		}, meta);
 ```
 
-필드명은 확인해 두었다 — `identities.identityAssociation`(`identities.ts:172`) · `identities.identityKeyword`(`:173`) · `identities.identityUnitKeyword`(`:174`). `egos.ego` 는 기존 `buildIdentityAxis` 호출(315행)이 이미 쓰던 것이다.
+필드명은 확인해 두었다 — `identities.identityAssociation`(`identities.ts:172`) · `identities.identityKeyword`(`:173`) · `identities.identityUnitKeyword`(`:174`).
 
 - [ ] **Step 3: 적재를 더한다**
 
@@ -1129,10 +1124,12 @@ npm run v2:canonical 2>&1 | grep -E "identity_axis|axis_restrict"
 ```
 Expected:
 ```
-identity_axis   338
+identity_axis   280
 axis_restrict     7
 ```
-`338 = keyword 266 + granted 72`. `granted 72 = 20109 32(16인격×2축) + 20509 30(15인격×2축) + 10814 2 + 11115 2 + 9282 6(DAWN 3인격×2축)`.
+`280 = keyword 266 + granted 14`. `granted 14 = 2010911 2(10110×2축) + 2050911 2(10508×2축) + 1081402 2(10814) + 1111502 2(11115) + 9282 6(DAWN 3인격×2축)`.
+
+폐기하는 `ego_granted` 62행이 14행으로 준다 — 그 62행은 E.G.O 를 수감자의 인격 전부로 폈고 원문은 인격 하나를 콕 집는다(「…전용 상시 효과」).
 
 숫자가 다르면 **멈추고 왜 다른지 밝힌다.** 저작이나 빌더 중 하나가 틀렸다는 뜻이다.
 
@@ -1169,13 +1166,13 @@ git commit -m "feat(canonical): 축 부여·제한 적재 배선"
 
 - [ ] **Step 1: 검사를 더한다**
 
-`identity_axis` 관련 기존 검사 근처에 넣는다. 기존 `eq(...)` 호출 중 `identity_axis` 총 행수를 재는 것이 있으면 값을 338 로 고친다.
+`identity_axis` 관련 기존 검사 근처에 넣는다. 기존 `eq(...)` 호출 중 `identity_axis` 총 행수를 재는 것이 있으면 값을 280 으로 고친다.
 
 ```typescript
 	// ── 축 부여·제한 ──────────────────────────────────────────
 	eq('axis_grant (저작)', await prisma.axisGrant.count(), 17);
 	eq('axis_restrict', await prisma.axisRestrict.count(), 7);
-	eq('identity_axis', await prisma.identityAxis.count(), 338);
+	eq('identity_axis', await prisma.identityAxis.count(), 280);
 
 	// special_status 경로는 없앴다. 남아 있으면 되살아난 것이다
 	const ss = await prisma.identityAxis.count({ where: { source: 'special_status' } });
@@ -1499,14 +1496,18 @@ test('덱 A — 9073 엔도르핀 키트가 죽는다', DB, () => {
 	assert.equal(v?.fireable, false);
 });
 
-test('덱 C — 착영휘도(20509)를 끼면 호흡·출혈이 생긴다', DB, () => {
-	// 뫼르소 10512 는 20509 를 낄 수 있다(같은 수감자). 제한 패시브가 없다
-	const bare: Squad = { roster: [{ identityId: '10512', egoIds: [] }], field: ['10512'] };
-	const worn: Squad = { roster: [{ identityId: '10512', egoIds: ['20509'] }], field: ['10512'] };
-	const b = new Profile(bare, data!.capabilities).count('axis', 'BREATH', 'field');
-	const w = new Profile(worn, data!.capabilities).count('axis', 'BREATH', 'field');
-	assert.equal(b, 0);
-	assert.equal(w, 1);
+test('덱 C — 착영휘도(20509)는 검계 우두머리 뫼르소(10508) 전용이다', DB, () => {
+	// 2050911 은 「[검계 우두머리 뫼르소 전용 상시 효과]」라 못 박는다.
+	// 출혈이 그 효과로 느는 축이다 — 호흡은 10508 의 keyword 에 이미 있다
+	const squad = (identityId: string, egoIds: string[]): Squad =>
+		({ roster: [{ identityId, egoIds }], field: [identityId] });
+	const lac = (s: Squad): number =>
+		new Profile(s, data!.capabilities).count('axis', 'LACERATION', 'field');
+
+	assert.equal(lac(squad('10508', [])), 0, '안 끼면 안 생긴다');
+	assert.equal(lac(squad('10508', ['20509'])), 1, '끼면 생긴다');
+	// 같은 수감자의 다른 인격은 같은 E.G.O 를 껴도 안 생긴다 — 전용이다
+	assert.equal(lac(squad('10512', ['20509'])), 0, '10512 는 대상이 아니다');
 });
 
 test('제한 인격 넷의 축이 패시브 문장과 일치한다', DB, async () => {
