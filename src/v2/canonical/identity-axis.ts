@@ -1,124 +1,89 @@
 /**
  * 인격이 가진 축.
  *
- * 세 경로를 한 관계로 통일한다.
- *   keyword         identity_keyword → axis
- *   special_status  identity_status → status_category → axis
- *   ego_granted     **저작 2행.** 아래 표를 보라
+ * 두 경로를 한 관계로 통일한다.
+ *   keyword  identity_keyword → axis
+ *   granted  app.axis_grant 의 add 행 (Task 3 의 buildAxisGrant 가 편 것)
+ *
+ * **`keyword` 가 정본이다.** `keyword.id` 를 대문자화하면 축 id 이고, mj 가
+ * 특수 키워드 파생과 「~로만 취급됨」을 이미 반영해 담았다. 제한 패시브를 가진
+ * 인격 넷을 전수 대조해 확인했다(2026-08-10).
+ *
+ *   10109 「출혈로만」              keyword = Laceration
+ *   10916 「화상·진동으로만」       keyword = Combustion, Vibration
+ *   11109 「출혈로만」              keyword = Laceration
+ *   10415 「화상·출혈·호흡으로만」  keyword = Breath, Combustion, Laceration
+ *
+ * **`special_status` 경로는 없앴다.** `identity_status → status_category → axis`
+ * 로 축을 유도하면 게임의 제한이 무너진다. 전수로 재면 그 경로는 `keyword` 의
+ * 진상위집합이라(겹침 266 = keyword 전부) 보태는 것이 0 이고 과대 34짝만
+ * 만들었다. `keyword` 가 없는 다섯 인격은 `special_status` 도 비어 있어 이
+ * 경로로 구제되지도 않는다. `identity_status` 표 자체는 남는다 — 출처가 말한
+ * 사실이고, 축을 그것에서 유도하지 않을 뿐이다.
+ *
+ * 그래도 `restrict` 를 여기서 한 번 더 건다. mj 가 앞으로도 반영해 준다는
+ * 보장은 없고, 제한은 최종 방어선이어야 한다.
  */
 import type { Meta } from './meta.js';
+import { applyRestrict, type AxisRestrictRow, type GrantedAxisRow } from './axis-grant.js';
 
-const EVIDENCE = 'docs/superpowers/specs/2026-08-03-mechanic-axis-graph-design.md';
+const EVIDENCE = 'docs/superpowers/specs/2026-08-10-axis-grant-design.md';
 
 export interface IdentityAxisInput {
 	identityKeyword: Array<{ identityId: string; keywordId: string }>;
-	identityStatus: Array<{ identityId: string; statusId: string }>;
-	statusCategory: Array<{ statusId: string; category: string }>;
 	axisIds: string[];
-	/** E.G.O 는 인격이 아니라 **수감자**에 딸린다. 장착 가능한 인격을 여기서 편다 */
-	identity: Array<{ id: string; sinnerId: number }>;
-	ego: Array<{ id: string; sinnerId: number }>;
-	/**
-	 * **E.G.O 장착이 축을 주는 경우는 저작이다.** `app.ego_granted_axis` 에서
-	 * 온다(ADR-08).
-	 *
-	 * `ego_status` 로 유도하면 안 된다 — 그것은 「이 E.G.O 가 다루는 상태」지
-	 * 「장착하면 그 인격이 이 축을 갖는다」가 아니다. 실측하면 `ego_status` 로
-	 * 축을 주는 E.G.O 가 94종인데 「인격으로 취급됨」이 명시된 것은 2종뿐이다.
-	 *
-	 * 반례 — 20705 홀리데이는 「부여하는 화상·출혈·진동·파열·침잠 위력 **+1**」인
-	 * 증폭기인데 `ego_status` 로는 축 7개를 전부 받는다. 어느 축의 인격도 아니다.
-	 */
-	egoGranted: Array<{ egoId: string; axisId: string }>;
+	identityIds: string[];
+	granted: GrantedAxisRow[];
+	restrict: AxisRestrictRow[];
 }
 
 export interface IdentityAxisRow {
 	identityId: string;
 	axisId: string;
 	source: string;
-	egoId: string;
+	affects: string;
+	gateKind: string;
+	gateRef: string;
+	gateMin: number | null;
 }
 
 export function buildIdentityAxis(input: IdentityAxisInput, meta: Meta): IdentityAxisRow[] {
 	const axes = new Set(input.axisIds);
-	const seen = new Set<string>();
-	const rows: IdentityAxisRow[] = [];
-	const push = (identityId: string, axisId: string, source: string, egoId = '') => {
-		const key = `${identityId}|${axisId}|${source}|${egoId}`;
-		if (seen.has(key)) return;
-		seen.add(key);
-		rows.push({ identityId, axisId, source, egoId });
-	};
 
 	// ── keyword 경로 ───────────────────────────────────────────
-	// keyword.id 를 대문자화하면 축 id 다. mj 가 특수 키워드 파생과
-	// 「~로만 취급됨」을 이미 반영해 담았으므로 그대로 옮긴다
+	const fromKeyword: GrantedAxisRow[] = [];
 	for (const k of input.identityKeyword) {
 		const axisId = k.keywordId.toUpperCase();
 		if (!axes.has(axisId)) continue;
-		push(k.identityId, axisId, 'keyword');
+		fromKeyword.push({
+			identityId: k.identityId, axisId, affects: 'both',
+			gateKind: 'always', gateRef: '', gateMin: null,
+		});
 	}
 
-	// ── special_status 경로 ────────────────────────────────────
-	// 홍매화(특수 출혈) → LACERATION. 게임이 부모 축으로 취급한다
-	const statusToAxis = new Map<string, string>();
-	for (const s of input.statusCategory) {
-		if (axes.has(s.category)) statusToAxis.set(s.statusId, s.category);
-	}
-	for (const s of input.identityStatus) {
-		const axisId = statusToAxis.get(s.statusId);
-		if (axisId === undefined) continue;
-		push(s.identityId, axisId, 'special_status');
-	}
+	// 제한은 keyword 에도 건다. granted 는 buildAxisGrant 가 이미 걸었지만
+	// 두 번 걸어도 결과가 같다(교집합은 멱등이다) — 여기서도 걸어 최종
+	// 방어선으로 삼는다
+	const keyword = applyRestrict(fromKeyword, input.restrict);
+	const granted = applyRestrict(input.granted, input.restrict);
 
-	// ── ego_granted 경로 ───────────────────────────────────────
-	// **조건부 행이다.** E.G.O 는 수감자에 딸리므로 그 수감자의 인격 전부가
-	// 장착 후보다. 실제로 축을 갖는지는 편성의 E.G.O 선택에 달렸고, 그 조건을
-	// `egoId` 가 진다 — 소비자는 `source='ego_granted' AND ego_id IN (장착분)`
-	// 으로 거른다. 무조건 축으로 세면 20509 를 안 낀 이상까지 출혈 인격이 된다.
-	const bySinner = new Map<number, string[]>();
-	for (const i of input.identity) {
-		const list = bySinner.get(i.sinnerId);
-		if (list === undefined) bySinner.set(i.sinnerId, [i.id]);
-		else list.push(i.id);
-	}
-	const egoSinner = new Map(input.ego.map((e) => [e.id, e.sinnerId]));
-
-	// E.G.O 별로 묶는다. 행 단위로 돌면 결손 보고가 축 수만큼 중복된다
-	const grantedByEgo = new Map<string, string[]>();
-	for (const g of input.egoGranted) {
-		const list = grantedByEgo.get(g.egoId);
-		if (list === undefined) grantedByEgo.set(g.egoId, [g.axisId]);
-		else list.push(g.axisId);
-	}
-
-	for (const [egoId, axisIds] of grantedByEgo) {
-		const sinnerId = egoSinner.get(egoId);
-		if (sinnerId === undefined) {
-			// 저작 표가 실물을 앞질렀다. 조용히 넘기면 축이 통째로 빈다
-			meta.gap('ego', egoId, 'axis', 'app.ego_granted_axis 에 있으나 ego 에 없다', EVIDENCE);
-			continue;
-		}
-		for (const identityId of bySinner.get(sinnerId) ?? []) {
-			for (const axisId of axisIds) {
-				if (!axes.has(axisId)) continue;
-				push(identityId, axisId, 'ego_granted', egoId);
-			}
-		}
-	}
+	const seen = new Set<string>();
+	const rows: IdentityAxisRow[] = [];
+	const push = (r: GrantedAxisRow, source: string): void => {
+		const key = `${r.identityId}|${r.axisId}|${source}|${r.gateKind}|${r.gateRef}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+		rows.push({ ...r, source });
+	};
+	for (const r of keyword) push(r, 'keyword');
+	for (const r of granted) push(r, 'granted');
 
 	// ── 축이 하나도 없는 인격을 기록한다 ─────────────────────────
-	// 실측 5인격(10201·10205·10305·10903·11206). E.G.O 없이는 축 프로파일이 빈다
-	// ego_granted 는 세지 않는다 — 결손의 뜻이 「E.G.O 없이는 트리거에 안 걸린다」다
-	const withAxis = new Set(
-		rows.filter((r) => r.source !== 'ego_granted').map((r) => r.identityId),
-	);
-	// 인격 전수를 본다. keyword·status 를 가진 인격만 보면 **둘 다 없는 인격**이
-	// 검사에서 빠진다 — 축이 없다는 사실을 가장 확실히 아는 쪽이 그쪽이다
-	const allIds = new Set(input.identity.map((i) => i.id));
-	for (const id of [...allIds].sort()) {
+	// granted 는 세지 않는다 — 결손의 뜻이 「조건 없이는 트리거에 안 걸린다」다
+	const withAxis = new Set(rows.filter((r) => r.source === 'keyword').map((r) => r.identityId));
+	for (const id of [...input.identityIds].sort()) {
 		if (withAxis.has(id)) continue;
-		meta.gap('identity', id, 'axis', '축이 하나도 없다 — E.G.O 없이는 트리거에 안 걸린다', EVIDENCE);
+		meta.gap('identity', id, 'axis', '축이 하나도 없다 — 조건 없이는 트리거에 안 걸린다', EVIDENCE);
 	}
 
 	return rows;
