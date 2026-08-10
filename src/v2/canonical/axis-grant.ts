@@ -127,12 +127,27 @@ export function applyRestrict(
 			else set.add(r.axisId);
 		}
 	}
-	return granted.filter((g) =>
-		expand(g.affects).some((a) => {
+	/**
+	 * `.some()` 으로는 안 된다. `affects='both'` 인 부여가 한 채널만 막혔을 때
+	 * `.some()` 은 다른 채널이 살아 있다는 이유로 원본을 통째로 살려 막힌
+	 * 채널로 새어나간다. 채널별로 통과 여부를 따로 보고, 일부만 살아남으면
+	 * `affects` 를 살아남은 채널로 좁힌다.
+	 */
+	const out: GrantedAxisRow[] = [];
+	for (const g of granted) {
+		const channels = expand(g.affects);
+		const survived = channels.filter((a) => {
 			const set = allow.get(`${g.identityId}|${a}`);
 			return set === undefined || set.has(g.axisId);
-		}),
-	);
+		});
+		if (survived.length === 0) continue;
+		if (survived.length === channels.length) {
+			out.push(g);
+		} else {
+			out.push({ ...g, affects: survived[0] ?? g.affects });
+		}
+	}
+	return out;
 }
 
 /** both 는 tag 와 skill 둘 다를 뜻한다 */

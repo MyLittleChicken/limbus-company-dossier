@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAxisGrant, type AxisGrantInput } from './axis-grant.js';
+import {
+	buildAxisGrant, applyRestrict,
+	type AxisGrantInput, type GrantedAxisRow, type AxisRestrictRow,
+} from './axis-grant.js';
 import { Meta } from './meta.js';
 
 function input(): AxisGrantInput {
@@ -99,4 +102,44 @@ test('저작이 실물을 앞질러도 던지지 않고 결손으로 남는다',
 	const { restrict } = buildAxisGrant(i, meta);
 	assert.equal(restrict.some((r) => r.identityId === '99999'), false);
 	assert.ok(meta.gaps.some((g) => g.entityId === 'qq:COMBUSTION'));
+});
+
+// applyRestrict 는 채널별로 좁혀야 한다 — .some() 은 한 채널만 막혔을 때
+// 원본 'both' 를 통째로 살려 막힌 채널로 새어나간다.
+
+test("제한이 tag 하나뿐이고 부여가 both 인데 축이 제한 밖이면 affects 가 skill 로 좁혀진다", () => {
+	const granted: GrantedAxisRow[] = [
+		{ identityId: '10916', axisId: 'BREATH', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	];
+	const restrict: AxisRestrictRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'tag', sourceId: 'x' },
+	];
+	const out = applyRestrict(granted, restrict);
+	assert.deepEqual(out, [
+		{ identityId: '10916', axisId: 'BREATH', affects: 'skill', gateKind: 'always', gateRef: '', gateMin: null },
+	]);
+});
+
+test("같은 상황에서 축이 제한 안이면 both 그대로 남는다", () => {
+	const granted: GrantedAxisRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	];
+	const restrict: AxisRestrictRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'tag', sourceId: 'x' },
+	];
+	const out = applyRestrict(granted, restrict);
+	assert.deepEqual(out, [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	]);
+});
+
+test("제한이 both 이고 축이 제한 밖이면 행이 사라진다", () => {
+	const granted: GrantedAxisRow[] = [
+		{ identityId: '10916', axisId: 'BREATH', affects: 'both', gateKind: 'always', gateRef: '', gateMin: null },
+	];
+	const restrict: AxisRestrictRow[] = [
+		{ identityId: '10916', axisId: 'COMBUSTION', affects: 'both', sourceId: 'x' },
+	];
+	const out = applyRestrict(granted, restrict);
+	assert.deepEqual(out, []);
 });
