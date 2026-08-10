@@ -904,24 +904,39 @@ async function main(): Promise<void> {
 		// 어휘를 하드코딩하지 않고 keyword 테이블을 질의해 대조한다. 어휘 밖 축(BULLET)은
 		// 제한이 손대지 않으므로(identity-axis.ts 39-44행) 이 검사 밖에 둔다 — 안 그러면
 		// 10916 이 BULLET 을 갖고 있다는 사실만으로 반드시 실패한다.
-		// `affects='both'` 로 한정한다 — 10104 는 restrict 가 SINKING 만 명시적으로
-		// 적었지만 VIBRATION 도 살아남는다(스킬 채널까지는 안 막아서 좁혀질 뿐 안
-		// 지워진다, Task 3 채널 좁히기). affects 가 원래 값 'both' 그대로 살아남았다면
-		// 그건 좁혀지지도 않은 것이라 restrict 가 전혀 안 걸렸다는 뜻이고, 그때만 진짜
-		// 누수다. 축이 좁혀졌는지(affects≠'both')는 아래 10104 전용 검사가 따로 잰다
+		//
+		// **채널마다 따진다.** `affects='both'` 인 행만 보면(예전 판) 좁혀진 행(10104
+		// 의 VIBRATION 처럼 tag 는 막히고 skill 은 남는 행)이 검사 밖으로 빠진다 —
+		// `applyRestrict` 가 두 채널을 다 막아야 하는데 한 채널로만 좁혀 내보내는
+		// 버그가 생겨도 이 검사가 못 잡는다는 뜻이다. 이 PR 이 지키려는 불변식이
+		// 정확히 그것이니 검사가 채널 단위로 덮어야 한다.
+		//
+		// 행이 주장하는 채널(both → tag·skill 둘, 그 밖 → 자기 자신)마다 「그 채널을
+		// 덮는 axis_restrict 가 있는데 이 축은 그 인격의 그 채널 허용 목록에 없다」를
+		// 찾는다. `r.affects = 'both'` 인 restrict 행은 tag·skill 두 채널을 다 덮는다.
 		const leaked = await prisma.$queryRaw<Array<{ n: bigint }>>`
-			WITH vocab AS (SELECT upper(id) AS axis_id FROM canonical.keyword)
+			WITH vocab AS (SELECT upper(id) AS axis_id FROM canonical.keyword),
+			     ch AS (
+			       SELECT ia.identity_id, ia.axis_id,
+			              unnest(CASE WHEN ia.affects = 'both'
+			                          THEN ARRAY['tag','skill'] ELSE ARRAY[ia.affects] END) AS channel
+			       FROM canonical.identity_axis ia
+			       JOIN vocab v ON v.axis_id = ia.axis_id
+			     )
 			SELECT count(*)::bigint AS n
-			FROM canonical.identity_axis ia
-			JOIN vocab v ON v.axis_id = ia.axis_id
-			WHERE ia.affects = 'both'
-			  AND EXISTS (SELECT 1 FROM canonical.axis_restrict r WHERE r.identity_id = ia.identity_id)
+			FROM ch
+			WHERE EXISTS (
+			        SELECT 1 FROM canonical.axis_restrict r
+			        WHERE r.identity_id = ch.identity_id
+			          AND (r.affects = ch.channel OR r.affects = 'both'))
 			  AND NOT EXISTS (
-				SELECT 1 FROM canonical.axis_restrict r
-				WHERE r.identity_id = ia.identity_id AND r.axis_id = ia.axis_id)
+			        SELECT 1 FROM canonical.axis_restrict r
+			        WHERE r.identity_id = ch.identity_id
+			          AND (r.affects = ch.channel OR r.affects = 'both')
+			          AND r.axis_id = ch.axis_id)
 		`;
 		checks.push({
-			name: '제한 밖의 축이 좁혀지지 않은 채 남지 않는다 (어휘 안 축으로 한정)',
+			name: '어느 채널에서도 제한 밖 축이 남지 않는다 (어휘 안 축으로 한정)',
 			ok: Number(leaked[0]?.n ?? 1n) === 0,
 			detail: `${Number(leaked[0]?.n ?? 0n)} / 0`,
 		});
