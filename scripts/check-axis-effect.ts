@@ -4,6 +4,10 @@
  * 축 공급 층만 고쳤다. 기프트 조건을 AND 로 읽는 결함은 다음 PR 몫이므로
  * 여기서 「발동 가능」이 늘 것을 기대하지 않는다. 보려는 것은 **공급이
  * 옳아졌는가** 하나다.
+ *
+ * Task 8 — 회귀 폭. 등급 분포·발동 가능 건수·identity_axis 출처별 행수를
+ * 더해 이 PR 이 실제 판정을 몇 건 바꿨는지 잰다(브리프의 `scripts/axis-diff.ts`
+ * 와 겹쳐 새로 만들지 않고 이 스크립트에 보탰다).
  */
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { loadEngineData } from '../lib/engine/v2/load.js';
@@ -53,6 +57,25 @@ for (const [label, sq] of [
 	const p = new Profile(sq, data.capabilities);
 	console.log(`  ${label}  LACERATION ${p.count('axis', 'LACERATION', 'field')}`);
 }
+
+console.log('\n=== 회귀 폭 — 덱 A 의 기프트 판정 등급 분포 ===');
+const verdictsAll = evaluateGifts({
+	squad: DECK_A, profile: pA,
+	giftTriggers: data.giftTriggers, refsByTrigger: data.refsByTrigger, params: data.params,
+});
+const n = { A: 0, B: 0, C: 0 };
+for (const v of verdictsAll) n[v.grade] += 1;
+console.log(`  등급 A ${n.A} · B ${n.B} · C ${n.C}`);
+console.log(`  발동 가능 ${verdictsAll.filter((v) => v.fireable).length} / ${verdictsAll.length}`);
+const fired = verdictsAll.filter((v) => v.grade === 'A' && v.satisfied === v.total);
+const sure = fired.filter((v) => v.certain === v.total);
+console.log(`  전부 충족 ${fired.length} · 그중 확정 ${sure.length}`);
+
+console.log('\n=== identity_axis 출처별 행수 ===');
+const axes = await prisma.$queryRaw<Array<{ source: string; n: bigint }>>`
+	SELECT source, count(*) AS n FROM canonical.identity_axis GROUP BY 1 ORDER BY 1
+`;
+for (const a of axes) console.log(`  ${a.source.padEnd(16)} ${a.n}`);
 
 await prisma.$disconnect();
 process.exit(0);

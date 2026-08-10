@@ -26,13 +26,22 @@ after(async () => {
 	await prisma.$disconnect();
 });
 
-test('편성의 축 프로파일 — 화상 6 · 진동 5', DB, async () => {
-	// **ego_granted 를 뺀다.** 이 편성의 10512 는 수감자 5 라 착영휘도 후보 행을 갖는다.
-	// 안 거르면 E.G.O 를 안 낀 편성이 출혈·호흡을 가진 것으로 세어진다
+test('편성의 축 프로파일(무조건) — 화상 6 · 진동 5', DB, async () => {
+	// **ego_id 칸은 게이트 재설계(Task 6)로 없어졌다.** 지금은 gate_kind·gate_ref·
+	// gate_min 셋으로 조건을 적는다 — `gate_kind = 'always'` 가 옛 `ego_id = ''`
+	// 자리다(무조건 부여). 이 검사는 그 무조건 행만 세는 raw 층 검사라 게이트
+	// 평가(roster_count 등 충족 여부 판단)는 하지 않는다 — 그건 `Profile.count`
+	// 의 몫이고 lib/engine/v2/axis-grant-golden.test.ts 의 「덱 A — 축 공급
+	// 실측」이 잰다(같은 편성인데 VIBRATION 이 6 이다).
+	//
+	// 여기서 VIBRATION 이 5 인 이유: 11009 는 keyword 로 VIBRATION 을 안 갖고
+	// `granted`(9282, DAWN 소속 3인 이상 게이트)로만 갖는데, 그 게이트가
+	// `roster_count` 라 무조건이 아니다 — 그래서 이 raw 셈에서는 빠진다.
+	// `Profile.count` 는 이 편성의 DAWN 인원이 3 을 채운다고 실제로 평가해 6 을 낸다.
 	const rows = await prisma.$queryRaw<Array<{ axis_id: string; n: bigint }>>`
 		SELECT axis_id, count(DISTINCT identity_id)::bigint AS n
 		FROM canonical.identity_axis
-		WHERE identity_id = ANY(${SQUAD}) AND ego_id = ''
+		WHERE identity_id = ANY(${SQUAD}) AND gate_kind = 'always'
 		GROUP BY 1 ORDER BY 2 DESC
 	`;
 	const m = Object.fromEntries(rows.map((r) => [r.axis_id, Number(r.n)]));
@@ -41,23 +50,33 @@ test('편성의 축 프로파일 — 화상 6 · 진동 5', DB, async () => {
 	assert.equal(m['LACERATION'], undefined);
 });
 
-test('착영휘도를 끼면 그 편성에 출혈·호흡이 선다 — 조건부 축', DB, async () => {
+test('착영휘도를 이 편성의 10512 가 껴도 축이 안 는다 — 전용 대상이 아니다', DB, async () => {
+	// **옛 가정이 틀렸다.** 예전엔 「10512 하나가 착영휘도로 두 축(출혈·호흡)을
+	// 얻는다」고 적혀 있었는데, ADR-08 재조사로 착영휘도(2050911)는 「검계
+	// 우두머리 뫼르소(10508) 전용 상시 효과」임이 드러났다(설계 1068행). 이
+	// 편성의 10512(동부 엄지 카포 뫼르소)는 같은 수감자의 다른 인격일 뿐 대상이
+	// 아니다 — app.axisGrant 가 대상을 10508 하나로 콕 집는다. 그래서 20509 를
+	// 껴도 이 편성엔 아무 축도 안 붙는다. 대상이 실제로 반응하는 골든은
+	// lib/engine/v2/axis-grant-golden.test.ts 의 「덱 C」다(10508 로 확인).
+	//
+	// 10916 도 호흡이 없다 — 패시브 1091603 이 화상·진동으로만 제한한다.
 	const rows = await prisma.$queryRaw<Array<{ axis_id: string; n: bigint }>>`
 		SELECT axis_id, count(DISTINCT identity_id)::bigint AS n
 		FROM canonical.identity_axis
-		WHERE identity_id = ANY(${SQUAD}) AND (ego_id = '' OR ego_id = '20509')
+		WHERE identity_id = ANY(${SQUAD})
+		  AND (gate_kind = 'always' OR (gate_kind = 'ego_equipped' AND gate_ref = '20509'))
 		GROUP BY 1
 	`;
 	const m = Object.fromEntries(rows.map((r) => [r.axis_id, Number(r.n)]));
-	// 10512 하나가 착영휘도로 두 축을 얻는다. 출혈은 편성에서 처음 생기고,
-	// 호흡은 10916 이 무조건으로 이미 갖고 있어 1 → 2 가 된다
-	assert.equal(m['LACERATION'], 1);
-	assert.equal(m['BREATH'], 2);
-	assert.equal(m['COMBUSTION'], 6);
+	assert.equal(m['LACERATION'], undefined, '전용 대상이 아니라 안 생긴다');
+	assert.equal(m['BREATH'], undefined, '10916 은 화상·진동으로만 제한된다');
+	assert.equal(m['COMBUSTION'], 6, '무관한 축은 그대로다');
 });
 
 test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_capability', DB, async () => {
-	// 이 뷰가 「RDB 구조만으로 푼다」의 증거물이다. CASE 도 ref_kind 별 특례도 없다
+	// 이 뷰가 「RDB 구조만으로 푼다」의 증거물이다. CASE 도 ref_kind 별 특례도 없다.
+	// ego_id 칸은 없어졌다 — `gate_kind <> 'ego_equipped'` 가 옛 `ego_id = ''`
+	// 자리다(E.G.O 장착 조건이 아닌 모든 것. roster_count 등 다른 게이트는 포함한다).
 	const rows = await prisma.$queryRaw<Array<{ backed: bigint; hit: bigint }>>`
 		SELECT count(*) FILTER (WHERE n IS NOT NULL)::bigint AS backed,
 		       count(*) FILTER (WHERE n > 0)::bigint AS hit
@@ -65,20 +84,24 @@ test('편성 판정이 분기 없는 조인 하나로 끝난다 — v_identity_c
 			SELECT (SELECT count(DISTINCT ic.identity_id)
 			          FROM canonical.v_identity_capability ic
 			         WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id
-			           AND ic.ego_id = '' AND ic.identity_id = ANY(${SQUAD})) AS n
+			           AND ic.gate_kind <> 'ego_equipped' AND ic.identity_id = ANY(${SQUAD})) AS n
 			  FROM canonical.trigger_ref tr
 			 WHERE EXISTS (SELECT 1 FROM canonical.v_identity_capability ic
 			                WHERE ic.ref_kind = tr.ref_kind AND ic.ref_id = tr.ref_id)
 		) x
 	`;
-	// 150 중 116 이 어휘로 닿는다. 나머지 34 는 none 31 · deployment 1 · Any 공명 2
+	// 150 중 116 이 어휘로 닿는다. hit 은 게이트 재설계(Task 6) 전 67 이었는데
+	// 채널 인식 제한이 10104 의 VIBRATION 을 'skill' 로 좁히는 등 태그 층 적중이
+	// 줄어 63 이 됐다(실측, 2026-08-10)
 	assert.equal(Number(rows[0]?.backed ?? 0n), 116);
-	assert.equal(Number(rows[0]?.hit ?? 0n), 67);
+	assert.equal(Number(rows[0]?.hit ?? 0n), 63);
 });
 
-test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가 LACERATION 으로 닿는다', DB, async () => {
-	// egoId 삭제(Task 5) — 최소 수정으로 컴파일만 맞춘다. 이 골든의 실측 재조정은
-	// 다음 태스크 몫이다(task-5-report.md)
+test('검계 살수 파우스트는 출혈·호흡 인격이다 — mj 의 keyword 가 홍매화를 이미 담는다', DB, async () => {
+	// **special_status 기대는 지금 틀렸다.** identity-axis.ts 가 special_status
+	// 경로를 BULLET 하나로 좁힌 뒤(2026-08-10, c70f267) LACERATION 은 더 이상
+	// special_status 를 거치지 않는다 — mj 의 `identity_keyword` 가 홍매화(특수
+	// 출혈)를 이미 Laceration 키워드로 반영해 담았으므로 keyword 경로 하나로 닿는다.
 	const rows = await prisma.identityAxis.findMany({
 		where: { identityId: '10208' },
 		select: { axisId: true, source: true },
@@ -86,8 +109,8 @@ test('검계 살수 파우스트는 출혈·호흡 인격이다 — 홍매화가
 	const axes = [...new Set(rows.map((r) => r.axisId))].sort();
 	assert.deepEqual(axes, ['BREATH', 'LACERATION']);
 	assert.ok(
-		rows.some((r) => r.axisId === 'LACERATION' && r.source === 'special_status'),
-		'홍매화 경로가 있어야 한다',
+		rows.every((r) => r.source === 'keyword'),
+		'지금은 keyword 경로 하나로 닿아야 한다(special_status 는 BULLET 전용)',
 	);
 });
 
@@ -117,14 +140,15 @@ test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · 
 });
 
 test('진혼이 실제로 판정된다 — 화상 6인 ≥ 5인, 분모는 출전', DB, async () => {
-	// 설계가 처음부터 예시로 든 자리다. 트리거·임계값·분모가 다 있어야 답이 나온다
+	// 설계가 처음부터 예시로 든 자리다. 트리거·임계값·분모가 다 있어야 답이 나온다.
+	// ego_id 대신 gate_kind <> 'ego_equipped' 를 쓴다(위 검사와 같은 이유)
 	const rows = await prisma.$queryRaw<Array<{ need: number; have: bigint; denom: string }>>`
 		SELECT p.value::int AS need, d.value AS denom,
 		       (SELECT count(DISTINCT ic.identity_id)
 		          FROM canonical.v_identity_capability ic
 		          JOIN canonical.trigger_ref tr ON tr.trigger_id = p.trigger_id
 		               AND tr.ref_kind = ic.ref_kind AND tr.ref_id = ic.ref_id
-		         WHERE ic.ego_id = '' AND ic.identity_id = ANY(${SQUAD})) AS have
+		         WHERE ic.gate_kind <> 'ego_equipped' AND ic.identity_id = ANY(${SQUAD})) AS have
 		  FROM canonical.gift_trigger_param p
 		  JOIN canonical.gift_trigger_param d
 		    ON d.gift_id = p.gift_id AND d.trigger_id = p.trigger_id AND d.kind = 'denominator'
@@ -145,7 +169,7 @@ test('같은 편성에서 미달하는 기프트가 있다 — 게이트가 실�
 		          FROM canonical.v_identity_capability ic
 		          JOIN canonical.trigger_ref tr ON tr.trigger_id = p.trigger_id
 		               AND tr.ref_kind = ic.ref_kind AND tr.ref_id = ic.ref_id
-		         WHERE ic.ego_id = '' AND ic.identity_id = ANY(${SQUAD})) AS have
+		         WHERE ic.gate_kind <> 'ego_equipped' AND ic.identity_id = ANY(${SQUAD})) AS have
 		  FROM canonical.gift_trigger_param p
 		 WHERE p.gift_id = '9090' AND p.kind = 'min_count'
 	`;

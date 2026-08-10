@@ -135,10 +135,15 @@ async function main(): Promise<void> {
 		//   +1    identity_axis.special_status — keyword 어휘가 BULLET 을 못 담는다는
 		//         설계 결손을 한 행으로 고정 기록한다(entity_id='*', identity-axis.ts).
 		//         1,157 + 1 = 1,158
+		//   +1    gift.supply — 9073 엔도르핀 키트. 조건이 스킬 층(「스킬 효과로 호흡
+		//         위력을 획득할 때마다」)을 묻는데 기프트 조건에 그 층을 적을 칸이
+		//         없다. 태그 층(축 제한·부여)만 옳게 만드는 이 PR 의 몫이 아니라
+		//         결손으로 남긴다(Task 8, identity-axis.ts 끝).
+		//         1,158 + 1 = 1,159
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_158,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,158`,
+			ok: gapTotal + overrideCount === 1_159,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,159`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
