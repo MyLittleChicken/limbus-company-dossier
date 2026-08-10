@@ -52,7 +52,30 @@ if (id.endsWith(' Identities') || id.endsWith(' Skill')) return 'roster';
 const fireable = !reasons.some((r) => r.verdict === 'unsatisfied' && r.certainty === 'certain');
 ```
 
-결과: 「발동 불가」 174건 중 **159건(91%)이 틀렸다**. OR 로 읽으면 15건이 된다.
+결과: 「발동 불가」 173건 중 **158건(91%)이 틀렸다**. OR 로 읽으면 15건이 된다. (`scripts/verify-spec-claims.ts` 로 실측)
+
+### 층 4 — 공급을 세는 자리
+
+`identity_axis` 는 「이 인격이 그 축의 인격인가」를 말한다. 게임의 키워드 태그와 특수 상태 태그를 합친 것이다. 그런데 기프트 조건 중에는 「**스킬 효과로** 그 상태를 얻을 때」처럼 스킬 수준의 공급을 묻는 것이 있고, 태그는 그 물음에 답하지 못한다.
+
+```
+identity_axis 가 말하는 (인격,축) 짝            300
+coin_token 이 스킬로 뒷받침하는 짝              229
+태그만 있고 스킬 근거가 없는 짝                  71
+coin_token 에만 있고 identity_axis 가 놓친 짝     0   ← 태그는 스킬의 상위집합이다
+
+호흡만 따로: identity_axis 47인격 · coin_token 38인격 · 태그만 9인격
+```
+
+9073 엔도르핀 키트가 정확히 여기서 틀린다.
+
+```
+편성  10114 10206 10406 10702 10808 11207   (전원 호흡 태그가 있다)
+옛 엔진  9073 유효 · axis/BREATH have=6 need=1 satisfied
+실측     그 편성에서 호흡을 주는 스킬 0개 (coin_token)
+```
+
+**태그가 틀린 것이 아니다.** 패시브가 호흡을 줄 수도 있다 — 다만 `passive` 표는 `id · conditions[] · cond_type` 뿐이고 효과는 `passive_text` 산문에만 있어 **패시브를 상태와 잇는 구조화된 표가 없다.** 그러므로 태그 공급은 구조로 검증할 수 없고, 스킬 공급은 `coin_token` 으로 정확히 셀 수 있다. 조건이 어느 쪽을 묻는지에 따라 세는 자리가 달라야 한다.
 
 ### 데이터베이스가 결손을 이미 알고 있었다
 
@@ -122,7 +145,8 @@ gift_trigger_param  188행 — (기프트,트리거) 1,081짝 중 122짝(11%)만
 - **효과 시뮬레이션을 하지 않는다.** 수량 · 배율 · 지속 · 적 쪽 효과는 뽑지 않는다. 엔진에 필요한 것은 「이 기프트가 아예 켜질 수 있나」뿐이다.
 - **기존 표를 지우지 않는다.** `gift_trigger` · `gift_effect` · `trigger_ref` · `effect_ref` · `gift_trigger_param` 은 그대로 두고 폐기 표시만 붙인다 (§6).
 - **점수 모형을 이번에 손대지 않는다.** 조건 판정이 옳아진 뒤에 별도로 다룬다.
-- **인격 쪽 데이터를 만들지 않는다.** `coin_token` 은 이미 정밀하다. 다만 2단계에서 엔진이 편성 공급을 **`identity_axis` 대신 `coin_token` 으로** 세게 바꾼다 — 9073 골든이 그것 없이는 서지 않는다(§8).
+- **인격 쪽 데이터를 만들지 않는다.** `coin_token` 은 이미 정밀하다. 2단계에서 엔진이 조건의 `supply` 에 따라 `coin_token` 과 `identity_axis` 중 어느 쪽으로 셀지 가르지만, 둘 다 그대로 쓴다(§8).
+- **패시브 효과를 구조화하지 않는다.** `passive` → `status` 를 잇는 표가 없어 태그 공급을 검증할 수 없다는 사실은 §1 층 4 에 기록해 두고, 이번에 메우지 않는다.
 
 ## 3. 데이터 모형
 
@@ -189,6 +213,17 @@ model GiftAbilityCond {
   threshold Int?
   /// field(출전 6인) · roster(편성 전체) · slot(특정 자리) · enemy · none
   scope     String
+  /// 공급을 어디서 세는가 — 층 4 가 이 칸이 없어 생긴 결함이다.
+  ///
+  ///   skill  스킬이 실제로 그 상태를 주는가. coin_token 으로 센다.
+  ///          「스킬 효과로 호흡 위력을 획득할 때마다」(9073)
+  ///   tag    게임이 그 인격을 그 축으로 분류하는가. identity_axis 로 센다.
+  ///          「출혈 인격 3명 이상」
+  ///   any    둘 중 하나면 된다. 문장이 가리지 않을 때.
+  ///
+  /// 태그는 스킬의 상위집합이다(태그만 71짝 · 스킬만 0짝). 패시브가 주는
+  /// 공급은 구조로 검증할 수 없어(passive→status 표가 없다) tag 로만 닿는다.
+  supply    String
   /// scope='slot' 일 때 게임 자리 번호 1~5. 아니면 null
   slot      Int?
   /// 전투 중에만 알 수 있는가. 참이면 편성만 보고 배제할 수 없다.
@@ -217,7 +252,13 @@ model GiftAbilityCond {
                 조건이 충족 가능
                   = runtime 이면 참 (배제 못 한다)
                     threshold 가 null 이면 참 (모른다 → 배제 안 한다)
-                    아니면 편성 공급 ≥ threshold
+                    아니면 공급(supply, scope) ≥ threshold
+
+공급(supply, scope)
+  supply=skill  coin_token 으로 센다 — 그 축의 상태를 주는 스킬을 가진 인격 수
+  supply=tag    identity_axis 로 센다 — 그 축으로 분류된 인격 수
+  supply=any    둘 중 큰 쪽
+  scope 가 분모를 정한다 — field(출전 6인) · roster(편성 전체) · slot(그 자리)
 ```
 
 **모든 독립 능력이 죽을 때만 기프트가 죽는다.** 지금은 조건 하나만 어긋나도 죽였다.
@@ -289,18 +330,26 @@ other          어휘에 없다 — field_gap 을 남긴다
 지금  AND 로 읽어 죽였다
 ```
 
-**9073 엔도르핀 키트 — 강화판은 켜짐을 만들지 않는다**
+**9073 엔도르핀 키트 — supply 와 refines 가 둘 다 있어야 한다**
 ```
 문단 1  스킬 효과로 호흡 위력을 획득할 때마다 …
-   → ordinal 0 · axis/BREATH · scope=field · op=gte · threshold=1
+   → ordinal 0 · axis/BREATH · supply=skill · scope=field · op=gte · threshold=1
+                               ^^^^^^^^^^^^ 「스킬 효과로」가 이 칸을 정한다
 문단 2  질투 속성 스킬을 사용할 경우, 효과가 강화되어 …
    → ordinal 1 · refines=0   ← 독립 능력이 아니다
 
-판정  ordinal 0 만 센다. 화진 덱은 호흡 부여 스킬이 10916 하나뿐(coin_token
-      으로 확인) → 죽는다
-지금  identity_axis 가 BREATH 공급이 있다고 보고해 통과시켰다
-      refines 가 없으면 「질투 스킬이 있으니 켜진다」로 또 틀린다
+편성  10114 10206 10406 10702 10808 11207  (전원 호흡 태그 · 호흡 스킬 0개)
+옛 엔진  유효   identity_axis 로 세어 BREATH have=6 → 통과시켰다
+새 모형  불가   supply=skill 이라 coin_token 으로 세면 have=0 → ordinal 0 죽음
+                ordinal 1 은 refines 라 켜짐을 만들지 못한다
+
+두 장치가 각각 필요하다
+  supply 가 없으면    태그만 보고 have=6 으로 통과한다 (지금의 오판정)
+  refines 가 없으면   ordinal 간 OR 가 「질투 스킬 4개 있으니 켜진다」로
+                     통과한다 — 고친 모형에서 같은 오판정이 재발한다
 ```
+
+화상·진동 골든 덱에서는 9073 이 **켜지는 것이 맞다** — 그 덱의 10916 은 호흡 부여 스킬을 실제로 갖는다(`coin_token` 스킬 1 · 토큰 5). 골든은 위 편성을 따로 쓴다(§7).
 
 ## 4. 추출 경로
 
@@ -443,6 +492,8 @@ refines 는 같은 (gift,level) 안의 실재하는 ordinal 을 가리킨다
 refines 가 가리키는 능력은 그 자신이 refines=null 이다 (사슬 금지)
 refKind='other' 가 아닌 모든 refId 가 canonical 에 실재한다
 scope='slot' 이면 slot 이 1~5, 아니면 null
+supply 가 skill · tag · any 셋 중 하나다
+supply='skill' 인 조건의 refKind 는 axis 다 (스킬 공급은 축으로만 셀 수 있다)
 timing 이 §3 의 닫힌 어휘에 든다
 기프트마다 refines=null 인 능력이 하나 이상 있다
 ```
@@ -459,14 +510,21 @@ timing='other' 마다 field_gap 행이 있다
 
 ### 판정 검증 (골든)
 
-기존 `lib/engine/v2/golden.test.ts` 의 화상·진동 덱을 그대로 쓴다. 사용자가 짚은 세 건을 골든 사례로 박는다. 각 사례가 모형의 다른 축을 시험한다(§3 「세 사례로 본 모형」).
+사용자가 짚은 세 건을 골든 사례로 박는다. 각 사례가 모형의 다른 축을 시험한다(§3 「세 사례로 본 모형」). **덱이 둘이다** — 9073 은 화상·진동 덱에서 켜지는 것이 맞기 때문이다.
 
 ```
-9052 휴대용 전지 소켓  → 발동 가능   (지금: 불가)   무조건 능력
-9043 사원증            → 발동 가능   (지금: 불가)   group 내 OR
-9073 엔도르핀 키트     → 발동 불가   (지금: 가능)   refines
-   근거: 화진 덱 7인격 중 호흡 부여 스킬을 가진 것은 10916 하나뿐이고
-        그마저 스킬 1개다 — coin_token 으로 확인했다
+덱 A · 화상·진동 (기존 golden.test.ts 그대로)
+      10216 11216 11009 10916 10716 10512
+  9052 휴대용 전지 소켓  → 발동 가능   (지금: 불가)   무조건 능력
+  9043 사원증            → 발동 가능   (지금: 불가)   group 내 OR
+  9073 엔도르핀 키트     → 발동 가능   (지금: 가능)   회귀 방지
+       10916 이 호흡 부여 스킬을 실제로 갖는다 — 새 모형이 이걸 죽이면 안 된다
+
+덱 B · 호흡 태그만 있는 편성 (새로 만든다)
+      10114 10206 10406 10702 10808 11207
+      identity_axis 는 전원 BREATH · coin_token 은 호흡 스킬 0개 · 질투 스킬 4개
+  9073 엔도르핀 키트     → 발동 불가   (지금: 가능)   supply=skill · refines
+       사용자가 본 오판정이 이 편성에서 재현된다
 ```
 
 **세 건 모두 코드를 되돌리면 실패해야 한다.** PR-B 6번 태스크에서 골든이 자기가 존재하는 이유인 버그를 못 잡은 전례가 있다(사례가 `deployedIds` 를 아예 안 넘겨 버그 유무와 무관하게 같은 답이 나왔다). 되돌려 확인한다.
@@ -502,10 +560,12 @@ scripts/verdict-diff.ts
 7  판정      lib/engine/v2/evaluate.ts 를 §3 규칙으로 다시 쓴다
              ordinal 간 OR · refines 제외 · group 간 AND · group 내 OR
              runtime · threshold=null 은 배제하지 않는다
-8  공급      Profile 이 편성 공급을 coin_token 으로 센다
-             지금은 identity_axis — 인격이 「그 축을 가진다」까지만 알고
-             「그 축을 실제로 주는 스킬이 몇 개인가」를 모른다. 9073 이
-             그래서 통과했다
+8  공급      Profile 이 supply 에 따라 세는 자리를 가른다
+             supply=skill → coin_token (스킬이 실제로 주는가)
+             supply=tag   → identity_axis (게임이 그렇게 분류하는가)
+             supply=any   → 둘 중 큰 쪽
+             identity_axis 를 버리지 않는다 — 패시브가 주는 공급은
+             구조로 검증할 수 없어 태그로만 닿는다(층 4)
 9  적재      load.ts 가 gift_ability 를 읽는다. 폐기 5표를 끊는다
 10 골든      §7 의 세 사례 · 회귀 폭 측정 · 되돌려 실패 확인
 11 화면      근거 모달이 새 구조를 보인다 (사용자가 「대충」이라 한 자리)
