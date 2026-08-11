@@ -9,6 +9,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from './generated/client.js';
+import { validatePayload, type AbilityPayload } from './ability-payload.js';
 
 export interface AxisGrantRow {
 	id: string; sourceKind: string; sourceId: string; mode: string;
@@ -16,20 +17,39 @@ export interface AxisGrantRow {
 	gateKind: string; gateRef: string; gateMin: number | null;
 }
 
+export interface GiftAbilityAuthoredRow {
+	giftId: string;
+	level: number;
+	ordinal: number;
+	payload: AbilityPayload;
+}
+
 export interface Authored {
 	refException: Array<{ kind: string; key: string; refKind: string; refId: string }>;
 	egoGranted: Array<{ egoId: string; axisId: string }>;
 	axisGrant: AxisGrantRow[];
+	giftAbility: GiftAbilityAuthoredRow[];
 }
 
+/**
+ * 저작이 가리킬 수 있는 참조 어휘.
+ *
+ * 앞 셋은 canonical 에 실물이 있어 거기서 읽는다. 뒤 넷은 **코드가 정하는
+ * 닫힌 집합**이다 — 게임이 정한 사실이 아니라 우리가 조건을 읽는 방법이라
+ * 코드에 둔다(ADR-08). 채우는 곳은 `load-canonical.ts` 다.
+ */
 export interface KnownIds {
 	axisIds: Set<string>;
 	unitKeywordIds: Set<string>;
 	associationIds: Set<string>;
+	sinIds: Set<string>;
+	attackTypes: Set<string>;
+	skillKinds: Set<string>;
+	resonanceIds: Set<string>;
 }
 
 export async function readAuthored(prisma: PrismaClient): Promise<Authored> {
-	const [refException, egoGranted, axisGrant] = await Promise.all([
+	const [refException, egoGranted, axisGrant, giftAbility] = await Promise.all([
 		prisma.refException.findMany({
 			select: { kind: true, key: true, refKind: true, refId: true },
 		}),
@@ -42,8 +62,17 @@ export async function readAuthored(prisma: PrismaClient): Promise<Authored> {
 			},
 			orderBy: { id: 'asc' },
 		}),
+		prisma.giftAbilityAuthored.findMany({
+			select: { giftId: true, level: true, ordinal: true, payload: true },
+			orderBy: [{ giftId: 'asc' }, { level: 'asc' }, { ordinal: 'asc' }],
+		}),
 	]);
-	return { refException, egoGranted, axisGrant };
+	return {
+		refException,
+		egoGranted,
+		axisGrant,
+		giftAbility: giftAbility as unknown as GiftAbilityAuthoredRow[],
+	};
 }
 
 /**
@@ -59,7 +88,24 @@ export function unknownRefs(a: Authored, known: KnownIds): string[] {
 		axis: known.axisIds,
 		unit_keyword: known.unitKeywordIds,
 		association: known.associationIds,
+		sin: known.sinIds,
+		attack_type: known.attackTypes,
+		skill_kind: known.skillKinds,
+		resonance: known.resonanceIds,
 	};
+	/**
+	 * 어휘 하나가 통째로 빠지면 그 종류의 조건이 전부 「어휘에 없다」로 나온다 —
+	 * 저작이 틀린 것처럼 보이지만 실은 부르는 쪽이 안 채운 것이다.
+	 *
+	 * `tsconfig` 가 `src` 를 검사에서 빼므로 타입이 이 실수를 못 잡는다.
+	 * 조용히 틀린 진단을 내느니 여기서 크게 터뜨린다.
+	 */
+	const missing = Object.entries(pool).filter(([, set]) => set === undefined).map(([k]) => k);
+	if (missing.length > 0) {
+		throw new Error(
+			`KnownIds 에 어휘가 빠졌다: ${missing.join(', ')} — 부르는 쪽(load-canonical.ts)이 채워야 한다`,
+		);
+	}
 
 	for (const e of a.refException) {
 		const set = pool[e.refKind];
@@ -109,6 +155,27 @@ export function unknownRefs(a: Authored, known: KnownIds): string[] {
 		}
 	}
 
+	/**
+	 * 기프트 능력 — 형식과 참조를 함께 본다.
+	 *
+	 * 심을 때도 막지만(`seed-authored`) 사람이 DB 를 직접 고칠 수 있으므로
+	 * **굽기 직전에 다시 본다**. `refKind='other'` 는 어휘에 못 담는 조건의
+	 * 원문 조각이라 실재를 물을 수 없다 — 검사에서 뺀다.
+	 */
+	for (const g of a.giftAbility) {
+		const at = `gift_ability ${g.giftId}/${g.level}/${g.ordinal}`;
+		for (const problem of validatePayload(g.payload)) out.push(`${at} 형식: ${problem}`);
+		for (const c of g.payload.conds) {
+			if (c.refKind === 'other') continue;
+			const set = pool[c.refKind];
+			if (set === undefined) {
+				out.push(`${at} 조건 ${c.group}/${c.idx} 의 refKind 가 어휘에 없다: ${c.refKind}`);
+			} else if (!set.has(c.refId)) {
+				out.push(`${at} 조건 ${c.group}/${c.idx} 의 ${c.refKind} 참조가 없다: ${c.refId}`);
+			}
+		}
+	}
+
 	return out;
 }
 
@@ -130,6 +197,26 @@ export function authoredDigest(a: Authored): string {
 		h.update(`axis_grant\t${g.id}\t${g.sourceKind}\t${g.sourceId}\t${g.mode}\t` +
 			`${g.targetKind}\t${g.targetId}\t${g.axisId}\t${g.affects}\t` +
 			`${g.gateKind}\t${g.gateRef}\t${g.gateMin ?? ''}\n`);
+	}
+	/**
+	 * 기프트 능력. **조건까지 정렬해서 잰다** — payload 의 키 순서나 조건 배열
+	 * 순서가 DB 왕복에 따라 흔들려도 같은 사실이면 같은 지문이 나와야 한다.
+	 *
+	 * `note` 는 애초에 안 읽으므로 자동으로 빠진다 — 설명을 고치는 것은 결과를
+	 * 안 바꾸므로 재빌드를 요구할 이유가 없다.
+	 */
+	const abilityKey = (g: GiftAbilityAuthoredRow): string =>
+		`${g.giftId}\t${String(g.level).padStart(3, '0')}\t${String(g.ordinal).padStart(3, '0')}`;
+	for (const g of [...a.giftAbility].sort((x, y) => abilityKey(x).localeCompare(abilityKey(y)))) {
+		const p = g.payload;
+		h.update(`gift_ability\t${abilityKey(g)}\t${p.timing}\t${p.unconditional}\t` +
+			`${p.refines ?? ''}\t${p.sourceText}\n`);
+		const conds = [...p.conds]
+			.map((c) => `${c.group}\t${c.idx}\t${c.refKind}\t${c.refId}\t${c.op}\t` +
+				`${c.threshold ?? ''}\t${c.scope}\t${c.supply}\t${c.slot ?? ''}\t` +
+				`${c.runtime}\t${c.resonanceMode ?? ''}`)
+			.sort();
+		for (const c of conds) h.update(`  cond\t${c}\n`);
 	}
 	return h.digest('hex');
 }
