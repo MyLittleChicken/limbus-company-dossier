@@ -1,7 +1,7 @@
 /**
  * 기프트 능력 저작 payload — 타입과 형식 검사.
  *
- * 저작 파일(`data/authored/gift-ability.jsonl`)은 사람이 손으로 고친다.
+ * 저작 파일(`src/v2/authored/gift-ability.jsonl`)은 사람이 손으로 고친다.
  * 형식이 틀어진 채 DB 로 들어가면 굽는 쪽에서 뒤늦게 터지므로 여기서 막는다.
  *
  * **DB 를 안 본다.** 참조가 실재하는지(`refId` 가 진짜 소속인지)는 여기서

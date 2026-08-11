@@ -4,7 +4,7 @@
 
 **Goal:** 기프트 발동 조건을 절(節) 단위 구조화된 사실로 갖는 데이터층을 세운다 — 표 셋, 굽는 경로, 검증, 그리고 456건 전건 검수를 돌릴 도구까지.
 
-**Architecture:** 설명문을 LLM 이 오프라인에서 절로 나눠 `data/authored/gift-ability.jsonl` 에 적고, 사람이 전건 검수하고, `seed-authored` 가 `app.gift_ability_authored` 에 심고, `v2:build` 가 `canonical.gift_ability` · `gift_ability_cond` 로 굽는다. 빌드는 설명문을 다시 읽지 않는다 — 그래야 결정적이고 `v2:verify:rebuild` 가 성립한다(ADR-08). 판정 코드는 이 PR 에서 안 바꾼다(2단계).
+**Architecture:** 설명문을 LLM 이 오프라인에서 절로 나눠 `src/v2/authored/gift-ability.jsonl` 에 적고, 사람이 전건 검수하고, `seed-authored` 가 `app.gift_ability_authored` 에 심고, `v2:build` 가 `canonical.gift_ability` · `gift_ability_cond` 로 굽는다. 빌드는 설명문을 다시 읽지 않는다 — 그래야 결정적이고 `v2:verify:rebuild` 가 성립한다(ADR-08). 판정 코드는 이 PR 에서 안 바꾼다(2단계).
 
 **Tech Stack:** TypeScript · Prisma(PostgreSQL 3스키마 raw/canonical/app) · node:test · tsx
 
@@ -46,7 +46,7 @@ src/v2/verify-canonical.ts       적재·결손 검사를 더한다
 
 lib/engine/v2/deprecated-tables.test.ts   엔진이 폐기 표를 다시 읽지 못하게
 
-data/authored/gift-ability.jsonl          저작 결과. 씨앗 10건으로 시작
+src/v2/authored/gift-ability.jsonl          저작 결과. 씨앗 10건으로 시작
 scripts/extract-gift-ability.ts           LLM 추출 (2회 독립)
 scripts/diff-gift-ability.ts              두 판 비교 → 검수 우선순위
 scripts/review-gift-ability.ts            검수 화면. 회차 재개 가능
@@ -164,7 +164,7 @@ Expected: FAIL — `Cannot find module './ability-payload.js'`
 /**
  * 기프트 능력 저작 payload — 타입과 형식 검사.
  *
- * 저작 파일(`data/authored/gift-ability.jsonl`)은 사람이 손으로 고친다.
+ * 저작 파일(`src/v2/authored/gift-ability.jsonl`)은 사람이 손으로 고친다.
  * 형식이 틀어진 채 DB 로 들어가면 굽는 쪽에서 뒤늦게 터지므로 여기서 막는다.
  *
  * **DB 를 안 본다.** 참조가 실재하는지(`refId` 가 진짜 소속인지)는 여기서
@@ -1100,8 +1100,8 @@ op='has' 의 threshold=null 은 결손이 아니다 — 「약지 소속 인격�
 ### Task 5: 저작 파일 형식과 씨앗 열 건
 
 **Files:**
-- Create: `data/authored/gift-ability.jsonl`
-- Create: `data/authored/README.md`
+- Create: `src/v2/authored/gift-ability.jsonl`
+- Create: `src/v2/authored/README.md`
 - Modify: `src/v2/seed-authored.ts`
 
 **Interfaces:**
@@ -1110,7 +1110,7 @@ op='has' 의 threshold=null 은 결손이 아니다 — 「약지 소속 인격�
 
 - [ ] **Step 1: 저작 파일 형식을 적는다**
 
-`data/authored/README.md` 를 만든다.
+`src/v2/authored/README.md` 를 만든다.
 
 ```markdown
 # 저작 데이터
@@ -1135,12 +1135,12 @@ op='has' 의 threshold=null 은 결손이 아니다 — 「약지 소속 인격�
 
 **456건 전건을 사람이 본다**(2026-08-11 사용자 확정). 회차 진행은
 `scripts/review-gift-ability.ts` 가 돕고, 어디까지 봤는지는
-`data/authored/gift-ability.progress.json` 이 기억한다.
+`src/v2/authored/gift-ability.progress.json` 이 기억한다.
 ```
 
 - [ ] **Step 2: 씨앗 열 건을 손으로 쓴다**
 
-`data/authored/gift-ability.jsonl` 을 만든다. **여기 열 건은 골든의 근거이므로 손으로 쓰고, 나머지 446건은 추출 도구(Task 8)가 채운다.**
+`src/v2/authored/gift-ability.jsonl` 을 만든다. **여기 열 건은 골든의 근거이므로 손으로 쓰고, 나머지 446건은 추출 도구(Task 8)가 채운다.**
 
 `sourceText` 는 `canonical.gift_stage_text` 의 실제 문단이어야 한다. 아래 명령으로 원문을 확인하며 쓴다.
 
@@ -1185,7 +1185,7 @@ import { validatePayload, type AbilityPayload } from './ability-payload.js';
 
 ```typescript
 	/**
-	 * 기프트 능력 저작 — `data/authored/gift-ability.jsonl`.
+	 * 기프트 능력 저작 — `src/v2/authored/gift-ability.jsonl`.
 	 *
 	 * 다른 저작은 이 파일에 배열로 적혀 있지만 이것만 별도 파일이다.
 	 * 456건이라 소스에 두면 읽을 수 없고, 검수 회차마다 커밋되므로
@@ -1194,7 +1194,7 @@ import { validatePayload, type AbilityPayload } from './ability-payload.js';
 	 * **형식이 틀어지면 여기서 멈춘다.** 사람이 손으로 고치는 파일이라
 	 * 오타가 DB 로 들어가면 굽는 쪽에서 뒤늦게 터진다.
 	 */
-	const abilityPath = fileURLToPath(new URL('../../data/authored/gift-ability.jsonl', import.meta.url));
+	const abilityPath = fileURLToPath(new URL('./authored/gift-ability.jsonl', import.meta.url));
 	const raw = await readFile(abilityPath, 'utf8');
 	const lines = raw.split('\n').map((l) => l.trim()).filter((l) => l !== '');
 	const problems: string[] = [];
@@ -1214,7 +1214,7 @@ import { validatePayload, type AbilityPayload } from './ability-payload.js';
 	}
 	if (problems.length > 0) {
 		throw new Error(
-			`data/authored/gift-ability.jsonl 의 형식이 틀렸다. 심지 않는다:\n  ${problems.join('\n  ')}`,
+			`src/v2/authored/gift-ability.jsonl 의 형식이 틀렸다. 심지 않는다:\n  ${problems.join('\n  ')}`,
 		);
 	}
 	const abilityRes = await prisma.giftAbilityAuthored.createMany({ data: rows, skipDuplicates: true });
@@ -1226,8 +1226,8 @@ import { validatePayload, type AbilityPayload } from './ability-payload.js';
 일부러 한 줄을 깨고 돌린다.
 
 ```bash
-cp data/authored/gift-ability.jsonl /tmp/ability-backup.jsonl
-printf '{"giftId":"9262","level":0,"ordinal":9,"payload":{"timing":"뭐시기","unconditional":true,"refines":null,"sourceText":"x","conds":[]},"note":"일부러 깬 줄"}\n' >> data/authored/gift-ability.jsonl
+cp src/v2/authored/gift-ability.jsonl /tmp/ability-backup.jsonl
+printf '{"giftId":"9262","level":0,"ordinal":9,"payload":{"timing":"뭐시기","unconditional":true,"refines":null,"sourceText":"x","conds":[]},"note":"일부러 깬 줄"}\n' >> src/v2/authored/gift-ability.jsonl
 npm run v2:seed:authored
 ```
 
@@ -1236,7 +1236,7 @@ Expected: 「timing 이 어휘에 없다: 뭐시기」를 담은 오류로 멈�
 되돌린다.
 
 ```bash
-cp /tmp/ability-backup.jsonl data/authored/gift-ability.jsonl
+cp /tmp/ability-backup.jsonl src/v2/authored/gift-ability.jsonl
 npm run v2:seed:authored
 ```
 
@@ -1245,7 +1245,7 @@ Expected: 열 건에 해당하는 행 수가 심긴다.
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add data/authored/gift-ability.jsonl data/authored/README.md src/v2/seed-authored.ts
+git add src/v2/authored/gift-ability.jsonl src/v2/authored/README.md src/v2/seed-authored.ts
 git commit -m "feat(authored): 기프트 능력 저작 파일과 씨앗 열 건
 
 456건이라 소스에 배열로 두면 읽을 수 없어 별도 jsonl 로 둔다. 검수 회차마다
@@ -1556,7 +1556,7 @@ git commit -m "test(verify): 기프트 능력 적재·결손 검사 11건
 
 **Interfaces:**
 - Consumes: Task 1 의 `validatePayload`, `canonical.gift_stage_text`, Task 5 의 저작 jsonl
-- Produces: `data/authored/gift-ability.pass1.jsonl` · `.pass2.jsonl` · `.progress.json`, 그리고 검수 페이지 HTML
+- Produces: `src/v2/authored/gift-ability.pass1.jsonl` · `.pass2.jsonl` · `.progress.json`, 그리고 검수 페이지 HTML
 
 **검수는 페이지로 한다(2026-08-11 사용자 확정).** 터미널이 아니라 웹 페이지가 창구다 — 사용자가 절 단위로 직접 보고 「맞다 / 틀리다」를 누르면, 페이지가 판정을 모아 파일로 내보내고, 에이전트가 그 파일을 받아 반영한다.
 
@@ -1567,7 +1567,7 @@ scripts/build-review-page.ts   DB + 저작 jsonl  →  자기완결 HTML
       ↓  「내보내기」 → window.claude.downloads.save()
 verdicts-<날짜>.json
       ↓  npm run gift:import <파일>
-data/authored/gift-ability.progress.json
+src/v2/authored/gift-ability.progress.json
 ```
 
 localStorage 에 남기므로 **여러 날에 나눠 봐도 이어진다.** 내보내기는 사용자가 누를 때만 일어난다.
@@ -1685,7 +1685,7 @@ for (const r of rows) {
 }
 writeFileSync(out, lines.join('\n'), 'utf8');
 console.log(`${rows.length}건 → ${out}`);
-console.log('이 파일을 모델에 넣고 받은 jsonl 을 data/authored/gift-ability.pass1.jsonl 등에 이어붙여라.');
+console.log('이 파일을 모델에 넣고 받은 jsonl 을 src/v2/authored/gift-ability.pass1.jsonl 등에 이어붙여라.');
 
 await prisma.$disconnect();
 process.exit(0);
@@ -1720,8 +1720,8 @@ const read = (path: string): Map<string, string> => {
 	return m;
 };
 
-const p1 = read('data/authored/gift-ability.pass1.jsonl');
-const p2 = read('data/authored/gift-ability.pass2.jsonl');
+const p1 = read('src/v2/authored/gift-ability.pass1.jsonl');
+const p2 = read('src/v2/authored/gift-ability.pass2.jsonl');
 
 const keys = [...new Set([...p1.keys(), ...p2.keys()])].sort();
 const only1: string[] = [];
@@ -1743,8 +1743,8 @@ console.log(`능력 열쇠  1판 ${p1.size} · 2판 ${p2.size}`);
 console.log(`  1판에만 ${only1.length} · 2판에만 ${only2.length} · 내용이 다름 ${differ.length}`);
 console.log(`어긋난 기프트 ${suspect.length}`);
 
-writeFileSync('data/authored/gift-ability.priority.json', JSON.stringify(suspect, null, '\t'), 'utf8');
-console.log('→ data/authored/gift-ability.priority.json (검수 우선순위)');
+writeFileSync('src/v2/authored/gift-ability.priority.json', JSON.stringify(suspect, null, '\t'), 'utf8');
+console.log('→ src/v2/authored/gift-ability.priority.json (검수 우선순위)');
 ```
 
 - [ ] **Step 3: 검수 페이지 생성기를 쓴다**
@@ -1777,9 +1777,9 @@ import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { validatePayload, type AbilityPayload } from '../src/v2/ability-payload.js';
 
-const AUTHORED = 'data/authored/gift-ability.jsonl';
-const PROGRESS = 'data/authored/gift-ability.progress.json';
-const PRIORITY = 'data/authored/gift-ability.priority.json';
+const AUTHORED = 'src/v2/authored/gift-ability.jsonl';
+const PROGRESS = 'src/v2/authored/gift-ability.progress.json';
+const PRIORITY = 'src/v2/authored/gift-ability.priority.json';
 
 const argv = process.argv.slice(2);
 const out = argv.indexOf('--out') >= 0 ? argv[argv.indexOf('--out') + 1] : '/tmp/gift-review.html';
@@ -2105,7 +2105,7 @@ render();
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
-const PROGRESS = 'data/authored/gift-ability.progress.json';
+const PROGRESS = 'src/v2/authored/gift-ability.progress.json';
 const src = process.argv[2];
 if (src === undefined) {
 	console.error('파일을 달라: npm run gift:import -- ~/Downloads/gift-verdicts.json');
@@ -2206,7 +2206,7 @@ cat > /tmp/verdicts-test.json <<'JSON'
 }}
 JSON
 npm run gift:import -- /tmp/verdicts-test.json
-cat data/authored/gift-ability.progress.json
+cat src/v2/authored/gift-ability.progress.json
 ```
 
 Expected: `새로 2 · 바뀜 0 · 누적 2`, `맞다 1`, `틀리다 1`, 그리고 `2차 대상: 9268`. 진행 파일에 `9268` 이 `{"state":"bad","round":1,"why":"2문단 조건이 빠졌다"}` 로 남는다.
@@ -2223,7 +2223,7 @@ Expected: `9262 의 판정이 어휘 밖이다: 글쎄` 로 멈춘다. **진행 
 되돌린다.
 
 ```bash
-git checkout data/authored/gift-ability.progress.json 2>/dev/null || rm -f data/authored/gift-ability.progress.json
+git checkout src/v2/authored/gift-ability.progress.json 2>/dev/null || rm -f src/v2/authored/gift-ability.progress.json
 ```
 
 - [ ] **Step 9: 커밋**

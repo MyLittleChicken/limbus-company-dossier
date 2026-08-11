@@ -518,7 +518,7 @@ canonical.gift_stage_text (en · ko)
         │
         │  scripts/extract-gift-ability.ts   ← 한 번만 돌린다
         ▼
-data/authored/gift-ability.jsonl            456 기프트 · 673 단계 · ~1,745 능력
+src/v2/authored/gift-ability.jsonl            456 기프트 · 673 단계 · ~1,745 능력
         │
         │  사람 검수 (§5)
         ▼
