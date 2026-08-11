@@ -75,6 +75,7 @@ test('편성으로 이미 충족된 참조는 사슬에서 뺀다', () => {
 		reasons: [{
 			triggerId: 't', refKind: 'axis', refId: 'SINKING',
 			verdict: 'satisfied', certainty: 'certain', have: 5, need: 5, denominator: 'field',
+			blocking: true,
 		}],
 		// 확정 미충족이 없으므로 켜질 수 있다
 		fireable: true,

@@ -93,6 +93,17 @@ export interface Reason {
 	need: number | null;
 	/** roster | field | waiting. 임계값이 없으면 null */
 	denominator: string | null;
+	/**
+	 * 이 근거가 발동을 막을 수 있는가.
+	 *
+	 * 제3자 트리거 태그는 조건만 담지 않는다 — 발동 조건 · 적용 범위 · 수혜
+	 * 대상이 한 목록에 섞여 있다. 9718 검계 기프트의 `association/BLADE_LINEAGE`
+	 * 는 게이트지만 `attack_type/slash` 는 효과가 무엇을 키우는지다.
+	 *
+	 * 막지 않는 근거도 `reasons` 에 그대로 남는다 — 근거 모달이 보여야 하고
+	 * `satisfied`/`total` 에도 계속 센다. 죽이지 않되 점수는 깎는다.
+	 */
+	blocking: boolean;
 }
 
 /**
