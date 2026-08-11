@@ -138,12 +138,15 @@ test('축을 가리키는 트리거가 43종이다', DB, async () => {
 	assert.equal(n, 43);
 });
 
-test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · slot 60', DB, async () => {
+test('gift_trigger_param 이 채워졌다 — min_count 69 · denominator 59 · slot 60 · gate 49', DB, async () => {
 	// 예전 이 테스트는 0 을 고정하는 트립와이어였다. 채우면 깨지도록 두었고,
 	// 실제로 깨져서 여기로 왔다 — 「채웠다」가 기록에 남는 방식이다
+	//
+	// gate 49 는 2026-08-11 게이트 판정 PR 이 더한 것이다 — 설명문 첫 문단의
+	// 게이트를 kind='gate' 행으로 승격했다(min_count 와 같은 문장에서 나온 짝)
 	const rows = await prisma.giftTriggerParam.groupBy({ by: ['kind'], _count: { _all: true } });
 	const m = Object.fromEntries(rows.map((r) => [r.kind, r._count._all]));
-	assert.deepEqual(m, { min_count: 69, denominator: 59, slot: 60 });
+	assert.deepEqual(m, { min_count: 69, denominator: 59, slot: 60, gate: 49 });
 });
 
 test('진혼이 실제로 판정된다 — 화상 6인 ≥ 5인, 분모는 출전', DB, async () => {
