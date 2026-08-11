@@ -39,6 +39,52 @@ const progress: { round: number; verdicts: Record<string, { state: string; why?:
 	existsSync(PROGRESS) ? JSON.parse(readFileSync(PROGRESS, 'utf8')) : { round: 1, verdicts: {} };
 const priority: string[] = existsSync(PRIORITY) ? JSON.parse(readFileSync(PRIORITY, 'utf8')) : [];
 
+/**
+ * 조건을 사람 문장으로 읽으려면 이름표가 필요하다.
+ *
+ * `association/RING_FINGER` 를 그대로 보이면 검수자가 머릿속에서 「약지」로
+ * 옮겨야 한다 — 456번 그러면 회차가 끝나지 않는다. DB 가 이름을 갖고 있으니
+ * 페이지에 함께 넣는다.
+ */
+const assocNames = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
+	SELECT association_id AS id, name FROM canonical.association_text WHERE locale = 'ko'
+`;
+const keywordNames = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
+	SELECT keyword_id AS id, name FROM canonical.keyword_text WHERE locale = 'ko'
+`;
+const unitKeywords = await prisma.$queryRaw<Array<{ keyword: string; n: bigint }>>`
+	SELECT keyword, count(*)::bigint AS n FROM canonical.identity_unit_keyword GROUP BY 1
+`;
+
+/** 축 id 는 대문자, keyword id 는 파스칼케이스라 맞춰 준다 */
+const axisLabel: Record<string, string> = {};
+for (const k of keywordNames) axisLabel[k.id.toUpperCase()] = k.name;
+axisLabel.BULLET = '가속(탄환)';
+
+const LABELS = {
+	axis: axisLabel,
+	association: Object.fromEntries(assocNames.map((a) => [a.id, a.name])),
+	/** 유닛 키워드는 ko 이름표가 없다 — 아는 것만 적고 나머지는 id 를 그대로 보인다 */
+	unit_keyword: { BLOODFIEND: '혈귀' } as Record<string, string>,
+	sin: {
+		wrath: '분노', lust: '색욕', sloth: '나태', gluttony: '폭식',
+		gloom: '우울', pride: '오만', envy: '질투',
+	} as Record<string, string>,
+	attack_type: { slash: '참격', pierce: '관통', blunt: '타격' } as Record<string, string>,
+	skill_kind: { counter: '반격', evade: '회피', guard: '방어' } as Record<string, string>,
+	coin: { minus: '빼기 코인', plus: '더하기 코인', single: '단일 코인' } as Record<string, string>,
+};
+LABELS.resonance = LABELS.sin;
+/** 유닛 키워드 공급 수 — 「혈귀 5명 중」처럼 모수를 함께 보이면 판단이 쉬워진다 */
+const SUPPLY_N: Record<string, number> = Object.fromEntries(
+	unitKeywords.map((u) => [`unit_keyword/${u.keyword}`, Number(u.n)]),
+);
+for (const a of assocNames) SUPPLY_N[`association/${a.id}`] = 0;
+const assocCounts = await prisma.$queryRaw<Array<{ id: string; n: bigint }>>`
+	SELECT association_id AS id, count(*)::bigint AS n FROM canonical.identity_association GROUP BY 1
+`;
+for (const a of assocCounts) SUPPLY_N[`association/${a.id}`] = Number(a.n);
+
 const gifts = [...new Set(texts.map((t) => t.giftId))].map((id) => ({
 	id,
 	name: texts.find((t) => t.giftId === id)?.name ?? '',
@@ -62,7 +108,7 @@ gifts.sort((a, b) =>
 	a.id.localeCompare(b.id));
 
 /** `</script>` 로 페이지가 끊기는 것과 줄 구분자를 막는다 */
-const DATA = JSON.stringify({ round: progress.round, gifts })
+const DATA = JSON.stringify({ round: progress.round, gifts, labels: LABELS, supplyN: SUPPLY_N })
 	.replaceAll('<', '\\u003c')
 	.replaceAll(' ', '\\u2028')
 	.replaceAll(' ', '\\u2029');
@@ -148,12 +194,27 @@ function renderPage(data: string): string {
     display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
   .ab .hd b{color:var(--text)}
   .ab .src{font-size:13px;margin-bottom:7px}
-  .cond{font-family:var(--mono);font-size:11.5px;padding:3px 0 3px 12px;
-    border-left:2px solid var(--struct);color:var(--text)}
+  /* 조건 — 사람 문장이 먼저, 기계말은 작게 아래 */
+  .cond{font-size:13px;padding:6px 0 6px 12px;border-left:2px solid var(--struct);
+    color:var(--text);margin:4px 0}
+  .cond b{font-weight:680}
   .cond .rt{color:var(--warn)}
-  .none{font-family:var(--mono);font-size:11.5px;color:var(--bad)}
+  .cond .sub{color:var(--dim);font-size:12px}
+  .cond .or{font-family:var(--mono);font-size:10.5px;color:var(--struct);
+    letter-spacing:.08em;margin-right:4px}
+  .cond .raw{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:3px}
+  .grp + .grp{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
+  .verdict-line{font-size:12.5px;color:var(--dim);margin:5px 0}
+  .verdict-line b{color:var(--text)}
+  .verdict-line.ok-line{color:var(--ok)}
+  .verdict-line.ok-line b{color:var(--ok)}
+  .summary{font-size:13px;background:var(--panel);border:1px solid var(--line);
+    border-left:3px solid var(--struct);padding:9px 13px;margin-bottom:9px}
+  .summary b{font-weight:680}
+  .none{font-size:12.5px;color:var(--bad)}
   .warn{font-family:var(--mono);font-size:11.5px;color:var(--bad);margin-top:5px}
-  .note{font-size:12.5px;color:var(--dim);margin-top:6px}
+  .note{font-size:12.5px;color:var(--dim);margin-top:7px;padding-top:6px;
+    border-top:1px dashed var(--line)}
 
   .verdict{display:flex;gap:8px;align-items:center;padding:11px 18px;
     border-top:1px solid var(--line);flex-wrap:wrap}
@@ -203,27 +264,110 @@ const save = () => localStorage.setItem(KEY, JSON.stringify(V));
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 let filter = 'picked';
 
-function condLine(c) {
-  const th = c.threshold === null ? '' : ' ' + c.threshold;
-  const rt = c.runtime ? ' <span class="rt">· 전투 중</span>' : '';
-  const sl = c.slot === null ? '' : ' · 자리 ' + c.slot;
-  const rm = c.resonanceMode ? ' · ' + c.resonanceMode : '';
-  return '<div class="cond">' + esc(c.group + '/' + c.idx) + '  ' +
-    esc(c.refKind + '/' + c.refId + ' ' + c.op + th + rm + ' · ' + c.scope + ' · ' + c.supply + sl) + rt + '</div>';
+const TIMING_KO = {
+  combat_start: '전투 시작 시', turn_start: '턴 시작 시', turn_end: '턴 종료 시',
+  on_use: '스킬 사용 시', on_hit: '적중 시', on_kill: '처치 시', on_clash: '합 시',
+  floor_start: '층·스테이지 시작 시', none: '시점 표지 없음', other: '어휘 밖 시점',
+};
+const SCOPE_KO = {
+  field: '출격 7인', roster: '편성 12인', waiting: '대기 5인',
+  slot: '그 자리', enemy: '적', none: '',
+};
+
+/** 조건 하나를 사람 문장으로 — 「편성 12인 중에 약지 소속이 한 명이라도 있어야 한다」 */
+function condSentence(c) {
+  const label = (DATA.labels[c.refKind] || {})[c.refId] || c.refId;
+  const kindKo = {
+    axis: '을(를) 주는 인격', association: ' 소속 인격', unit_keyword: ' 인격',
+    sin: ' 속성 스킬 보유자', resonance: ' 속성 스킬 보유자',
+    attack_type: ' 스킬 보유자', skill_kind: ' 스킬 보유자', coin: ' 보유자',
+  }[c.refKind];
+
+  if (c.refKind === 'other') return '조건을 어휘로 못 담았다 — 원문: 「' + esc(c.refId) + '」';
+  if (c.refKind === 'deployment') return '편성 자리 조건';
+  if (c.refKind === 'enemy_state') return '적 상태 조건 — ' + esc(c.refId);
+
+  const who = '<b>' + esc(label) + '</b>' + (kindKo || '');
+  const where = SCOPE_KO[c.scope] || c.scope;
+  const slotPart = c.scope === 'slot' ? '<b>' + c.slot + '번 자리</b>의 인격이 ' : '';
+  const howMany = c.op === 'has'
+    ? '<b>한 명이라도</b> 있어야 한다'
+    : c.op === 'eq'
+      ? '<b>정확히 ' + c.threshold + '명</b>이어야 한다'
+      : c.threshold === null
+        ? '있어야 한다 <span class="rt">(몇 명인지 못 찾았다)</span>'
+        : '<b>' + c.threshold + '명 이상</b> 있어야 한다';
+
+  const supplyNote = c.supply === 'skill'
+    ? ' <span class="sub">— 태그가 아니라 <b>실제로 그 스킬을 가진</b> 인격으로 센다</span>'
+    : '';
+  const resoNote = c.resonanceMode === 'absolute'
+    ? ' <span class="sub">— <b>완전 공명</b>은 슬롯에서 연속 3개 이상이라야 선다</span>'
+    : c.resonanceMode === 'activate'
+      ? ' <span class="sub">— 일반 공명</span>' : '';
+  const pool = DATA.supplyN[c.refKind + '/' + c.refId];
+  const poolNote = pool !== undefined
+    ? ' <span class="sub">(게임 전체에 ' + pool + '명)</span>' : '';
+  const rtNote = c.runtime
+    ? ' <span class="rt">— 전투 중에만 아는 조건이라 편성만 보고 배제하지 않는다</span>' : '';
+
+  return (slotPart !== '' ? slotPart : (where ? esc(where) + ' 중에 ' : '')) +
+    who + '이(가) ' + howMany + poolNote + supplyNote + resoNote + rtNote;
+}
+
+function condLine(c, many) {
+  const raw = c.refKind + '/' + c.refId + ' ' + c.op +
+    (c.threshold === null ? '' : ' ' + c.threshold) +
+    ' · ' + c.scope + ' · ' + c.supply +
+    (c.slot === null ? '' : ' · slot ' + c.slot) +
+    (c.resonanceMode ? ' · ' + c.resonanceMode : '') + (c.runtime ? ' · runtime' : '');
+  return '<div class="cond">' + (many ? '<span class="or">또는</span> ' : '') +
+    condSentence(c) + '<div class="raw">' + esc(raw) + '</div></div>';
 }
 
 function abilityBlock(a) {
-  const head = '<div class="hd"><b>[' + a.level + '/' + a.ordinal + ']</b>' +
-    '<span>시점 ' + esc(a.timing) + '</span>' +
-    '<span>' + (a.unconditional ? '무조건' : '조건부') + '</span>' +
-    (a.refines === null ? '' : '<span>강화판 → ' + a.refines + '</span>') + '</div>';
+  const head = '<div class="hd"><b>절 ' + (a.ordinal + 1) + '</b>' +
+    '<span>' + esc(TIMING_KO[a.timing] || a.timing) + '</span>' +
+    (a.level > 0 ? '<span>강화 ' + a.level + '단계</span>' : '') +
+    (a.refines === null ? '' : '<span class="rt">절 ' + (a.refines + 1) + '의 강화판 — 그 절이 죽으면 같이 죽는다</span>') +
+    '</div>';
   const src = '<div class="src">' + esc(a.sourceText) + '</div>';
-  const conds = a.conds.length > 0
-    ? a.conds.map(condLine).join('')
-    : (a.unconditional ? '' : '<div class="none">조건 없음 — 결손이다(조건이 있다고 적혔는데 못 뽑았다)</div>');
-  const note = a.note ? '<div class="note">note · ' + esc(a.note) + '</div>' : '';
+
+  let conds;
+  if (a.unconditional) {
+    conds = '<div class="verdict-line ok-line">조건이 없다 — <b>편성과 무관하게 언제나 돈다</b>. ' +
+      '이 절 하나만으로도 기프트는 켜진다</div>';
+  } else if (a.conds.length === 0) {
+    conds = '<div class="none">조건이 있다고 적혔는데 <b>하나도 못 뽑았다</b> — 결손이다</div>';
+  } else {
+    // group 이 여럿이면 group 끼리는 그리고, 같은 group 안은 또는
+    const byGroup = new Map();
+    for (const c of a.conds) byGroup.set(c.group, [...(byGroup.get(c.group) || []), c]);
+    const groups = [...byGroup.entries()].sort((x, y) => x[0] - y[0]);
+    const head2 = groups.length > 1
+      ? '<div class="verdict-line">아래 <b>' + groups.length + '가지가 전부</b> 서야 이 절이 돈다 (그리고)</div>'
+      : '';
+    conds = head2 + groups.map(([, list]) =>
+      '<div class="grp">' +
+      (list.length > 1 ? '<div class="verdict-line">아래 중 <b>하나만</b> 서면 된다 (또는)</div>' : '') +
+      list.map((c, i) => condLine(c, list.length > 1 && i > 0)).join('') +
+      '</div>').join('');
+  }
+
+  const note = a.note ? '<div class="note">왜 이렇게 봤나 · ' + esc(a.note) + '</div>' : '';
   const warn = a.problems.map((p) => '<div class="warn">⚠ ' + esc(p) + '</div>').join('');
   return '<div class="ab">' + head + src + conds + note + warn + '</div>';
+}
+
+/** 기프트 한 줄 요약 — 「절 셋 중 하나라도 서면 켜진다」 */
+function summary(g) {
+  const indep = g.abilities.filter((a) => a.refines === null);
+  if (indep.length === 0) return '';
+  const uncond = indep.filter((a) => a.unconditional).length;
+  const txt = uncond > 0
+    ? '조건 없는 절이 ' + uncond + '개 있으므로 <b>이 기프트는 언제나 켜진다</b>'
+    : '독립된 절 ' + indep.length + '개 중 <b>하나라도 서면 켜진다</b>. 전부 안 서면 죽는다';
+  return '<div class="summary">' + txt + '</div>';
 }
 
 function card(g) {
@@ -232,13 +376,13 @@ function card(g) {
   const stages = g.stages.map((s) =>
     '<div><div class="lbl">강화 ' + s.level + '단계 설명문</div><pre>' + esc(s.desc) + '</pre></div>').join('');
   const abilities = g.abilities.length > 0
-    ? g.abilities.map(abilityBlock).join('')
+    ? summary(g) + g.abilities.map(abilityBlock).join('')
     : '<div class="none">뽑힌 절이 없다 — 아직 안 뽑혔거나 추출이 빠뜨렸다</div>';
   return '<article class="gift' + cls + '" id="g-' + g.id + '">' +
     '<div class="top"><h2>' + esc(g.name) + '<em>' + g.id + '</em></h2>' +
     (g.priority ? '<span class="flag">두 판 어긋남</span>' : '') + '</div>' +
     '<div class="body">' + stages +
-      '<div><div class="lbl">뽑힌 절</div>' + abilities + '</div>' +
+      '<div><div class="lbl">설명문을 이렇게 절로 나눴다</div>' + abilities + '</div>' +
     '</div>' +
     '<div class="verdict">' +
       '<button class="y" data-v="ok" data-g="' + g.id + '" aria-pressed="' + (v.state === 'ok') + '">맞다</button>' +
