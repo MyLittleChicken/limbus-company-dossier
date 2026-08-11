@@ -47,7 +47,14 @@ const GATE = /(\d+)\s*(?:인|명)\s*이상/g;
 const CONTEXT = 130;
 
 export interface GiftTriggerParamInput {
-	/** `gift_stage_text` 의 ko · level 0. 강화 단계는 조건이 같아 중복이다 */
+	/**
+	 * `gift_stage_text` 의 ko · level 0.
+	 *
+	 * 강화 단계는 대개 조건이 같아 level 0 만으로 충분하다. 다만 456개 전량
+	 * 검수(2026-08-11)에서 14건은 단계마다 조건이 다르다고 확인됐다 — 9117 ·
+	 * 9138 · 9148 은 편성 자리 범위 자체가 단계별로 바뀐다. 이 회차는 게이트
+	 * 판정에 level 0 만 쓰므로 그 14건은 다루지 않는다.
+	 */
 	giftDesc: Array<{ giftId: string; desc: string }>;
 	giftTrigger: Array<{ giftId: string; triggerId: string }>;
 	triggerRef: Array<{ triggerId: string; refKind: string; refId: string; evaluability: string }>;
@@ -168,12 +175,26 @@ export function buildGiftTriggerParam(
 
 	const rows: GiftTriggerParamRow[] = [];
 	const denomSeen = new Set<string>();
+	const gateSeen = new Set<string>();
 
 	for (const g of input.giftDesc) {
 		GATE.lastIndex = 0;
 		const denom = DENOMINATOR.find(([re]) => re.test(g.desc))?.[1] ?? null;
 		// 같은 (기프트, 트리거) 안에서 몇 번째 단인가. 9206 은 5인·10인 두 단이다
 		const tierOf = new Map<string, number>();
+
+		/**
+		 * **게이트는 첫 문단에만 있다.**
+		 *
+		 * 「턴 시작 시, 검계 소속 인격이 3인 이상일 때 발동」처럼 기프트 전체를
+		 * 여는 문은 설명문 맨 앞에 온다. 뒤 문단의 「…4인 이상 있다면」은 그
+		 * 문단만 여는 조건이라 기프트를 죽일 근거가 못 된다(9220 · 9270).
+		 *
+		 * 「발동」이라는 낱말을 함께 본다 — 9778 「…4인 이상이면 공격 레벨 +1」은
+		 * 첫 문단이지만 효과 서술이지 여는 문이 아니다.
+		 */
+		const firstPara = g.desc.split(/\n+/).find((p) => p.trim().length > 0) ?? '';
+		const gateZone = firstPara.includes('발동') ? firstPara.length : -1;
 
 		for (const m of g.desc.matchAll(GATE)) {
 			const ctx = g.desc.slice(Math.max(0, m.index - CONTEXT), m.index);
@@ -202,6 +223,17 @@ export function buildGiftTriggerParam(
 				giftId: g.giftId, triggerId, kind: 'min_count', tier,
 				value: m[1] ?? null, slots: [], source: 'desc_derived',
 			});
+
+			// 첫 문단 안에서 왔고 그 문단이 여는 문이면 게이트다. 엔진은 이 표시가
+			// 있는 짝만 발동을 막는다
+			const gateKey = `${g.giftId}|${triggerId}`;
+			if (m.index < gateZone && !gateSeen.has(gateKey)) {
+				gateSeen.add(gateKey);
+				rows.push({
+					giftId: g.giftId, triggerId, kind: 'gate', tier: 0,
+					value: m[1] ?? null, slots: [], source: 'desc_derived',
+				});
+			}
 
 			// 분모는 (기프트, 트리거) 당 한 행이다. 다단 임계가 분모를 공유한다
 			const key = `${g.giftId}|${triggerId}`;

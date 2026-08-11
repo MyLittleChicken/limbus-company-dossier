@@ -1143,7 +1143,8 @@ async function main(): Promise<void> {
 		// ── 트리거 정량자 ───────────────────────────────────────────
 		// 숫자는 어느 출처에도 구조화돼 있지 않다 — raw 를 전수로 확인했다.
 		// `gift_stage_text.desc` 산문에서 적재 시점에 한 번 뽑아 굳힌 것이다
-		eq('gift_trigger_param', await prisma.giftTriggerParam.count(), 188);
+		// 188 + 49(kind='gate', 2026-08-11 게이트 판정 도입) = 237
+		eq('gift_trigger_param', await prisma.giftTriggerParam.count(), 237);
 		eq('gift_trigger_param (min_count)',
 			await prisma.giftTriggerParam.count({ where: { kind: 'min_count' } }), 69);
 		eq('gift_trigger_param (denominator)',
@@ -1182,9 +1183,11 @@ async function main(): Promise<void> {
 			where: { giftId: '9088' }, select: { triggerId: true, kind: true, value: true },
 		});
 		const rq = requiem.map((r) => `${r.triggerId}|${r.kind}|${r.value}`).sort().join(' · ');
+		// 9088 설명문 첫 문단이 「…5인 이상이면 … 발동」이라 게이트 정의(첫 문단 +
+		// 「발동」)를 그대로 충족한다 — 2026-08-11 게이트 도입으로 gate 행이 붙었다
 		checks.push({
-			name: '9088 진혼 = 화상 5인 · 출전 분모',
-			ok: rq === 'Allies have Burn Skill|denominator|field · Allies have Burn Skill|min_count|5',
+			name: '9088 진혼 = 화상 5인 · 출전 분모 · 게이트',
+			ok: rq === 'Allies have Burn Skill|denominator|field · Allies have Burn Skill|gate|5 · Allies have Burn Skill|min_count|5',
 			detail: rq,
 		});
 
