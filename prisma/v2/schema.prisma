@@ -592,6 +592,90 @@ model GiftTriggerParam {
   @@schema("canonical")
 }
 
+/// 기프트 능력 — 설명문 문단 하나가 능력 하나다.
+///
+/// 강화 단계마다 따로 있다. 단계가 둘 이상인 기프트 110개 중 87개가 단계에
+/// 따라 조건 자체가 바뀌기 때문이다(9001 은 2단계에서 완전 공명 → 공명으로
+/// 느슨해진다).
+///
+/// `app.gift_ability_authored` 가 정본이다. 이 표는 그것을 편 것이고, 빌드는
+/// 설명문을 다시 읽지 않는다 — 그래야 결과가 고정되고 재현 가능하다(ADR-08).
+model GiftAbility {
+  giftId        String @map("gift_id")
+  level         Int
+  ordinal       Int
+  /// 발동 시점. 머리표(턴 시작 시)와 문말 시점구에서 온다. 모르면 'none'
+  timing        String
+  /// 조건 없이 도는가. 참이면 conds 가 비어 있다.
+  /// **거짓인데 비어 있으면 결손이다** — field_gap 이 그 사실을 적는다
+  unconditional Boolean
+  /// 다른 능력의 강화판인가. 그 능력의 ordinal, 독립이면 null.
+  /// 강화판은 켜짐 판정에 참여하지 않는다 — 원 능력이 죽으면 같이 죽는다
+  refines       Int?
+  /// 이 능력에 해당하는 설명문 문단 원문. 검수와 재현의 근거다
+  sourceText    String @map("source_text")
+
+  gift  Gift              @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  conds GiftAbilityCond[]
+
+  @@id([giftId, level, ordinal])
+  @@index([giftId])
+  @@map("gift_ability")
+  @@schema("canonical")
+}
+
+/// 능력 하나의 발동 조건.
+///
+/// `group` 이 AND/OR 를 가른다 — **같은 group 안은 OR, group 끼리는 AND.**
+/// 9043 사원증 「분노 완전 공명을 발동하였거나 충전 … 스킬을 사용할 경우」가
+/// group 0 에 조건 2개로 들어간다. 옛 모형이 이것을 AND 로 읽어 죽였다.
+model GiftAbilityCond {
+  giftId        String  @map("gift_id")
+  level         Int
+  ordinal       Int
+  group         Int
+  idx           Int
+  /// axis · sin · resonance · attack_type · skill_kind · coin
+  /// deployment · association · unit_keyword · enemy_state · other
+  refKind       String  @map("ref_kind")
+  /// COMBUSTION · RING_FINGER · … . refKind='other' 면 원문 조각을 그대로 둔다
+  refId         String  @map("ref_id")
+  /// gte · eq · has
+  op            String
+  /// 문턱값. 문장에 없으면 null — **1 로 가정하지 않는다**
+  threshold     Int?
+  /// 세는 모집단. 거울 던전은 편성 12인 · 출격 7인 · 대기 5인이다.
+  ///   field    출격 7인    「출격 인원을 기준으로 함」(9283 상납된 시가)
+  ///   roster   편성 12인   「편성 인원을 기준」(9282) · 「대기 인원 포함」(9212)
+  ///   waiting  대기 5인    「대기 인원에 …」(9778 통상 작전용 장비)
+  ///   slot · enemy · none
+  scope         String
+  /// 공급을 어디서 세는가.
+  ///   skill  스킬이 실제로 그 상태를 주는가. coin_token 으로 센다
+  ///   tag    게임이 그 인격을 그 축으로 분류하는가. identity_axis 로 센다
+  ///   any    둘 중 하나면 된다
+  /// refKind 마다 보는 표가 다르다 — association 은 identity_association,
+  /// unit_keyword 는 **identity_unit_keyword**(identity_keyword 가 아니다.
+  /// 후자는 축 7종뿐이라 BLOODFIEND 가 없다), coin=minus 는
+  /// skill_stage.coin_value < 0
+  supply        String
+  /// scope='slot' 일 때 자리 번호 1~7. 출격이 7인이라 7번이 있다
+  slot          Int?
+  /// 전투 중에만 아는가. 참이면 편성만 보고 배제할 수 없다
+  runtime       Boolean
+  /// activate(일반 공명) · absolute(완전 공명). resonance 조건에만 붙는다.
+  /// 공명은 스킬 슬롯에서 같은 속성이 얼마나 연속인가이고, 완전 공명은
+  /// 연속 3개 이상이다
+  resonanceMode String? @map("resonance_mode")
+
+  ability GiftAbility @relation(fields: [giftId, level, ordinal], references: [giftId, level, ordinal], onDelete: Cascade)
+
+  @@id([giftId, level, ordinal, group, idx])
+  @@index([refKind, refId])
+  @@map("gift_ability_cond")
+  @@schema("canonical")
+}
+
 model KeywordText {
   keywordId String @map("keyword_id")
   locale    Locale
@@ -665,6 +749,7 @@ model Gift {
   startGifts     StartGift[]
   runGifts       RunGift[]
   triggerParams  GiftTriggerParam[]
+  abilities      GiftAbility[]
 
   @@index([domain])
   @@index([sin])
@@ -2122,6 +2207,27 @@ model AxisGrant {
 
   @@index([sourceKind, sourceId])
   @@map("axis_grant")
+  @@schema("app")
+}
+
+/// 기프트 능력 저작 사실. 설명문에서 뽑아 사람이 전건 검수한 결과다.
+///
+/// 빌드는 이 표를 읽어 canonical.gift_ability 를 굽는다. 설명문을 다시
+/// 파싱하지 않는다 — LLM 호출을 빌드에 넣으면 같은 입력에 다른 결과가 나올
+/// 수 있어 v2:verify:rebuild 가 성립하지 않는다(ADR-08).
+model GiftAbilityAuthored {
+  giftId  String @map("gift_id")
+  level   Int
+  ordinal Int
+  /// AbilityPayload — timing · unconditional · refines · sourceText · conds.
+  /// 모양은 src/v2/ability-payload.ts 가 정하고 validatePayload 가 지킨다
+  payload Json
+  /// 왜 이렇게 판정했는가. 검수자가 남긴다. **지문에는 안 들어간다** —
+  /// 설명을 고치는 것은 결과를 안 바꾸므로 재빌드를 요구할 이유가 없다
+  note    String
+
+  @@id([giftId, level, ordinal])
+  @@map("gift_ability_authored")
   @@schema("app")
 }
 
