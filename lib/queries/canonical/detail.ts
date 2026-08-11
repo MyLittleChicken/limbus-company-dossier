@@ -6,12 +6,15 @@ import {
 	egoImage,
 	giftIcon,
 	identityImage,
+	keywordIcon,
 	packBossIcon,
 	packIcon,
 	rarityIcon,
 	sinIcon,
 	skillFrame,
+	sinnerIcon,
 	skillIcon,
+	statusIcon,
 } from '@/lib/assets';
 import { localeRows, nameOf, textOf } from './locale';
 
@@ -77,6 +80,40 @@ function identityName(
 	};
 }
 
+/**
+ * 본문에 나오는 상태만 고른다.
+ *
+ * 등록 목록 안에서만 찾으므로 엉뚱한 낱말이 걸리지 않는다. 이름과 토큰 두 갈래로 보는
+ * 까닭은 `getIdentity` 의 주석에 적었다.
+ */
+function pickStatuses(
+	rows: ReadonlyArray<{
+		statusId: string;
+		status: {
+			sprite: string | null;
+			texts: ReadonlyArray<{ locale: string; name: string; desc: string | null }>;
+		};
+	}>,
+	body: string,
+	locale: Locale,
+) {
+	return rows
+		.map((row) => {
+			const text = textOf(row.status.texts, locale);
+			if (!text) return null;
+			const byName = text.name.length >= 2 && body.includes(text.name);
+			const byToken = body.includes(`[${row.statusId}]`);
+			if (!byName && !byToken) return null;
+			return {
+				id: row.statusId,
+				text,
+				icon: statusIcon(row.status.sprite),
+			};
+		})
+		.filter((v) => v !== null)
+		.sort((a, b) => a.text.name.localeCompare(b.text.name));
+}
+
 // ── 인격 ─────────────────────────────────────────────────────────
 
 export async function getIdentity(id: number, locale: Locale) {
@@ -89,10 +126,18 @@ export async function getIdentity(id: number, locale: Locale) {
 			speed: { orderBy: { uptie: 'asc' } },
 			associations: { include: { association: { include: { texts: localeRows(locale) } } } },
 			statuses: { include: { status: { include: { texts: localeRows(locale) } } } },
+			// 기믹 축. 게임이 「직접 부여하는 것」으로 선언한 값이다(#32 부여와 제한).
+			keywords: true,
 			passives: {
 				include: { passive: { include: { texts: localeRows(locale), requirements: true } } },
 			},
 			skills: {
+				/*
+					**`non_action` 하나를 뺀다.** `1000104` E.G.O 침식은 184 인격 전부에 붙어
+					있고 고를 수 있는 스킬이 아니다 — 정신력이 바닥났을 때 게임이 대신 쓰는
+					것이다. 목록에 두면 모든 인격의 스킬이 하나씩 늘어난다.
+				*/
+				where: { skill: { kind: { not: 'non_action' } } },
 				orderBy: [{ role: 'asc' }, { ordinal: 'asc' }],
 				include: {
 					skill: {
@@ -109,6 +154,38 @@ export async function getIdentity(id: number, locale: Locale) {
 	});
 
 	if (!identity) return null;
+
+	/* 상태를 가려낼 밑글. 스킬 · 코인 · 패시브의 모든 줄을 한 덩이로 잇는다. */
+	const body = [
+		...identity.skills.flatMap((s) =>
+			s.skill.stages.flatMap((st) => [
+				textOf(st.texts, locale)?.desc ?? '',
+				...st.coins.map((c) => c.effects.join('\n')),
+			]),
+		),
+		...identity.passives.map((p) => textOf(p.passive.texts, locale)?.desc ?? ''),
+	].join('\n');
+
+	/*
+		이름표는 데이터에서 읽는다. **표를 새로 만들지 않는다.**
+
+		죄악은 `sin_text` 가, 공격 타입은 `keyword` 의 `Slash` · `Penetrate` · `Hit` 이
+		갖고 있다(참격 · 관통 · 타격). 후자는 `EgoGiftCategory.json` 이 정본이다. 다만
+		`skill.attack_type` 은 `slash` · `pierce` · `blunt` 로 적혀 어휘 id 와 다르므로
+		여기서 맞춘다 — 화면이 그 어긋남을 알 필요가 없다.
+	*/
+	const ATK_KEYWORD: Record<string, string> = { slash: 'Slash', pierce: 'Penetrate', blunt: 'Hit' };
+	const [sinRows, vocabulary] = await Promise.all([
+		canonical.sinText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
+		canonical.keyword.findMany({ include: { texts: localeRows(locale) } }),
+	]);
+	const sinNames: Record<string, string> = {};
+	for (const r of sinRows) if (r.locale === locale || !sinNames[r.sin]) sinNames[r.sin] = r.name;
+	const atkNames: Record<string, string> = {};
+	for (const [atk, keywordId] of Object.entries(ATK_KEYWORD)) {
+		const text = nameOf(vocabulary.find((v) => v.id === keywordId)?.texts ?? [], locale);
+		if (text) atkNames[atk] = text.name;
+	}
 
 	return {
 		id: Number(identity.id),
@@ -129,17 +206,58 @@ export async function getIdentity(id: number, locale: Locale) {
 			profileBase: identityImage(Number(identity.id), 'profileBase'),
 			full: identityImage(Number(identity.id), 'full'),
 			fullAwakened: identityImage(Number(identity.id), 'fullAwakened'),
+			/** 수감자 상징. 표제에 이름과 함께 선다. */
+			sinner: sinnerIcon(identity.sinnerId),
 		},
-		resists: identity.resists.map((r) => ({ atkType: r.atkType, value: r.value })),
+		resists: identity.resists.map((r) => ({
+			atkType: r.atkType,
+			value: r.value,
+			icon: atkTypeIcon(r.atkType),
+		})),
 		speeds: identity.speed.map((s) => ({ uptie: s.uptie, min: s.min, max: s.max })),
 		affiliations: identity.associations.map((a) => ({
 			id: a.associationId,
 			text: nameOf(a.association.texts, locale),
 		})),
-		statuses: identity.statuses.map((s) => ({
-			id: s.statusId,
-			text: nameOf(s.status.texts, locale),
-		})),
+		/*
+			상태.
+
+			**등록 목록을 그대로 늘어놓지 않고 본문에 나오는 것만 고른다.** `identity_status`
+			는 넓게 잡혀 있어 글에 없는 것까지 든다 — 읽는 사람이 궁금해하는 것은 지금 눈에
+			보이는 낱말이다.
+
+			**두 갈래로 찾는다.** 문구가 상태를 늘 같은 꼴로 적지 않는다.
+
+			  이름   「침잠 1 부여」   치환이 끝난 줄
+			  토큰   「[Sinking] 1 부여」   아직 안 끝난 줄 — ko 코인 7,634 중 4,219 행
+
+			이름만 보면 후자를, 토큰만 보면 전자를 놓친다. 실측으로 토큰만 볼 때 184 중 48
+			인격이 통째로 비었다.
+
+			아무 이름이나 훑지 않고 **그 인격의 등록 목록 안에서만** 찾으므로 엉뚱한 낱말이
+			걸리지 않는다. 한 글자 이름은 뺀다 — 어느 문장에나 걸린다.
+		*/
+		statuses: pickStatuses(identity.statuses, body, locale),
+
+		/*
+			기믹 키워드.
+
+			**아이콘 열쇠는 id 가 아니라 `en` 이름이다** — `Laceration` → `Bleed.webp` 처럼
+			다섯 군데가 갈린다. 짝표를 새로 만들지 않고 데이터가 가진 이름을 그대로 쓴다.
+			목록 화면이 쓰는 규칙과 같다(`canonical/list.ts`).
+		*/
+		keywords: identity.keywords
+			.map((k) => {
+				const row = vocabulary.find((v) => v.id === k.keywordId);
+				const text = row ? nameOf(row.texts, locale) : null;
+				const en = row?.texts.find((t) => t.locale === 'en')?.name;
+				return text ? { id: k.keywordId, text, icon: keywordIcon(en ?? k.keywordId) } : null;
+			})
+			.filter((v) => v !== null),
+
+		/** 죄악 · 공격 타입의 이름. **화면이 표를 들지 않는다** — 데이터에 있다. */
+		sinNames,
+		atkNames,
 		passives: identity.passives.map((p) => ({
 			id: p.passiveId,
 			kind: p.role,
@@ -151,6 +269,14 @@ export async function getIdentity(id: number, locale: Locale) {
 		skills: identity.skills.map((s) => ({
 			id: Number(s.skillId),
 			deckCount: s.copies,
+			/*
+				이 스킬이 처음 생기는 동기화 단계.
+
+				**단계 행은 바뀔 때만 있다.** 1051504 는 1·4 단계만 갖는데 2·3 에서 문구가
+				그대로라 행이 없을 뿐이고, 1051503 은 3 단계부터 행이 생겨 그 앞에서는
+				정말로 쓸 수 없다. 화면이 둘을 갈라 말하려면 이 값이 필요하다.
+			*/
+			firstUptie: s.skill.stages[0]?.uptie ?? null,
 			affinity: s.skill.sin,
 			atkType: s.skill.attackType,
 			defType: s.skill.kind,
