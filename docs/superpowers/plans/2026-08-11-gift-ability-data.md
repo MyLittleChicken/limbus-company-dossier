@@ -1545,17 +1545,32 @@ git commit -m "test(verify): 기프트 능력 적재·결손 검사 11건
 
 ---
 
-### Task 8: 추출 · 비교 · 검수 도구
+### Task 8: 추출 · 비교 · 검수 페이지
 
 **Files:**
 - Create: `scripts/extract-gift-ability.ts`
 - Create: `scripts/diff-gift-ability.ts`
-- Create: `scripts/review-gift-ability.ts`
-- Modify: `package.json` (스크립트 셋)
+- Create: `scripts/build-review-page.ts`
+- Create: `scripts/import-verdicts.ts`
+- Modify: `package.json` (스크립트 넷)
 
 **Interfaces:**
-- Consumes: Task 1 의 `validatePayload`, `canonical.gift_stage_text`
-- Produces: `data/authored/gift-ability.pass1.jsonl` · `.pass2.jsonl` · `.progress.json`
+- Consumes: Task 1 의 `validatePayload`, `canonical.gift_stage_text`, Task 5 의 저작 jsonl
+- Produces: `data/authored/gift-ability.pass1.jsonl` · `.pass2.jsonl` · `.progress.json`, 그리고 검수 페이지 HTML
+
+**검수는 페이지로 한다(2026-08-11 사용자 확정).** 터미널이 아니라 웹 페이지가 창구다 — 사용자가 절 단위로 직접 보고 「맞다 / 틀리다」를 누르면, 페이지가 판정을 모아 파일로 내보내고, 에이전트가 그 파일을 받아 반영한다.
+
+```
+scripts/build-review-page.ts   DB + 저작 jsonl  →  자기완결 HTML
+      ↓  (Artifact 로 게시)
+사용자가 절 단위로 훑으며 맞다/틀리다.  판정은 localStorage 에 남는다
+      ↓  「내보내기」 → window.claude.downloads.save()
+verdicts-<날짜>.json
+      ↓  npm run gift:import <파일>
+data/authored/gift-ability.progress.json
+```
+
+localStorage 에 남기므로 **여러 날에 나눠 봐도 이어진다.** 내보내기는 사용자가 누를 때만 일어난다.
 
 - [ ] **Step 1: 추출 도구를 쓴다**
 
@@ -1732,66 +1747,42 @@ writeFileSync('data/authored/gift-ability.priority.json', JSON.stringify(suspect
 console.log('→ data/authored/gift-ability.priority.json (검수 우선순위)');
 ```
 
-- [ ] **Step 3: 검수 도구를 쓴다 — 두 단계 왕복이 핵심이다**
+- [ ] **Step 3: 검수 페이지 생성기를 쓴다**
 
 검수는 사용자 확정 절차를 따른다(사양 §5 「검수 절차」).
 
 ```
-1차   사용자가 직접 보고 상호작용한다. 판정은 「맞다 / 틀리다」 둘뿐이다.
-      이유를 적지 않는다 — 456건을 빠르게 훑는 것이 이 단계의 일이다.
-2차   「틀리다」만 모아 에이전트가 먼저 읽고, 사용자가 무엇이 틀렸는지 서술한다.
-3차   에이전트가 저작을 고치면 그 건은 미판정으로 돌아가 1차를 다시 받는다.
-      「틀리다」가 없어질 때까지 반복한다.
+1차   사용자가 페이지에서 절 단위로 보고 「맞다 / 틀리다」만 누른다.
+      이유를 안 적는다 — 456번 적게 하면 회차가 끝나지 않는다
+2차   「틀리다」만 모아 에이전트가 읽고, 사용자가 무엇이 틀렸는지 서술한다
+3차   에이전트가 고치면 그 건은 미판정으로 돌아가 1차를 다시 받는다
 ```
 
-**1차가 이진이어야 한다.** 「무엇이 틀렸나」를 456번 적게 하면 회차가 끝나지 않는다.
-
-
-`scripts/review-gift-ability.ts`.
+`scripts/build-review-page.ts` 는 DB 와 저작 파일을 읽어 **자기완결 HTML** 을 만든다. 외부 요청이 CSP 로 막히므로 데이터를 페이지 안에 넣는다.
 
 ```typescript
 /**
- * 검수 화면. 기프트 하나가 한 화면이고, **키 하나로 넘긴다.**
+ * 검수 페이지를 만든다. 절 단위로 보고 「맞다 / 틀리다」를 누르는 창구다.
  *
- * 절차는 사양 §5 「검수 절차」다.
- *   1차  사용자가 보고 「맞다 / 틀리다」만 누른다. 이유를 안 적는다
- *   2차  「틀리다」만 모아 에이전트가 읽고, 사용자가 무엇이 틀렸는지 서술한다
- *   3차  에이전트가 고치면 그 건은 미판정으로 돌아가 1차를 다시 받는다
+ * **자기완결이어야 한다** — Artifact 는 외부 요청이 CSP 로 막히므로 기프트
+ * 데이터를 페이지 안에 통째로 넣는다. 456건이라 크지만 텍스트뿐이라 감당된다.
  *
- * **456건 전건을 사람이 본다**(2026-08-11 사용자 확정). 그래서 두 가지가
- * 필수다 — 1차의 손동작이 최소여야 하고, 중단해도 그 자리에서 이어져야 한다.
+ * 판정은 localStorage 에 남는다 — 여러 날에 나눠 봐도 이어진다. 내보내기는
+ * 사용자가 누를 때만 일어나고(window.claude.downloads), 그 파일을
+ * `npm run gift:import` 가 받아 progress.json 에 반영한다.
  *
- * 실행
- *   npm run gift:review                    1차. 미판정 건을 하나씩 물어본다
- *   npm run gift:review -- --bad           2차. 「틀리다」 큐를 전부 펼친다
- *   npm run gift:review -- --why 9262 "…"  그 건에 사용자 서술을 붙인다
- *   npm run gift:review -- --revised 9262  고쳤으니 미판정으로 되돌린다
- *   npm run gift:review -- --status        진행률
+ * 실행: npm run gift:page -- --out /tmp/gift-review.html
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { createInterface } from 'node:readline/promises';
-import { stdin, stdout } from 'node:process';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { validatePayload, type AbilityPayload } from '../src/v2/ability-payload.js';
 
-const PROGRESS = 'data/authored/gift-ability.progress.json';
 const AUTHORED = 'data/authored/gift-ability.jsonl';
+const PROGRESS = 'data/authored/gift-ability.progress.json';
 const PRIORITY = 'data/authored/gift-ability.priority.json';
 
-/** 판정 상태. revised 는 곧바로 pending 이 되므로 저장하지 않는다 */
-interface Verdict { state: 'ok' | 'bad'; round: number; why?: string; }
-interface Progress { round: number; verdicts: Record<string, Verdict>; }
-
-const load = (): Progress =>
-	existsSync(PROGRESS) ? JSON.parse(readFileSync(PROGRESS, 'utf8')) : { round: 1, verdicts: {} };
-const save = (p: Progress): void =>
-	writeFileSync(PROGRESS, `${JSON.stringify(p, null, '\t')}\n`, 'utf8');
-
 const argv = process.argv.slice(2);
-const flag = (name: string): string | null => {
-	const i = argv.indexOf(`--${name}`);
-	return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : null;
-};
+const out = argv.indexOf('--out') >= 0 ? argv[argv.indexOf('--out') + 1] : '/tmp/gift-review.html';
 
 const prisma = new PrismaClient();
 const texts = await prisma.$queryRaw<Array<{ giftId: string; level: number; name: string; desc: string }>>`
@@ -1800,170 +1791,375 @@ const texts = await prisma.$queryRaw<Array<{ giftId: string; level: number; name
 	WHERE t.locale = 'ko' AND g.domain = 'mirror_dungeon'
 	ORDER BY t.gift_id, t.level
 `;
-const allGifts = [...new Set(texts.map((t) => t.giftId))];
-const nameOf = new Map(texts.map((t) => [t.giftId, t.name]));
 
-/** 저작에서 뽑힌 능력을 기프트별로 모은다 */
 interface Authored { giftId: string; level: number; ordinal: number; payload: AbilityPayload; note: string; }
-const byGift = new Map<string, Authored[]>();
-if (existsSync(AUTHORED)) {
-	for (const line of readFileSync(AUTHORED, 'utf8').split('\n')) {
-		const t = line.trim();
-		if (t === '') continue;
-		const o = JSON.parse(t) as Authored;
-		byGift.set(o.giftId, [...(byGift.get(o.giftId) ?? []), o]);
-	}
-}
+const authored: Authored[] = existsSync(AUTHORED)
+	? readFileSync(AUTHORED, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l !== '').map((l) => JSON.parse(l))
+	: [];
 
-const progress = load();
-const stateOf = (g: string): 'pending' | 'ok' | 'bad' => progress.verdicts[g]?.state ?? 'pending';
-const count = (s: string): number => allGifts.filter((g) => stateOf(g) === s).length;
-
-/** 한 기프트를 화면에 편다. 1차와 2차가 같은 화면을 쓴다 */
-const render = (g: string): void => {
-	const stages = texts.filter((t) => t.giftId === g);
-	console.log('═'.repeat(74));
-	console.log(`${nameOf.get(g) ?? ''}  (${g})`);
-	console.log('═'.repeat(74));
-	for (const s of stages) {
-		console.log(`\n── 강화 ${s.level}단계 설명문 ──\n`);
-		console.log(s.desc);
-	}
-	console.log('\n── 뽑힌 능력 ──\n');
-	const picked = byGift.get(g) ?? [];
-	if (picked.length === 0) console.log('(없다 — 아직 안 뽑혔거나 추출이 빠뜨렸다)');
-	for (const o of picked) {
-		console.log(`[${o.level}/${o.ordinal}]  시점 ${o.payload.timing} · 무조건 ${o.payload.unconditional}${o.payload.refines === null ? '' : ` · 강화판(→${o.payload.refines})`}`);
-		console.log(`   원문  ${o.payload.sourceText}`);
-		for (const c of o.payload.conds) {
-			const th = c.threshold === null ? '' : ` ${c.threshold}`;
-			console.log(`   조건 ${c.group}/${c.idx}  ${c.refKind}/${c.refId} ${c.op}${th} · ${c.scope} · ${c.supply}${c.runtime ? ' · runtime' : ''}${c.slot === null ? '' : ` · 자리 ${c.slot}`}`);
-		}
-		if (o.payload.conds.length === 0 && !o.payload.unconditional) {
-			console.log('   조건 없음 — 결손이다(조건이 있다고 적혔는데 못 뽑았다)');
-		}
-		if (o.note !== '') console.log(`   note  ${o.note}`);
-		for (const p of validatePayload(o.payload)) console.log(`   ⚠ ${p}`);
-		console.log('');
-	}
-};
-
-// ── --status ─────────────────────────────────────────────────
-if (argv.includes('--status')) {
-	console.log(`회차 ${progress.round}`);
-	console.log(`  맞다   ${count('ok')}`);
-	console.log(`  틀리다 ${count('bad')}   ← 서술 대기`);
-	console.log(`  미판정 ${count('pending')}`);
-	console.log(`  합계   ${allGifts.length}`);
-	await prisma.$disconnect();
-	process.exit(0);
-}
-
-// ── --why <gift> "<서술>" ─────────────────────────────────────
-const whyGift = flag('why');
-if (whyGift !== null) {
-	const text = argv[argv.indexOf('--why') + 2];
-	if (text === undefined || text.trim() === '') {
-		console.error('서술이 비었다. npm run gift:review -- --why 9262 "약지 조건이 1문단에만 붙어야 한다"');
-		process.exit(1);
-	}
-	const v = progress.verdicts[whyGift];
-	if (v === undefined || v.state !== 'bad') {
-		console.error(`${whyGift} 는 「틀리다」로 표시돼 있지 않다 (지금 ${stateOf(whyGift)})`);
-		process.exit(1);
-	}
-	v.why = text;
-	save(progress);
-	console.log(`${whyGift} 에 서술을 붙였다 — 에이전트가 저작을 고칠 차례다`);
-	await prisma.$disconnect();
-	process.exit(0);
-}
-
-// ── --revised <gift> ─────────────────────────────────────────
-const revised = flag('revised');
-if (revised !== null) {
-	// 고친 건은 미판정으로 돌아가 1차를 한 번 더 받는다. 고친 사람이 스스로
-	// 「맞다」라고 적으면 검수가 아니다.
-	delete progress.verdicts[revised];
-	save(progress);
-	console.log(`${revised} 를 미판정으로 되돌렸다 — 다음 1차에서 다시 물어본다`);
-	await prisma.$disconnect();
-	process.exit(0);
-}
-
-// ── --bad : 2차. 틀리다 큐를 전부 펼친다 ──────────────────────
-if (argv.includes('--bad')) {
-	const bad = allGifts.filter((g) => stateOf(g) === 'bad');
-	if (bad.length === 0) {
-		console.log('「틀리다」가 없다.');
-		await prisma.$disconnect();
-		process.exit(0);
-	}
-	console.log(`「틀리다」 ${bad.length}건 — 에이전트가 읽고 사용자가 무엇이 틀렸는지 서술한다\n`);
-	for (const g of bad) {
-		render(g);
-		const why = progress.verdicts[g]?.why;
-		console.log(why === undefined
-			? `서술 없음 →  npm run gift:review -- --why ${g} "무엇이 틀렸는지"`
-			: `서술: ${why}`);
-		console.log('');
-	}
-	await prisma.$disconnect();
-	process.exit(0);
-}
-
-// ── 1차 : 맞다 / 틀리다 ───────────────────────────────────────
-/** 두 판이 어긋난 것을 앞에 둔다 — 어려운 것을 앞에 두면 뒤로 갈수록 빨라진다 */
+const progress: { round: number; verdicts: Record<string, { state: string; why?: string }> } =
+	existsSync(PROGRESS) ? JSON.parse(readFileSync(PROGRESS, 'utf8')) : { round: 1, verdicts: {} };
 const priority: string[] = existsSync(PRIORITY) ? JSON.parse(readFileSync(PRIORITY, 'utf8')) : [];
-const order = [
-	...priority.filter((g) => allGifts.includes(g)),
-	...allGifts.filter((g) => !priority.includes(g)),
-];
-const queue = order.filter((g) => stateOf(g) === 'pending');
 
-if (queue.length === 0) {
-	const bad = count('bad');
-	console.log(bad === 0
-		? `1차가 끝났다 — ${allGifts.length}건 전부 「맞다」`
-		: `1차가 끝났다. 「틀리다」 ${bad}건이 남았다 →  npm run gift:review -- --bad`);
-	await prisma.$disconnect();
-	process.exit(0);
-}
+/** 페이지에 넣을 자료. 기프트 하나가 카드 하나다 */
+const gifts = [...new Set(texts.map((t) => t.giftId))].map((id) => ({
+	id,
+	name: texts.find((t) => t.giftId === id)?.name ?? '',
+	stages: texts.filter((t) => t.giftId === id).map((t) => ({ level: t.level, desc: t.desc })),
+	abilities: authored.filter((a) => a.giftId === id).map((a) => ({
+		level: a.level, ordinal: a.ordinal, note: a.note,
+		timing: a.payload.timing, unconditional: a.payload.unconditional,
+		refines: a.payload.refines, sourceText: a.payload.sourceText,
+		conds: a.payload.conds,
+		problems: validatePayload(a.payload),
+	})),
+	priority: priority.includes(id),
+	seeded: progress.verdicts[id]?.state ?? null,
+	why: progress.verdicts[id]?.why ?? null,
+}));
+// 어긋난 것을 앞에 둔다 — 어려운 것을 먼저 보면 뒤로 갈수록 빨라진다
+gifts.sort((a, b) => Number(b.priority) - Number(a.priority) || a.id.localeCompare(b.id));
 
-const rl = createInterface({ input: stdin, output: stdout });
-try {
-	for (const g of queue) {
-		console.clear();
-		console.log(`회차 ${progress.round} · 남은 ${queue.length - queue.indexOf(g)} / ${queue.length}  ·  맞다 ${count('ok')} · 틀리다 ${count('bad')}\n`);
-		render(g);
-		console.log('─'.repeat(74));
-		const ans = (await rl.question('맞다 [y] · 틀리다 [n] · 건너뜀 [s] · 그만 [q] > ')).trim().toLowerCase();
-		if (ans === 'q') break;
-		if (ans === 's') continue;
-		if (ans === 'n') progress.verdicts[g] = { state: 'bad', round: progress.round };
-		else progress.verdicts[g] = { state: 'ok', round: progress.round };
-		// 한 건마다 저장한다 — 중단해도 그 자리에서 이어져야 한다
-		save(progress);
-	}
-} finally {
-	rl.close();
-}
+const DATA = JSON.stringify({ round: progress.round, gifts })
+	.replaceAll('<', '\\u003c')   // </script> 로 페이지가 끊기는 것을 막는다
+	.replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
 
-console.log(`\n회차 ${progress.round}  ·  맞다 ${count('ok')} · 틀리다 ${count('bad')} · 미판정 ${count('pending')}`);
-if (count('bad') > 0) console.log('다음:  npm run gift:review -- --bad');
+writeFileSync(out, renderPage(DATA), 'utf8');
+console.log(`기프트 ${gifts.length} · 능력 ${authored.length}  →  ${out}`);
+console.log('Artifact 로 게시해 사용자에게 준다.');
 
 await prisma.$disconnect();
 process.exit(0);
 ```
 
-- [ ] **Step 4: `package.json` 에 스크립트 셋을 더한다**
+`renderPage(data: string): string` 은 같은 파일 아래쪽에 둔다. **HTML 을 문자열로 짜되 데이터는 `JSON.parse` 로 읽는다** — 문자열 안에 기프트 설명문을 직접 끼워 넣으면 따옴표 하나에 페이지가 깨진다.
+
+```typescript
+function renderPage(data: string): string {
+	return `<title>기프트 절 검수</title>
+<style>
+  :root {
+    --panel:#fff; --panel-2:#f6f6f4; --line:#dddcd6; --ink:#0e1116;
+    --text:#1a1e25; --dim:#666e7a; --faint:#9aa1ab;
+    --ok:#2f7f6f; --bad:#b4423a; --warn:#b07d22; --struct:#4f5f92;
+    --ok-bg:#e7f3f0; --bad-bg:#fbeceb; --warn-bg:#fbf3e3;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --panel:#14181e; --panel-2:#0f1318; --line:#29303a; --ink:#f2f1ee;
+    --text:#e6e7ea; --dim:#939aa5; --faint:#6b737e;
+    --ok:#5fb8a5; --bad:#e0736a; --warn:#d9a545; --struct:#8e9dd0;
+    --ok-bg:#16261f; --bad-bg:#2b1a19; --warn-bg:#2a2216;}}
+  :root[data-theme="dark"]{
+    --panel:#14181e; --panel-2:#0f1318; --line:#29303a; --ink:#f2f1ee;
+    --text:#e6e7ea; --dim:#939aa5; --faint:#6b737e;
+    --ok:#5fb8a5; --bad:#e0736a; --warn:#d9a545; --struct:#8e9dd0;
+    --ok-bg:#16261f; --bad-bg:#2b1a19; --warn-bg:#2a2216;}
+  :root[data-theme="light"]{
+    --panel:#fff; --panel-2:#f6f6f4; --line:#dddcd6; --ink:#0e1116;
+    --text:#1a1e25; --dim:#666e7a; --faint:#9aa1ab;
+    --ok:#2f7f6f; --bad:#b4423a; --warn:#b07d22;
+    --ok-bg:#e7f3f0; --bad-bg:#fbeceb; --warn-bg:#fbf3e3;}
+  body{background:var(--panel-2);color:var(--text);font-family:var(--sans);
+    line-height:1.6;margin:0;padding:0 16px 120px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto}
+  code{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  h1{font-size:26px;margin:0;letter-spacing:-.02em}
+
+  /* 머리 — 진행률과 거르개가 스크롤을 따라온다 */
+  header{position:sticky;top:0;z-index:10;background:var(--panel-2);
+    border-bottom:2px solid var(--ink);padding:18px 0 12px;margin-bottom:20px}
+  .bar{height:6px;background:var(--line);margin:12px 0 10px;display:flex;overflow:hidden}
+  .bar i{display:block;height:100%}
+  .bar .b-ok{background:var(--ok)} .bar .b-bad{background:var(--bad)}
+  .tally{display:flex;gap:16px;font-family:var(--mono);font-size:12.5px;
+    color:var(--dim);font-variant-numeric:tabular-nums;flex-wrap:wrap;align-items:center}
+  .tally b{font-weight:700}
+  .tally .t-ok b{color:var(--ok)} .tally .t-bad b{color:var(--bad)}
+  .filters{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  button{font-family:inherit;font-size:12.5px;padding:5px 11px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);cursor:pointer;border-radius:2px}
+  button:hover{border-color:var(--dim)}
+  button[aria-pressed="true"]{background:var(--ink);color:var(--panel-2);border-color:var(--ink)}
+  button:focus-visible{outline:2px solid var(--struct);outline-offset:2px}
+  .export{margin-left:6px;border-color:var(--struct);color:var(--struct);font-weight:600}
+
+  /* 기프트 카드 */
+  .gift{background:var(--panel);border:1px solid var(--line);margin-bottom:14px}
+  .gift.v-ok{border-left:4px solid var(--ok)}
+  .gift.v-bad{border-left:4px solid var(--bad)}
+  .gift > .top{padding:14px 18px 12px;border-bottom:1px solid var(--line);
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .gift h2{font-size:16.5px;font-weight:680;margin:0}
+  .gift h2 em{font-family:var(--mono);font-style:normal;font-size:10.5px;
+    color:var(--faint);font-weight:400;margin-left:6px}
+  .flag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    padding:2px 7px;border-radius:2px;background:var(--warn-bg);color:var(--warn)}
+  .body{padding:14px 18px 16px;display:grid;gap:13px}
+  .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:6px}
+  pre{margin:0;padding:12px 14px;background:var(--panel-2);border:1px solid var(--line);
+    overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.7;
+    white-space:pre-wrap;word-break:break-word;color:var(--text)}
+
+  /* 절 하나 */
+  .ab{border:1px solid var(--line);padding:11px 14px;background:var(--panel-2)}
+  .ab + .ab{margin-top:8px}
+  .ab .hd{font-family:var(--mono);font-size:11.5px;color:var(--dim);
+    display:flex;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+  .ab .hd b{color:var(--text)}
+  .ab .src{font-size:13px;margin-bottom:8px}
+  .cond{font-family:var(--mono);font-size:11.5px;padding:3px 0 3px 12px;
+    border-left:2px solid var(--struct);color:var(--text)}
+  .cond .rt{color:var(--warn)}
+  .none{font-family:var(--mono);font-size:11.5px;color:var(--bad)}
+  .warn{font-family:var(--mono);font-size:11.5px;color:var(--bad);margin-top:5px}
+  .note{font-size:12.5px;color:var(--dim);margin-top:7px}
+
+  /* 판정 */
+  .verdict{display:flex;gap:8px;align-items:center;padding:12px 18px;
+    border-top:1px solid var(--line);flex-wrap:wrap}
+  .verdict .y[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
+  .verdict .n[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+  .why{width:100%;margin-top:8px;font-family:inherit;font-size:13px;padding:8px 10px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--text);resize:vertical}
+  .why:focus-visible{outline:2px solid var(--struct);outline-offset:-1px}
+  .hint{font-size:12px;color:var(--faint)}
+  footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);
+    border-top:1px solid var(--line);padding:10px 16px;font-family:var(--mono);
+    font-size:12px;color:var(--dim);display:flex;gap:14px;justify-content:center}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>기프트 절 검수</h1>
+  <div class="bar"><i class="b-ok"></i><i class="b-bad"></i></div>
+  <div class="tally">
+    <span class="t-ok">맞다 <b id="n-ok">0</b></span>
+    <span class="t-bad">틀리다 <b id="n-bad">0</b></span>
+    <span>미판정 <b id="n-pending">0</b></span>
+    <span>합계 <b id="n-all">0</b></span>
+    <span class="filters">
+      <button data-filter="all" aria-pressed="true">전체</button>
+      <button data-filter="pending" aria-pressed="false">미판정</button>
+      <button data-filter="bad" aria-pressed="false">틀리다</button>
+      <button data-filter="ok" aria-pressed="false">맞다</button>
+      <button id="export" class="export">내보내기</button>
+    </span>
+  </div>
+</header>
+<main id="list"></main>
+</div>
+<footer><span>판정은 이 브라우저에 남는다 — 나눠 봐도 이어진다</span><span>다 보면 「내보내기」를 눌러 파일을 전달한다</span></footer>
+
+<script>
+const DATA = JSON.parse(${JSON.stringify(data)});
+const KEY = 'gift-ability-verdicts-v1';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } };
+let V = load();
+// 파일에 이미 있던 판정을 초깃값으로 — 다른 기계에서 이어받을 수 있게
+for (const g of DATA.gifts) if (g.seeded && !V[g.id]) V[g.id] = { state: g.seeded, why: g.why || '' };
+const save = () => localStorage.setItem(KEY, JSON.stringify(V));
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+let filter = 'all';
+
+function condLine(c) {
+  const th = c.threshold === null ? '' : ' ' + c.threshold;
+  const rt = c.runtime ? ' <span class="rt">· 전투 중</span>' : '';
+  const sl = c.slot === null ? '' : ' · 자리 ' + c.slot;
+  const rm = c.resonanceMode ? ' · ' + c.resonanceMode : '';
+  return '<div class="cond">' + esc(c.group + '/' + c.idx) + '  ' +
+    esc(c.refKind + '/' + c.refId + ' ' + c.op + th) + rm +
+    esc(' · ' + c.scope + ' · ' + c.supply + sl) + rt + '</div>';
+}
+
+function abilityBlock(a) {
+  const head = '<div class="hd"><b>[' + a.level + '/' + a.ordinal + ']</b>' +
+    '<span>시점 ' + esc(a.timing) + '</span>' +
+    '<span>' + (a.unconditional ? '무조건' : '조건부') + '</span>' +
+    (a.refines === null ? '' : '<span>강화판 → ' + a.refines + '</span>') + '</div>';
+  const src = '<div class="src">' + esc(a.sourceText) + '</div>';
+  const conds = a.conds.length > 0
+    ? a.conds.map(condLine).join('')
+    : (a.unconditional ? '' : '<div class="none">조건 없음 — 결손이다(조건이 있다고 적혔는데 못 뽑았다)</div>');
+  const note = a.note ? '<div class="note">note · ' + esc(a.note) + '</div>' : '';
+  const warn = a.problems.map((p) => '<div class="warn">⚠ ' + esc(p) + '</div>').join('');
+  return '<div class="ab">' + head + src + conds + note + warn + '</div>';
+}
+
+function card(g) {
+  const v = V[g.id] || {};
+  const cls = v.state === 'ok' ? ' v-ok' : v.state === 'bad' ? ' v-bad' : '';
+  const stages = g.stages.map((s) =>
+    '<div><div class="lbl">강화 ' + s.level + '단계 설명문</div><pre>' + esc(s.desc) + '</pre></div>').join('');
+  const abilities = g.abilities.length > 0
+    ? g.abilities.map(abilityBlock).join('')
+    : '<div class="none">뽑힌 절이 없다 — 아직 안 뽑혔거나 추출이 빠뜨렸다</div>';
+  return '<article class="gift' + cls + '" id="g-' + g.id + '" data-state="' + (v.state || 'pending') + '">' +
+    '<div class="top"><h2>' + esc(g.name) + '<em>' + g.id + '</em></h2>' +
+    (g.priority ? '<span class="flag">두 판 어긋남</span>' : '') + '</div>' +
+    '<div class="body">' + stages +
+      '<div><div class="lbl">뽑힌 절</div>' + abilities + '</div>' +
+    '</div>' +
+    '<div class="verdict">' +
+      '<button class="y" data-v="ok" data-g="' + g.id + '" aria-pressed="' + (v.state === 'ok') + '">맞다</button>' +
+      '<button class="n" data-v="bad" data-g="' + g.id + '" aria-pressed="' + (v.state === 'bad') + '">틀리다</button>' +
+      '<span class="hint">1차는 맞다/틀리다만. 이유는 2차에 적는다</span>' +
+      (v.state === 'bad'
+        ? '<textarea class="why" data-g="' + g.id + '" rows="2" placeholder="선택 — 지금 아는 게 있으면 적어도 된다">' + esc(v.why || '') + '</textarea>'
+        : '') +
+    '</div></article>';
+}
+
+function tally() {
+  const n = { ok: 0, bad: 0, pending: 0 };
+  for (const g of DATA.gifts) n[(V[g.id] || {}).state || 'pending'] += 1;
+  document.getElementById('n-ok').textContent = n.ok;
+  document.getElementById('n-bad').textContent = n.bad;
+  document.getElementById('n-pending').textContent = n.pending;
+  document.getElementById('n-all').textContent = DATA.gifts.length;
+  const t = DATA.gifts.length || 1;
+  document.querySelector('.b-ok').style.width = (n.ok / t * 100) + '%';
+  document.querySelector('.b-bad').style.width = (n.bad / t * 100) + '%';
+}
+
+function render() {
+  const shown = DATA.gifts.filter((g) => filter === 'all' || ((V[g.id] || {}).state || 'pending') === filter);
+  document.getElementById('list').innerHTML = shown.map(card).join('');
+  tally();
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.filter) {
+    filter = b.dataset.filter;
+    for (const x of document.querySelectorAll('[data-filter]')) x.setAttribute('aria-pressed', String(x === b));
+    render();
+    window.scrollTo({ top: 0 });
+    return;
+  }
+  if (b.dataset.v) {
+    const g = b.dataset.g;
+    const prev = (V[g] || {}).state;
+    // 같은 것을 다시 누르면 미판정으로 되돌린다 — 잘못 누른 것을 물릴 수 있어야 한다
+    if (prev === b.dataset.v) delete V[g];
+    else V[g] = { state: b.dataset.v, why: (V[g] || {}).why || '' };
+    save();
+    if (filter === 'all') {
+      // 카드 하나만 갈아끼운다 — 전체를 다시 그리면 스크롤이 튄다
+      const el = document.getElementById('g-' + g);
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = card(DATA.gifts.find((x) => x.id === g));
+      el.replaceWith(wrapper.firstElementChild);
+      tally();
+    } else render();
+    return;
+  }
+  if (b.id === 'export') exportVerdicts();
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!t.classList.contains('why')) return;
+  const g = t.dataset.g;
+  if (V[g]) { V[g].why = t.value; save(); }
+});
+
+async function exportVerdicts() {
+  const payload = { round: DATA.round, exportedAt: new Date().toISOString(), verdicts: V };
+  const text = JSON.stringify(payload, null, '\\t');
+  if (window.claude && window.claude.downloads) {
+    try {
+      await window.claude.downloads.save({ filename: 'gift-verdicts.json', data: text });
+      return;
+    } catch (err) {
+      // 사용자가 거절했거나 저장이 안 됐다. 아래 대체 경로로 간다
+    }
+  }
+  // 대체 — 새 창에 띄워 복사할 수 있게 한다
+  const w = window.open('', '_blank');
+  if (w) { w.document.write('<pre>' + esc(text) + '</pre>'); w.document.close(); }
+  else alert('내려받기가 막혔다. 브라우저 콘솔에서 localStorage 를 복사해라.');
+}
+
+render();
+</script>`;
+}
+```
+
+- [ ] **Step 3b: 판정을 되받는 도구를 쓴다**
+
+`scripts/import-verdicts.ts`.
+
+```typescript
+/**
+ * 페이지가 내보낸 판정을 progress.json 에 반영한다.
+ *
+ * 페이지는 브라우저에 있고 저장소는 여기 있다 — 그 사이를 파일 하나가 잇는다.
+ * 사용자가 「내보내기」로 받은 파일을 이 도구가 받아 넣는다.
+ *
+ * 실행: npm run gift:import -- ~/Downloads/gift-verdicts.json
+ */
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+
+const PROGRESS = 'data/authored/gift-ability.progress.json';
+const src = process.argv[2];
+if (src === undefined) {
+	console.error('파일을 달라: npm run gift:import -- ~/Downloads/gift-verdicts.json');
+	process.exit(1);
+}
+
+interface Verdict { state: 'ok' | 'bad'; round: number; why?: string; }
+interface Progress { round: number; verdicts: Record<string, Verdict>; }
+
+const incoming = JSON.parse(readFileSync(src, 'utf8')) as {
+	round: number; verdicts: Record<string, { state: string; why?: string }>;
+};
+const progress: Progress = existsSync(PROGRESS)
+	? JSON.parse(readFileSync(PROGRESS, 'utf8'))
+	: { round: 1, verdicts: {} };
+
+let added = 0;
+let changed = 0;
+const bad: string[] = [];
+for (const [giftId, v] of Object.entries(incoming.verdicts)) {
+	if (v.state !== 'ok' && v.state !== 'bad') {
+		console.error(`${giftId} 의 판정이 어휘 밖이다: ${v.state}`);
+		process.exit(1);
+	}
+	const before = progress.verdicts[giftId];
+	if (before === undefined) added += 1;
+	else if (before.state !== v.state) changed += 1;
+	progress.verdicts[giftId] = {
+		state: v.state,
+		round: incoming.round ?? progress.round,
+		...(v.why !== undefined && v.why !== '' ? { why: v.why } : {}),
+	};
+	if (v.state === 'bad') bad.push(giftId);
+}
+
+writeFileSync(PROGRESS, `${JSON.stringify(progress, null, '\t')}\n`, 'utf8');
+
+const total = Object.keys(progress.verdicts).length;
+console.log(`새로 ${added} · 바뀜 ${changed} · 누적 ${total}`);
+console.log(`  맞다   ${Object.values(progress.verdicts).filter((v) => v.state === 'ok').length}`);
+console.log(`  틀리다 ${bad.length}`);
+if (bad.length > 0) console.log(`\n2차 대상: ${bad.join(' · ')}`);
+```
+
+
+- [ ] **Step 4: `package.json` 에 스크립트 넷을 더한다**
 
 `scripts` 안에 넣는다.
 
 ```json
     "gift:extract": "tsx --env-file-if-exists=.env scripts/extract-gift-ability.ts",
     "gift:diff": "tsx --env-file-if-exists=.env scripts/diff-gift-ability.ts",
-    "gift:review": "tsx --env-file-if-exists=.env scripts/review-gift-ability.ts",
+    "gift:page": "tsx --env-file-if-exists=.env scripts/build-review-page.ts",
+    "gift:import": "tsx --env-file-if-exists=.env scripts/import-verdicts.ts",
 ```
 
 - [ ] **Step 5: 추출 도구가 도는지 확인한다**
@@ -1975,83 +2171,84 @@ head -60 /tmp/batch-check.md
 
 Expected: 프롬프트 파일에 절 네 종류·칸 어휘·group 규칙과 기프트 3건의 설명문이 담긴다.
 
-- [ ] **Step 6: 1차 왕복이 도는지 확인한다**
+- [ ] **Step 6: 페이지가 만들어지는지 확인한다**
 
 ```bash
-npm run gift:review -- --status
+npm run gift:page -- --out /tmp/gift-review.html
+ls -la /tmp/gift-review.html
 ```
 
-Expected: `회차 1 · 맞다 0 · 틀리다 0 · 미판정 456`
+Expected: `기프트 456 · 능력 <씨앗 수>` 가 찍히고 HTML 이 나온다.
 
-1차를 돌려 씨앗 한 건에 「틀리다」를 주고 바로 그만둔다.
+**설명문에 든 따옴표·꺾쇠가 페이지를 깨지 않는지 본다.** 자료를 `JSON.parse` 로 읽고 `<` 를 이스케이프했으므로 깨지면 안 된다.
 
 ```bash
-npm run gift:review
-# 화면이 뜨면  n  엔터,  그다음  q  엔터
-npm run gift:review -- --status
+node -e "
+const s = require('fs').readFileSync('/tmp/gift-review.html','utf8');
+const m = s.match(/JSON\.parse\((\"(?:[^\"\\\\]|\\\\.)*\")\)/);
+if (!m) throw new Error('자료 블록을 못 찾았다');
+const d = JSON.parse(JSON.parse(m[1]));
+console.log('기프트', d.gifts.length, '· 첫 건', d.gifts[0].name);
+"
 ```
 
-Expected: `틀리다 1`. `data/authored/gift-ability.progress.json` 에 그 기프트가 `{"state":"bad","round":1}` 로 남는다.
+Expected: 기프트 수와 첫 건 이름이 찍힌다 — 페이지 안 자료가 온전한 JSON 이라는 뜻이다.
 
-- [ ] **Step 7: 2차·3차 왕복이 도는지 확인한다**
+- [ ] **Step 7: 되받기가 도는지 확인한다**
+
+페이지가 내보낼 모양을 손으로 만들어 넣어 본다.
 
 ```bash
-npm run gift:review -- --bad
+cat > /tmp/verdicts-test.json <<'JSON'
+{"round":1,"exportedAt":"2026-08-11T00:00:00.000Z","verdicts":{
+  "9262":{"state":"ok","why":""},
+  "9268":{"state":"bad","why":"2문단 조건이 빠졌다"}
+}}
+JSON
+npm run gift:import -- /tmp/verdicts-test.json
+cat data/authored/gift-ability.progress.json
 ```
 
-Expected: 그 기프트의 설명문과 뽑힌 능력이 펼쳐지고 `서술 없음 → --why …` 안내가 나온다.
+Expected: `새로 2 · 바뀜 0 · 누적 2`, `맞다 1`, `틀리다 1`, 그리고 `2차 대상: 9268`. 진행 파일에 `9268` 이 `{"state":"bad","round":1,"why":"2문단 조건이 빠졌다"}` 로 남는다.
+
+- [ ] **Step 8: 어휘 밖 판정을 막는지 확인한다**
 
 ```bash
-GIFT=$(node -e "const p=require('./data/authored/gift-ability.progress.json');console.log(Object.keys(p.verdicts).find(k=>p.verdicts[k].state==='bad'))")
-npm run gift:review -- --why "$GIFT" "시험용 서술"
-npm run gift:review -- --bad
+printf '{"round":1,"verdicts":{"9262":{"state":"글쎄"}}}' > /tmp/verdicts-bad.json
+npm run gift:import -- /tmp/verdicts-bad.json
 ```
 
-Expected: `서술: 시험용 서술` 이 보인다.
+Expected: `9262 의 판정이 어휘 밖이다: 글쎄` 로 멈춘다. **진행 파일이 안 바뀐다.**
+
+되돌린다.
 
 ```bash
-npm run gift:review -- --revised "$GIFT"
-npm run gift:review -- --status
+git checkout data/authored/gift-ability.progress.json 2>/dev/null || rm -f data/authored/gift-ability.progress.json
 ```
 
-Expected: 그 기프트가 **미판정으로 돌아간다** — `틀리다 0 · 미판정 456`. 고친 사람이 스스로 「맞다」라고 적으면 검수가 아니므로 1차를 다시 받는다.
-
-- [ ] **Step 8: 중단해도 이어지는지 확인한다**
-
-한 건마다 저장하므로 강제 종료해도 앞의 판정이 남아야 한다.
+- [ ] **Step 9: 커밋**
 
 ```bash
-npm run gift:review
-# 한 건에 y 엔터, 그다음 Ctrl-C
-npm run gift:review -- --status
-```
-
-Expected: `맞다 1` 이 남는다. 다시 돌리면 그 건은 큐에 없다.
-
-- [ ] **Step 9: 진행 파일을 커밋한다**
-
-회차가 여러 날에 걸치고 기계가 바뀔 수 있으므로 진행 상황도 저장소에 남긴다.
-
-```bash
-git add scripts/extract-gift-ability.ts scripts/diff-gift-ability.ts scripts/review-gift-ability.ts package.json data/authored/gift-ability.progress.json
-git commit -m "feat(scripts): 기프트 능력 추출·비교·검수 도구
+git add scripts/extract-gift-ability.ts scripts/diff-gift-ability.ts scripts/build-review-page.ts scripts/import-verdicts.ts package.json
+git commit -m "feat(scripts): 기프트 능력 추출·비교·검수 페이지
 
 추출은 프롬프트 파일까지만 만들고 LLM 을 부르지 않는다. 빌드가 LLM 을
 부르면 같은 입력에 다른 결과가 나올 수 있어 v2:verify:rebuild 가 성립하지
 않는다(ADR-08). 사람이 그 파일을 모델에 넣고 결과를 --pass N 으로 저장한다.
 
-검수는 두 단계를 왕복한다(사양 §5).
-  1차  사용자가 보고 「맞다 / 틀리다」만 누른다. 이유를 안 적는다 —
-       456번 적게 하면 회차가 끝나지 않는다
-  2차  「틀리다」만 모아 에이전트가 읽고, 사용자가 --why 로 서술한다
-  3차  에이전트가 고치고 --revised 로 미판정으로 되돌린다.
-       고친 사람이 스스로 「맞다」라고 적으면 검수가 아니다
+검수는 페이지가 창구다(사용자 확정 2026-08-11). 터미널이 아니라 웹 페이지에서
+절 단위로 보고 「맞다 / 틀리다」를 누른다.
+  1차  이진 판정만. 이유를 안 적는다 — 456번 적게 하면 회차가 끝나지 않는다
+  2차  「틀리다」만 모아 에이전트가 읽고 사용자가 서술한다
+  3차  에이전트가 고치면 미판정으로 돌아가 1차를 다시 받는다
 
-한 건마다 저장한다 — 중단해도 그 자리에서 이어져야 한다. 진행 파일도
-커밋한다: 회차가 여러 날에 걸치고 기계가 바뀔 수 있다.
+페이지는 자기완결이다 — Artifact 는 외부 요청이 CSP 로 막히므로 자료를
+안에 넣는다. 설명문에 따옴표·꺾쇠가 있어 JSON.parse 로 읽고 '<' 를
+이스케이프한다.
 
-두 판이 어긋난 기프트를 앞에 둔다. 전건을 다 보되 어려운 것을 앞에 두면
-뒤로 갈수록 빨라진다."
+판정은 localStorage 에 남아 여러 날에 나눠 봐도 이어지고, 「내보내기」가
+파일을 만들면 gift:import 가 progress.json 에 반영한다. 브라우저와 저장소
+사이를 파일 하나가 잇는다."
 ```
 
 ---
@@ -2091,11 +2288,13 @@ git commit -m "feat(scripts): 기프트 능력 추출·비교·검수 도구
 검수 회차(456건)는 **태스크가 아니라 사용자와 에이전트가 왕복하는 작업**이다. Task 8 이 그 도구를 만들고, 회차는 이 PR 이 머지된 뒤 돈다.
 
 ```
-사용자   npm run gift:review          1차. 맞다/틀리다만 누른다
-에이전트  npm run gift:review -- --bad  틀리다를 읽는다
-사용자   무엇이 틀렸는지 서술한다        에이전트가 --why 로 기록한다
-에이전트  저작 jsonl 을 고치고 --revised  그 건이 미판정으로 돌아간다
-                                     「틀리다」가 없어질 때까지 반복
+에이전트  npm run gift:page      검수 페이지를 만들어 Artifact 로 게시한다
+사용자   페이지에서 절 단위로 훑으며 맞다/틀리다. 판정은 브라우저에 남는다
+사용자   「내보내기」                 verdicts.json 을 받아 전달한다
+에이전트  npm run gift:import        progress.json 에 반영하고 틀리다를 읽는다
+사용자   무엇이 틀렸는지 서술한다
+에이전트  저작 jsonl 을 고치고 페이지를 다시 만든다
+                               「틀리다」가 없어질 때까지 반복
 ```
 
 검수가 끝나기 전에도 값이 나온다 — 저작 파일에 없는 기프트는 `gift_ability` 행이 없고, 2단계 엔진은 그런 기프트를 판정 보류로 다룬다.
