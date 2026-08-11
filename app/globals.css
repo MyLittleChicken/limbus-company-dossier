@@ -2913,3 +2913,715 @@ input[type='checkbox'] {
 html:has(.axispanels) {
 	overflow-anchor: none;
 }
+
+/* ══ 인격 상세 — 서류 한 장 ═══════════════════════════════════
+   시안 F 를 옮긴 것이다(`publish/lab/identity-f.html`).
+
+   명함의 규칙을 따랐다 — **위계는 셋이고 이름이 가장 크다**(이름 → 소속 → 등록 자료),
+   왼쪽 정렬에 오른쪽 자료 덩이로 균형을 잡고, 글꼴은 표제체와 고정폭 둘로 묶는다.
+
+   문서 인상은 넷이 진다 — 이중 테두리 · 대지에 붙인 사진 · 모서리 홀더 · 문서 번호.
+
+   **글자 계단은 토큰을 건드리지 않고 이 카드 안에서만 올린다.** `tokens.css` 의 일곱 단은
+   목록의 밀도를 지키려고 접어 둔 것이라 카드 하나 때문에 전 화면을 키울 수 없다. */
+
+.f-card {
+	position: relative;
+	display: grid;
+	grid-template-columns: 380px minmax(0, 1fr);
+	gap: var(--sp-11);
+	margin-bottom: var(--gap);
+	padding: var(--sp-9);
+	background: var(--surface-1);
+	border: 1px solid var(--line-active);
+	box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* 안쪽 점선 테두리. 서류의 인쇄 여백이다. */
+.f-card::before {
+	content: '';
+	position: absolute;
+	inset: 6px;
+	border: 1px dotted var(--line);
+	pointer-events: none;
+}
+
+/* ── 대지에 붙인 사진 ────────────────────────────────────── */
+
+.f-art {
+	position: relative;
+	line-height: 0;
+	padding: var(--sp-3);
+	background: var(--surface-inset);
+	border: 1px solid var(--line-faint);
+}
+
+.f-art img,
+.f-art-none {
+	display: block;
+	width: 100%;
+	aspect-ratio: 3 / 4;
+	object-fit: cover;
+	object-position: 50% 18%;
+	border: 1px solid var(--line);
+	background: var(--surface-inset);
+}
+
+/* 모서리 홀더 넷. `.f-art` 의 앞뒤와 `.f-mount` 의 앞뒤로 네 귀를 잡는다. */
+.f-art::before,
+.f-art::after,
+.f-mount::before,
+.f-mount::after {
+	content: '';
+	position: absolute;
+	z-index: 2;
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--ink-gold);
+	opacity: 0.55;
+	pointer-events: none;
+}
+
+.f-art::before {
+	top: 3px;
+	left: 3px;
+	border-right: none;
+	border-bottom: none;
+}
+
+.f-art::after {
+	top: 3px;
+	right: 3px;
+	border-left: none;
+	border-bottom: none;
+}
+
+.f-mount::before {
+	bottom: 3px;
+	left: 3px;
+	border-right: none;
+	border-top: none;
+}
+
+.f-mount::after {
+	bottom: 3px;
+	right: 3px;
+	border-left: none;
+	border-top: none;
+}
+
+/*
+	일러스트 바꾸기.
+
+	교차 화살표 하나로 말한다 — 글자 설명은 자리를 먹고 그림을 가린다. 뜻은 툴팁과 대체
+	텍스트가 지고, 켜져 있으면 색이 뒤집혀 지금 어느 쪽인지 보인다.
+*/
+.f-swap {
+	position: absolute;
+	top: var(--sp-5);
+	right: var(--sp-5);
+	z-index: 3;
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	background: rgba(8, 7, 6, 0.72);
+	border: 1px solid var(--line-active);
+	color: var(--ink-gold);
+	cursor: pointer;
+}
+
+.f-swap svg {
+	display: block;
+	width: 21px;
+	height: 21px;
+}
+
+.f-swap[aria-pressed='true'] {
+	background: var(--ink-gold);
+	color: #17130f;
+}
+
+/* ── 표제 ────────────────────────────────────────────────── */
+
+.f-body {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: var(--sp-6);
+	min-height: 100%;
+}
+
+.f-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--sp-9);
+	padding-bottom: var(--sp-6);
+	border-bottom: 1px solid var(--line-active);
+}
+
+.f-title {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-4);
+}
+
+/* 이름이 가장 크다. 체력 수치보다 위다. */
+.f-title h1 {
+	margin: 0;
+	font-family: var(--font-title);
+	font-size: 32px;
+	line-height: 1.15;
+	color: var(--ink-cream);
+}
+
+/*
+	게임이 인격을 부르는 꼴이 `[인격명] 수감자` 다. **표기를 새로 만들지 않는다.**
+
+	대괄호는 CSS 로 그린다 — 데이터의 이름 문자열에 글자를 섞지 않기 위해서다. 골라 복사하면
+	이름만 잡힌다.
+*/
+.f-title h1::before {
+	content: '[';
+}
+
+/*
+	수감자 이름은 크기가 아니라 **색**으로 가른다.
+
+	`--ink-dim` 으로 낮췄더니 대비가 5.9:1 대 11.2:1 이라 같은 32px 인데도 더 가늘고 작게
+	읽혔다. `--ink` 는 14.7:1 로 더 밝지만 따뜻한 크림이 아닌 중성색이라 여전히 갈린다.
+*/
+.f-sinner {
+	color: var(--ink);
+	font-size: inherit;
+	font-weight: inherit;
+}
+
+.f-sinner::before {
+	content: '] ';
+}
+
+/* 수감자 상징. 판에 가두면 도장이 되어 이름보다 무거워진다 — 블렌딩으로 바닥에 녹인다. */
+.f-emblem {
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 60px;
+	height: 60px;
+}
+
+.f-emblem img {
+	width: 60px;
+	height: 60px;
+	object-fit: contain;
+	mix-blend-mode: screen;
+}
+
+/* 등급은 이름과 같은 무게로 선다. */
+.f-rank {
+	flex: 0 0 auto;
+	height: 30px;
+	width: auto;
+	align-self: center;
+}
+
+/* 소속은 이름 바로 밑이다. 명함의 회사 자리다. */
+.f-affil {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	flex-wrap: wrap;
+	margin-top: var(--sp-5);
+}
+
+.f-affil .tag {
+	padding: var(--sp-2) var(--sp-5);
+	font-size: var(--fs-sm);
+}
+
+/*
+	오른쪽 등록 자료.
+
+	`NO.` · 시즌 · 출시를 오른끝에 세워 이름 덩이와 마주 세운다. 명함의 연락처 자리다.
+	`NO.` 는 인격 id 이며 정리 번호로 쓴다 — 없던 값을 만들지 않았다.
+*/
+.f-file {
+	display: grid;
+	gap: var(--sp-2);
+	margin: 0;
+	flex: 0 0 auto;
+	text-align: right;
+	font-family: var(--font-mono);
+}
+
+.f-file > div {
+	display: flex;
+	align-items: baseline;
+	justify-content: flex-end;
+	gap: var(--sp-4);
+}
+
+.f-file dt {
+	color: var(--ink-muted);
+	font-size: var(--fs-tiny);
+	letter-spacing: var(--ls-wide);
+}
+
+.f-file dd {
+	min-width: 84px;
+	margin: 0;
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+.f-file > div:first-child dd {
+	color: var(--ink-cream);
+	font-size: var(--fs-lg);
+}
+
+/* ── 서식 이름표 ─────────────────────────────────────────── */
+
+/* 타자로 친 항목 이름이다. 다섯 줄(레벨·체력·스탯·저항·키워드)이 한 선에 선다. */
+.f-lab {
+	flex: 0 0 auto;
+	min-width: 46px;
+	color: var(--ink-muted);
+	font-family: var(--font-mono);
+	font-size: var(--fs-xs);
+	letter-spacing: var(--ls-normal);
+}
+
+/* ── 레벨 · 동기화 ───────────────────────────────────────── */
+
+.f-picks {
+	display: flex;
+	gap: var(--sp-11);
+	flex-wrap: wrap;
+}
+
+.f-pick {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+}
+
+.f-pick--lv {
+	flex: 1 1 260px;
+	min-width: 220px;
+}
+
+.f-lv-range {
+	flex: 1;
+	height: 18px;
+	accent-color: var(--ink-gold);
+	cursor: pointer;
+}
+
+/* 스핀 단추가 자리를 먹어 숫자가 가려졌다. 단추를 없애고 폭을 넉넉히 준다. */
+.f-lv-num {
+	width: 6ch;
+	padding: var(--sp-3);
+	-moz-appearance: textfield;
+	appearance: textfield;
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: var(--fs-base);
+	text-align: center;
+}
+
+.f-lv-num::-webkit-outer-spin-button,
+.f-lv-num::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.f-lv-num:focus {
+	border-color: var(--line-active);
+	outline: none;
+}
+
+/* 동기화 단계는 로마자다 — 게임 표기가 「동기화 Ⅳ」다. */
+.f-up {
+	min-width: 40px;
+	padding: var(--sp-3) var(--sp-4);
+	background: var(--surface-1);
+	border: 1px solid var(--line);
+	color: var(--ink-dim);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	text-align: center;
+	cursor: pointer;
+}
+
+.f-up[aria-pressed='true'] {
+	background: var(--surface-2);
+	border-color: var(--line-active);
+	color: var(--ink-gold);
+}
+
+/* ── 체력 ────────────────────────────────────────────────── */
+
+.f-hp {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-6);
+}
+
+/*
+	자릿수가 달라져도 막대가 흔들리지 않게 자리를 미리 잡고 오른쪽으로 맞춘다.
+	104 ↔ 212 를 오가도 막대의 시작점이 붙박인다.
+*/
+.f-hp-n {
+	flex: 0 0 auto;
+	min-width: 4ch;
+	text-align: right;
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: 28px;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+}
+
+.f-hp-bar {
+	position: relative;
+	flex: 1;
+	height: 26px;
+	background: linear-gradient(90deg, #6d2320, #a83c33);
+	border: 1px solid var(--line);
+	border-radius: 2px;
+}
+
+/*
+	흐트러짐 구간.
+
+	배경과 같은 색 2px 로는 붉은 막대 위에서 거의 안 보였다. 밝은 금색 선에 어두운 테두리를
+	둘러 어느 쪽 배경에서도 드러나게 한다.
+*/
+.f-hp-bar i {
+	position: absolute;
+	top: -3px;
+	bottom: -3px;
+	width: 3px;
+	background: var(--ink-gold);
+	box-shadow: 0 0 0 1px rgba(8, 7, 6, 0.9);
+}
+
+.f-hp-bar b {
+	position: absolute;
+	bottom: 28px;
+	left: 50%;
+	transform: translateX(-50%);
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: var(--fs-sm);
+	font-weight: var(--fw-normal);
+}
+
+/* ── 수치 ────────────────────────────────────────────────── */
+
+.f-stats {
+	padding: var(--sp-5) 0;
+	border-top: 1px dotted var(--line);
+	border-bottom: 1px dotted var(--line);
+}
+
+.f-statrow {
+	display: grid;
+	grid-template-columns: 46px repeat(3, minmax(0, 1fr));
+	align-items: center;
+	gap: var(--sp-4);
+}
+
+.f-statrow + .f-statrow {
+	margin-top: var(--sp-6);
+}
+
+.f-stat {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--sp-3);
+}
+
+.f-stat span {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	color: var(--ink-muted);
+	font-size: var(--fs-xs);
+}
+
+.f-stat b {
+	color: var(--ink-cream);
+	font-family: var(--font-num);
+	font-size: 21px;
+	font-weight: var(--fw-normal);
+	font-variant-numeric: tabular-nums;
+}
+
+/* 방어 보정. 유도할 수 없는 값이라 이름 옆에 근거로 남긴다. */
+.f-stat em {
+	color: var(--ink-dim);
+	font-family: var(--font-mono);
+	font-size: var(--fs-tiny);
+	font-style: normal;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── 키워드 ──────────────────────────────────────────────── */
+
+.f-tags > div {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	flex-wrap: wrap;
+}
+
+.f-tags .tag {
+	padding: var(--sp-2) var(--sp-5);
+	font-size: var(--fs-sm);
+}
+
+/* 그림을 단 칩. 목록 화면의 필터 칩과 같은 그림을 쓴다. */
+.tag--icon {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-3);
+}
+
+/* ── 스킬 ────────────────────────────────────────────────── */
+
+/*
+	한 줄 요약 + 펼치기.
+
+	게젤샤프트가 스킬마다 한 화면을 먹는 것은 조건을 켜고 끄며 최종 피해를 다시 계산하기
+	때문이다. 우리는 계산기가 아니므로 다섯이 한 화면에 들어온다.
+*/
+.f-skills {
+	display: grid;
+	gap: var(--sp-3);
+}
+
+.f-skill {
+	background: var(--surface-1);
+	border: 1px solid var(--line-faint);
+}
+
+.f-skill > summary {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-5);
+	padding: var(--sp-5) var(--sp-6);
+	cursor: pointer;
+	list-style: none;
+}
+
+.f-skill > summary::-webkit-details-marker {
+	display: none;
+}
+
+.f-skill[open] > summary {
+	border-bottom: 1px solid var(--line-faint);
+}
+
+.f-skill-icon {
+	flex: 0 0 auto;
+	width: 30px;
+	height: 30px;
+	object-fit: contain;
+}
+
+.f-skill-slot {
+	flex: 0 0 auto;
+	min-width: 44px;
+	color: var(--ink-muted);
+	font-size: var(--fs-tiny);
+	letter-spacing: var(--ls-wide);
+}
+
+.f-skill summary strong {
+	flex: 1;
+	color: var(--ink-cream);
+	font-size: var(--fs-base);
+	font-weight: var(--fw-medium);
+}
+
+/*
+	코인을 앞에 둔다.
+
+	코인 수가 스킬마다 달라(2~4) 뒤에 두면 그 앞의 죄악·공격 타입이 줄마다 다른 자리에서
+	끝났다. 코인을 먼저 놓고 죄악·공격 타입에 같은 폭을 주어 세로로 맞춘다.
+*/
+.f-skill-tags {
+	display: grid;
+	grid-template-columns: 52px 56px 56px;
+	align-items: center;
+	gap: var(--sp-2);
+	justify-items: start;
+}
+
+.f-skill-tags .coin-dots {
+	margin: 0;
+	justify-self: end;
+}
+
+.coin-dots {
+	display: inline-flex;
+	gap: 2px;
+}
+
+.coin-dots img {
+	width: 12px;
+	height: 12px;
+}
+
+.f-skill-body {
+	padding: var(--sp-6);
+}
+
+/* ── 문구 ────────────────────────────────────────────────── */
+
+/*
+	타이밍 태그와 상태 이름을 색으로 가른다. 게임의 공식 인격 프리뷰 카드가 같은 자리를
+	같은 방식으로 가른다.
+*/
+.fx-line {
+	margin: 0 0 var(--sp-3);
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+	line-height: var(--lh-base);
+}
+
+.fx-line:last-child {
+	margin-bottom: 0;
+}
+
+.fx-when {
+	margin-right: var(--sp-2);
+	color: var(--ink-muted);
+	font-family: var(--font-mono);
+	font-size: var(--fs-tiny);
+}
+
+.fx-st {
+	color: var(--ink-gold);
+	text-decoration: none;
+	border-bottom: 1px dotted currentColor;
+}
+
+.fx-coins {
+	display: grid;
+	gap: var(--sp-4);
+	margin: var(--sp-6) 0 0;
+	padding: var(--sp-6) 0 0;
+	border-top: 1px dotted var(--line);
+	list-style: none;
+}
+
+.fx-coins li {
+	display: flex;
+	align-items: baseline;
+	gap: var(--sp-5);
+}
+
+.coin-r {
+	flex: 0 0 auto;
+	min-width: 2ch;
+	color: var(--ink-muted);
+	font-family: var(--font-num);
+	font-size: var(--fs-tiny);
+}
+
+/* ── 패시브 ──────────────────────────────────────────────── */
+
+.f-passives {
+	display: grid;
+	gap: var(--sp-4);
+}
+
+.f-passive {
+	padding: var(--sp-6);
+	background: var(--surface-1);
+	border: 1px solid var(--line-faint);
+}
+
+.f-passive-head {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-4);
+	margin-bottom: var(--sp-4);
+}
+
+.f-passive-head strong {
+	color: var(--ink-cream);
+	font-size: var(--fs-base);
+}
+
+/* ── 상태 ────────────────────────────────────────────────── */
+
+.st-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: var(--sp-4);
+}
+
+.st-card {
+	padding: var(--sp-5);
+	background: var(--surface-1);
+	border: 1px solid var(--line-faint);
+	scroll-margin-top: calc(var(--head-h) + var(--sp-6));
+}
+
+.st-head {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-4);
+	margin-bottom: var(--sp-4);
+}
+
+.st-head img {
+	width: 22px;
+	height: 22px;
+	object-fit: contain;
+}
+
+.st-head strong {
+	color: var(--ink-gold);
+	font-size: var(--fs-sm);
+}
+
+/* ── 좁은 화면 ───────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+	.f-card {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--sp-8);
+		padding: var(--sp-7);
+	}
+
+	.f-head {
+		flex-direction: column;
+		gap: var(--sp-5);
+	}
+
+	.f-file {
+		text-align: left;
+	}
+
+	.f-file > div {
+		justify-content: flex-start;
+	}
+
+	.f-statrow {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	}
+
+	.f-statrow .f-lab {
+		grid-column: 1 / -1;
+	}
+}
