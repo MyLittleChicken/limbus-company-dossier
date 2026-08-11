@@ -8,7 +8,7 @@
  */
 import { PrismaClient } from './generated/client.js';
 import { liveRowCount } from './schema-ops.js';
-import { readAuthored, unknownRefs, type KnownIds } from './authored.js';
+import { readAuthored, unknownRefs, type KnownIds, knownIdsOf } from './authored.js';
 
 interface Check {
 	name: string;
@@ -1564,11 +1564,13 @@ async function main(): Promise<void> {
 			SELECT count(*)::bigint AS n FROM information_schema.tables WHERE table_schema = 'app'
 		`;
 		// 6 → 8 은 ref_exception · ego_granted_axis 다(ADR-08). 8 → 9 는 axis_grant 다
-		// (Task 3, 저작 18행). 저작 사실이 app 으로 내려오면서 늘었다
+		// (Task 3, 저작 18행). 9 → 10 은 gift_ability_authored 다 — 기프트 능력
+		// 저작이 내려온 자리이고, 이 표만 값이 파일(src/v2/authored/)에서 온다.
+		// 저작 사실이 app 으로 내려오면서 늘었다
 		checks.push({
 			name: 'app 스키마가 섰다',
-			ok: Number(appTables[0]?.n ?? 0n) === 9,
-			detail: `${Number(appTables[0]?.n ?? 0n)} / 9`,
+			ok: Number(appTables[0]?.n ?? 0n) === 10,
+			detail: `${Number(appTables[0]?.n ?? 0n)} / 10`,
 		});
 
 		// ══ 판 표식 — 이 판이 무엇에서 나왔나 (ADR-08) ═════════════
@@ -1624,7 +1626,7 @@ async function main(): Promise<void> {
 		// 저작이 가리키는 대상이 실재하는가. 적재기가 굽기 전에도 보지만,
 		// 살아있는 판에 대고도 물어야 한다 — 승격 뒤에 대상이 사라질 수 있다
 		const authoredNow = await readAuthored(prisma);
-		const knownNow: KnownIds = {
+		const knownNow: KnownIds = knownIdsOf({
 			axisIds: new Set((await prisma.axis.findMany({ select: { id: true } })).map((a) => a.id)),
 			unitKeywordIds: new Set(
 				(await prisma.identityUnitKeyword.findMany({ select: { keyword: true } })).map((k) => k.keyword),
@@ -1632,7 +1634,7 @@ async function main(): Promise<void> {
 			associationIds: new Set(
 				(await prisma.association.findMany({ select: { id: true } })).map((a) => a.id),
 			),
-		};
+		});
 		const badNow = unknownRefs(authoredNow, knownNow);
 		checks.push({
 			name: '저작이 가리키는 대상이 전부 canonical 에 있다',
@@ -1734,6 +1736,126 @@ async function main(): Promise<void> {
 		// 모든 기프트가 최소 한 단계 텍스트를 갖는다
 		const noText = await prisma.gift.count({ where: { stages: { none: { texts: { some: {} } } } } });
 		checks.push({ name: '텍스트 없는 기프트 (0이어야 한다)', ok: noText === 0, detail: `${noText} / 0` });
+
+		// ══ 기프트 능력 — 절 단위 조건 (기프트 능력 모형 1단계) ═══════
+		const abilityN = await prisma.giftAbility.count();
+		const condN = await prisma.giftAbilityCond.count();
+		checks.push({ name: '기프트 능력 행이 있다', ok: abilityN > 0, detail: `${abilityN}행 · 조건 ${condN}행` });
+
+		// unconditional 이면 조건이 없어야 한다 — 둘 다 있으면 모형이 모순이다
+		const uncondWithConds = await prisma.giftAbility.count({
+			where: { unconditional: true, conds: { some: {} } },
+		});
+		checks.push({
+			name: 'unconditional 인데 조건이 있는 능력 (0이어야 한다)',
+			ok: uncondWithConds === 0, detail: `${uncondWithConds} / 0`,
+		});
+
+		// refines 는 같은 (gift,level) 안의 실재하는 ordinal 을 가리켜야 한다.
+		// 굽는 쪽이 끊지만 손으로 DB 를 고칠 수 있으므로 여기서도 본다
+		const danglingRefines = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability a
+			WHERE a.refines IS NOT NULL AND NOT EXISTS (
+				SELECT 1 FROM canonical.gift_ability b
+				WHERE b.gift_id = a.gift_id AND b.level = a.level AND b.ordinal = a.refines
+			)`;
+		checks.push({
+			name: 'refines 가 없는 ordinal 을 가리킨다 (0이어야 한다)',
+			ok: Number(danglingRefines[0]?.n ?? 0n) === 0,
+			detail: `${Number(danglingRefines[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 사슬 금지 — 강화판을 또 강화하면 켜짐 판정이 몇 겹인지 알 수 없어진다
+		const refineChain = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability a
+			JOIN canonical.gift_ability b
+			  ON b.gift_id = a.gift_id AND b.level = a.level AND b.ordinal = a.refines
+			WHERE a.refines IS NOT NULL AND b.refines IS NOT NULL`;
+		checks.push({
+			name: 'refines 사슬 (0이어야 한다)',
+			ok: Number(refineChain[0]?.n ?? 0n) === 0,
+			detail: `${Number(refineChain[0]?.n ?? 0n)} / 0`,
+		});
+
+		// 기프트마다 독립 능력이 하나는 있어야 한다 — 전부 강화판이면 영영 죽는다
+		const allRefined = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM (
+				SELECT gift_id, level FROM canonical.gift_ability
+				GROUP BY 1, 2 HAVING count(*) FILTER (WHERE refines IS NULL) = 0
+			) x`;
+		checks.push({
+			name: '독립 능력이 없는 (기프트,단계) (0이어야 한다)',
+			ok: Number(allRefined[0]?.n ?? 0n) === 0,
+			detail: `${Number(allRefined[0]?.n ?? 0n)} / 0`,
+		});
+
+		// scope='slot' 이면 slot 이 1~7 — 출격이 7인이라 7번 자리가 있다
+		const badSlot = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability_cond
+			WHERE (scope = 'slot' AND (slot IS NULL OR slot < 1 OR slot > 7))
+			   OR (scope <> 'slot' AND slot IS NOT NULL)`;
+		checks.push({
+			name: "scope='slot' 과 slot 이 어긋난다 (0이어야 한다)",
+			ok: Number(badSlot[0]?.n ?? 0n) === 0,
+			detail: `${Number(badSlot[0]?.n ?? 0n)} / 0`,
+		});
+
+		// scope 어휘 — waiting 이 있어야 「대기 인원에 …」(9778)이 판정된다
+		const badScope = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability_cond
+			WHERE scope NOT IN ('field','roster','waiting','slot','enemy','none')`;
+		checks.push({
+			name: 'scope 어휘 밖 (0이어야 한다)',
+			ok: Number(badScope[0]?.n ?? 0n) === 0,
+			detail: `${Number(badScope[0]?.n ?? 0n)} / 0`,
+		});
+
+		// supply='skill' 은 축으로만 셀 수 있다 — coin_token 은 축만 안다
+		const badSupply = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability_cond
+			WHERE supply NOT IN ('skill','tag','any')
+			   OR (supply = 'skill' AND ref_kind <> 'axis')`;
+		checks.push({
+			name: 'supply 어휘 밖이거나 skill 인데 축이 아니다 (0이어야 한다)',
+			ok: Number(badSupply[0]?.n ?? 0n) === 0,
+			detail: `${Number(badSupply[0]?.n ?? 0n)} / 0`,
+		});
+
+		// resonance_mode 는 resonance 조건에만 — 공명은 슬롯 연속성이 정한다
+		const badResonance = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability_cond
+			WHERE resonance_mode IS NOT NULL AND ref_kind <> 'resonance'`;
+		checks.push({
+			name: 'resonance 가 아닌데 resonance_mode 가 있다 (0이어야 한다)',
+			ok: Number(badResonance[0]?.n ?? 0n) === 0,
+			detail: `${Number(badResonance[0]?.n ?? 0n)} / 0`,
+		});
+
+		// ── 결손이 짝을 이루는가 ──────────────────────────────────
+		// threshold 를 못 정한 자리마다 결손이 있어야 한다. op='has' 는 수가
+		// 아니라 존재를 묻는 것이라 문턱값이 없는 것이 옳다 — 뺀다
+		const nullThreshold = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n FROM canonical.gift_ability_cond
+			WHERE threshold IS NULL AND op <> 'has'`;
+		const thresholdGaps = await prisma.fieldGap.count({
+			where: { entity: 'gift', field: 'threshold' },
+		});
+		checks.push({
+			name: '문턱값 결손이 조건 수만큼 기록됐다',
+			ok: thresholdGaps > 0 || Number(nullThreshold[0]?.n ?? 0n) === 0,
+			detail: `조건 ${Number(nullThreshold[0]?.n ?? 0n)} · 결손 ${thresholdGaps}`,
+		});
+
+		// unconditional=false 인데 조건이 없는 능력마다 결손이 있어야 한다
+		const emptyConds = await prisma.giftAbility.count({
+			where: { unconditional: false, conds: { none: {} } },
+		});
+		const condGaps = await prisma.fieldGap.count({ where: { entity: 'gift', field: 'conds' } });
+		checks.push({
+			name: '조건이 있다고 적혔는데 없는 능력이 결손에 기록됐다',
+			ok: condGaps > 0 || emptyConds === 0,
+			detail: `능력 ${emptyConds} · 결손 ${condGaps}`,
+		});
 	} finally {
 		await prisma.$disconnect();
 	}

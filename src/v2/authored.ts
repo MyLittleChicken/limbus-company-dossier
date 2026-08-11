@@ -48,6 +48,34 @@ export interface KnownIds {
 	resonanceIds: Set<string>;
 }
 
+/**
+ * 일곱 죄악. `sin` 과 `resonance` 가 같은 값을 쓰지만 묻는 것이 다르다 —
+ * `sin` 은 「그 속성 스킬이 있는가」, `resonance` 는 「공명이 서는가」다.
+ */
+export const SINS = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+export const ATTACK_TYPES = ['slash', 'pierce', 'blunt'];
+export const SKILL_KINDS = ['counter', 'evade', 'guard'];
+
+/**
+ * canonical 에 실물이 있는 셋만 받아 `KnownIds` 를 완성한다.
+ *
+ * **두 곳이 이것을 만든다** — 적재기(굽기 직전)와 검사기(살아있는 판). 어휘를
+ * 양쪽에 따로 적으면 한쪽만 늘어나 조용히 갈린다. 여기서 한 번만 정한다.
+ */
+export function knownIdsOf(live: {
+	axisIds: Set<string>;
+	unitKeywordIds: Set<string>;
+	associationIds: Set<string>;
+}): KnownIds {
+	return {
+		...live,
+		sinIds: new Set(SINS),
+		attackTypes: new Set(ATTACK_TYPES),
+		skillKinds: new Set(SKILL_KINDS),
+		resonanceIds: new Set(SINS),
+	};
+}
+
 export async function readAuthored(prisma: PrismaClient): Promise<Authored> {
 	const [refException, egoGranted, axisGrant, giftAbility] = await Promise.all([
 		prisma.refException.findMany({

@@ -23,13 +23,14 @@ import { buildAxis } from './canonical/axis.js';
 import { buildAxisGrant } from './canonical/axis-grant.js';
 import { buildIdentityAxis } from './canonical/identity-axis.js';
 import { buildGiftTriggerParam } from './canonical/gift-trigger-param.js';
+import { buildGiftAbility } from './canonical/gift-ability.js';
 import { parseCoinTokens } from './canonical/tokens.js';
 import { buildMirror } from './canonical/mirror.js';
 import { buildMirrorDungeon } from './canonical/mirror-dungeon.js';
 import { substituteTokens } from './canonical/markup.js';
 import { buildEncounters } from './canonical/encounters.js';
 import { applyTextOverrides, applyColumnOverrides, type OverrideRow } from './canonical/override.js';
-import { readAuthored, unknownRefs, authoredDigest, type KnownIds } from './authored.js';
+import { readAuthored, unknownRefs, authoredDigest, knownIdsOf, type KnownIds } from './authored.js';
 import { emptyRequiredMessage, hasAnyRow, liveRowCount } from './schema-ops.js';
 
 const CHUNK = 1_000;
@@ -290,11 +291,14 @@ async function main(): Promise<void> {
 		// 저작이 가리키는 대상이 실재하는가. **굽기 전에 멈춘다** — 못 닿는 참조를
 		// 안고 구우면 조용히 빈 축이 나오고, 그건 검사 203건이 못 잡는 자리다.
 		// axisTables 뒤여야 axis_id 를 알 수 있다
-		const known: KnownIds = {
+		// 나머지 어휘(죄악·공격 타입·스킬 종류·공명)는 코드가 정하는 닫힌
+		// 집합이라 knownIdsOf 가 채운다 — 게임이 정한 사실이 아니라 우리가
+		// 조건을 읽는 방법이다(ADR-08)
+		const known: KnownIds = knownIdsOf({
 			axisIds: new Set(axisTables.axis.map((a) => a.id)),
 			unitKeywordIds: new Set(identities.identityUnitKeyword.map((k) => k.keyword)),
 			associationIds: new Set(sinners.association.map((a) => a.id)),
-		};
+		});
 		const badRefs = unknownRefs(authored, known);
 		if (badRefs.length > 0) {
 			console.error('저작이 가리키는 대상이 canonical 에 없다. 굽지 않는다.');
@@ -345,6 +349,18 @@ async function main(): Promise<void> {
 			granted: axisGrant.granted,
 			restrict: axisGrant.restrict,
 		}, meta);
+
+		/**
+		 * 기프트 능력 — 저작이 정본이다. 여기서는 펴고 결손만 남긴다.
+		 *
+		 * 위 `giftTriggerParam` 과 달리 **설명문을 읽지 않는다.** 저작이
+		 * 오프라인 추출과 전건 검수를 거쳐 굳은 사실이고, 빌드가 산문을 다시
+		 * 파싱하면 결정성이 깨진다(ADR-08).
+		 */
+		const giftAbility = buildGiftAbility(
+			{ authored: authored.giftAbility, giftIds: new Set(gifts.gift.map((g) => g.id)) },
+			meta,
+		);
 
 		// 트리거 정량자. **level 0 만 본다** — 강화 단계는 조건 문장이 같아 중복이다.
 		// 산문을 여기서 한 번 뽑아 구조로 굳힌다. 질의 시점에 desc 를 다시 읽지 않는다
@@ -667,6 +683,15 @@ async function main(): Promise<void> {
 		counts.push([
 			'gift_trigger_param',
 			await chunked(giftTriggerParam, (d) => prisma.giftTriggerParam.createMany({ data: d })),
+		]);
+		// gift_ability 도 gift 를 FK 로 걸고, cond 는 ability 를 건다 — 순서가 있다
+		counts.push([
+			'gift_ability',
+			await chunked(giftAbility.abilities, (d) => prisma.giftAbility.createMany({ data: d })),
+		]);
+		counts.push([
+			'gift_ability_cond',
+			await chunked(giftAbility.conds, (d) => prisma.giftAbilityCond.createMany({ data: d })),
 		]);
 		counts.push([
 			'fusion_recipe',
