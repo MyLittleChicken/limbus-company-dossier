@@ -171,6 +171,10 @@ test('저작 예외 — [BloodDinner] 는 흡혈종 트리거로 간다', () => 
 	const min = rows.find((r) => r.kind === 'min_count');
 	assert.equal(min?.triggerId, 'Bloodfiend Identities');
 	assert.equal(min?.value, '3');
+	// 이 desc 는 (개행 없는) 첫 문단 안에 「발동」이 있다 — 게이트도 만든다
+	const gate = rows.find((r) => r.kind === 'gate');
+	assert.equal(gate?.triggerId, 'Bloodfiend Identities');
+	assert.equal(gate?.value, '3');
 });
 
 test('적을 세는 문장은 이유를 갈라 남긴다 — 올바른 배제와 결손은 다르다', () => {
@@ -191,6 +195,8 @@ test('토큰 예외는 입력으로 온다 — 상수가 아니다', () => {
 
 	const rows = buildGiftTriggerParam(i, new Meta());
 	assert.equal(rows.find((r) => r.kind === 'min_count')?.value, '3');
+	// 이 desc 도 (개행 없는) 첫 문단 안에 「발동」이 있다 — 게이트도 만든다
+	assert.equal(rows.find((r) => r.kind === 'gate')?.value, '3');
 });
 
 test('입력에 그 토큰이 없으면 게이트가 안 붙는다', () => {
@@ -288,4 +294,26 @@ test('첫 문단에 「발동」이 없으면 게이트가 아니다', () => {
 
 	const rows = buildGiftTriggerParam(i, new Meta());
 	assert.equal(rows.some((r) => r.kind === 'gate'), false);
+});
+
+test('desc 가 개행으로 시작해도 첫 문단 끝자락의 게이트를 놓치지 않는다 — 경계는 절대 위치다', () => {
+	const i = base();
+	// 리딩 개행 8개. split(/\n+/) 이 앞쪽 빈 조각을 건너뛰므로 firstPara.length 만으로
+	// 경계를 잡으면(옛 버그) 이 오프셋만큼 짧게 잡혀, 문단 끝자락의 「3인 이상」이
+	// 실제로는 첫 문단 안인데도 gateZone 밖으로 밀려난다
+	i.giftDesc = [{
+		giftId: '9718',
+		desc: '\n\n\n\n\n\n\n\n발동 시 검계 소속 인격이 3인 이상\n\n뒤 문단.',
+	}];
+	i.giftTrigger = [{ giftId: '9718', triggerId: 'Blade Lineage Identities' }];
+	i.triggerRef = [{
+		triggerId: 'Blade Lineage Identities',
+		refKind: 'association', refId: 'BLADE_LINEAGE', evaluability: 'roster',
+	}];
+	i.associationKo = [{ associationId: 'BLADE_LINEAGE', name: '검계' }];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	const gate = rows.find((r) => r.kind === 'gate');
+	assert.equal(gate?.triggerId, 'Blade Lineage Identities');
+	assert.equal(gate?.value, '3');
 });

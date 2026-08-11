@@ -194,7 +194,11 @@ export function buildGiftTriggerParam(
 		 * 첫 문단이지만 효과 서술이지 여는 문이 아니다.
 		 */
 		const firstPara = g.desc.split(/\n+/).find((p) => p.trim().length > 0) ?? '';
-		const gateZone = firstPara.includes('발동') ? firstPara.length : -1;
+		// firstPara.length 는 첫 문단 자기 길이일 뿐이다 — desc 가 개행으로 시작해
+		// split 이 앞쪽 빈 조각을 건너뛰면 그 오프셋만큼 실제 경계보다 짧게 잡힌다.
+		// indexOf 로 desc 안에서의 절대 시작 위치를 구해 더해야 진짜 경계가 나온다
+		const start = g.desc.indexOf(firstPara);
+		const gateZone = firstPara.includes('발동') ? start + firstPara.length : -1;
 
 		for (const m of g.desc.matchAll(GATE)) {
 			const ctx = g.desc.slice(Math.max(0, m.index - CONTEXT), m.index);
