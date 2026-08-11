@@ -184,5 +184,22 @@ gift/9043                   원문에 「거나」가 있는데 태그에 OR 정
 ## 7. 안 하는 것
 
 - `axis` · `attack_type` · `resonance` · `deployment` 의 판정을 바꾸지 않는다. 9005 · 9023 · 9048 · 9041 은 여전히 죽는다 — 그것이 옳다.
+
+### 언제 걷어내는가
+
+**이 규칙은 임시방편이다.** 절 구조가 들어오면 조건이 어느 절에 붙는지 데이터가 직접 말하므로 「첫 문단이면 게이트」라는 근사가 필요 없어진다.
+
+기프트 능력 PR 이 절 구조를 넣을 때 함께 지운다.
+
+```
+canonical.gift_trigger_param 의 kind='gate' 49행
+lib/engine/v2/evaluate.ts 의 gateKeysOf · hasGate · SCOPE_KINDS
+src/v2/verify-canonical.ts 의 게이트 검사 둘
+lib/engine/v2/gate-golden.test.ts
+```
+
+`Reason.blocking` 은 남긴다 — 절 구조에서도 「이 근거가 발동을 막는가」는 여전히 필요하고, 그때는 절이 그 값을 정한다.
+
+**두 진실을 만들지 마라.** 절 구조가 들어온 기프트는 `kind='gate'` 를 더 이상 보지 않아야 한다.
 - `evaluability` 를 손대지 않는다. 이 필드가 「전투 중 조건은 안 죽인다」를 떠받치고 있고(46종 · 282 기프트), 근거가 약하다는 것은 알지만 대체는 절 구조가 들어올 때다.
 - 저작 데이터를 만들지 않는다.
