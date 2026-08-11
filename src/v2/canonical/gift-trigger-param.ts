@@ -47,7 +47,14 @@ const GATE = /(\d+)\s*(?:인|명)\s*이상/g;
 const CONTEXT = 130;
 
 export interface GiftTriggerParamInput {
-	/** `gift_stage_text` 의 ko · level 0. 강화 단계는 조건이 같아 중복이다 */
+	/**
+	 * `gift_stage_text` 의 ko · level 0.
+	 *
+	 * 강화 단계는 대개 조건이 같아 level 0 만으로 충분하다. 다만 456개 전량
+	 * 검수(2026-08-11)에서 14건은 단계마다 조건이 다르다고 확인됐다 — 9117 ·
+	 * 9138 · 9148 은 편성 자리 범위 자체가 단계별로 바뀐다. 이 회차는 게이트
+	 * 판정에 level 0 만 쓰므로 그 14건은 다루지 않는다.
+	 */
 	giftDesc: Array<{ giftId: string; desc: string }>;
 	giftTrigger: Array<{ giftId: string; triggerId: string }>;
 	triggerRef: Array<{ triggerId: string; refKind: string; refId: string; evaluability: string }>;
@@ -168,12 +175,30 @@ export function buildGiftTriggerParam(
 
 	const rows: GiftTriggerParamRow[] = [];
 	const denomSeen = new Set<string>();
+	const gateSeen = new Set<string>();
 
 	for (const g of input.giftDesc) {
 		GATE.lastIndex = 0;
 		const denom = DENOMINATOR.find(([re]) => re.test(g.desc))?.[1] ?? null;
 		// 같은 (기프트, 트리거) 안에서 몇 번째 단인가. 9206 은 5인·10인 두 단이다
 		const tierOf = new Map<string, number>();
+
+		/**
+		 * **게이트는 첫 문단에만 있다.**
+		 *
+		 * 「턴 시작 시, 검계 소속 인격이 3인 이상일 때 발동」처럼 기프트 전체를
+		 * 여는 문은 설명문 맨 앞에 온다. 뒤 문단의 「…4인 이상 있다면」은 그
+		 * 문단만 여는 조건이라 기프트를 죽일 근거가 못 된다(9220 · 9270).
+		 *
+		 * 「발동」이라는 낱말을 함께 본다 — 9778 「…4인 이상이면 공격 레벨 +1」은
+		 * 첫 문단이지만 효과 서술이지 여는 문이 아니다.
+		 */
+		const firstPara = g.desc.split(/\n+/).find((p) => p.trim().length > 0) ?? '';
+		// firstPara.length 는 첫 문단 자기 길이일 뿐이다 — desc 가 개행으로 시작해
+		// split 이 앞쪽 빈 조각을 건너뛰면 그 오프셋만큼 실제 경계보다 짧게 잡힌다.
+		// indexOf 로 desc 안에서의 절대 시작 위치를 구해 더해야 진짜 경계가 나온다
+		const start = g.desc.indexOf(firstPara);
+		const gateZone = firstPara.includes('발동') ? start + firstPara.length : -1;
 
 		for (const m of g.desc.matchAll(GATE)) {
 			const ctx = g.desc.slice(Math.max(0, m.index - CONTEXT), m.index);
@@ -203,6 +228,17 @@ export function buildGiftTriggerParam(
 				value: m[1] ?? null, slots: [], source: 'desc_derived',
 			});
 
+			// 첫 문단 안에서 왔고 그 문단이 여는 문이면 게이트다. 엔진은 이 표시가
+			// 있는 짝만 발동을 막는다
+			const gateKey = `${g.giftId}|${triggerId}`;
+			if (m.index < gateZone && !gateSeen.has(gateKey)) {
+				gateSeen.add(gateKey);
+				rows.push({
+					giftId: g.giftId, triggerId, kind: 'gate', tier: 0,
+					value: m[1] ?? null, slots: [], source: 'desc_derived',
+				});
+			}
+
 			// 분모는 (기프트, 트리거) 당 한 행이다. 다단 임계가 분모를 공유한다
 			const key = `${g.giftId}|${triggerId}`;
 			if (denom !== null && !denomSeen.has(key)) {
@@ -231,6 +267,25 @@ export function buildGiftTriggerParam(
 			value: null, slots: s.slots, source: 'requirement',
 		});
 	}
+
+	// 456개 전량 검수(2026-08-11)가 찾았으나 이 회차가 담지 않는 것. 기프트
+	// 능력 PR 의 입력이다
+	meta.gap('gift', '*', 'clause_structure',
+		'절마다 조건이 다른데 태그가 평면이라 어느 조건이 어느 효과를 켜는지 모른다. ' +
+		'편성쪽 게이트를 가진 절 16건을 포함해, 전량 검수가 86건을 「편성으로 판정해야 ' +
+		'하는데 못 담는다」로 분류했다', EVIDENCE);
+	for (const id of ['9220', '9270']) {
+		meta.gap('gift', id, 'clause_gate',
+			'문단 단위 게이트다. 첫 문단이 아니라 이 회차의 규칙이 못 가린다. 본 효과는 ' +
+			'실제로 켜지므로 「막지 않는다」가 방향은 맞다', EVIDENCE);
+	}
+	meta.gap('gift', '9052', 'priority_hint',
+		'「(스킬을 사용하여 충전 횟수를 획득하는 인격을 우선으로 지정)」은 우선순위 ' +
+		'주석인데 조건으로 읽힌다. 이 기프트의 첫 문단은 무조건 효과라 실제로는 항상 켜진다',
+		EVIDENCE);
+	meta.gap('gift', '9043', 'or_condition',
+		'원문이 「분노 완전 공명을 발동하였거나 충전 … 스킬을 사용할 경우」로 OR 인데 ' +
+		'태그에 그 정보가 없다', EVIDENCE);
 
 	return rows;
 }

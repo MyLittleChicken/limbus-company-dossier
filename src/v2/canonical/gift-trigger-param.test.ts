@@ -52,6 +52,8 @@ test('진혼 — 축 게이트가 roster 트리거에 붙고 분모는 출전이
 		rows.map((r) => `${r.triggerId}|${r.kind}|${r.tier}|${r.value}`).sort(),
 		[
 			'Allies have Burn Skill|denominator|0|field',
+			// 이 설명문은 첫 문단에 「발동」이 있다 — 진혼 자체가 게이트 기프트다
+			'Allies have Burn Skill|gate|0|5',
 			'Allies have Burn Skill|min_count|0|5',
 		],
 	);
@@ -169,6 +171,10 @@ test('저작 예외 — [BloodDinner] 는 흡혈종 트리거로 간다', () => 
 	const min = rows.find((r) => r.kind === 'min_count');
 	assert.equal(min?.triggerId, 'Bloodfiend Identities');
 	assert.equal(min?.value, '3');
+	// 이 desc 는 (개행 없는) 첫 문단 안에 「발동」이 있다 — 게이트도 만든다
+	const gate = rows.find((r) => r.kind === 'gate');
+	assert.equal(gate?.triggerId, 'Bloodfiend Identities');
+	assert.equal(gate?.value, '3');
 });
 
 test('적을 세는 문장은 이유를 갈라 남긴다 — 올바른 배제와 결손은 다르다', () => {
@@ -189,6 +195,8 @@ test('토큰 예외는 입력으로 온다 — 상수가 아니다', () => {
 
 	const rows = buildGiftTriggerParam(i, new Meta());
 	assert.equal(rows.find((r) => r.kind === 'min_count')?.value, '3');
+	// 이 desc 도 (개행 없는) 첫 문단 안에 「발동」이 있다 — 게이트도 만든다
+	assert.equal(rows.find((r) => r.kind === 'gate')?.value, '3');
 });
 
 test('입력에 그 토큰이 없으면 게이트가 안 붙는다', () => {
@@ -227,4 +235,85 @@ test('DENOMINATOR 는 코드에 남는다 — 입력으로 안 받는다', () =>
 
 	const rows = buildGiftTriggerParam(i, new Meta());
 	assert.equal(rows.find((r) => r.kind === 'denominator')?.value, 'field');
+});
+
+test('첫 문단이 「…N인 이상일 때 발동」이면 게이트다', () => {
+	const i = base();
+	i.giftDesc = [{
+		giftId: '9718',
+		desc: '턴 시작 시, 검계 소속 인격이 3인 이상일 때 발동 (출격 인원을 기준으로 함).\n\n아군이 턴 시작 시 참격 위력 증가 2 얻음.',
+	}];
+	i.giftTrigger = [{ giftId: '9718', triggerId: 'Blade Lineage Identities' }];
+	i.triggerRef = [{
+		triggerId: 'Blade Lineage Identities',
+		refKind: 'association', refId: 'BLADE_LINEAGE', evaluability: 'roster',
+	}];
+	i.associationKo = [{ associationId: 'BLADE_LINEAGE', name: '검계' }];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	const gate = rows.find((r) => r.kind === 'gate');
+	assert.equal(gate?.giftId, '9718');
+	assert.equal(gate?.triggerId, 'Blade Lineage Identities');
+	assert.equal(gate?.value, '3');
+	// 게이트는 min_count 와 함께 나온다 — 같은 문장에서 왔다
+	assert.ok(rows.some((r) => r.kind === 'min_count' && r.triggerId === 'Blade Lineage Identities'));
+});
+
+test('첫 문단이 아니면 게이트가 아니다', () => {
+	const i = base();
+	// 9220 도둑맞은 해결사 잡지 — 본 효과가 먼저 오고 소속 조건은 나중 문단이다
+	i.giftDesc = [{
+		giftId: '9220',
+		desc: '턴 시작 시, 타격 위력 증가 1 얻음\n\n중지 소속 인격이 4인 이상 있다면, 스테이지 시작 시 무작위 적 1명에게 앙갚음 대상 부여',
+	}];
+	i.giftTrigger = [{ giftId: '9220', triggerId: 'Middle Finger Identities' }];
+	i.triggerRef = [{
+		triggerId: 'Middle Finger Identities',
+		refKind: 'association', refId: 'MIDDLE_FINGER', evaluability: 'roster',
+	}];
+	i.associationKo = [{ associationId: 'MIDDLE_FINGER', name: '중지' }];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	assert.equal(rows.some((r) => r.kind === 'gate'), false);
+	// min_count 는 그대로 나와야 한다 — 게이트가 아닐 뿐 문턱값은 사실이다
+	assert.ok(rows.some((r) => r.kind === 'min_count'));
+});
+
+test('첫 문단에 「발동」이 없으면 게이트가 아니다', () => {
+	const i = base();
+	i.giftDesc = [{
+		giftId: '9778',
+		desc: '림버스 컴퍼니 소속 인격이 4인 이상이면 스킬 2의 공격 레벨 +1',
+	}];
+	i.giftTrigger = [{ giftId: '9778', triggerId: 'Limbus Company Identities' }];
+	i.triggerRef = [{
+		triggerId: 'Limbus Company Identities',
+		refKind: 'association', refId: 'LIMBUS_COMPANY', evaluability: 'roster',
+	}];
+	i.associationKo = [{ associationId: 'LIMBUS_COMPANY', name: '림버스 컴퍼니' }];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	assert.equal(rows.some((r) => r.kind === 'gate'), false);
+});
+
+test('desc 가 개행으로 시작해도 첫 문단 끝자락의 게이트를 놓치지 않는다 — 경계는 절대 위치다', () => {
+	const i = base();
+	// 리딩 개행 8개. split(/\n+/) 이 앞쪽 빈 조각을 건너뛰므로 firstPara.length 만으로
+	// 경계를 잡으면(옛 버그) 이 오프셋만큼 짧게 잡혀, 문단 끝자락의 「3인 이상」이
+	// 실제로는 첫 문단 안인데도 gateZone 밖으로 밀려난다
+	i.giftDesc = [{
+		giftId: '9718',
+		desc: '\n\n\n\n\n\n\n\n발동 시 검계 소속 인격이 3인 이상\n\n뒤 문단.',
+	}];
+	i.giftTrigger = [{ giftId: '9718', triggerId: 'Blade Lineage Identities' }];
+	i.triggerRef = [{
+		triggerId: 'Blade Lineage Identities',
+		refKind: 'association', refId: 'BLADE_LINEAGE', evaluability: 'roster',
+	}];
+	i.associationKo = [{ associationId: 'BLADE_LINEAGE', name: '검계' }];
+
+	const rows = buildGiftTriggerParam(i, new Meta());
+	const gate = rows.find((r) => r.kind === 'gate');
+	assert.equal(gate?.triggerId, 'Blade Lineage Identities');
+	assert.equal(gate?.value, '3');
 });

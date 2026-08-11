@@ -46,6 +46,38 @@ function run(giftTriggers: Map<string, string[]>, params: TriggerParam[] = []) {
 	return evaluateGifts({ squad: SQUAD, profile, giftTriggers, refsByTrigger: REFS, params });
 }
 
+/**
+ * 게이트/적용범위 테스트 전용 편성·능력.
+ *
+ * `GATE_CAPS` 는 `slash` 공격 취급 하나만 준다 — `BLADE_LINEAGE`·`SHI`
+ * 소속과 `LACERATION` 축은 아예 없다. 그래서 이 편성으로 세면 그 셋은
+ * 항상 미충족(확정)이 나온다 — 「해당 축·소속이 없는 편성」이 저절로 된다.
+ */
+const SLASH_ID = 'gate-slash-user';
+
+const GATE_CAPS: Capability[] = [
+	{ identityId: SLASH_ID, refKind: 'attack_type', refId: 'slash', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
+];
+
+const SQUAD_NO_BLADE: Squad = {
+	roster: [{ identityId: SLASH_ID, egoIds: [] }],
+	field: [SLASH_ID],
+};
+
+const SQUAD_NO_SHI: Squad = {
+	roster: [{ identityId: SLASH_ID, egoIds: [] }],
+	field: [SLASH_ID],
+};
+
+const SQUAD_NO_BLEED: Squad = {
+	roster: [{ identityId: SLASH_ID, egoIds: [] }],
+	field: [SLASH_ID],
+};
+
+function profileOf(squad: Squad): Profile {
+	return new Profile(squad, GATE_CAPS);
+}
+
 test('분모 — 출전 5인 · 편성 6인 · 대기 1인', () => {
 	const p = new Profile(SQUAD, CAPS);
 	assert.equal(p.count('axis', 'COMBUSTION', 'field'), 5);
@@ -279,4 +311,59 @@ test('자리 조건이 없으면 편성 전체로 판정한다', () => {
 		params: [],
 	});
 	assert.equal(out[0]!.reasons[0]!.verdict, 'satisfied');
+});
+
+test('게이트가 있으면 게이트만 막는다 — 다른 참조가 미충족이어도 산다', () => {
+	const verdicts = evaluateGifts({
+		squad: SQUAD_NO_BLADE,          // 검계가 없는 편성
+		profile: profileOf(SQUAD_NO_BLADE),
+		giftTriggers: new Map([['9718', ['Blade Lineage Identities', 'Slash Skill Used']]]),
+		refsByTrigger: new Map([
+			['Blade Lineage Identities', [{ triggerId: 'Blade Lineage Identities', refKind: 'association', refId: 'BLADE_LINEAGE', evaluability: 'roster' }]],
+			['Slash Skill Used', [{ triggerId: 'Slash Skill Used', refKind: 'attack_type', refId: 'slash', evaluability: 'roster_gated' }]],
+		]),
+		params: [
+			{ giftId: '9718', triggerId: 'Blade Lineage Identities', kind: 'min_count', tier: 0, value: '3', slots: [] },
+			{ giftId: '9718', triggerId: 'Blade Lineage Identities', kind: 'gate', tier: 0, value: '3', slots: [] },
+		],
+	});
+	const v = verdicts.find((x) => x.giftId === '9718');
+	// 게이트가 미충족이므로 죽는다
+	assert.equal(v?.fireable, false);
+	const gate = v?.reasons.find((r) => r.refId === 'BLADE_LINEAGE');
+	assert.equal(gate?.blocking, true);
+	// 수혜 대상은 막지 않는다
+	const slash = v?.reasons.find((r) => r.refId === 'slash');
+	assert.equal(slash?.blocking, false);
+});
+
+test('게이트가 없으면 소속·유닛키워드는 안 막는다', () => {
+	const verdicts = evaluateGifts({
+		squad: SQUAD_NO_SHI,
+		profile: profileOf(SQUAD_NO_SHI),
+		giftTriggers: new Map([['9140', ['Shi Assoc. Identities', 'Allies have Slash Skill']]]),
+		refsByTrigger: new Map([
+			['Shi Assoc. Identities', [{ triggerId: 'Shi Assoc. Identities', refKind: 'association', refId: 'SHI', evaluability: 'roster' }]],
+			['Allies have Slash Skill', [{ triggerId: 'Allies have Slash Skill', refKind: 'attack_type', refId: 'slash', evaluability: 'roster' }]],
+		]),
+		params: [],
+	});
+	const v = verdicts.find((x) => x.giftId === '9140');
+	assert.equal(v?.fireable, true);
+	assert.equal(v?.reasons.find((r) => r.refId === 'SHI')?.blocking, false);
+});
+
+test('게이트가 없으면 축은 막는다', () => {
+	const verdicts = evaluateGifts({
+		squad: SQUAD_NO_BLEED,
+		profile: profileOf(SQUAD_NO_BLEED),
+		giftTriggers: new Map([['9005', ['Bleed Skill Used']]]),
+		refsByTrigger: new Map([
+			['Bleed Skill Used', [{ triggerId: 'Bleed Skill Used', refKind: 'axis', refId: 'LACERATION', evaluability: 'roster' }]],
+		]),
+		params: [],
+	});
+	const v = verdicts.find((x) => x.giftId === '9005');
+	assert.equal(v?.fireable, false);
+	assert.equal(v?.reasons[0]?.blocking, true);
 });

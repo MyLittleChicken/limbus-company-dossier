@@ -160,10 +160,15 @@ async function main(): Promise<void> {
 		//         gateKind·gateRef)가 affects 를 안 봐서 조용히 접힐 수 있는 자리를
 		//         감지하는 결손이다. 지금 데이터(축 부여·제한 저작 18행 전건 대조)엔
 		//         충돌이 없어 0건 — 나지 않을 수 있는 결손이라고 실측 전에 이미 적어 뒀다.
+		//   +5    게이트 판정(2026-08-11) — 456개 전량 검수가 찾았으나 이 회차가
+		//         못 담는 것을 결손으로 남긴다. gift.*.clause_structure(1) ·
+		//         gift.{9220,9270}.clause_gate(2) · gift.9052.priority_hint(1) ·
+		//         gift.9043.or_condition(1) = 5 (gift-trigger-param.ts 끝)
+		//         1,166 + 5 = 1,171
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_166,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,166`,
+			ok: gapTotal + overrideCount === 1_171,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,171`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
@@ -1143,7 +1148,8 @@ async function main(): Promise<void> {
 		// ── 트리거 정량자 ───────────────────────────────────────────
 		// 숫자는 어느 출처에도 구조화돼 있지 않다 — raw 를 전수로 확인했다.
 		// `gift_stage_text.desc` 산문에서 적재 시점에 한 번 뽑아 굳힌 것이다
-		eq('gift_trigger_param', await prisma.giftTriggerParam.count(), 188);
+		// 188 + 49(kind='gate', 2026-08-11 게이트 판정 도입) = 237
+		eq('gift_trigger_param', await prisma.giftTriggerParam.count(), 237);
 		eq('gift_trigger_param (min_count)',
 			await prisma.giftTriggerParam.count({ where: { kind: 'min_count' } }), 69);
 		eq('gift_trigger_param (denominator)',
@@ -1151,6 +1157,27 @@ async function main(): Promise<void> {
 		// gift_requirement.slots 60행을 Deployment Position 에 귄다. 실측 60/60 유일
 		eq('gift_trigger_param (slot)',
 			await prisma.giftTriggerParam.count({ where: { kind: 'slot' } }), 60);
+
+		// ── 게이트 (2026-08-11) ────────────────────────────────────
+		const gateGifts = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(DISTINCT gift_id)::bigint AS n
+			FROM canonical.gift_trigger_param WHERE kind = 'gate'
+		`;
+		eq('게이트를 가진 기프트', Number(gateGifts[0]?.n ?? 0), 49);
+
+		// 게이트는 언제나 같은 짝의 min_count 와 함께 온다 — 같은 문장에서 왔다
+		const orphan = await prisma.$queryRaw<Array<{ n: bigint }>>`
+			SELECT count(*)::bigint AS n
+			FROM canonical.gift_trigger_param g
+			WHERE g.kind = 'gate' AND NOT EXISTS (
+				SELECT 1 FROM canonical.gift_trigger_param m
+				WHERE m.gift_id = g.gift_id AND m.trigger_id = g.trigger_id AND m.kind = 'min_count')
+		`;
+		checks.push({
+			name: 'min_count 없는 게이트가 없다',
+			ok: Number(orphan[0]?.n ?? 1) === 0,
+			detail: `${orphan[0]?.n ?? 0} / 0`,
+		});
 
 		// **분모를 틀리면 전부 틀린다.** 49건이 출전(대기 인원 제외)이라 편성 12 로
 		// 세면 과대 판정이 된다. waiting 1건은 9778 통상 작전용 장비뿐이다
@@ -1182,9 +1209,11 @@ async function main(): Promise<void> {
 			where: { giftId: '9088' }, select: { triggerId: true, kind: true, value: true },
 		});
 		const rq = requiem.map((r) => `${r.triggerId}|${r.kind}|${r.value}`).sort().join(' · ');
+		// 9088 설명문 첫 문단이 「…5인 이상이면 … 발동」이라 게이트 정의(첫 문단 +
+		// 「발동」)를 그대로 충족한다 — 2026-08-11 게이트 도입으로 gate 행이 붙었다
 		checks.push({
-			name: '9088 진혼 = 화상 5인 · 출전 분모',
-			ok: rq === 'Allies have Burn Skill|denominator|field · Allies have Burn Skill|min_count|5',
+			name: '9088 진혼 = 화상 5인 · 출전 분모 · 게이트',
+			ok: rq === 'Allies have Burn Skill|denominator|field · Allies have Burn Skill|gate|5 · Allies have Burn Skill|min_count|5',
 			detail: rq,
 		});
 

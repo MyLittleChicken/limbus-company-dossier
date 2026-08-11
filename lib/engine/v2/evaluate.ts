@@ -21,6 +21,14 @@ const RESONANCE_MIN = 3;
 /** 죄악 일곱. `Any Resonance` 는 이 중 **최댓값**을 봐야 해서 조인으로는 안 닿는다 */
 const SINS = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
 
+/**
+ * 「누구에게 적용되는가」를 말하는 참조. 켜짐의 조건이 아니다.
+ *
+ * 게이트가 없는 기프트에서만 쓰인다 — 게이트가 있으면 게이트 짝만 막고
+ * 나머지는 전부 안 막는다(수혜 대상이든 적용 범위든).
+ */
+const SCOPE_KINDS = new Set(['association', 'unit_keyword']);
+
 export interface EvaluateInput {
 	squad: Squad;
 	profile: Profile;
@@ -52,6 +60,15 @@ function gatesOf(params: TriggerParam[]): Map<string, Gate> {
 		if (p.kind === 'min_count' && p.tier === 0) g.need = Number(p.value);
 		if (p.kind === 'denominator') g.denominator = p.value;
 		if (p.kind === 'slot') g.slots = p.slots;
+	}
+	return out;
+}
+
+/** 게이트가 붙은 (기프트, 트리거) 짝. 이 짝만 발동을 막을 수 있다 */
+function gateKeysOf(params: readonly TriggerParam[]): Set<string> {
+	const out = new Set<string>();
+	for (const p of params) {
+		if (p.kind === 'gate') out.add(`${p.giftId}|${p.triggerId}`);
 	}
 	return out;
 }
@@ -104,6 +121,7 @@ function judge(
 
 export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
 	const gates = gatesOf(input.params);
+	const gateKeys = gateKeysOf(input.params);
 	const out: GiftVerdict[] = [];
 
 	for (const [giftId, triggerIds] of input.giftTriggers) {
@@ -136,8 +154,21 @@ export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
 						? 'possible' : 'certain',
 					have: j.have, need: j.need,
 					denominator: j.need === null ? null : gate.denominator ?? 'field',
+					// 아래에서 게이트 유무에 따라 덮는다 — 여기서는 타입이 요구해 초기화만 한다
+					blocking: false,
 				});
 			}
+		}
+
+		/**
+		 * 이 기프트에 게이트가 있는가. 있으면 게이트만 막고, 없으면 적용 범위를
+		 * 뺀 나머지가 막는다.
+		 */
+		const hasGate = triggerIds.some((t) => gateKeys.has(`${giftId}|${t}`));
+		for (const r of reasons) {
+			r.blocking = hasGate
+				? gateKeys.has(`${giftId}|${r.triggerId}`)
+				: !SCOPE_KINDS.has(r.refKind);
 		}
 
 		const decidable = reasons.filter((r) => r.verdict !== 'unknown').length;
@@ -148,9 +179,10 @@ export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
 		// 참조가 하나도 없는 기프트는 C 다 — 「전부 판정 가능」이 아니라 「셀 것이 없다」
 		const grade = reasons.length > 0 && decidable === reasons.length ? 'A'
 			: decidable > 0 ? 'B' : 'C';
-		// 하나라도 확정 미충족이면 이 편성에서 영영 안 켜진다
+		// 막을 수 있는 근거가 확정 미충족일 때만 죽는다 — 막지 않는 근거는
+		// reasons·satisfied·grade 에 그대로 남되 fireable 은 깎지 않는다
 		const fireable = !reasons.some(
-			(r) => r.verdict === 'unsatisfied' && r.certainty === 'certain',
+			(r) => r.blocking && r.verdict === 'unsatisfied' && r.certainty === 'certain',
 		);
 
 		out.push({
