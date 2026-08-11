@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, type ReactElement, type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Nothing, Panel } from './ui';
 
 /**
@@ -42,68 +42,91 @@ export const SwapIcon = () => (
  *
  *   상태 이름   문장 속의 「출혈」 — 눌러서 아래 상태 칸으로 내려간다
  *   상태 토큰   아직 치환이 안 끝난 `[Laceration]` — **이름으로 바꿔 보인다**
- *   타이밍 태그 `[OnSucceedAttack]` — 뜻을 모르므로 꼴만 태그로 세운다
+ *   대괄호 태그 `[사용시]` · `[OnSucceedAttack]` — 뜻을 모르는 채 꼴만 태그로 세운다
  *
  * 게임의 공식 인격 프리뷰 카드가 같은 자리를 같은 방식으로 가른다.
  *
  * **짝표를 새로 만들지 않는다.** 토큰을 이름으로 바꾸는 데 쓰는 것은 이미 읽어 온
  * `status_text` 하나뿐이다. 거기 없는 토큰은 그대로 둔다 — 없는 말을 지어내지 않는다.
  *
- * 한국어 코인 문구 7,634 행 중 4,219 행에 아직 토큰이 남아 있다(2026-08-11 실측).
- * 데이터층이 치환을 끝내면 이 갈래는 저절로 조용해진다.
+ * **글자 종류를 가리지 않는다.** 같은 자리가 데이터에 따라 한국어이기도 영문이기도 하다 —
+ * 스킬 본문은 「[사용시]」로 오고 코인은 「[OnSucceedAttack]」으로 온다. 어느 쪽이 오든 같은
+ * 꼴로 세우므로, **데이터층이 영문 태그를 한국어로 바꿔도 화면은 손댈 것이 없다.**
+ *
+ * 실측으로 대괄호 안에 오는 한국어는 전부 이 성격이다 — 사용시 · 공격 종료시 · 합 승리시 ·
+ * 피아식별불가 …
  */
-const TOKEN = /\[([A-Za-z][A-Za-z0-9_]*)\]/g;
+/*
+	대괄호 태그.
 
-function paint(line: string, names: Map<string, string>, key: string) {
+	길이 상한은 실측으로 잡았다 — 가장 긴 것이 `[로보토미 E.G.O::엄숙한 애도 이상 전용 상시
+	효과]` 이고 `[UnBrokenCoinOnSucceedAttack]` 이 27 자다. 한 문장을 통째로 삼키지 않도록
+	줄바꿈을 막고 40 자에서 끊는다.
+
+	**글자가 하나도 없으면 태그로 보지 않는다.** `[+0.2]` 같은 수치 주석이 있어 그것까지
+	칩으로 세우면 문장 가운데가 끊긴다.
+*/
+const TOKEN = /^\[([^\]\n]{1,40})\]/;
+const HAS_LETTER = /[A-Za-z가-힣]/;
+
+export function paint(line: string, names: Map<string, string>, key: string) {
 	const out: ReactNode[] = [];
+	let buffer = '';
 	let at = 0;
 
-	/*
-		대괄호 밖의 맨 글자. 여기서만 상태 이름을 찾는다.
-
-		조각을 `ReactNode` 로 두면 `flatMap` 이 중첩 배열까지 받아들이는 넓은 타입이 되어
-		빌드가 막힌다. **글자 아니면 요소** 둘로 좁혀 둔다.
-	*/
-	const plain = (text: string, tag: string) => {
-		let parts: Array<string | ReactElement> = [text];
-		for (const [id, name] of names) {
-			parts = parts.flatMap((part, i) => {
-				if (typeof part !== 'string') return [part];
-				const chunks = part.split(name);
-				if (chunks.length === 1) return [part];
-				return chunks.flatMap((c, j) =>
-					j === 0
-						? [c]
-						: [
-								<a key={`${tag}-${id}-${i}-${j}`} className="fx-st" href={`#st-${id}`}>
-									{name}
-								</a>,
-								c,
-							],
-				);
-			});
-		}
-		out.push(...parts.map((p, i) => <Fragment key={`${tag}-p${i}`}>{p}</Fragment>));
+	const flush = () => {
+		if (buffer) out.push(<Fragment key={`${key}-p${out.length}`}>{buffer}</Fragment>);
+		buffer = '';
 	};
 
-	for (const m of line.matchAll(TOKEN)) {
-		if (m.index > at) plain(line.slice(at, m.index), `${key}-${at}`);
-		const id = m[1]!;
-		const name = names.get(id);
-		out.push(
-			name ? (
-				<a key={`${key}-t${m.index}`} className="fx-st" href={`#st-${id}`}>
-					{name}
-				</a>
-			) : (
-				<span key={`${key}-t${m.index}`} className="fx-when">
-					{m[0]}
-				</span>
-			),
-		);
-		at = m.index + m[0].length;
+	/*
+		**상태 이름을 대괄호보다 먼저 본다.**
+
+		이름 자체에 대괄호가 든 것이 있다 — 「찢긴 색채 [루주]」. 대괄호를 먼저 떼면 그 이름이
+		둘로 쪼개져 링크도 깨지고 「[루주]」만 태그로 남는다.
+	*/
+	while (at < line.length) {
+		let hit = false;
+
+		for (const [id, name] of names) {
+			if (name && line.startsWith(name, at)) {
+				flush();
+				out.push(
+					<a key={`${key}-n${at}`} className="fx-st" href={`#st-${id}`}>
+						{name}
+					</a>,
+				);
+				at += name.length;
+				hit = true;
+				break;
+			}
+		}
+		if (hit) continue;
+
+		const tag = TOKEN.exec(line.slice(at));
+		if (tag && HAS_LETTER.test(tag[1]!)) {
+			flush();
+			const id = tag[1]!;
+			const name = names.get(id);
+			out.push(
+				name ? (
+					<a key={`${key}-t${at}`} className="fx-st" href={`#st-${id}`}>
+						{name}
+					</a>
+				) : (
+					<span key={`${key}-t${at}`} className="fx-when">
+						{tag[0]}
+					</span>
+				),
+			);
+			at += tag[0].length;
+			continue;
+		}
+
+		buffer += line[at];
+		at += 1;
 	}
-	if (at < line.length) plain(line.slice(at), `${key}-${at}`);
+	flush();
 
 	return <>{out}</>;
 }
