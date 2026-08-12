@@ -56,10 +56,18 @@ const unitKeywords = await prisma.$queryRaw<Array<{ keyword: string; n: bigint }
 	SELECT keyword, count(*)::bigint AS n FROM canonical.identity_unit_keyword GROUP BY 1
 `;
 
-/** 축 id 는 대문자, keyword id 는 파스칼케이스라 맞춰 준다 */
+/**
+ * 축 id 는 대문자, keyword id 는 파스칼케이스라 맞춰 준다.
+ *
+ * **BULLET 은 `keyword_text` 에 없다.** 게임 어휘 12종이 죄악속성 대비 부여
+ * 키워드만 담고 탄환은 안 담기 때문이다(`canonical.axis` 가 `kind='bullet'`
+ * 로 따로 둔다). 이름표가 비어 id 가 그대로 보이던 자리라 우리가 붙인다 —
+ * 탄환을 **소모하는** 인격을 가리키고, 마침표 사무소 · 동부 엄지 · R사 계열
+ * 13인이다.
+ */
 const axisLabel: Record<string, string> = {};
 for (const k of keywordNames) axisLabel[k.id.toUpperCase()] = k.name;
-axisLabel.BULLET = '가속(탄환)';
+axisLabel.BULLET = '탄환';
 
 const LABELS = {
 	axis: axisLabel,
@@ -220,10 +228,17 @@ function renderPage(data: string): string {
     border-top:1px solid var(--line);flex-wrap:wrap}
   .verdict .y[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
   .verdict .n[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
-  .why{width:100%;margin-top:8px;font-family:inherit;font-size:13px;padding:8px 10px;
-    border:1px solid var(--line);background:var(--panel-2);color:var(--text);resize:vertical}
-  .why:focus-visible{outline:2px solid var(--struct);outline-offset:-1px}
+  .whybox{width:100%;margin-top:10px;border:1px solid var(--bad);border-left-width:3px;
+    background:var(--bad-bg);padding:9px 11px}
+  .whylbl{font-size:12.5px;font-weight:650;color:var(--bad);margin-bottom:6px}
+  .whylbl span{font-weight:400;color:var(--dim)}
+  .why{width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;padding:8px 10px;
+    border:1px solid var(--line);background:var(--panel);color:var(--text);resize:vertical;
+    line-height:1.55}
+  .why:focus-visible{outline:2px solid var(--bad);outline-offset:-1px}
+  .whyfoot{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:5px}
   .hint{font-size:12px;color:var(--faint)}
+  .t-why b{color:var(--bad)}
   footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);
     border-top:1px solid var(--line);padding:9px 16px;font-family:var(--mono);
     font-size:11.5px;color:var(--dim);display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
@@ -236,6 +251,7 @@ function renderPage(data: string): string {
   <div class="tally">
     <span class="t-ok">맞다 <b id="n-ok">0</b></span>
     <span class="t-bad">틀리다 <b id="n-bad">0</b></span>
+    <span class="t-why">서술 <b id="n-why">0 / 0</b></span>
     <span>미판정 <b id="n-pending">0</b></span>
     <span>합계 <b id="n-all">0</b></span>
     <span class="filters">
@@ -389,18 +405,30 @@ function card(g) {
       '<button class="n" data-v="bad" data-g="' + g.id + '" aria-pressed="' + (v.state === 'bad') + '">틀리다</button>' +
       '<span class="hint">같은 것을 다시 누르면 미판정으로 돌아간다</span>' +
       (v.state === 'bad'
-        ? '<textarea class="why" data-g="' + g.id + '" rows="2" placeholder="선택 — 지금 아는 게 있으면 적어도 된다. 안 적어도 된다">' + esc(v.why || '') + '</textarea>'
+        ? '<div class="whybox">' +
+            '<div class="whylbl">무엇이 틀렸나 <span>— 안 적어도 된다. 적으면 고칠 때 바로 쓴다</span></div>' +
+            '<textarea class="why" data-g="' + g.id + '" rows="3" ' +
+              'placeholder="예) 2문단은 소속 조건이 아니다 · 「우선으로 지정」을 조건으로 읽었다 · 절을 하나로 합쳐야 한다 · 문턱값이 3이 아니라 5다">' +
+              esc(v.why || '') + '</textarea>' +
+            '<div class="whyfoot" data-count="' + g.id + '">' + (v.why || '').length + '자 · 내보내기에 함께 담긴다</div>' +
+          '</div>'
         : '') +
     '</div></article>';
 }
 
 function tally() {
   const n = { ok: 0, bad: 0, pending: 0 };
-  for (const g of DATA.gifts) n[(V[g.id] || {}).state || 'pending'] += 1;
+  let withWhy = 0;
+  for (const g of DATA.gifts) {
+    const v = V[g.id] || {};
+    n[v.state || 'pending'] += 1;
+    if (v.state === 'bad' && (v.why || '').trim() !== '') withWhy += 1;
+  }
   document.getElementById('n-ok').textContent = n.ok;
   document.getElementById('n-bad').textContent = n.bad;
   document.getElementById('n-pending').textContent = n.pending;
   document.getElementById('n-all').textContent = DATA.gifts.length;
+  document.getElementById('n-why').textContent = withWhy + ' / ' + n.bad;
   const t = DATA.gifts.length || 1;
   document.querySelector('.b-ok').style.width = (n.ok / t * 100) + '%';
   document.querySelector('.b-bad').style.width = (n.bad / t * 100) + '%';
@@ -451,7 +479,13 @@ document.addEventListener('input', (e) => {
   const t = e.target;
   if (!t.classList.contains('why')) return;
   const g = t.dataset.g;
-  if (V[g]) { V[g].why = t.value; save(); }
+  if (!V[g]) return;
+  V[g].why = t.value;
+  save();
+  // 적힌 것이 저장됐다는 신호 — 내보내기를 눌러야 반영되는 줄 알면 안 된다
+  const foot = document.querySelector('[data-count="' + g + '"]');
+  if (foot) foot.textContent = t.value.length + '자 · 저장됨 · 내보내기에 함께 담긴다';
+  tally();
 });
 
 async function exportVerdicts() {
