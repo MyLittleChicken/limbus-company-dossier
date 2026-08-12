@@ -38,6 +38,7 @@
     "gift:split": "tsx --env-file-if-exists=.env scripts/split-clauses.ts",
     "gift:conds": "tsx --env-file-if-exists=.env scripts/extract-conds.ts",
     "gift:merge": "tsx --env-file-if-exists=.env scripts/merge-authored.ts",
+    "gift:sim": "tsx --env-file-if-exists=.env scripts/simulate-ability.ts",
     "gift:page": "tsx --env-file-if-exists=.env scripts/build-review-page.ts",
     "gift:import": "tsx --env-file-if-exists=.env scripts/import-verdicts.ts",
     "v2:gap-report": "tsx --env-file-if-exists=.env src/v2/gap-report.ts",
