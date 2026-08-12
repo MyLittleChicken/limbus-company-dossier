@@ -75,9 +75,20 @@ const clauses: Clause[] = readFileSync(inPath, 'utf8').split('\n')
  */
 const conditionPart = (s: string): string | null => {
 	const flat = s.replace(/⏎/g, ' ').replace(/\([^)]*\)/g, ' ');
-	const m = /^(.*?(?:할 경우|한 경우|일 경우|인 경우|했으면|하였다면|한다면|이라면|있다면|이면|일 때|할 때|보유한|사용하여|사용할 경우|적중 시|사용 시|승리 시|처치 시|이상이면|이상일 때))/.exec(flat);
+	const m = /^(.*?(?:할 경우|한 경우|일 경우|인 경우|했으면|하였다면|한다면|이라면|있다면|이면|일 때|할 때|보유한|보유하면|사용하여|사용할 경우|적중 시|사용 시|승리 시|처치 시|이상이면|이상일 때|때마다|경우에는))/.exec(flat);
 	return m === null ? null : m[1];
 };
+
+/**
+ * 「스킬을 사용하여 적에게 적중 시」는 **조건이 아니다.**
+ *
+ * 아무 스킬이나 되므로 어떤 편성에서도 선다. 이것을 조건으로 세면 조건이
+ * 있는데 못 뽑은 것처럼 보여 결손이 부풀고, 판정은 어차피 안 달라진다.
+ * 앞에 수식이 붙은 것(「참격 스킬을 사용하여」)은 그 수식이 조건이므로 뺀다.
+ */
+const isVacuous = (cond: string): boolean =>
+	/^\s*(전투 승리 시|아군이|스킬을 사용하여|스킬 효과로 적에게 적중|공격 스킬을 사용하여 적을)/.test(cond)
+	&& !/화상|출혈|파열|호흡|진동|침잠|충전|탄환|참격|관통|타격|소속|공명|코인|반격|회피|가드|수비|혈찬/.test(cond);
 
 /** 분모를 문장이 직접 말하는가 */
 const scopeOf = (text: string): string => {
@@ -95,9 +106,12 @@ const thresholdOf = (text: string): number | null => {
 
 /** 대괄호 자리 번호들 */
 const slotsOf = (text: string): number[] => {
-	const m = /\[편성[^\]]*?((?:[0-9]+\s*,?\s*)+)번[^\]]*전용/.exec(text);
-	if (m === null) return [];
-	return [...m[1].matchAll(/[0-9]+/g)].map((x) => Number(x[0])).filter((n) => n >= 1 && n <= 7);
+	// 어순이 둘이다 — 「[편성 1번, 2번 인격 전용]」과 「[1번 편성 전용 효과]」.
+	// 앞것만 보면 9075 · 9767 처럼 뒤 어순인 것을 통째로 놓친다
+	const box = /\[([^\]]*(?:편성|편성 순서)[^\]]*전용[^\]]*)\]/.exec(text);
+	if (box === null) return [];
+	return [...box[1].matchAll(/([0-9]+)\s*번/g)]
+		.map((x) => Number(x[1])).filter((n) => n >= 1 && n <= 7);
 };
 
 /** 전투 중에만 아는 조건인가 */
@@ -189,7 +203,7 @@ for (const c of clauses) {
 		}
 		// 「…을 부여하는/획득하는 공격 스킬을 보유한 인격」 — 공급 조건이다
 		for (const [re, id] of AXIS) {
-			if (new RegExp(`${re.source}[^.]{0,30}(부여|획득|소모)하[^.]{0,10}스킬을 보유한`).test(flat)) {
+			if (new RegExp(`${re.source}[^.]{0,30}(부여|획득|소모)[하할한][^.]{0,10}스킬을 보유한`).test(flat)) {
 				push({ refKind: 'axis', refId: id, op: th === null ? 'has' : 'gte', threshold: th, scope: sc, supply: 'skill' });
 			}
 		}
@@ -209,10 +223,22 @@ for (const c of clauses) {
 			}
 		}
 		for (const [re, id] of AXIS) {
-			// 아군이 그 축을 **공급**해야 하는가. 「…을 부여하는 스킬」 「…상태인 아군」
-			if (new RegExp(`${re.source}[^.]{0,20}(위력|횟수|상태)?[^.]{0,20}(부여|획득|소모)하는`).test(cond)
-				|| new RegExp(`${re.source}[^.]{0,10}(상태인|보유한) 아군`).test(cond)) {
-				push({ refKind: 'axis', refId: id, op: th === null ? 'has' : 'gte', threshold: th, scope: sc, supply: 'skill' });
+			// ㉠ 아군이 그 축을 **공급**해야 하는가. 「…을 부여하는/부여할 스킬」
+			const supplies = new RegExp(`${re.source}[^.]{0,20}(위력|횟수|상태)?[^.]{0,20}(부여|획득|소모)[하할한]`).test(cond)
+				|| new RegExp(`${re.source}[^.]{0,10}(상태인|보유한) 아군`).test(cond);
+			// ㉡ 적·자기 상태를 보는 조건도 **그 상태를 만들 수 있어야** 성립한다
+			//    (2026-08-12 사용자 확정). 「화상에 걸린 적에게」는 내 편성이 화상을
+			//    걸 수 있어야 하고, 「호흡 5 이상 보유한 아군」은 호흡을 얻을 수 있어야
+			//    한다. 시점은 전투 중이지만 **공급은 편성으로 정해진다**
+			const needsState = new RegExp(`${re.source}[^.]{0,15}(에 걸린|상태인|을? ?[0-9]+ ?이상 보유|보유한)`).test(cond);
+			if (supplies || needsState) {
+				push({
+					refKind: 'axis', refId: id,
+					// 상태 문턱의 수는 **적이 가진 수**이지 인원 수가 아니다 — 문턱으로 안 쓴다
+					op: supplies && th !== null ? 'gte' : 'has',
+					threshold: supplies ? th : null,
+					scope: sc, supply: 'skill', runtime: !supplies && needsState,
+				});
 			}
 		}
 		for (const [re, id] of SIN) {
@@ -225,7 +251,9 @@ for (const c of clauses) {
 		for (const [re, id] of COIN) if (re.test(cond)) push({ refKind: 'coin', refId: id });
 		if (/혈찬/.test(cond)) push({ refKind: 'unit_keyword', refId: 'BLOODFIEND', op: th === null ? 'has' : 'gte', threshold: th, scope: sc });
 
-		if (conds.length === 0) gaps.push(`조건절은 있는데 무엇을 요구하는지 못 찾았다: ${cond.slice(0, 50)}`);
+		if (conds.length === 0 && !isVacuous(cond)) {
+			gaps.push(`조건절은 있는데 무엇을 요구하는지 못 찾았다: ${cond.slice(0, 50)}`);
+		}
 		if (th !== null && !conds.some((x) => x.threshold === th)) {
 			gaps.push(`「${th}인 이상」이 있는데 무엇을 세는지 못 찾았다: ${cond.slice(0, 40)}`);
 		}
@@ -238,7 +266,9 @@ for (const c of clauses) {
 
 	// idx 를 group 안에서 0부터 다시 매긴다
 	conds.forEach((x, i) => { x.idx = i; });
-	const unconditional = cond === null && conds.length === 0 && c.inherits.length === 0 && c.tier === null;
+	const vacuous = cond !== null && isVacuous(cond);
+	const unconditional = (cond === null || vacuous)
+		&& conds.length === 0 && c.inherits.length === 0 && c.tier === null;
 	if (conds.length > 0) matched += 1; else if (!unconditional) empty += 1;
 	out.push({ ...c, conds, unconditional, gaps });
 }
