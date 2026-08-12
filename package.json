@@ -35,6 +35,7 @@
     "v2:rollback": "tsx --env-file-if-exists=.env src/v2/promote-canonical.ts rollback",
     "gift:extract": "tsx --env-file-if-exists=.env scripts/extract-gift-ability.ts",
     "gift:diff": "tsx --env-file-if-exists=.env scripts/diff-gift-ability.ts",
+    "gift:split": "tsx --env-file-if-exists=.env scripts/split-clauses.ts",
     "gift:page": "tsx --env-file-if-exists=.env scripts/build-review-page.ts",
     "gift:import": "tsx --env-file-if-exists=.env scripts/import-verdicts.ts",
     "v2:gap-report": "tsx --env-file-if-exists=.env src/v2/gap-report.ts",
