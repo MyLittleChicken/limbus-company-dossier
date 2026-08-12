@@ -290,6 +290,39 @@ CREATE TABLE "canonical"."gift_trigger_param" (
 );
 
 -- CreateTable
+CREATE TABLE "canonical"."gift_ability" (
+    "gift_id" TEXT NOT NULL,
+    "level" INTEGER NOT NULL,
+    "ordinal" INTEGER NOT NULL,
+    "timing" TEXT NOT NULL,
+    "unconditional" BOOLEAN NOT NULL,
+    "refines" INTEGER,
+    "source_text" TEXT NOT NULL,
+
+    CONSTRAINT "gift_ability_pkey" PRIMARY KEY ("gift_id","level","ordinal")
+);
+
+-- CreateTable
+CREATE TABLE "canonical"."gift_ability_cond" (
+    "gift_id" TEXT NOT NULL,
+    "level" INTEGER NOT NULL,
+    "ordinal" INTEGER NOT NULL,
+    "group" INTEGER NOT NULL,
+    "idx" INTEGER NOT NULL,
+    "ref_kind" TEXT NOT NULL,
+    "ref_id" TEXT NOT NULL,
+    "op" TEXT NOT NULL,
+    "threshold" INTEGER,
+    "scope" TEXT NOT NULL,
+    "supply" TEXT NOT NULL,
+    "slot" INTEGER,
+    "runtime" BOOLEAN NOT NULL,
+    "resonance_mode" TEXT,
+
+    CONSTRAINT "gift_ability_cond_pkey" PRIMARY KEY ("gift_id","level","ordinal","group","idx")
+);
+
+-- CreateTable
 CREATE TABLE "canonical"."keyword_text" (
     "keyword_id" TEXT NOT NULL,
     "locale" "canonical"."Locale" NOT NULL,
@@ -1135,6 +1168,17 @@ CREATE TABLE "app"."axis_grant" (
 );
 
 -- CreateTable
+CREATE TABLE "app"."gift_ability_authored" (
+    "gift_id" TEXT NOT NULL,
+    "level" INTEGER NOT NULL,
+    "ordinal" INTEGER NOT NULL,
+    "payload" JSONB NOT NULL,
+    "note" TEXT NOT NULL,
+
+    CONSTRAINT "gift_ability_authored_pkey" PRIMARY KEY ("gift_id","level","ordinal")
+);
+
+-- CreateTable
 CREATE TABLE "app"."account" (
     "id" TEXT NOT NULL,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1222,6 +1266,12 @@ CREATE INDEX "identity_axis_axis_id_idx" ON "canonical"."identity_axis"("axis_id
 
 -- CreateIndex
 CREATE INDEX "trigger_ref_ref_kind_ref_id_idx" ON "canonical"."trigger_ref"("ref_kind", "ref_id");
+
+-- CreateIndex
+CREATE INDEX "gift_ability_gift_id_idx" ON "canonical"."gift_ability"("gift_id");
+
+-- CreateIndex
+CREATE INDEX "gift_ability_cond_ref_kind_ref_id_idx" ON "canonical"."gift_ability_cond"("ref_kind", "ref_id");
 
 -- CreateIndex
 CREATE INDEX "gift_domain_idx" ON "canonical"."gift"("domain");
@@ -1369,6 +1419,12 @@ ALTER TABLE "canonical"."effect_ref" ADD CONSTRAINT "effect_ref_effect_id_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "canonical"."gift_trigger_param" ADD CONSTRAINT "gift_trigger_param_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_ability" ADD CONSTRAINT "gift_ability_gift_id_fkey" FOREIGN KEY ("gift_id") REFERENCES "canonical"."gift"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "canonical"."gift_ability_cond" ADD CONSTRAINT "gift_ability_cond_gift_id_level_ordinal_fkey" FOREIGN KEY ("gift_id", "level", "ordinal") REFERENCES "canonical"."gift_ability"("gift_id", "level", "ordinal") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "canonical"."keyword_text" ADD CONSTRAINT "keyword_text_keyword_id_fkey" FOREIGN KEY ("keyword_id") REFERENCES "canonical"."keyword"("id") ON DELETE CASCADE ON UPDATE CASCADE;

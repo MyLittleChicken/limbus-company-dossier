@@ -1,0 +1,35 @@
+{
+	"round": 1,
+	"groups": {
+		"INDEP": {
+			"state": "ok",
+			"round": 1,
+			"why": ""
+		},
+		"SINGLE": {
+			"state": "ok",
+			"round": 1,
+			"why": ""
+		},
+		"GATE": {
+			"state": "ok",
+			"round": 1,
+			"why": ""
+		},
+		"HEAD": {
+			"state": "ok",
+			"round": 1,
+			"why": ""
+		},
+		"AMP": {
+			"state": "ok",
+			"round": 1,
+			"why": ""
+		},
+		"TIER": {
+			"state": "ok",
+			"round": 1,
+			"why": ""
+		}
+	}
+}

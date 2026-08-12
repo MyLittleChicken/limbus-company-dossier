@@ -8,7 +8,54 @@
  *
  * 실행: npm run v2:seed:authored
  */
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from './generated/client.js';
+import { validatePayload, type AbilityPayload } from './ability-payload.js';
+
+/**
+ * 기프트 능력 저작을 읽는다 — `src/v2/authored/gift-ability.jsonl`.
+ *
+ * 다른 저작은 이 파일에 배열로 적혀 있지만 이것만 별도 파일이다. 456건이라
+ * 소스에 두면 읽을 수 없고, 검수 회차마다 커밋되므로 한 줄이 능력 하나여야
+ * diff 가 깨끗하다.
+ *
+ * **형식이 틀어지면 한 행도 안 심는다.** 사람이 손으로 고치는 파일이라
+ * 오타가 DB 로 들어가면 굽는 쪽에서 뒤늦게 터진다.
+ */
+interface GiftAbilitySeed {
+	giftId: string;
+	level: number;
+	ordinal: number;
+	payload: AbilityPayload;
+	note: string;
+}
+
+async function readGiftAbilitySeed(): Promise<GiftAbilitySeed[]> {
+	const path = fileURLToPath(new URL('./authored/gift-ability.jsonl', import.meta.url));
+	const raw = await readFile(path, 'utf8');
+	const problems: string[] = [];
+	const rows: GiftAbilitySeed[] = [];
+	for (const [i, line] of raw.split('\n').map((l) => l.trim()).filter((l) => l !== '').entries()) {
+		let parsed: GiftAbilitySeed;
+		try {
+			parsed = JSON.parse(line) as GiftAbilitySeed;
+		} catch (e) {
+			problems.push(`${i + 1}줄: JSON 이 아니다 — ${(e as Error).message}`);
+			continue;
+		}
+		for (const p of validatePayload(parsed.payload)) {
+			problems.push(`${i + 1}줄 (${parsed.giftId}/${parsed.level}/${parsed.ordinal}): ${p}`);
+		}
+		rows.push(parsed);
+	}
+	if (problems.length > 0) {
+		throw new Error(
+			`src/v2/authored/gift-ability.jsonl 의 형식이 틀렸다. 심지 않는다:\n  ${problems.join('\n  ')}`,
+		);
+	}
+	return rows;
+}
 
 const REF_EXCEPTION = [
 	{
@@ -217,6 +264,20 @@ async function main(): Promise<void> {
 			console.error(`axis_grant 합계가 ${AXIS_GRANT.length} 이 아니다`);
 			process.exitCode = 1;
 		}
+
+		// 기프트 능력은 파일에서 읽는다. 형식이 틀리면 위에서 이미 던졌다
+		const abilities = await readGiftAbilitySeed();
+		// 파일에는 origin(hand·auto) 같은 검수용 칸이 더 있다. **표에 있는 칸만
+		// 골라 넣는다** — 파일이 표보다 넓어도 심기가 막히면 안 된다
+		const d = await prisma.giftAbilityAuthored.createMany({
+			data: abilities.map((a) => ({
+				giftId: a.giftId, level: a.level, ordinal: a.ordinal,
+				payload: a.payload as never, note: a.note,
+			})),
+			skipDuplicates: true,
+		});
+		const totalD = await prisma.giftAbilityAuthored.count();
+		console.log(`gift_ability_authored  새로 ${d.count}행 · 합계 ${totalD} (파일 ${abilities.length})`);
 	} finally {
 		await prisma.$disconnect();
 	}

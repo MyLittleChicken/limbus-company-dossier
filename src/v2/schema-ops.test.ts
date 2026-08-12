@@ -441,17 +441,26 @@ test('진짜 schema.sql — 블록 268개 중 235개가 순수 canonical', () =>
 	//   axis_restrict 의 FK 둘(identity·axis)        +2   (canonical, +3에 포함)
 	//   app.axis_grant 표                            +1   (canonical 밖)
 	//   axis_grant 의 색인 하나                       +1   (app, canonical 밖)
-	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 268);
-	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 235);
+	//
+	// 268 → 275 는 기프트 능력이다(기프트 능력 모형 1단계).
+	//   canonical.gift_ability · gift_ability_cond 표     +2   (canonical, +6에 포함)
+	//   그 둘의 색인 둘(gift_id · ref_kind+ref_id)          +2   (canonical, +6에 포함)
+	//   FK 둘(gift_ability→gift · cond→ability)           +2   (canonical, +6에 포함)
+	//   app.gift_ability_authored 표                       +1   (canonical 밖)
+	assert.equal(splitDdlBlocks(REAL_SCHEMA_SQL).length, 275);
+	assert.equal(extractCanonicalDdl(REAL_SCHEMA_SQL).length, 241);
 });
 
 test('진짜 schema.sql — 종류별 집계가 실측과 같다', () => {
 	const tally = tallyCanonicalDdl(REAL_SCHEMA_SQL);
 	// 97 → 98 은 canonical.axis_restrict 다. app.axis_grant 는 canonical 밖이라 안 늘린다
-	assert.equal(tally['CREATE TABLE "canonical".'], 98);
-	assert.equal(tally['CREATE INDEX ... ON "canonical"'], 37);
+	// 98 → 100 은 gift_ability · gift_ability_cond 다. app.gift_ability_authored 는 밖이다
+	assert.equal(tally['CREATE TABLE "canonical".'], 100);
+	// 37 → 39 는 gift_ability(gift_id) · gift_ability_cond(ref_kind, ref_id) 색인이다
+	assert.equal(tally['CREATE INDEX ... ON "canonical"'], 39);
 	// 86 → 88 은 axis_restrict 의 FK 둘(identity_id · axis_id)이다
-	assert.equal(tally['ALTER TABLE "canonical".'], 88);
+	// 88 → 90 은 gift_ability→gift · gift_ability_cond→gift_ability FK 둘이다
+	assert.equal(tally['ALTER TABLE "canonical".'], 90);
 	assert.equal(tally['CREATE TYPE "canonical".'], 11);
 });
 
