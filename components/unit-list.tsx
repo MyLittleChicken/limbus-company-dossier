@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { seasonLabel } from '@/lib/season';
 
 /**
  * 인격 · E.G.O · 기프트 목록.
@@ -64,23 +65,6 @@ export type Section = { id: string; name: string; icon?: string | null };
  * 나중에 생겨 목차 감각이 깨졌다.
  */
 const STEP = 200;
-
-/**
- * 시즌 표기.
- *
- *   0      통상
- *   1~8    시즌 N
- *   91NN   발푸르기스의 밤 — 뒤 두 자리가 회차
- *   8000   콜라보 — 명일방주 「선의의 순례」. 표본이 1 건이라 상수로 다룬다
- */
-export function seasonLabel(raw: number | null): string | null {
-	if (raw === null || raw === undefined) return null;
-	const n = String(raw);
-	if (n === '0') return '통상';
-	if (n === '8000') return '콜라보';
-	if (n.startsWith('91') && n.length === 4) return `발푸르기스의 밤 ${Number(n.slice(2))}회`;
-	return `시즌 ${n}`;
-}
 
 export function UnitList({
 	units,

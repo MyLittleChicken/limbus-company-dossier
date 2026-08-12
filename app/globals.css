@@ -3625,3 +3625,169 @@ html:has(.axispanels) {
 		grid-column: 1 / -1;
 	}
 }
+
+/* ── E.G.O 상세 — 인격과 다른 자리 ─────────────────────────
+   짜임은 인격과 같고 규칙도 대부분 나눠 쓴다. 여기 있는 것은 **축이 달라 어긋나는 자리**뿐이다. */
+
+/* 저항이 죄악 7종이다. 인격의 3칸 격자로는 안 들어간다. */
+.f-statrow--sin {
+	grid-template-columns: 46px repeat(7, minmax(0, 1fr));
+	gap: var(--sp-3);
+}
+
+.f-statrow--sin .f-stat b {
+	font-size: var(--fs-lg);
+}
+
+/* 죄악 자원 소모. 소속 칩과 같은 자리에 오되 수치를 함께 든다. */
+.tag--cost b {
+	margin-left: var(--sp-2);
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-weight: var(--fw-normal);
+}
+
+/* 스킬 요약 오른쪽. 인격은 코인·죄악·공격 타입 셋이고 E.G.O 는 코인과 정신력 소모 둘이다. */
+.f-skill-tags--ego {
+	grid-template-columns: 52px 64px;
+}
+
+.f-sp {
+	color: var(--ink-dim);
+	font-family: var(--font-mono);
+	font-size: var(--fs-tiny);
+	font-variant-numeric: tabular-nums;
+}
+
+/* 유래 환상체. loc 단독 개념이라 스킬 본문 위에 한 줄로 밝힌다. */
+.f-abname {
+	margin: 0 0 var(--sp-5);
+	padding-bottom: var(--sp-4);
+	border-bottom: 1px dotted var(--line);
+	color: var(--ink-muted);
+	font-size: var(--fs-tiny);
+	letter-spacing: var(--ls-wide);
+}
+
+.f-abname b {
+	color: var(--ink-cream);
+	font-weight: var(--fw-normal);
+}
+
+/*
+	침식 확률.
+
+	`section` 이 백분율이 아니라 정규화된 정신력 자리라, 질의가 SP 로 되돌린 값을 받는다.
+	막대는 확률이다 — 「정신력이 이 아래로 내려가면 이만큼」으로 읽힌다.
+*/
+.f-corrosion {
+	display: grid;
+	gap: var(--sp-4);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.f-corrosion li {
+	display: grid;
+	grid-template-columns: 72px minmax(0, 1fr) 52px;
+	align-items: center;
+	gap: var(--sp-5);
+}
+
+.f-corrosion-bar {
+	position: relative;
+	height: 14px;
+	background: var(--surface-inset);
+	border: 1px solid var(--line);
+}
+
+.f-corrosion-bar i {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: linear-gradient(90deg, #6d2320, #a83c33);
+}
+
+.f-corrosion b {
+	color: var(--ink-cream);
+	font-family: var(--font-num);
+	font-size: var(--fs-lg);
+	font-weight: var(--fw-normal);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+/* CG 는 가로로 긴 한 장이다. 패널 폭에 맞춘다. */
+.f-cg {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+}
+
+@media (max-width: 860px) {
+	.f-statrow--sin {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+
+	.f-statrow--sin .f-lab {
+		grid-column: 1 / -1;
+	}
+}
+
+/*
+	죄악 자원 소모.
+
+	인격 카드에서 체력 막대가 앉던 자리다. **이 카드에서 가장 먼저 읽혀야 하는 값**이라
+	같은 무게로 놓는다 — 그러지 않으면 체력이 빠진 만큼 카드 가운데가 빈다.
+*/
+.f-cost {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-6);
+}
+
+.f-cost ul {
+	display: flex;
+	gap: var(--sp-8);
+	flex-wrap: wrap;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.f-cost li {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+}
+
+.f-cost img {
+	width: 22px;
+	height: 22px;
+}
+
+.f-cost span {
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+}
+
+.f-cost b {
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: 26px;
+	font-weight: var(--fw-normal);
+	line-height: 1;
+}
+
+/*
+	속성 줄은 값이 숫자가 아니라 낱말이다 — 「탐식 · 타격」.
+
+	인격의 수치 칸(21px 숫자체)을 그대로 쓰면 두 낱말이 카드를 가로지른다. 본문 크기로 낮추고
+	숫자체를 벗긴다.
+*/
+.f-statrow--type .f-stat b {
+	font-family: inherit;
+	font-size: var(--fs-base);
+	line-height: var(--lh-tight);
+}

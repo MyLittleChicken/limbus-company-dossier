@@ -4,6 +4,7 @@ import {
 	atkTypeIcon,
 	defTypeIcon,
 	egoImage,
+	egoRankIcon,
 	giftIcon,
 	identityImage,
 	keywordIcon,
@@ -47,6 +48,13 @@ const tierOf = (g: { tier: number | null; tierLabel: string | null }): string =>
  * 달랐다 — 20509 는 envy · pride · wrath 였다. 게임 차례로 못 박는다.
  */
 const SIN_ORDER = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
+
+/**
+ * 공격 타입의 이름은 `keyword` 어휘가 갖고 있다 — 참격 · 관통 · 타격.
+ * `EgoGiftCategory.json` 이 정본이다. 다만 `attack_type` 열은 `slash` · `pierce` · `blunt`
+ * 로 적혀 어휘 id 와 달라 여기서 맞춘다. **화면이 이 어긋남을 알 필요가 없다.**
+ */
+const ATK_KEYWORD: Record<string, string> = { slash: 'Slash', pierce: 'Penetrate', blunt: 'Hit' };
 
 const bySin = <T extends { sin: string }>(rows: T[]): T[] =>
 	[...rows].sort((a, b) => SIN_ORDER.indexOf(a.sin) - SIN_ORDER.indexOf(b.sin));
@@ -174,7 +182,6 @@ export async function getIdentity(id: number, locale: Locale) {
 		`skill.attack_type` 은 `slash` · `pierce` · `blunt` 로 적혀 어휘 id 와 다르므로
 		여기서 맞춘다 — 화면이 그 어긋남을 알 필요가 없다.
 	*/
-	const ATK_KEYWORD: Record<string, string> = { slash: 'Slash', pierce: 'Penetrate', blunt: 'Hit' };
 	const [sinRows, vocabulary] = await Promise.all([
 		canonical.sinText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
 		canonical.keyword.findMany({ include: { texts: localeRows(locale) } }),
@@ -336,6 +343,21 @@ export async function getEgo(id: number, locale: Locale) {
 			costs: { orderBy: { sin: 'asc' } },
 			resists: { orderBy: { sin: 'asc' } },
 			statuses: { include: { status: { include: { texts: localeRows(locale) } } } },
+			/* 침식 확률 곡선. `section` 은 백분율이 아니라 정규화된 SP 자리다 — 아래 참고. */
+			corrosions: { orderBy: { index: 'asc' } },
+			/*
+				스킬. **인격과 구조가 다르다** — 각성과 침식으로 갈리고, 단계가 델타가 아니라
+				있는 것만 담긴다(실측 1 · 3 · 4 가 주력이고 2 · 5 는 열 건뿐이다).
+			*/
+			skills: {
+				orderBy: [{ role: 'asc' }, { ordinal: 'asc' }],
+				include: {
+					stages: {
+						orderBy: { uptie: 'asc' },
+						include: { texts: localeRows(locale), coins: { orderBy: { index: 'asc' } } },
+					},
+				},
+			},
 			// 연결 표에 순서가 없다. passiveId 로 정렬해 실행마다 같은 차례를 낸다
 			passives: {
 				orderBy: { passiveId: 'asc' },
@@ -345,6 +367,29 @@ export async function getEgo(id: number, locale: Locale) {
 	});
 
 	if (!ego) return null;
+
+	/* 상태를 가려낼 밑글. 스킬 · 코인 · 패시브의 모든 줄을 한 덩이로 잇는다. */
+	const body = [
+		...ego.skills.flatMap((s) =>
+			s.stages.flatMap((st) => [
+				textOf(st.texts, locale)?.desc ?? '',
+				...st.coins.map((c) => c.effects.join('\n')),
+			]),
+		),
+		...ego.passives.map((p) => textOf(p.passive.texts, locale)?.desc ?? ''),
+	].join('\n');
+
+	const [sinRows, vocabulary] = await Promise.all([
+		canonical.sinText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
+		canonical.keyword.findMany({ include: { texts: localeRows(locale) } }),
+	]);
+	const sinNames: Record<string, string> = {};
+	for (const r of sinRows) if (r.locale === locale || !sinNames[r.sin]) sinNames[r.sin] = r.name;
+	const atkNames: Record<string, string> = {};
+	for (const [atk, keywordId] of Object.entries(ATK_KEYWORD)) {
+		const text = nameOf(vocabulary.find((v) => v.id === keywordId)?.texts ?? [], locale);
+		if (text) atkNames[atk] = text.name;
+	}
 
 	return {
 		id: Number(ego.id),
@@ -360,15 +405,87 @@ export async function getEgo(id: number, locale: Locale) {
 		extractable: ego.extractable,
 		maxThreadspin: ego.maxThreadspin,
 		text: nameOf(ego.texts, locale),
+		rankIcon: ego.rank ? egoRankIcon(ego.rank) : null,
 		images: {
 			awaken: egoImage(Number(ego.id), 'awaken'),
 			cg: egoImage(Number(ego.id), 'cg'),
 			erosion: egoImage(Number(ego.id), 'erosion'),
+			/** 수감자 상징. 표제에 이름과 함께 선다. */
+			sinner: sinnerIcon(ego.sinnerId),
 		},
 		// 죄악 자원 소모량. E.G.O 기능의 핵심이다(02-data-model 3.4).
-		costs: bySin(ego.costs).map((c) => ({ sin: c.sin, amount: c.count })),
+		costs: bySin(ego.costs).map((c) => ({ sin: c.sin, amount: c.count, icon: sinIcon(c.sin) })),
 		resists: bySin(ego.resists).map((r) => ({ sin: r.sin, value: r.value })),
-		statuses: ego.statuses.map((s) => ({ id: s.statusId, text: nameOf(s.status.texts, locale) })),
+		statuses: pickStatuses(ego.statuses, body, locale),
+
+		/*
+			기믹 키워드.
+
+			**인격과 다른 데서 온다.** 인격은 `identity_keyword` 라는 전용 표를 갖지만 E.G.O
+			에는 그런 표가 없어 `ego_status` 에서 기믹 어휘와 겹치는 것만 추린다. 목록 화면이
+			쓰는 규칙과 같다(`canonical/list.ts`). **두 방식이 같지는 않다는 사실을 여기 적어
+			둔다** — 유래가 다르다.
+		*/
+		keywords: [...new Set(ego.statuses.map((s) => s.statusId))]
+			.map((statusId) => {
+				const row = vocabulary.find((v) => v.id === statusId);
+				const text = row ? nameOf(row.texts, locale) : null;
+				const en = row?.texts.find((t) => t.locale === 'en')?.name;
+				return text ? { id: statusId, text, icon: keywordIcon(en ?? statusId) } : null;
+			})
+			.filter((v) => v !== null),
+
+		/**
+		 * 침식 확률.
+		 *
+		 * `section` 은 백분율이 아니라 **정규화된 정신력 자리**다 — 게임의 SP 범위
+		 * `[-45, +45]` 를 `[0, 1]` 로 편 값이다(마스터북 게임 확인). `0.5` 가 SP 0 이고
+		 * `0` 이 SP −45 다. 화면이 그 자리를 SP 로 되돌려 보인다.
+		 */
+		corrosion: ego.corrosions.map((c) => ({
+			sp: Math.round(c.section * 90 - 45),
+			probability: c.probability,
+		})),
+
+		/** 죄악 · 공격 타입 이름표. **화면이 표를 들지 않는다** — 데이터에 있다. */
+		sinNames,
+		atkNames,
+
+		/*
+			스킬. 각성과 침식으로 갈린다.
+
+			`abName` 은 **유래 환상체**다(loc 단독 개념). 실측 611/611 이 값을 갖는다.
+		*/
+		skills: ego.skills.map((s) => ({
+			id: Number(s.id),
+			role: s.role,
+			ordinal: s.ordinal,
+			icon: skillIcon(Number(s.id)),
+			/** 이 스킬이 처음 생기는 단계. 단계가 띄엄띄엄해 화면이 이월을 판정해야 한다. */
+			firstUptie: s.stages[0]?.uptie ?? null,
+			stages: s.stages.map((st) => ({
+				uptie: st.uptie,
+				spCost: st.spCost,
+				baseValue: st.baseValue,
+				coinValue: st.coinValue,
+				atkWeight: st.atkWeight,
+				text: textOf(st.texts, locale),
+				abName: st.texts.find((t) => t.locale === locale)?.abName
+					?? st.texts.find((t) => t.locale === 'en')?.abName
+					?? null,
+				coins: [...new Set(st.coins.map((c) => c.index))]
+					.sort((a, b) => a - b)
+					.map((index) => {
+						const rows = st.coins.filter((c) => c.index === index);
+						const picked =
+							rows.find((c) => c.locale === locale) ?? rows.find((c) => c.locale === 'en');
+						return {
+							index,
+							desc: picked && picked.effects.length > 0 ? picked.effects.join('\n') : null,
+						};
+					}),
+			})),
+		})),
 		// 패시브는 요약 파일에 없고 개별 상세에만 있었다(02-data-model 3.4).
 		// 캐노니컬 연결 표에 순서 열이 없어 나열 차례를 index 로 쓴다
 		passives: ego.passives.map((p, index) => ({
