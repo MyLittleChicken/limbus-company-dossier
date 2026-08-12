@@ -175,10 +175,24 @@ async function main(): Promise<void> {
 		//         gift.*.conds(87)       조건이 있다고 적혔는데 뽑힌 조건이 없다
 		//         gift.*.threshold(9)    「N인 이상」인데 무엇을 세는지 못 찾았다
 		//         1,171 + 96 = 1,267
+		//   +5    문단 분해 결함 셋을 고쳤다(2026-08-12) — 절 1,267 → 1,292.
+		//         ① 머리·게이트 판정이 문단의 **첫 줄**이 아니라 **끝줄**을 봤다.
+		//            `split('⏎')` 는 실제 데이터에 없는 글자라 아무 일도 안 했고,
+		//            의도했던 「첫 줄만 본다」가 죽어 있었다. 9194·9195·9199 의
+		//            본체가 머리로, 9831 의 본체가 게이트로 삼켜졌다.
+		//         ② 문단 안의 「넓히는 불릿」(「…에도 효과 적용」)이 본체와 한 절에
+		//            묶여, 넓힘의 소속이 본체의 **발동 조건**으로 읽혔다. 떼어서
+		//            강화판으로 매단다 — 실측 16문단.
+		//         ③ 병합·적재가 둘 다 더하기 전용이라 고친 추출 결과가 DB 에
+		//            반영되지 않았다. 이제 자동 행은 갈아 끼운다.
+		//         늘어난 5는 떼어낸 넓힘 절 자신이 「무엇을 요구하는지 못 찾았다」로
+		//         남긴 것이다. 강화판이라 켜짐 판정엔 참여하지 않지만, 못 읽은
+		//         것은 못 읽었다고 적는다.
+		//         1,267 + 5 = 1,272
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_267,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,267`,
+			ok: gapTotal + overrideCount === 1_272,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,272`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
