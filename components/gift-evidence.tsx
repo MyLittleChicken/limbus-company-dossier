@@ -35,6 +35,23 @@ export interface EvidenceGift {
 	}>;
 }
 
+/**
+ * 절 자리표를 사람이 읽는 말로 바꾼다.
+ *
+ * 판정이 절 단위로 옮겨가며 근거의 첫 칸이 `ordinal/group/idx` 가 됐다.
+ * 「0/0/1」은 아무 뜻이 없지만 「1절 · 조건 2」는 설명문에서 찾을 수 있다.
+ * 조건이 하나뿐인 절은 번호를 안 붙인다 — 붙이면 없는 갈래를 있는 것처럼 읽힌다.
+ */
+function clauseLabel(triggerId: string, ko: boolean): string {
+	const m = /^(\d+)\/(\d+)\/(\d+)$/.exec(triggerId);
+	if (m === null) return triggerId;
+	const clause = Number(m[1]) + 1;
+	const group = Number(m[2]) + 1;
+	const idx = Number(m[3]) + 1;
+	const cond = idx > 1 ? `${group}-${idx}` : String(group);
+	return ko ? `${clause}절 · 조건 ${cond}` : `clause ${clause} · cond ${cond}`;
+}
+
 export function GiftEvidence({
 	packName,
 	gifts,
@@ -76,7 +93,12 @@ export function GiftEvidence({
 							<ul className="comp">
 								{g.reasons.map((r, i) => (
 									<li key={i}>
-										<span className="comp-k">{`${r.triggerId} · ${r.refKind}:${r.refId}`}</span>
+										{/**
+										  * `triggerId` 는 절 모형에서 「몇 번째 절의 몇 번째 조건인가」다
+										  * (`ordinal/group/idx`). 날것으로 보이면 `0/0/1` 이라 아무 뜻이
+										  * 없어, 사람이 읽는 자리로 옮긴다
+										  */}
+										<span className="comp-k">{`${clauseLabel(r.triggerId, ko)} · ${r.refKind}:${r.refId}`}</span>
 										<span className="comp-v">
 											{`${r.verdict}/${r.certainty} ${r.have}${r.need !== null ? `/${r.need}` : ''}`}
 											{r.denominator !== null ? ` ${r.denominator}` : ''}

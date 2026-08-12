@@ -8,7 +8,10 @@
  * **판정 불가를 목록에서 빼지 않는다(결정 4).** 98/451 을 감추면 사용자가 존재를
  * 모른다. 등급 C 로 표시만 하고 점수에서 뺀다.
  */
-import { judgeGift, type Ability, type AbilityCond } from './ability.js';
+// 값은 확장자 없이, 타입은 `.js` 로 — 이 저장소의 규칙이다. Turbopack 은
+// TypeScript 원본을 `.js` 로 못 풀고, 타입 import 는 지워지므로 상관없다
+import { judgeGift } from './ability';
+import type { Ability, AbilityCond } from './ability.js';
 import type { Profile } from './profile.js';
 import type { SupplyTables } from './supply.js';
 import type { GiftVerdict, Reason, RefVerdict, Squad, TriggerParam, TriggerRef } from './types.js';

@@ -16,7 +16,8 @@
  *
  * **DB 를 모른다.** 표를 주입받는 순수 함수다.
  */
-import { countSupply, type SupplyTables } from './supply.js';
+import { countSupply } from './supply';
+import type { SupplyTables } from './supply.js';
 import type { Reason, Squad } from './types.js';
 
 /** `canonical.gift_ability` 한 행 */
