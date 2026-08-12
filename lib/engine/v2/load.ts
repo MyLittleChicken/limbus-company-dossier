@@ -6,16 +6,22 @@
  * 하나만 갈아 끼우면 된다.
  *
  * 읽는 양은 편성과 무관하게 고정이다.
- *   v_identity_capability  ~2,700행    trigger_ref 150 · effect_ref 55
- *   gift_trigger 1,081 · gift_effect 1,123 · gift_trigger_param 188
+ *   v_identity_capability  ~2,700행    gift_ability 898 · gift_ability_cond 642
+ *   trigger_ref 150 · effect_ref 55 · gift_trigger 1,081 · gift_effect 1,123
  * 한 번 읽어 캐시할 크기이며, 편성마다 다시 읽을 이유가 없다.
+ *
+ * **`gift_trigger_param` 은 더 안 읽는다**(2026-08-12). 판정이 절로 옮겨가며
+ * 그 표를 보는 곳이 옛 판정(`evaluateGiftsLegacy`)뿐이 됐고, 옛 판정은
+ * `scripts/verdict-diff.ts` 가 대조용으로만 부른다 — 그 스크립트가 직접 읽는다.
+ * 남은 넷(`trigger_ref`·`gift_trigger`·`gift_effect`·`effect_ref`)은 연쇄
+ * (`chain.ts`)가 아직 쓴다.
  */
 import { PrismaClient } from '../../../src/v2/generated/client.js';
 import type { Ability, AbilityCond } from './ability.js';
 import type { EffectRef } from './chain.js';
 import type { Recipe } from './fusion.js';
 import type { SupplyTables } from './supply.js';
-import type { Capability, TriggerParam, TriggerRef } from './types.js';
+import type { Capability, TriggerRef } from './types.js';
 
 /** 절 조건이 세는 축. `coin_token` 은 어휘가 훨씬 넓어 이 여덟만 걸러야 한다 */
 const AXES = ['COMBUSTION', 'LACERATION', 'BURST', 'BREATH',
@@ -28,7 +34,6 @@ export interface EngineData {
 	giftEffects: Map<string, string[]>;
 	effectRefs: Map<string, EffectRef[]>;
 	giftRefs: Map<string, Array<{ refKind: string; refId: string }>>;
-	params: TriggerParam[];
 	recipes: Recipe[];
 	/**
 	 * 절 단위 능력 — `canonical.gift_ability`. **level 0 만 읽는다.**
@@ -55,7 +60,7 @@ function group<T, V>(rows: T[], key: (r: T) => string, val: (r: T) => V): Map<st
 }
 
 export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> {
-	const [caps, refs, giftTrigger, giftEffect, effectRef, params, fusionSlot, fusionOption,
+	const [caps, refs, giftTrigger, giftEffect, effectRef, fusionSlot, fusionOption,
 		abilityRows, condRows, supplyRows] =
 		await Promise.all([
 			prisma.$queryRaw<Capability[]>`
@@ -72,9 +77,6 @@ export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> 
 			prisma.giftEffect.findMany({ select: { giftId: true, effectId: true } }),
 			prisma.effectRef.findMany({
 				select: { effectId: true, refKind: true, refId: true, mode: true },
-			}),
-			prisma.giftTriggerParam.findMany({
-				select: { giftId: true, triggerId: true, kind: true, tier: true, value: true, slots: true },
 			}),
 			prisma.fusionSlot.findMany({
 				select: { giftId: true, recipeIdx: true, slotIdx: true, materialId: true },
@@ -216,7 +218,6 @@ export async function loadEngineData(prisma: PrismaClient): Promise<EngineData> 
 		giftEffects: group(giftEffect, (r) => r.giftId, (r) => r.effectId),
 		effectRefs: group(effectRef, (r) => r.effectId, (r) => r),
 		giftRefs,
-		params,
 		recipes,
 		abilities,
 		abilityConds,

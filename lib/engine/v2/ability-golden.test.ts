@@ -9,10 +9,9 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '../../../src/v2/generated/client.js';
 import { NO_DB, canonicalReachable } from '../../../src/v2/canonical/db-available.js';
-import { loadEngineData } from './load.js';
+import { loadEngineData, type EngineData } from './load.js';
 import { evaluateGifts } from './evaluate.js';
-import { Profile } from './profile.js';
-import type { EngineData, Squad } from './types.js';
+import type { Squad } from './types.js';
 
 const prisma = new PrismaClient();
 after(async () => { await prisma.$disconnect(); });
@@ -31,9 +30,7 @@ const judge = (squad: Squad): Map<string, boolean> => {
 	const d = data as EngineData;
 	const m = new Map<string, boolean>();
 	for (const v of evaluateGifts({
-		squad, profile: new Profile(squad, d.capabilities),
-		giftTriggers: d.giftTriggers, refsByTrigger: d.refsByTrigger, params: d.params,
-		abilities: d.abilities, abilityConds: d.abilityConds, supply: d.supply,
+		squad, abilities: d.abilities, abilityConds: d.abilityConds, supply: d.supply,
 	})) m.set(v.giftId, v.fireable);
 	return m;
 };

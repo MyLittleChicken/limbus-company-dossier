@@ -30,7 +30,7 @@ const SQUAD: Squad = {
 const EMPTY: EngineData = {
 	capabilities: [], refsByTrigger: new Map(), giftTriggers: new Map(),
 	giftEffects: new Map(), effectRefs: new Map(), giftRefs: new Map(),
-	params: [], recipes: [], abilities: new Map(), abilityConds: new Map(),
+	recipes: [], abilities: new Map(), abilityConds: new Map(),
 	supply: {
 		axisTag: new Map(), axisSkill: new Map(), association: new Map(),
 		unitKeyword: new Map(), sin: new Map(), attackType: new Map(),
@@ -40,10 +40,6 @@ const EMPTY: EngineData = {
 const data = DB.skip === false ? await loadEngineData(prisma) : EMPTY;
 const verdicts = evaluateGifts({
 	squad: SQUAD,
-	profile: new Profile(SQUAD, data.capabilities),
-	giftTriggers: data.giftTriggers,
-	refsByTrigger: data.refsByTrigger,
-	params: data.params,
 	abilities: data.abilities, abilityConds: data.abilityConds, supply: data.supply,
 });
 const byId = new Map(verdicts.map((v) => [v.giftId, v]));
@@ -102,10 +98,6 @@ test('분모를 편성으로 바꾸면 답이 달라지는 기프트가 있다',
 	};
 	const wideVerdicts = evaluateGifts({
 		squad: wide,
-		profile: new Profile(wide, data.capabilities),
-		giftTriggers: data.giftTriggers,
-		refsByTrigger: data.refsByTrigger,
-		params: data.params,
 		abilities: data.abilities, abilityConds: data.abilityConds, supply: data.supply,
 	});
 	const wideById = new Map(wideVerdicts.map((v) => [v.giftId, v]));

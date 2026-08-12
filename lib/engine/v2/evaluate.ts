@@ -42,7 +42,14 @@ export interface LegacyEvaluateInput {
 	params: TriggerParam[];
 }
 
-export interface EvaluateInput extends LegacyEvaluateInput {
+/**
+ * 절 모형이 보는 것. **폐기 5표가 하나도 안 들어온다** — 그것이 요점이다.
+ *
+ * `profile` 도 안 받는다. `Profile` 은 `identity_axis` 를 `affects` 게이트와
+ * 함께 세는 자리인데, 절 조건은 `supply` 로 그 갈래를 직접 말한다.
+ */
+export interface EvaluateInput {
+	squad: Squad;
 	/** 절 단위 능력. 이쪽으로 판정한다 */
 	abilities: Map<string, Ability[]>;
 	abilityConds: Map<string, Map<string, AbilityCond[]>>;
@@ -140,10 +147,10 @@ export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
 
 	/**
 	 * **절을 가진 기프트 전부를 돈다.** 옛 판정은 `giftTriggers` 를 돌았는데
-	 * 트리거가 0개인 기프트는 아예 판정되지 않았다. 절 모형에서는 그런
-	 * 기프트도 「능력이 없으니 판정 보류」로 명시적으로 답한다.
+	 * 트리거가 0개인 기프트(451 vs 456)는 아예 판정되지 않았다. 절 모형은
+	 * 456건 전부에 답한다 — 능력이 없으면 「판정 보류」라고 답한다.
 	 */
-	const giftIds = [...new Set([...input.abilities.keys(), ...input.giftTriggers.keys()])].sort();
+	const giftIds = [...input.abilities.keys()].sort();
 
 	for (const giftId of giftIds) {
 		const abilities = input.abilities.get(giftId) ?? [];

@@ -13,7 +13,7 @@ import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { loadEngineData } from '../lib/engine/v2/load.js';
 import { Profile } from '../lib/engine/v2/profile.js';
-import { evaluateGifts } from '../lib/engine/v2/evaluate.js';
+import { evaluateGiftsLegacy } from '../lib/engine/v2/evaluate.js';
 import type { Squad } from '../lib/engine/v2/types.js';
 
 const ROSTER_SIZE = 12;
@@ -170,14 +170,20 @@ function fireable(giftId: string, squad: Squad): boolean {
 
 // ── 옛 판정과 나란히 ────────────────────────────────────────────
 const data = await loadEngineData(prisma);
+// `load.ts` 는 이 표를 더 안 읽는다 — 옛 판정만 쓰므로 여기서 직접 읽는다
+const params = await prisma.giftTriggerParam.findMany({
+	select: { giftId: true, triggerId: true, kind: true, tier: true, value: true, slots: true },
+});
 const giftIds = [...new Set(abilities.map((a) => a.giftId))];
 const oldAlive = new Map<string, number>();
 const newAlive = new Map<string, number>();
 
 for (const [, squad] of decks) {
-	const verdicts = evaluateGifts({
+	// **옛 판정**과 견준다. 이 스크립트가 2단계의 명세였고, 엔진이 옮겨간
+	// 지금은 `scripts/verdict-diff.ts` 가 같은 대조를 엔진 자체로 한다
+	const verdicts = evaluateGiftsLegacy({
 		squad, profile: new Profile(squad, data.capabilities),
-		giftTriggers: data.giftTriggers, refsByTrigger: data.refsByTrigger, params: data.params,
+		giftTriggers: data.giftTriggers, refsByTrigger: data.refsByTrigger, params,
 	});
 	for (const v of verdicts) if (v.fireable) oldAlive.set(v.giftId, (oldAlive.get(v.giftId) ?? 0) + 1);
 	for (const id of giftIds) if (fireable(id, squad)) newAlive.set(id, (newAlive.get(id) ?? 0) + 1);

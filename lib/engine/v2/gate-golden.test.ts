@@ -23,8 +23,7 @@ const SQUAD: Squad = { roster: IDS.map((identityId) => ({ identityId, egoIds: []
 const data = DB.skip === false ? await loadEngineData(prisma) : null;
 const verdicts = DB.skip === false
 	? evaluateGifts({
-		squad: SQUAD, profile: new Profile(SQUAD, data!.capabilities),
-		giftTriggers: data!.giftTriggers, refsByTrigger: data!.refsByTrigger, params: data!.params,
+		squad: SQUAD,
 		abilities: data!.abilities, abilityConds: data!.abilityConds, supply: data!.supply,
 	})
 	: [];
