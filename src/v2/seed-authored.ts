@@ -269,15 +269,25 @@ async function main(): Promise<void> {
 		const abilities = await readGiftAbilitySeed();
 		// 파일에는 origin(hand·auto) 같은 검수용 칸이 더 있다. **표에 있는 칸만
 		// 골라 넣는다** — 파일이 표보다 넓어도 심기가 막히면 안 된다
+		/**
+		 * **파일이 진실이다 — 통째로 갈아 끼운다.**
+		 *
+		 * 예전에는 `skipDuplicates` 로 더하기만 했다. 그러면 (gift,level,ordinal)
+		 * 이 이미 있는 행은 파일이 바뀌어도 영영 안 바뀐다 — 추출기를 고쳐도
+		 * DB 는 낡은 채로 남는다. 실제로 그렇게 굳어 있었다: 9194 의 0절이
+		 * 조건을 잃었는데도 DB 에는 옛 조건이 그대로 있었다.
+		 *
+		 * 저작 파일은 git 이 들고 있으므로 지우고 다시 넣어도 잃는 것이 없다.
+		 */
+		await prisma.giftAbilityAuthored.deleteMany({});
 		const d = await prisma.giftAbilityAuthored.createMany({
 			data: abilities.map((a) => ({
 				giftId: a.giftId, level: a.level, ordinal: a.ordinal,
 				payload: a.payload as never, note: a.note,
 			})),
-			skipDuplicates: true,
 		});
 		const totalD = await prisma.giftAbilityAuthored.count();
-		console.log(`gift_ability_authored  새로 ${d.count}행 · 합계 ${totalD} (파일 ${abilities.length})`);
+		console.log(`gift_ability_authored  갈아끼움 ${d.count}행 · 합계 ${totalD} (파일 ${abilities.length})`);
 	} finally {
 		await prisma.$disconnect();
 	}
