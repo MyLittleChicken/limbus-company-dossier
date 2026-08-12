@@ -11,6 +11,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
+import { SHAPES, shapeKeysOf } from './gift-shapes.js';
 
 const argv = process.argv.slice(2);
 const out = argv.indexOf('--out') >= 0 ? argv[argv.indexOf('--out') + 1] : '/tmp/gift-shapes.md';
@@ -23,74 +24,6 @@ const rows = await prisma.$queryRaw<Array<{ giftId: string; level: number; name:
 	ORDER BY t.gift_id
 `;
 
-/**
- * 문형 표지. **절을 어떻게 나눌지가 갈리는 것만 본다** — 효과가 무엇인지는
- * 안 본다(그건 크기이고 이 스펙의 비목표다).
- */
-interface Shape { key: string; label: string; test: (d: string) => boolean }
-const SHAPES: Shape[] = [
-	{
-		key: 'GATE', label: '첫 문단이 「…이면 발동」 — 소속·인원 게이트',
-		test: (d) => /발동/.test((d.split(/\n\s*\n/)[0] ?? '')) && /이상|이면|일 때/.test(d.split(/\n\s*\n/)[0] ?? ''),
-	},
-	{
-		key: 'TIER', label: '「…수에 따라 기프트 효과 강화」 + 「- N인 이상」 티어',
-		test: (d) => /기프트 효과 강화/.test(d),
-	},
-	{
-		key: 'SLOT', label: '「[편성 N번 인격 전용 효과]」 자리 한정',
-		test: (d) => /\[편성[^\]]*번[^\]]*전용/.test(d),
-	},
-	{
-		key: 'ONLY', label: '「[… 전용 효과]」 — 자리가 아닌 다른 한정',
-		test: (d) => /\[[^\]]*전용[^\]]*\]/.test(d) && !/\[편성[^\]]*번[^\]]*전용/.test(d),
-	},
-	{
-		key: 'OR', label: '「…거나」·「또는」 — 조건이 OR 다',
-		test: (d) => /하였거나|하거나|이거나|또는/.test(d),
-	},
-	{
-		key: 'AMPLIFY', label: '「효과가 강화되어」 — 앞 절에 딸린 강화판',
-		test: (d) => /효과가 강화되어|효과가 강화된다/.test(d),
-	},
-	{
-		key: 'REPLACE', label: '「효과가 변경되어」 — 조건은 같고 효과만 갈린다',
-		test: (d) => /효과가 변경되어/.test(d),
-	},
-	{
-		key: 'SUBBULLET', label: '「- 」 하위 불릿 — 앞 문장을 키우는 항목',
-		test: (d) => /\n\s*-\s/.test(d),
-	},
-	{
-		key: 'ASSOC', label: '「… 소속 인격」 — 소속 조건이 있다',
-		test: (d) => /소속 인격|소속의 인격|소속이면/.test(d),
-	},
-	{
-		key: 'COUNT', label: '「N인 이상」·「N명 이상」 — 인원 문턱',
-		test: (d) => /[0-9]+인 이상|[0-9]+명 이상/.test(d),
-	},
-	{
-		key: 'DENOM', label: '분모를 직접 말한다 — 편성·출격·대기',
-		test: (d) => /대기 인원|편성 인원|출격 인원/.test(d),
-	},
-	{
-		key: 'RESO', label: '공명 조건',
-		test: (d) => /공명/.test(d),
-	},
-	{
-		key: 'SCALE', label: '크기가 편성 수에 비례한다',
-		test: (d) => /편성된 수|편성 인원 수|편성된 인격 수/.test(d),
-	},
-	{
-		key: 'PRIORITY', label: '「(… 우선으로 지정)」 — 조건이 아니라 우선순위 주석',
-		test: (d) => /우선으로 지정|우선하여 지정/.test(d),
-	},
-	{
-		key: 'RUNTIME', label: '전투 중 상태를 본다 — 적 상태·정신력·보유 효과',
-		test: (d) => /적이 보유한|보유한 적|정신력이|상태[이라면]|흐트러짐|보유하고 있/.test(d),
-	},
-];
-
 /** 문단 수 — 절이 몇 개쯤 될지의 밑그림이다 */
 const paraCount = (d: string): number =>
 	d.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p !== '').length;
@@ -99,7 +32,7 @@ interface Row { giftId: string; name: string; keys: string[]; paras: number; des
 const analyzed: Row[] = rows.map((r) => ({
 	giftId: r.giftId,
 	name: r.name,
-	keys: SHAPES.filter((s) => s.test(r.desc)).map((s) => s.key),
+	keys: shapeKeysOf(r.desc),
 	paras: paraCount(r.desc),
 	desc: r.desc,
 }));
