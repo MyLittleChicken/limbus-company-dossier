@@ -38,7 +38,17 @@ const readJsonl = <T>(p: string): T[] =>
 		.map((l) => JSON.parse(l) as T);
 
 const extracted = readJsonl<Extracted>(condsPath);
-const hand = readJsonl<Authored>(AUTHORED);
+/**
+ * **`origin === 'hand'` 인 것만 지킨다.**
+ *
+ * 예전에는 저작 파일에 있는 모든 행을 「손」으로 쳤다. 그러면 한 번 적재한 뒤로
+ * 자동 행이 영영 안 바뀐다 — 추출기를 고쳐도 병합이 전부 건너뛰기 때문이다.
+ * 실제로 그렇게 굳어 있었다(재실행 시 「새로 더함 0 · 건너뜀 1274」).
+ *
+ * 자동 행은 추출기가 다시 만들면 되는 것이고, 사람이 쓴 20행만 지키면 된다.
+ */
+const previous = readJsonl<Authored>(AUTHORED);
+const hand = previous.filter((h) => h.origin === 'hand');
 const handKeys = new Set(hand.map((h) => `${h.giftId}\t${h.level}\t${h.ordinal}`));
 /** 손으로 쓴 기프트는 **통째로** 지킨다 — 절 개수까지 사람이 정한 것이다 */
 const handGifts = new Set(hand.map((h) => `${h.giftId}\t${h.level}`));

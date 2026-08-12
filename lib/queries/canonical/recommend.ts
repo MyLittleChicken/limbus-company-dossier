@@ -135,12 +135,13 @@ export async function recommendForDeck(
 	// 것과 같은 값이다 — 둘이 갈리면 「켜진다」가 두 가지 답을 낸다
 	const heldGiftIds = ownedIds.map(String);
 	const profile = new Profile(squad, data.capabilities, heldGiftIds);
+	// 판정은 절만 본다 — 폐기 5표가 하나도 안 들어간다. `profile` 은 아래
+	// 연쇄(`chain`)가 계속 쓰므로 남는다
 	const verdicts = evaluateGifts({
 		squad,
-		profile,
-		giftTriggers: data.giftTriggers,
-		refsByTrigger: data.refsByTrigger,
-		params: data.params,
+		abilities: data.abilities,
+		abilityConds: data.abilityConds,
+		supply: data.supply,
 	});
 	const byGift = new Map(verdicts.map((v) => [v.giftId, v]));
 

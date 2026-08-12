@@ -8,7 +8,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PrismaClient } from '../../../src/v2/generated/client.js';
 import { NO_DB, canonicalReachable } from '../../../src/v2/canonical/db-available.js';
-import { loadEngineData } from './load';
+import { loadEngineData, type EngineData } from './load';
 import { Profile } from './profile';
 import { evaluateGifts } from './evaluate';
 import { chain } from './chain';
@@ -27,16 +27,20 @@ const SQUAD: Squad = {
 };
 
 // DB 가 없으면 적재 자체가 던진다. 빈 값으로 두고 아래 테스트를 전부 건너뛴다
-const data = DB.skip === false
-	? await loadEngineData(prisma)
-	: { capabilities: [], refsByTrigger: new Map(), giftTriggers: new Map(),
-		giftEffects: new Map(), effectRefs: new Map(), giftRefs: new Map(), params: [] };
+const EMPTY: EngineData = {
+	capabilities: [], refsByTrigger: new Map(), giftTriggers: new Map(),
+	giftEffects: new Map(), effectRefs: new Map(), giftRefs: new Map(),
+	recipes: [], abilities: new Map(), abilityConds: new Map(),
+	supply: {
+		axisTag: new Map(), axisSkill: new Map(), association: new Map(),
+		unitKeyword: new Map(), sin: new Map(), attackType: new Map(),
+		skillKind: new Map(), minusCoin: new Set(),
+	},
+};
+const data = DB.skip === false ? await loadEngineData(prisma) : EMPTY;
 const verdicts = evaluateGifts({
 	squad: SQUAD,
-	profile: new Profile(SQUAD, data.capabilities),
-	giftTriggers: data.giftTriggers,
-	refsByTrigger: data.refsByTrigger,
-	params: data.params,
+	abilities: data.abilities, abilityConds: data.abilityConds, supply: data.supply,
 });
 const byId = new Map(verdicts.map((v) => [v.giftId, v]));
 
@@ -62,9 +66,15 @@ test('등급 셋이 전부 나온다 — 결합을 접지 않은 결과', DB, ()
 	const n = { A: 0, B: 0, C: 0 };
 	for (const v of verdicts) n[v.grade] += 1;
 	assert.ok(n.A > 0 && n.B > 0 && n.C > 0, JSON.stringify(n));
-	// B 가 가장 크다. 설계 결정 2 가 「B 291건이 정보의 대부분」이라 한 자리다
-	assert.ok(n.B > n.A && n.B > n.C, JSON.stringify(n));
-	assert.equal(n.A + n.B + n.C, data.giftTriggers.size);
+	/**
+	 * **절 모형에서는 A 가 가장 크다**(2026-08-12). 옛 모형은 B 가 가장 컸는데
+	 * 그건 트리거 참조의 `evaluability` 가 `runtime`·`unclassified` 를 남발해
+	 * 「일부만 판정 가능」이 기본값이 됐기 때문이다. 절 조건은 문장에서 뽑은
+	 * 것이라 대부분 편성으로 바로 판정된다 — 그것이 이 단계가 얻은 것이다.
+	 */
+	assert.ok(n.A > n.B && n.A > n.C, JSON.stringify(n));
+	// 절을 가진 기프트 전부를 돈다 — 트리거가 0개인 기프트도 판정 보류로 답한다
+	assert.equal(n.A + n.B + n.C, verdicts.length);
 });
 
 test('판정 불가를 목록에서 빼지 않는다 — C 도 근거를 갖는다', DB, () => {
@@ -88,10 +98,7 @@ test('분모를 편성으로 바꾸면 답이 달라지는 기프트가 있다',
 	};
 	const wideVerdicts = evaluateGifts({
 		squad: wide,
-		profile: new Profile(wide, data.capabilities),
-		giftTriggers: data.giftTriggers,
-		refsByTrigger: data.refsByTrigger,
-		params: data.params,
+		abilities: data.abilities, abilityConds: data.abilityConds, supply: data.supply,
 	});
 	const wideById = new Map(wideVerdicts.map((v) => [v.giftId, v]));
 	// 진혼은 출전 분모라 대기가 늘어도 그대로여야 한다 — 분모 분기가 실제로 산다
@@ -131,13 +138,31 @@ test('이미 충족된 참조는 사슬이 되풀이하지 않는다 — 화상 
 	assert.equal(links.some((l) => l.via.some((v) => v.refId === 'COMBUSTION')), false);
 });
 
-test('실측 등급 — A 146 · B 219 · C 86', DB, () => {
+/**
+ * 절 모형의 실측 등급. 옛 모형은 A 146 · B 219 · C 86 이었다.
+ *
+ * `C 192` 는 「셀 것이 없다」다 — 조건이 하나도 안 붙은 기프트이며, 그중
+ * 대부분은 실제로 무조건 절을 갖는다(「매 턴 시작 시 모든 적에게 파열 3」처럼
+ * 편성과 무관한 문단). 결손도 여기 섞여 있으므로 이 수는 「범용 기프트 수」의
+ * 상한이지 확정치가 아니다.
+ */
+test('실측 등급 — A 246 · B 18 · C 192', DB, () => {
 	const n = { A: 0, B: 0, C: 0 };
 	for (const v of verdicts) n[v.grade] += 1;
-	assert.deepEqual(n, { A: 146, B: 219, C: 86 });
+	assert.deepEqual(n, { A: 246, B: 18, C: 192 });
 });
 
-test('전부 충족 89 · 그중 확정 49 — roster_gated 를 확정으로 세면 과대다', DB, () => {
+/**
+ * 절 모형에는 **「가능」이 없다** — 충족은 언제나 확정이다.
+ *
+ * 옛 모형은 89건 중 49건만 확정이었다. 그 「가능」은 트리거 이름 접미사
+ * (`roster_gated`)로 지어낸 어림이었고, 절 조건은 문장에서 뽑은 것이라 그런
+ * 어림이 없다. 전투 중에만 아는 것은 `runtime` 으로 따로 적혀 `unknown` 이
+ * 되므로 애초에 「충족」으로 세지지 않는다.
+ *
+ * 아래 주석은 옛 모형의 89·49 가 어떻게 나온 값인지에 대한 기록이다.
+ */
+test('전부 충족 108 — 절 모형에는 「가능」이 없어 확정과 같다', DB, () => {
 	// 자리 한정을 씌우기 전엔 95였다. 9143·9210 이 「편성 4·5번」 자리 조건과
 	// 무기 갈래 조건(각각 pierce · blunt)을 갖는데, 이 골든 편성의 4·5번은
 	// 10916 · 10716 이고 둘 다 그 무기 갈래가 없다(pierce 는 3번, blunt 는
@@ -152,8 +177,8 @@ test('전부 충족 89 · 그중 확정 49 — roster_gated 를 확정으로 세
 	// 「전부 충족」 문턱에서 떨어졌다.
 	const fired = verdicts.filter((v) => v.grade === 'A' && v.satisfied === v.total);
 	const sure = fired.filter((v) => v.certain === v.total);
-	assert.equal(fired.length, 89);
-	assert.equal(sure.length, 49);
+	assert.equal(fired.length, 108);
+	assert.equal(sure.length, 108);
 });
 
 test('10104(개화 E.G.O::동백 이상) 만 넣은 편성 — 침잠 인격이지 진동 인격이 아니다', DB, () => {

@@ -42,21 +42,50 @@ export interface ClassDef {
 const paras = (d: string): string[] =>
 	d.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p !== '');
 
-/** 첫 문단이 「…이면 발동」으로 끝나는 게이트인가 */
-const isGate = (first: string): boolean =>
-	/발동(한다|함|됨)?\.?\s*$/.test(first.split('⏎')[0].trim()) ||
-	/이면, 이번 전투 동안 발동/.test(first) ||
-	/일 때 발동/.test(first) ||
-	/경우 발동/.test(first) ||
-	/사용 시 발동/.test(first);
+/**
+ * 첫 문단이 「…이면 발동」으로 끝나는 게이트인가.
+ *
+ * **문단의 첫 줄만 본다.** 게이트는 문단 머리에 서는 말이다 — 뒤에 붙은
+ * 불릿의 끝을 보면 본체가 있는 문단까지 게이트로 삼켜진다. 9831 시테러
+ * 연구집이 그랬다: 본체는 「적에게 입히는 피해량 +10%」인데 마지막 불릿이
+ * 「…위 효과가 조건 없이 최대로 발동됨」이라 문단 전체가 물림이 됐다.
+ */
+const isGate = (first: string): boolean => {
+	const head = (first.split('\n')[0] as string).trim();
+	return /발동(한다|함|됨)?\.?\s*$/.test(head)
+		|| /이면, 이번 전투 동안 발동/.test(head)
+		|| /일 때 발동/.test(head)
+		|| /경우 발동/.test(head)
+		|| /사용 시 발동/.test(head);
+};
 
-/** 첫 문단이 대상·범위를 정하는 머리인가 */
-const isHead = (first: string): boolean =>
-	/^\[[^\]]*\]\s*$/.test(first.split('⏎')[0].trim()) ||
-	/^\[[^\]]*전용[^\]]*\]/.test(first) ||
-	/효과(가|를)? ?적용\.?\s*$/.test(first.split('⏎')[0].trim()) ||
-	/에게 효과 적용/.test(first) ||
-	/효과 발동\.?\s*$/.test(first.split('⏎')[0].trim());
+/**
+ * 첫 문단이 대상·범위를 정하는 머리인가.
+ *
+ * **머리는 자기 문단에 혼자 있어야 한다.** 머리는 「뒤따르는 것에 씌우는 말」
+ * 이므로, 같은 문단에 이미 효과가 붙어 있으면 그건 자기완결 절이지 머리가
+ * 아니다.
+ *
+ * 이 조건이 없으면 문단 **끝줄**이 「…효과 적용」인 것까지 머리로 잡힌다.
+ * 9194 짧은 케인 소드가 그랬다 — 「참격 … 방어 레벨 감소 2 부여」가 본체이고
+ * 「- 세븐 협회 소속 인격은 관통, 타격 … 에도 효과 적용」은 그것을 **넓히는**
+ * 말인데, 문단 전체가 머리로 삼켜져 본체가 사라지고 세븐이 발동 조건이 됐다.
+ * 뜻이 뒤집힌 것이다(163덱 중 162 → 64 로 거짓 죽음).
+ *
+ * 「혼자」를 요구해도 진짜 머리 61건은 그대로 잡히고, 9194·9195·9199 셋만
+ * 빠진다(실측 2026-08-12). 셋 다 같은 모양이다.
+ */
+const isHead = (first: string): boolean => {
+	// 「[편성 1번 전용 효과] …」는 한 줄 안에서 머리와 본문이 붙는 꼴이라 예외다
+	if (/^\[[^\]]*전용[^\]]*\]/.test(first)) return true;
+	const lines = first.split('\n').map((x) => x.trim()).filter((x) => x !== '');
+	if (lines.length !== 1) return false;
+	const only = lines[0] as string;
+	return /^\[[^\]]*\]\s*$/.test(only)
+		|| /효과(가|를)? ?적용\.?\s*$/.test(only)
+		|| /에게 효과 적용/.test(only)
+		|| /효과 발동\.?\s*$/.test(only);
+};
 
 /** 뒤 문단에 강화·대체가 있는가 */
 const hasAmp = (rest: string[]): boolean =>

@@ -15,9 +15,19 @@ import { readFileSync } from 'node:fs';
 
 const DEPRECATED = ['giftTrigger', 'giftEffect', 'triggerRef', 'effectRef', 'giftTriggerParam'];
 
-/** 2단계 PR 이 끊을 때까지 남는 부채. **여기에 새로 더하지 마라** */
+/**
+ * 아직 남는 부채. **여기에 새로 더하지 마라.**
+ *
+ * `giftTriggerParam` 은 2단계가 끊었다(2026-08-12) — 판정이 절로 옮겨가며 그
+ * 표를 보는 곳이 옛 판정뿐이 됐고, 옛 판정은 `scripts/verdict-diff.ts` 가
+ * 대조용으로만 부르므로 그 스크립트가 직접 읽는다.
+ *
+ * 남은 넷은 **연쇄(`chain.ts`)가 쓴다** — 「보유 기프트가 이 기프트를 켜 주나」
+ * 를 답하려면 기프트의 효과와 참조가 필요하고, 그것은 절 모형이 아직 안 담는다.
+ * 연쇄를 절로 옮기는 것이 이 넷을 끊는 조건이다.
+ */
 const ALLOWED_UNTIL_STAGE_2 = new Set([
-	'giftTrigger', 'giftEffect', 'triggerRef', 'effectRef', 'giftTriggerParam',
+	'giftTrigger', 'giftEffect', 'triggerRef', 'effectRef',
 ]);
 
 const loadSrc = (): string => readFileSync(new URL('./load.ts', import.meta.url), 'utf8');
