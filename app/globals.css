@@ -3734,3 +3734,60 @@ html:has(.axispanels) {
 		grid-column: 1 / -1;
 	}
 }
+
+/*
+	죄악 자원 소모.
+
+	인격 카드에서 체력 막대가 앉던 자리다. **이 카드에서 가장 먼저 읽혀야 하는 값**이라
+	같은 무게로 놓는다 — 그러지 않으면 체력이 빠진 만큼 카드 가운데가 빈다.
+*/
+.f-cost {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-6);
+}
+
+.f-cost ul {
+	display: flex;
+	gap: var(--sp-8);
+	flex-wrap: wrap;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.f-cost li {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+}
+
+.f-cost img {
+	width: 22px;
+	height: 22px;
+}
+
+.f-cost span {
+	color: var(--ink-dim);
+	font-size: var(--fs-sm);
+}
+
+.f-cost b {
+	color: var(--ink-gold);
+	font-family: var(--font-num);
+	font-size: 26px;
+	font-weight: var(--fw-normal);
+	line-height: 1;
+}
+
+/*
+	속성 줄은 값이 숫자가 아니라 낱말이다 — 「탐식 · 타격」.
+
+	인격의 수치 칸(21px 숫자체)을 그대로 쓰면 두 낱말이 카드를 가로지른다. 본문 크기로 낮추고
+	숫자체를 벗긴다.
+*/
+.f-statrow--type .f-stat b {
+	font-family: inherit;
+	font-size: var(--fs-base);
+	line-height: var(--lh-tight);
+}

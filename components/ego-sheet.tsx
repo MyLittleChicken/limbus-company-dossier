@@ -197,21 +197,6 @@ export function EgoSheetView({
 									<span className="f-sinner">{sheet.sinner?.name ?? ''}</span>
 								</h1>
 							</div>
-							{/*
-								죄악 자원 소모. **E.G.O 기능의 핵심이다**(02-data-model 3.4) — 인격
-								카드에서 소속이 앉던 자리에 온다.
-							*/}
-							<div className="f-affil">
-								{sheet.costs.length ? (
-									sheet.costs.map((c) => (
-										<span key={c.sin} className="tag tag--cost">
-											{sin(c.sin)} <b>{c.amount}</b>
-										</span>
-									))
-								) : (
-									<Nothing kind="absent">{ko ? '소모 없음' : 'No cost'}</Nothing>
-								)}
-							</div>
 						</div>
 						<dl className="f-file">
 							<div>
@@ -246,17 +231,34 @@ export function EgoSheetView({
 								</button>
 							))}
 						</div>
-						<div className="f-pick">
-							<span className="f-lab">{ko ? '추출' : 'Extract'}</span>
-							{/* 거울 던전에서 뽑을 수 있는가. 게임 확인으로 값이 맞음을 밝혔다. */}
-							<span className="tag">
-								{sheet.extractable ? (ko ? '가능' : 'Yes') : ko ? '불가' : 'No'}
-							</span>
-						</div>
+					</div>
+
+					{/*
+						죄악 자원 소모.
+
+						**E.G.O 기능의 핵심이다**(02-data-model 3.4). 인격 카드에서 체력 막대가
+						앉던 자리에 같은 무게로 놓는다 — 이 카드에서 가장 먼저 읽혀야 하는 값이다.
+					*/}
+					<div className="f-cost">
+						<span className="f-lab">{ko ? '소모' : 'Cost'}</span>
+						{sheet.costs.length ? (
+							<ul>
+								{sheet.costs.map((c) => (
+									<li key={c.sin}>
+										{/* eslint-disable-next-line @next/next/no-img-element */}
+										{c.icon ? <img src={c.icon} alt="" width={22} height={22} /> : null}
+										<span>{sin(c.sin)}</span>
+										<b>{c.amount}</b>
+									</li>
+								))}
+							</ul>
+						) : (
+							<Nothing kind="absent">{ko ? '소모 없음' : 'No cost'}</Nothing>
+						)}
 					</div>
 
 					<div className="f-stats">
-						<div className="f-statrow">
+						<div className="f-statrow f-statrow--type">
 							<span className="f-lab">{ko ? '속성' : 'Type'}</span>
 							<div className="f-stat">
 								<span>{ko ? '각성' : 'Awaken'}</span>
@@ -275,9 +277,10 @@ export function EgoSheetView({
 									)}
 								</b>
 							</div>
+							{/* 거울 던전에서 뽑을 수 있는가. 게임 확인으로 값이 맞음을 밝혔다. */}
 							<div className="f-stat">
-								<span>{ko ? '최대 해석' : 'Max threadspin'}</span>
-								<b>{sheet.maxThreadspin ? roman(sheet.maxThreadspin) : roman(upties[upties.length - 1] ?? 0)}</b>
+								<span>{ko ? '추출' : 'Extract'}</span>
+								<b>{sheet.extractable ? (ko ? '가능' : 'Yes') : ko ? '불가' : 'No'}</b>
 							</div>
 						</div>
 

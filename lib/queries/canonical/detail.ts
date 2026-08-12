@@ -414,7 +414,7 @@ export async function getEgo(id: number, locale: Locale) {
 			sinner: sinnerIcon(ego.sinnerId),
 		},
 		// 죄악 자원 소모량. E.G.O 기능의 핵심이다(02-data-model 3.4).
-		costs: bySin(ego.costs).map((c) => ({ sin: c.sin, amount: c.count })),
+		costs: bySin(ego.costs).map((c) => ({ sin: c.sin, amount: c.count, icon: sinIcon(c.sin) })),
 		resists: bySin(ego.resists).map((r) => ({ sin: r.sin, value: r.value })),
 		statuses: pickStatuses(ego.statuses, body, locale),
 
