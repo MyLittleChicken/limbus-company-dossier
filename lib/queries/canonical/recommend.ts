@@ -141,6 +141,9 @@ export async function recommendForDeck(
 		giftTriggers: data.giftTriggers,
 		refsByTrigger: data.refsByTrigger,
 		params: data.params,
+		abilities: data.abilities,
+		abilityConds: data.abilityConds,
+		supply: data.supply,
 	});
 	const byGift = new Map(verdicts.map((v) => [v.giftId, v]));
 

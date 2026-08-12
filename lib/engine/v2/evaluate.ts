@@ -8,7 +8,9 @@
  * **판정 불가를 목록에서 빼지 않는다(결정 4).** 98/451 을 감추면 사용자가 존재를
  * 모른다. 등급 C 로 표시만 하고 점수에서 뺀다.
  */
+import { judgeGift, type Ability, type AbilityCond } from './ability.js';
 import type { Profile } from './profile.js';
+import type { SupplyTables } from './supply.js';
 import type { GiftVerdict, Reason, RefVerdict, Squad, TriggerParam, TriggerRef } from './types.js';
 
 /**
@@ -29,7 +31,8 @@ const SINS = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
  */
 const SCOPE_KINDS = new Set(['association', 'unit_keyword']);
 
-export interface EvaluateInput {
+/** 옛 판정이 보는 것. 대조가 끝나면 이 타입과 함께 사라진다 */
+export interface LegacyEvaluateInput {
 	squad: Squad;
 	profile: Profile;
 	/** giftId → triggerId[] */
@@ -37,6 +40,13 @@ export interface EvaluateInput {
 	/** triggerId → 참조들 */
 	refsByTrigger: Map<string, TriggerRef[]>;
 	params: TriggerParam[];
+}
+
+export interface EvaluateInput extends LegacyEvaluateInput {
+	/** 절 단위 능력. 이쪽으로 판정한다 */
+	abilities: Map<string, Ability[]>;
+	abilityConds: Map<string, Map<string, AbilityCond[]>>;
+	supply: SupplyTables;
 }
 
 /** `(giftId, triggerId)` 의 임계값과 분모 */
@@ -119,7 +129,53 @@ function judge(
 	return { verdict: have >= need ? 'satisfied' : 'unsatisfied', have, need };
 }
 
+/**
+ * 절 단위 판정 — 이것이 현행이다.
+ *
+ * **`GiftVerdict` 모양을 그대로 낸다.** `score.ts` 와 화면이 그 모양에 매여
+ * 있어, 판정만 갈아끼우고 나머지는 안 건드린다.
+ */
 export function evaluateGifts(input: EvaluateInput): GiftVerdict[] {
+	const out: GiftVerdict[] = [];
+
+	/**
+	 * **절을 가진 기프트 전부를 돈다.** 옛 판정은 `giftTriggers` 를 돌았는데
+	 * 트리거가 0개인 기프트는 아예 판정되지 않았다. 절 모형에서는 그런
+	 * 기프트도 「능력이 없으니 판정 보류」로 명시적으로 답한다.
+	 */
+	const giftIds = [...new Set([...input.abilities.keys(), ...input.giftTriggers.keys()])].sort();
+
+	for (const giftId of giftIds) {
+		const abilities = input.abilities.get(giftId) ?? [];
+		const condsByAbility = input.abilityConds.get(giftId) ?? new Map<string, AbilityCond[]>();
+		const { fireable, reasons } = judgeGift({
+			tables: input.supply, squad: input.squad, abilities, condsByAbility,
+		});
+
+		const decidable = reasons.filter((r) => r.verdict !== 'unknown').length;
+		const satisfied = reasons.filter((r) => r.verdict === 'satisfied').length;
+		const certain = reasons.filter(
+			(r) => r.verdict === 'satisfied' && r.certainty === 'certain',
+		).length;
+		// 조건이 하나도 없는 기프트는 C 다 — 「전부 판정 가능」이 아니라 「셀 것이 없다」
+		const grade = reasons.length > 0 && decidable === reasons.length ? 'A'
+			: decidable > 0 ? 'B' : 'C';
+
+		out.push({
+			giftId, grade, decidable, satisfied, certain,
+			total: reasons.length, reasons, fireable,
+		});
+	}
+	return out;
+}
+
+/**
+ * **폐기됨** — 절 모형(`evaluateGifts`)이 대신한다.
+ *
+ * 지우지 않는 이유는 `scripts/verdict-diff.ts` 가 옛 판정과 새 판정을 나란히
+ * 재기 때문이다. 그 대조가 끝나면 지운다.
+ */
+export function evaluateGiftsLegacy(input: LegacyEvaluateInput): GiftVerdict[] {
 	const gates = gatesOf(input.params);
 	const gateKeys = gateKeysOf(input.params);
 	const out: GiftVerdict[] = [];

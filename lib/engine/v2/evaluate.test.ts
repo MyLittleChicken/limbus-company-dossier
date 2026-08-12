@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Profile, denominatorsOf, activeCapabilities } from './profile';
-import { evaluateGifts } from './evaluate';
+// 이 파일은 **옛 판정**의 단위 검사다. 절 모형(`evaluateGifts`)은
+// `ability.test.ts` 가 따로 검사하고, 이쪽은 대조가 끝날 때까지 남는다
+import { evaluateGiftsLegacy } from './evaluate';
 import type { Capability, Squad, TriggerParam, TriggerRef } from './types';
 
 const SQUAD: Squad = {
@@ -43,7 +45,7 @@ const REFS = new Map<string, TriggerRef[]>([
 
 function run(giftTriggers: Map<string, string[]>, params: TriggerParam[] = []) {
 	const profile = new Profile(SQUAD, CAPS);
-	return evaluateGifts({ squad: SQUAD, profile, giftTriggers, refsByTrigger: REFS, params });
+	return evaluateGiftsLegacy({ squad: SQUAD, profile, giftTriggers, refsByTrigger: REFS, params });
 }
 
 /**
@@ -187,7 +189,7 @@ test('roster_gated 충족은 확정이 아니라 가능이다', () => {
 		{ triggerId: 'Gated', refKind: 'axis', refId: 'COMBUSTION', evaluability: 'roster_gated' },
 	]]]);
 	const profile = new Profile(SQUAD, CAPS);
-	const v = evaluateGifts({
+	const v = evaluateGiftsLegacy({
 		squad: SQUAD, profile, giftTriggers: new Map([['g1', ['Gated']]]),
 		refsByTrigger: refs, params: [],
 	})[0];
@@ -202,7 +204,7 @@ test('roster_gated 불충족은 확정이다 — 편성에 없으면 전투 중�
 		{ triggerId: 'Gated', refKind: 'axis', refId: 'SINKING', evaluability: 'roster_gated' },
 	]]]);
 	const profile = new Profile(SQUAD, CAPS);
-	const v = evaluateGifts({
+	const v = evaluateGiftsLegacy({
 		squad: SQUAD, profile, giftTriggers: new Map([['g1', ['Gated']]]),
 		refsByTrigger: refs, params: [],
 	})[0];
@@ -216,7 +218,7 @@ test('하나라도 미충족·확정이면 켜질 수 없다', () => {
 	const profile = new Profile(squad, [
 		{ identityId: 'A', refKind: 'sin', refId: 'wrath', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
-	const out = evaluateGifts({
+	const out = evaluateGiftsLegacy({
 		squad,
 		profile,
 		giftTriggers: new Map([['g1', ['t-sin', 't-axis']]]),
@@ -236,7 +238,7 @@ test('미충족이 없으면 켜질 수 있다', () => {
 	const profile = new Profile(squad, [
 		{ identityId: 'A', refKind: 'sin', refId: 'wrath', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
-	const out = evaluateGifts({
+	const out = evaluateGiftsLegacy({
 		squad,
 		profile,
 		giftTriggers: new Map([['g1', ['t-sin']]]),
@@ -251,7 +253,7 @@ test('미충족이 없으면 켜질 수 있다', () => {
 test('판정 불가만 있으면 켜질 수 있다 — 모른다와 못 켠다는 다르다', () => {
 	const squad: Squad = { roster: [{ identityId: 'A', egoIds: [] }], field: ['A'] };
 	const profile = new Profile(squad, []);
-	const out = evaluateGifts({
+	const out = evaluateGiftsLegacy({
 		squad,
 		profile,
 		giftTriggers: new Map([['g1', ['t-rt']]]),
@@ -277,7 +279,7 @@ test('자리 조건이 있으면 다른 조건을 그 자리로만 판정한다'
 	const profile = new Profile(squad, [
 		{ identityId: 'C', refKind: 'axis', refId: 'BURST', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
-	const out = evaluateGifts({
+	const out = evaluateGiftsLegacy({
 		squad,
 		profile,
 		giftTriggers: new Map([['g1', ['t-slot', 't-axis']]]),
@@ -301,7 +303,7 @@ test('자리 조건이 없으면 편성 전체로 판정한다', () => {
 	const profile = new Profile(squad, [
 		{ identityId: 'C', refKind: 'axis', refId: 'BURST', gateKind: 'always', gateRef: '', gateMin: null, affects: 'both' },
 	]);
-	const out = evaluateGifts({
+	const out = evaluateGiftsLegacy({
 		squad,
 		profile,
 		giftTriggers: new Map([['g1', ['t-axis']]]),
@@ -314,7 +316,7 @@ test('자리 조건이 없으면 편성 전체로 판정한다', () => {
 });
 
 test('게이트가 있으면 게이트만 막는다 — 다른 참조가 미충족이어도 산다', () => {
-	const verdicts = evaluateGifts({
+	const verdicts = evaluateGiftsLegacy({
 		squad: SQUAD_NO_BLADE,          // 검계가 없는 편성
 		profile: profileOf(SQUAD_NO_BLADE),
 		giftTriggers: new Map([['9718', ['Blade Lineage Identities', 'Slash Skill Used']]]),
@@ -338,7 +340,7 @@ test('게이트가 있으면 게이트만 막는다 — 다른 참조가 미충�
 });
 
 test('게이트가 없으면 소속·유닛키워드는 안 막는다', () => {
-	const verdicts = evaluateGifts({
+	const verdicts = evaluateGiftsLegacy({
 		squad: SQUAD_NO_SHI,
 		profile: profileOf(SQUAD_NO_SHI),
 		giftTriggers: new Map([['9140', ['Shi Assoc. Identities', 'Allies have Slash Skill']]]),
@@ -354,7 +356,7 @@ test('게이트가 없으면 소속·유닛키워드는 안 막는다', () => {
 });
 
 test('게이트가 없으면 축은 막는다', () => {
-	const verdicts = evaluateGifts({
+	const verdicts = evaluateGiftsLegacy({
 		squad: SQUAD_NO_BLEED,
 		profile: profileOf(SQUAD_NO_BLEED),
 		giftTriggers: new Map([['9005', ['Bleed Skill Used']]]),
