@@ -267,8 +267,14 @@ async function main(): Promise<void> {
 
 		// 기프트 능력은 파일에서 읽는다. 형식이 틀리면 위에서 이미 던졌다
 		const abilities = await readGiftAbilitySeed();
+		// 파일에는 origin(hand·auto) 같은 검수용 칸이 더 있다. **표에 있는 칸만
+		// 골라 넣는다** — 파일이 표보다 넓어도 심기가 막히면 안 된다
 		const d = await prisma.giftAbilityAuthored.createMany({
-			data: abilities, skipDuplicates: true,
+			data: abilities.map((a) => ({
+				giftId: a.giftId, level: a.level, ordinal: a.ordinal,
+				payload: a.payload as never, note: a.note,
+			})),
+			skipDuplicates: true,
 		});
 		const totalD = await prisma.giftAbilityAuthored.count();
 		console.log(`gift_ability_authored  새로 ${d.count}행 · 합계 ${totalD} (파일 ${abilities.length})`);
