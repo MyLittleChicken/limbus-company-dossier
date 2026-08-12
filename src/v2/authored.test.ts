@@ -11,6 +11,8 @@ const KNOWN: KnownIds = {
 	attackTypes: new Set(['slash', 'pierce', 'blunt']),
 	skillKinds: new Set(['counter', 'evade', 'guard']),
 	resonanceIds: new Set(['wrath', 'gloom']),
+	coinKinds: new Set(['minus', 'plus', 'single']),
+	deploymentIds: new Set(['slot1', 'slot7']),
 };
 
 const OK: Authored = {
@@ -144,6 +146,7 @@ test('axis_grant — restrict 는 self 여야 한다', () => {
 		associationIds: new Set(['DAWN']),
 		sinIds: new Set<string>(), attackTypes: new Set<string>(),
 		skillKinds: new Set<string>(), resonanceIds: new Set<string>(),
+		coinKinds: new Set<string>(), deploymentIds: new Set<string>(),
 	};
 	const out = unknownRefs(a, known);
 	assert.equal(out.length, 1);
@@ -165,6 +168,7 @@ test('axis_grant — source_kind 어휘 밖이면 잡는다', () => {
 		associationIds: new Set<string>(),
 		sinIds: new Set<string>(), attackTypes: new Set<string>(),
 		skillKinds: new Set<string>(), resonanceIds: new Set<string>(),
+		coinKinds: new Set<string>(), deploymentIds: new Set<string>(),
 	};
 	assert.match(unknownRefs(a, known)[0] as string, /모르는 source_kind 'nope'/);
 });
@@ -184,6 +188,7 @@ test('axis_grant — gate_min 은 roster_count 일 때만 있다', () => {
 		associationIds: new Set<string>(),
 		sinIds: new Set<string>(), attackTypes: new Set<string>(),
 		skillKinds: new Set<string>(), resonanceIds: new Set<string>(),
+		coinKinds: new Set<string>(), deploymentIds: new Set<string>(),
 	};
 	assert.match(unknownRefs(a, known)[0] as string, /gate_min 은 roster_count 일 때만/);
 });
@@ -315,6 +320,6 @@ test('KnownIds 에 어휘가 빠지면 크게 터뜨린다', () => {
 	} as unknown as KnownIds;
 	assert.throws(
 		() => unknownRefs(EMPTY, half),
-		/KnownIds 에 어휘가 빠졌다: sin, attack_type, skill_kind, resonance/,
+		/KnownIds 에 어휘가 빠졌다: sin, attack_type, skill_kind, resonance, coin, deployment/,
 	);
 });

@@ -46,6 +46,8 @@ export interface KnownIds {
 	attackTypes: Set<string>;
 	skillKinds: Set<string>;
 	resonanceIds: Set<string>;
+	coinKinds: Set<string>;
+	deploymentIds: Set<string>;
 }
 
 /**
@@ -55,6 +57,9 @@ export interface KnownIds {
 export const SINS = ['wrath', 'lust', 'sloth', 'gluttony', 'gloom', 'pride', 'envy'];
 export const ATTACK_TYPES = ['slash', 'pierce', 'blunt'];
 export const SKILL_KINDS = ['counter', 'evade', 'guard'];
+export const COIN_KINDS = ['minus', 'plus', 'single'];
+/** 출격이 7인이라 자리는 7번까지다 — 9759 불 꺼진 랜턴이 「편성 7번」이다 */
+export const DEPLOYMENT_IDS = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7'];
 
 /**
  * canonical 에 실물이 있는 셋만 받아 `KnownIds` 를 완성한다.
@@ -73,6 +78,8 @@ export function knownIdsOf(live: {
 		attackTypes: new Set(ATTACK_TYPES),
 		skillKinds: new Set(SKILL_KINDS),
 		resonanceIds: new Set(SINS),
+		coinKinds: new Set(COIN_KINDS),
+		deploymentIds: new Set(DEPLOYMENT_IDS),
 	};
 }
 
@@ -120,6 +127,8 @@ export function unknownRefs(a: Authored, known: KnownIds): string[] {
 		attack_type: known.attackTypes,
 		skill_kind: known.skillKinds,
 		resonance: known.resonanceIds,
+		coin: known.coinKinds,
+		deployment: known.deploymentIds,
 	};
 	/**
 	 * 어휘 하나가 통째로 빠지면 그 종류의 조건이 전부 「어휘에 없다」로 나온다 —
