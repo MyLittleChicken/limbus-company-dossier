@@ -165,10 +165,17 @@ async function main(): Promise<void> {
 		//         gift.{9220,9270}.clause_gate(2) · gift.9052.priority_hint(1) ·
 		//         gift.9043.or_condition(1) = 5 (gift-trigger-param.ts 끝)
 		//         1,166 + 5 = 1,171
+		//   +140  기프트 능력 모형(2026-08-12) — 절 1,267개의 조건을 뽑으면서
+		//         **못 뽑은 자리를 정직하게 적은 것**이다. 추측해 채우면 이 수가
+		//         0이 되지만 그것이 옛 적재기가 need=1 로 가정해 118짝 중 76짝을
+		//         틀린 길이다.
+		//         gift.*.conds(131)      조건이 있다고 적혔는데 뽑힌 조건이 없다
+		//         gift.*.threshold(9)    「N인 이상」인데 무엇을 세는지 못 찾았다
+		//         1,171 + 140 = 1,311
 		checks.push({
 			name: '결손 합계 (보정한 만큼 줄어든다)',
-			ok: gapTotal + overrideCount === 1_171,
-			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,171`,
+			ok: gapTotal + overrideCount === 1_311,
+			detail: `결손 ${gapTotal.toLocaleString()} + 보정 ${overrideCount} = ${(gapTotal + overrideCount).toLocaleString()} / 1,311`,
 		});
 
 		// 마스터북이 실측한 것 — 1309 는 loc 후행 공백을 쓰지 않는다
