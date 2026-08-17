@@ -32,8 +32,25 @@ const out = arg('--out', '/tmp/rank.html');
 const { decks } = JSON.parse(readFileSync(input, 'utf8')) as { decks: Deck[] };
 const total = decks.reduce((s, d) => s + d.cards.length, 0);
 
+/**
+ * 따옴표까지 막는다 — `data-gift="…"` 처럼 큰따옴표 속성 안에 값이 들어가서,
+ * 안 막으면 값 하나가 속성을 깨고 나와 페이지 구조가 무너진다. 지금 데이터에는
+ * 따옴표가 없지만 이 페이지는 데이터가 바뀌어도 다시 만들 물건이다.
+ */
 const esc = (s: string): string => s
-	.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+	.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+/**
+ * 키워드를 사람이 읽는 말로.
+ *
+ * **`'None'` 은 문자열이다.** `canonical.gift.keyword_id` 에 JSON `null` 이
+ * 아니라 글자 그대로 `None` 이 들어 있는 행이 있고(적재 때 파이썬 `None` 이
+ * 글자로 굳은 것으로 보인다), 그대로 두면 60장 중 32장에 「None」이 뜬다.
+ * 판정하는 사람에게 보일 자리라 여기서 막는다 — 뿌리(적재)는 이 PR 밖이다.
+ */
+const keywordLabel = (k: string | null): string =>
+	k === null || k === 'None' ? '키워드 없음' : k;
 
 const BUCKETS = [
 	{ key: 3, label: '반드시 집는다' },
@@ -94,7 +111,7 @@ ${decks.map((d) => `
       <div class="card${c.fireable ? '' : ' dead'}" draggable="true" data-gift="${esc(c.giftId)}">
         <div class="nm">${esc(c.name)}</div>
         <div class="tag">${c.tier === null ? 'EX' : `${c.tier}등급`} ·
-          ${esc(c.keywordId ?? '키워드 없음')} · ${c.exclusive ? '전용' : '공용'}${c.fireable ? '' : ' · 안 켜짐'}</div>
+          ${esc(keywordLabel(c.keywordId))} · ${c.exclusive ? '전용' : '공용'}${c.fireable ? '' : ' · 안 켜짐'}</div>
         <div class="ds">${esc(c.desc)}</div>
       </div>`).join('')}
     </div>
@@ -109,7 +126,12 @@ ${decks.map((d) => `
 <script>
 let dragged = null;
 for (const c of document.querySelectorAll('.card')) {
-  c.addEventListener('dragstart', () => { dragged = c; });
+  c.addEventListener('dragstart', (e) => {
+    dragged = c;
+    // Firefox 는 dragstart 에서 setData 를 안 부르면 끌기가 아예 시작 안 된다.
+    // 값은 안 쓰지만 이게 없으면 그 브라우저에서 페이지가 통째로 먹통이 된다
+    if (e.dataTransfer !== null) e.dataTransfer.setData('text/plain', c.dataset.gift);
+  });
 }
 for (const col of document.querySelectorAll('.col')) {
   col.addEventListener('dragover', (e) => { e.preventDefault(); });
