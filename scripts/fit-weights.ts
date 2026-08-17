@@ -168,6 +168,15 @@ function spread(tied: Weights[]): string[] {
 	];
 }
 
+/**
+ * 갈래마다도 동점을 밝힌다 — **여기가 가장 잘못 읽히는 자리다.**
+ *
+ * 확인 쪽 수치는 대표 저울추 하나로 잰 것이고, 대표는 항을 적게 쓰는 쪽이라
+ * 체계적으로 `w_적합 = 0` 을 고른다. 맞춘 덱이 등급만으로 갈리고 뺀 덱이 적합도를
+ * 들고 있으면 화면에는 「확인 0%」가 찍히는데, 같은 점수를 내는 다른 저울추로는
+ * 100% 인 일이 실제로 생긴다 — 그것을 「모형이 틀렸다」로 읽으면 정반대다.
+ * 그래서 확인 쪽도 동점 전부로 재서 폭을 함께 찍는다.
+ */
 console.log('덱 하나를 빼고 맞춘 뒤, 뺀 덱으로 확인한다');
 console.log('  확인 덱   맞춘 쪽            확인 쪽            저울추 (적합·등급·전용)');
 for (const held of deckIds) {
@@ -178,6 +187,13 @@ for (const held of deckIds) {
 	console.log(`  ${held}         ${pct(r.hit, r.total)} (${r.hit}/${r.total})`
 		+ `      ${pct(t.hit, t.total)} (${t.hit}/${t.total})`
 		+ `      ${r.best.fit} · ${r.best.tier} · ${r.best.exclusive}`);
+
+	const hits = r.tied.map((w) => agreementOf(test, (d, g) => value(d, g, w)).hit);
+	const lo = Math.min(...hits);
+	const hi = Math.max(...hits);
+	console.log(`    같은 점수를 내는 저울추 ${r.tied.length}가지 — 위 저울추는 그중 대표 하나다`);
+	console.log(`    그 저울추들의 확인 쪽  ${pct(lo, test.length)} ~ ${pct(hi, test.length)}`);
+	for (const line of spread(r.tied)) console.log(`  ${line}`);
 }
 
 const all = searchWeights(allPairs, value);
