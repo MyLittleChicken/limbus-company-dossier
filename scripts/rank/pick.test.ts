@@ -3,6 +3,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fitOfKeyword } from './fit.js';
 import { pickTwenty } from './pick.js';
 import type { DeckSupply, GiftCard } from './types.js';
 
@@ -114,6 +115,15 @@ test('축 일치 · 축 불일치 · 키워드 없음을 다 넣는다', () => {
 	assert.ok(picked.some((c) => c.keywordId === 'Sinking'), '축 불일치가 없다');
 	assert.ok(picked.some((c) => c.keywordId === null || c.keywordId === 'None'),
 		'키워드 없음이 없다');
+});
+
+test('어휘 밖과 곁다리를 가른다 — 둘이 뭉치면 「약」이 빈 칸이 된다', () => {
+	const picked = pickTwenty(makePool(), SUPPLY, []);
+	const weak = picked.filter((c) => {
+		const f = fitOfKeyword(c.keywordId, SUPPLY);
+		return f > 0 && f < 0.5;
+	});
+	assert.ok(weak.length > 0, '0 도 1 도 아닌 카드가 하나도 없다');
 });
 
 test('전용과 공용을 다 넣는다', () => {

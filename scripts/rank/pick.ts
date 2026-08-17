@@ -14,7 +14,7 @@
  * **무작위를 안 쓴다.** 표본을 다시 짤 일이 생겼을 때 같은 기준으로 짜야 하고,
  * 무작위면 「왜 이 스물인가」를 답할 수 없다.
  */
-import { fitOfKeyword } from './fit.js';
+import { fitOfKeyword, inVocabulary } from './fit.js';
 import type { DeckSupply, GiftCard } from './types.js';
 
 const WANT = 20;
@@ -25,16 +25,20 @@ const TIERS: ReadonlyArray<number | null> = [1, 2, 3, 4, 5, null];
 /**
  * 이 기프트의 키워드가 이 덱에 얼마나 맞나 — **셋으로 나눈다.**
  *
- * 「맞는다 / 안 맞는다」로 가르면 안 된다. 인격은 축을 여럿 갖기 때문에 화상
- * 덱에도 침잠이 한둘 섞이고, 그러면 `fit > 0` 이라 침잠 기프트까지 「일치」가
- * 된다 — 「불일치」 칸이 영영 비어 세 갈래가 둘로 접힌다.
- *
- * 문턱을 두면 「이 덱의 주력 축인가(강)」와 「곁다리인가(약)」가 갈린다.
+ * **어휘 소속을 먼저 본다.** 문턱만 보면 「어휘 밖이라 정의상 0」과 「어휘 안인데
+ * 이 덱엔 적다」가 한 칸에 뭉친다. 실측으로 덱 B 의 「약」 10장이 전부 fit 이
+ * 정확히 0 이었다 — 갈래는 셋인데 뜻은 둘이었다.
  */
 function keywordClassOf(c: GiftCard, supply: DeckSupply): '강' | '약' | '없음' {
-	if (c.keywordId === null || c.keywordId === 'None') return '없음';
+	if (!inVocabulary(c.keywordId)) return '없음';
 	return fitOfKeyword(c.keywordId, supply) >= 0.5 ? '강' : '약';
 }
+
+/** 「곁다리」가 실재하는 칸인지 못 박는다 — 0 도 1 도 아닌 것이 하나는 있어야 한다 */
+const partialFit = (supply: DeckSupply) => (c: GiftCard): boolean => {
+	const f = fitOfKeyword(c.keywordId, supply);
+	return f > 0 && f < 0.5;
+};
 
 /**
  * 반드시 하나씩은 들어가야 하는 갈래.
@@ -49,6 +53,9 @@ function needsOf(supply: DeckSupply): Array<(c: GiftCard) => boolean> {
 		...TIERS.map((t) => (c: GiftCard) => c.tier === t),
 		...(['강', '약', '없음'] as const).map((k) =>
 			(c: GiftCard) => keywordClassOf(c, supply) === k),
+		// 「곁다리」는 0 도 1 도 아닌 자리다. 이것이 없으면 fit 이 연속값이라는
+		// 것을 표본이 한 번도 안 보여 준다
+		partialFit(supply),
 		(c: GiftCard) => c.exclusive,
 		(c: GiftCard) => !c.exclusive,
 		(c: GiftCard) => !c.fireable,
