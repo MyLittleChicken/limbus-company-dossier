@@ -50,6 +50,49 @@ for (const d of decks) for (const c of d.cards) cardOf.set(`${d.id}\t${c.giftId}
 
 const fireable = (deck: string, giftId: string): boolean =>
 	cardOf.get(`${deck}\t${giftId}`)?.fireable ?? false;
+
+/**
+ * 표본을 다듬는다 — **조용히 잃거나 부풀리는 것이 없게.**
+ *
+ * 둘 다 실제로 겪을 일이다. 사람이 판정을 내보낸 뒤 누군가 `rank:deck` 을 다시
+ * 돌리면 후보가 바뀌어 표본이 후보에 없는 기프트를 가리키고, 붙여넣기 실수로
+ * 같은 줄이 두 번 들어오기도 한다.
+ *
+ * 안 막으면 어느 쪽도 티가 안 난다(실측 2026-08-17).
+ * 후보 밖 행은 `fireable` 이 `false` 로 떨어져 짝이 통째로 사라지는데 「표본 N
+ * 판정」은 그대로 커져 있고, 중복 한 줄은 확인 덱의 짝을 9 → 12 로 33% 부풀렸다.
+ *
+ * **의심스러우면 멈춘다.** 이 스크립트가 내는 수치가 곧 다음 PR 을 열지 정하는
+ * 근거라, 반쯤 맞는 답을 내느니 안 내는 편이 낫다.
+ */
+function cleanRows(rows: RankRow[]): RankRow[] {
+	const outside = rows.filter((r) => !cardOf.has(`${r.deck}\t${r.giftId}`));
+	if (outside.length > 0) {
+		console.error(`표본에 후보 밖 기프트가 ${outside.length}줄 있다 — 후보가 바뀌었거나 표본이 낡았다`);
+		for (const r of outside.slice(0, 10)) console.error(`  덱 ${r.deck} · ${r.giftId}`);
+		console.error('rank:deck 을 다시 돌렸다면 표본도 다시 받아야 한다.');
+		process.exit(1);
+	}
+
+	const seen = new Map<string, RankRow>();
+	let dupes = 0;
+	for (const r of rows) {
+		const k = `${r.deck}\t${r.giftId}`;
+		const prev = seen.get(k);
+		if (prev === undefined) {
+			seen.set(k, r);
+			continue;
+		}
+		// 판정이 서로 다르면 어느 쪽이 참인지 모른다. 골라내면 그것이 지어내기다
+		if (prev.bucket !== r.bucket) {
+			console.error(`같은 기프트에 판정이 둘이다 — 덱 ${r.deck} · ${r.giftId} · ${prev.bucket} 과 ${r.bucket}`);
+			process.exit(1);
+		}
+		dupes += 1;
+	}
+	if (dupes > 0) console.log(`중복 ${dupes}줄을 지웠다 — 판정이 같아 뜻은 안 바뀐다`);
+	return [...seen.values()];
+}
 const value = (deck: string, giftId: string, w: Weights): number => {
 	const c = cardOf.get(`${deck}\t${giftId}`);
 	const s = supplyOf.get(deck);
@@ -57,10 +100,14 @@ const value = (deck: string, giftId: string, w: Weights): number => {
 	return valueOf(c, s, w);
 };
 
-const allPairs = pairsOf(rows, fireable);
-const deckIds = [...new Set(rows.map((r) => r.deck))].sort();
+const clean = cleanRows(rows);
+const allPairs = pairsOf(clean, fireable);
+const deckIds = [...new Set(clean.map((r) => r.deck))].sort();
 
-console.log(`표본 ${rows.length}판정 · 덱 ${deckIds.join(' ')} · 순서 제약 ${allPairs.length}짝\n`);
+// **판정 수와 산 판정 수를 따로 낸다.** 죽은 기프트는 짝을 안 만들므로, 둘이
+// 크게 벌어지면 저울추가 생각보다 적은 근거로 정해졌다는 뜻이다
+const live = clean.filter((r) => fireable(r.deck, r.giftId)).length;
+console.log(`표본 ${clean.length}판정 (그중 켜지는 것 ${live}) · 덱 ${deckIds.join(' ')} · 순서 제약 ${allPairs.length}짝\n`);
 
 const pct = (h: number, t: number): string =>
 	t === 0 ? '  —  ' : `${((h / t) * 100).toFixed(1).padStart(5)}%`;
