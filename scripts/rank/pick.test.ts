@@ -71,6 +71,29 @@ test('앞에서 스물을 집는 것과 다르다 — 검사에 이빨이 있는
 	assert.notDeepEqual(picked.map((c) => c.giftId), naive.map((c) => c.giftId));
 });
 
+test('다른 덱이 쓴 기프트는 피한다 — 덱마다 다른 것을 보여야 한다', () => {
+	// 이것이 없으면 세 덱이 거의 같은 스물을 보여 준다(실측: 서로 다른 기프트 21개)
+	const pool = makePool();
+	const first = pickTwenty(pool, SUPPLY, []);
+	const avoid = new Set(first.map((c) => c.giftId));
+	const second = pickTwenty(pool, SUPPLY, [], avoid);
+	const overlap = second.filter((c) => avoid.has(c.giftId)).map((c) => c.giftId);
+	assert.deepEqual(overlap, [], `겹친다: ${overlap.join(' ')}`);
+	assert.equal(second.length, 20);
+});
+
+test('공통 기프트는 피하기보다 우선한다 — 일부러 겹치라고 둔 것이다', () => {
+	const picked = pickTwenty(makePool(), SUPPLY, ['g001'], new Set(['g001']));
+	assert.ok(picked.some((c) => c.giftId === 'g001'), '공통인데 피했다');
+});
+
+test('피할 것뿐이면 피하지 않는다 — 자리를 비우느니 겹친다', () => {
+	// 갈래를 덮는 것이 겹침을 피하는 것보다 중요하다
+	const small = makePool().slice(0, 4);
+	const avoid = new Set(small.map((c) => c.giftId));
+	assert.equal(pickTwenty(small, SUPPLY, [], avoid).length, 4);
+});
+
 test('등급을 고르게 덮는다 — 한 등급에 몰리지 않는다', () => {
 	const picked = pickTwenty(makePool(), SUPPLY, []);
 	const byTier = new Map<string, number>();

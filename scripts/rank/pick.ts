@@ -59,6 +59,16 @@ export function pickTwenty(
 	pool: GiftCard[],
 	supply: DeckSupply,
 	shared: string[],
+	/**
+	 * 다른 덱이 이미 쓴 기프트. **공통은 여기 안 든다.**
+	 *
+	 * 이것이 없으면 세 덱이 거의 같은 기프트를 보여 준다 — 갈래 채우기 조건
+	 * 대부분(등급·전용)이 `supply` 를 안 보기 때문에, `find` 가 매번 giftId 가
+	 * 가장 작은 것을 집어 덱이 달라도 같은 카드가 나온다. 실측으로 덱 A 와
+	 * 덱 B 의 스무 장이 통째로 같았고 세 덱 통틀어 서로 다른 기프트가 21개뿐
+	 * 이었다(목표 48). 60판정이 21개어치 정보밖에 안 되는 것이다.
+	 */
+	avoid: ReadonlySet<string> = new Set(),
 ): GiftCard[] {
 	const sorted = [...pool].sort((a, b) => a.giftId.localeCompare(b.giftId));
 	const byId = new Map(sorted.map((c) => [c.giftId, c]));
@@ -69,7 +79,18 @@ export function pickTwenty(
 		taken.add(c.giftId);
 	};
 
-	// ① 공통 기프트를 먼저 넣는다 — 겹침이 없으면 덱 간 견줌이 안 된다
+	/**
+	 * 조건에 맞는 것 하나. **피할 것은 뒤로 미룬다.**
+	 *
+	 * 피할 것밖에 없으면 그냥 쓴다 — 자리를 비우느니 겹치는 편이 낫다.
+	 * 갈래를 덮는 것이 겹침을 피하는 것보다 중요하다.
+	 */
+	const findFor = (ok: (c: GiftCard) => boolean): GiftCard | undefined =>
+		sorted.find((x) => !taken.has(x.giftId) && !avoid.has(x.giftId) && ok(x))
+		?? sorted.find((x) => !taken.has(x.giftId) && ok(x));
+
+	// ① 공통 기프트를 먼저 넣는다 — 겹침이 없으면 덱 간 견줌이 안 된다.
+	//    **`avoid` 보다 우선한다** — 공통은 일부러 겹치라고 둔 것이다
 	for (const id of shared) {
 		if (picked.length >= WANT) break;
 		const c = byId.get(id);
@@ -80,7 +101,7 @@ export function pickTwenty(
 	for (const ok of needsOf(supply)) {
 		if (picked.length >= WANT) break;
 		if (picked.some(ok)) continue;
-		const c = sorted.find((x) => !taken.has(x.giftId) && ok(x));
+		const c = findFor(ok);
 		if (c !== undefined) add(c);
 	}
 
@@ -89,7 +110,7 @@ export function pickTwenty(
 		let added = false;
 		for (const t of TIERS) {
 			if (picked.length >= WANT) break;
-			const c = sorted.find((x) => !taken.has(x.giftId) && x.tier === t);
+			const c = findFor((x) => x.tier === t);
 			if (c === undefined) continue;
 			add(c);
 			added = true;
