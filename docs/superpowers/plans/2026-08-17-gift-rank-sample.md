@@ -748,6 +748,29 @@ test('앞에서 스물을 집는 것과 다르다 — 검사에 이빨이 있는
 	assert.notDeepEqual(picked.map((c) => c.giftId), naive.map((c) => c.giftId));
 });
 
+test('다른 덱이 쓴 기프트는 피한다 — 덱마다 다른 것을 보여야 한다', () => {
+	// 이것이 없으면 세 덱이 거의 같은 스물을 보여 준다(실측: 서로 다른 기프트 21개)
+	const pool = makePool();
+	const first = pickTwenty(pool, SUPPLY, []);
+	const avoid = new Set(first.map((c) => c.giftId));
+	const second = pickTwenty(pool, SUPPLY, [], avoid);
+	const overlap = second.filter((c) => avoid.has(c.giftId)).map((c) => c.giftId);
+	assert.deepEqual(overlap, [], `겹친다: ${overlap.join(' ')}`);
+	assert.equal(second.length, 20);
+});
+
+test('공통 기프트는 피하기보다 우선한다 — 일부러 겹치라고 둔 것이다', () => {
+	const picked = pickTwenty(makePool(), SUPPLY, ['g001'], new Set(['g001']));
+	assert.ok(picked.some((c) => c.giftId === 'g001'), '공통인데 피했다');
+});
+
+test('피할 것뿐이면 피하지 않는다 — 자리를 비우느니 겹친다', () => {
+	// 갈래를 덮는 것이 겹침을 피하는 것보다 중요하다
+	const small = makePool().slice(0, 4);
+	const avoid = new Set(small.map((c) => c.giftId));
+	assert.equal(pickTwenty(small, SUPPLY, [], avoid).length, 4);
+});
+
 test('등급을 고르게 덮는다 — 한 등급에 몰리지 않는다', () => {
 	const picked = pickTwenty(makePool(), SUPPLY, []);
 	const byTier = new Map<string, number>();
@@ -860,6 +883,16 @@ export function pickTwenty(
 	pool: GiftCard[],
 	supply: DeckSupply,
 	shared: string[],
+	/**
+	 * 다른 덱이 이미 쓴 기프트. **공통은 여기 안 든다.**
+	 *
+	 * 이것이 없으면 세 덱이 거의 같은 기프트를 보여 준다 — 갈래 채우기 조건
+	 * 대부분(등급·전용)이 `supply` 를 안 보기 때문에, `find` 가 매번 giftId 가
+	 * 가장 작은 것을 집어 덱이 달라도 같은 카드가 나온다. 실측으로 덱 A 와
+	 * 덱 B 의 스무 장이 통째로 같았고 세 덱 통틀어 서로 다른 기프트가 21개뿐
+	 * 이었다(목표 48). 60판정이 21개어치 정보밖에 안 되는 것이다.
+	 */
+	avoid: ReadonlySet<string> = new Set(),
 ): GiftCard[] {
 	const sorted = [...pool].sort((a, b) => a.giftId.localeCompare(b.giftId));
 	const byId = new Map(sorted.map((c) => [c.giftId, c]));
@@ -870,7 +903,18 @@ export function pickTwenty(
 		taken.add(c.giftId);
 	};
 
-	// ① 공통 기프트를 먼저 넣는다 — 겹침이 없으면 덱 간 견줌이 안 된다
+	/**
+	 * 조건에 맞는 것 하나. **피할 것은 뒤로 미룬다.**
+	 *
+	 * 피할 것밖에 없으면 그냥 쓴다 — 자리를 비우느니 겹치는 편이 낫다.
+	 * 갈래를 덮는 것이 겹침을 피하는 것보다 중요하다.
+	 */
+	const findFor = (ok: (c: GiftCard) => boolean): GiftCard | undefined =>
+		sorted.find((x) => !taken.has(x.giftId) && !avoid.has(x.giftId) && ok(x))
+		?? sorted.find((x) => !taken.has(x.giftId) && ok(x));
+
+	// ① 공통 기프트를 먼저 넣는다 — 겹침이 없으면 덱 간 견줌이 안 된다.
+	//    **`avoid` 보다 우선한다** — 공통은 일부러 겹치라고 둔 것이다
 	for (const id of shared) {
 		if (picked.length >= WANT) break;
 		const c = byId.get(id);
@@ -881,7 +925,7 @@ export function pickTwenty(
 	for (const ok of needsOf(supply)) {
 		if (picked.length >= WANT) break;
 		if (picked.some(ok)) continue;
-		const c = sorted.find((x) => !taken.has(x.giftId) && ok(x));
+		const c = findFor(ok);
 		if (c !== undefined) add(c);
 	}
 
@@ -890,7 +934,7 @@ export function pickTwenty(
 		let added = false;
 		for (const t of TIERS) {
 			if (picked.length >= WANT) break;
-			const c = sorted.find((x) => !taken.has(x.giftId) && x.tier === t);
+			const c = findFor((x) => x.tier === t);
 			if (c === undefined) continue;
 			add(c);
 			added = true;
@@ -904,7 +948,7 @@ export function pickTwenty(
 - [ ] **Step 4: 테스트가 통과하는지 본다**
 
 Run: `npx tsx --test scripts/rank/pick.test.ts`
-Expected: PASS 9건
+Expected: PASS 12건
 
 - [ ] **Step 5: 커밋**
 
@@ -969,7 +1013,11 @@ const SHARED = [
 	'9754', // 굴레 — 4등급 · 범용 · 최대 체력 +20%
 	'9035', // 저주 인형 — 1등급 · 범용 · 적 전체에 고정 피해
 	'9088', // 진혼 — 화상 전용 · 축이 맞을 때만 값이 오른다
-	'9262', // 모든 것의 뼈대 — 4등급 · 약지 요구 · 덱 B 에서만 켜진다
+	// 모든 것의 뼈대 — 4등급 · 약지 요구. **덱 B 에서만 켜지는 것은 아니다** —
+	// 이 기프트의 조건은 scope='roster' 라 대기 인원까지 세고, 덱 C 도 약지
+	// 인격 하나를 대기에 얹게 되어 함께 켜진다. 그래도 덱 A 에서는 죽으므로
+	// 「소속을 요구하는 기프트」의 자리는 여전히 보인다
+	'9262',
 	'9021', // 쪽빛 지포라이터 — 1등급 · 범용 · E.G.O 자원
 ];
 
@@ -1012,13 +1060,21 @@ function supplyOf(roster: string[]): DeckSupply {
 const sortedIds = (s: Set<string> | undefined): string[] => [...(s ?? [])].sort();
 const allIds = [...new Set([...data.supply.association.values()].flatMap((s) => [...s]))].sort();
 
-/** 덱 A — 화상 인격으로 채운다 */
-const deckA = [...sortedIds(data.supply.axisTag.get('COMBUSTION')),
-	...allIds].slice(0, ROSTER);
+/**
+ * 핵심 인격으로 채우고 모자라면 나머지로 메운다.
+ *
+ * **중복을 거른다.** `allIds` 는 핵심 집단을 이미 품고 있어서, 안 거르면 같은
+ * 인격이 편성에 두 번 들어가 12인이 실질 11인이 된다. 지금 데이터로는 안
+ * 겹치지만 id 범위가 바뀌면 조용히 어긋난다.
+ */
+const rosterOf = (core: string[]): string[] =>
+	[...new Set([...core, ...allIds])].slice(0, ROSTER);
 
-/** 덱 B — 약지 소속 중심. 모자라면 나머지로 채운다 */
-const deckB = [...sortedIds(data.supply.association.get('RING_FINGER')),
-	...allIds].slice(0, ROSTER);
+/** 덱 A — 화상 인격으로 채운다 */
+const deckA = rosterOf(sortedIds(data.supply.axisTag.get('COMBUSTION')));
+
+/** 덱 B — 약지 소속 중심 */
+const deckB = rosterOf(sortedIds(data.supply.association.get('RING_FINGER')));
 
 /**
  * 덱 C — 축이 흩어지게. 축마다 하나씩 돌아가며 뽑아 어느 축도 크지 않게 한다.
@@ -1040,6 +1096,15 @@ const specs = [
 	{ id: 'C', name: '섞인 덱 — 축이 흩어져 적합도가 낮다', roster: deckC },
 ];
 
+/**
+ * 앞 덱들이 이미 쓴 기프트. **공통 여섯은 안 넣는다** — 그건 일부러 겹친다.
+ *
+ * 이것이 없으면 세 덱이 거의 같은 스물을 보여 준다. 갈래 채우기 조건 대부분이
+ * 덱을 안 보기 때문에 `find` 가 매번 같은 카드를 집는다(실측: 덱 A 와 B 가
+ * 통째로 같았고 서로 다른 기프트가 21개뿐이었다).
+ */
+const used = new Set<string>();
+
 const decks = specs.map((s) => {
 	const squad = {
 		roster: s.roster.map((identityId) => ({ identityId, egoIds: [] })),
@@ -1055,7 +1120,10 @@ const decks = specs.map((s) => {
 		keywordId: m.keywordId, exclusive: m.exclusive,
 		fireable: fire.get(m.giftId) ?? true,
 	}));
-	const cards = pickTwenty(pool, supply, SHARED);
+	const cards = pickTwenty(pool, supply, SHARED, used);
+	for (const c of cards) {
+		if (!SHARED.includes(c.giftId)) used.add(c.giftId);
+	}
 	return {
 		id: s.id, name: s.name, roster: s.roster,
 		supply: { axis: [...supply.axis], attackType: [...supply.attackType] },
@@ -1098,8 +1166,28 @@ Expected:
 - 덱 C 의 축 공급이 고르다(최댓값이 3 이하)
 - 덱마다 기프트 20개 · 등급 여섯 갈래가 다 나온다
 - 덱마다 안 켜지는 기프트가 1개 이상 있다
+- **세 덱 통틀어 서로 다른 기프트가 45개 이상이다**
+- **어느 두 덱도 카드 목록이 같지 않고, 겹치는 것은 공통 여섯뿐이다**
 
-셋 중 하나라도 어긋나면 덱 짜기를 고친다. **특히 덱 C 의 축이 고르지 않으면 `w_등급` 이 안 정해지므로 그냥 넘어가지 않는다.**
+하나라도 어긋나면 덱 짜기를 고친다. **특히 덱 C 의 축이 고르지 않으면 `w_등급` 이 안 정해지므로 그냥 넘어가지 않는다.**
+
+마지막 둘은 스크립트가 스스로 세어 내야 한다. 사람이 눈으로 세면 놓친다 —
+실제로 앞선 회차가 이 검사 없이 「네 조건 통과」로 넘어갔고, 그때 서로 다른
+기프트가 **21개**(덱 A 와 B 는 통째로 같음)였다. 콘솔 보고에 이 두 줄을 더한다.
+
+```typescript
+const all = new Set(decks.flatMap((d) => d.cards.map((c) => c.giftId)));
+console.log(`\n서로 다른 기프트 ${all.size} (덱 ${decks.length} × ${decks[0]?.cards.length ?? 0})`);
+for (let i = 0; i < decks.length; i += 1) {
+	for (let j = i + 1; j < decks.length; j += 1) {
+		const a = decks[i] as { id: string; cards: GiftCard[] };
+		const b = decks[j] as { id: string; cards: GiftCard[] };
+		const bIds = new Set(b.cards.map((c) => c.giftId));
+		const both = a.cards.filter((c) => bIds.has(c.giftId)).length;
+		console.log(`  ${a.id}∩${b.id} ${both} (공통 ${SHARED.length} 이어야 한다)`);
+	}
+}
+```
 
 - [ ] **Step 4: 커밋**
 
