@@ -27,7 +27,11 @@ const SHARED = [
 	'9754', // 굴레 — 4등급 · 범용 · 최대 체력 +20%
 	'9035', // 저주 인형 — 1등급 · 범용 · 적 전체에 고정 피해
 	'9088', // 진혼 — 화상 전용 · 축이 맞을 때만 값이 오른다
-	'9262', // 모든 것의 뼈대 — 4등급 · 약지 요구 · 덱 B 에서만 켜진다
+	// 모든 것의 뼈대 — 4등급 · 약지 요구. **덱 B 에서만 켜지는 것은 아니다** —
+	// 이 기프트의 조건은 scope='roster' 라 대기 인원까지 세고, 덱 C 도 약지
+	// 인격 하나를 대기에 얹게 되어 함께 켜진다. 그래도 덱 A 에서는 죽으므로
+	// 「소속을 요구하는 기프트」의 자리는 여전히 보인다
+	'9262',
 	'9021', // 쪽빛 지포라이터 — 1등급 · 범용 · E.G.O 자원
 ];
 
@@ -70,13 +74,21 @@ function supplyOf(roster: string[]): DeckSupply {
 const sortedIds = (s: Set<string> | undefined): string[] => [...(s ?? [])].sort();
 const allIds = [...new Set([...data.supply.association.values()].flatMap((s) => [...s]))].sort();
 
-/** 덱 A — 화상 인격으로 채운다 */
-const deckA = [...sortedIds(data.supply.axisTag.get('COMBUSTION')),
-	...allIds].slice(0, ROSTER);
+/**
+ * 핵심 인격으로 채우고 모자라면 나머지로 메운다.
+ *
+ * **중복을 거른다.** `allIds` 는 핵심 집단을 이미 품고 있어서, 안 거르면 같은
+ * 인격이 편성에 두 번 들어가 12인이 실질 11인이 된다. 지금 데이터로는 안
+ * 겹치지만 id 범위가 바뀌면 조용히 어긋난다.
+ */
+const rosterOf = (core: string[]): string[] =>
+	[...new Set([...core, ...allIds])].slice(0, ROSTER);
 
-/** 덱 B — 약지 소속 중심. 모자라면 나머지로 채운다 */
-const deckB = [...sortedIds(data.supply.association.get('RING_FINGER')),
-	...allIds].slice(0, ROSTER);
+/** 덱 A — 화상 인격으로 채운다 */
+const deckA = rosterOf(sortedIds(data.supply.axisTag.get('COMBUSTION')));
+
+/** 덱 B — 약지 소속 중심 */
+const deckB = rosterOf(sortedIds(data.supply.association.get('RING_FINGER')));
 
 /**
  * 덱 C — 축이 흩어지게. 축마다 하나씩 돌아가며 뽑아 어느 축도 크지 않게 한다.
@@ -98,6 +110,15 @@ const specs = [
 	{ id: 'C', name: '섞인 덱 — 축이 흩어져 적합도가 낮다', roster: deckC },
 ];
 
+/**
+ * 앞 덱들이 이미 쓴 기프트. **공통 여섯은 안 넣는다** — 그건 일부러 겹친다.
+ *
+ * 이것이 없으면 세 덱이 거의 같은 스물을 보여 준다. 갈래 채우기 조건 대부분이
+ * 덱을 안 보기 때문에 `find` 가 매번 같은 카드를 집는다(실측: 덱 A 와 B 가
+ * 통째로 같았고 서로 다른 기프트가 21개뿐이었다).
+ */
+const used = new Set<string>();
+
 const decks = specs.map((s) => {
 	const squad = {
 		roster: s.roster.map((identityId) => ({ identityId, egoIds: [] })),
@@ -113,7 +134,10 @@ const decks = specs.map((s) => {
 		keywordId: m.keywordId, exclusive: m.exclusive,
 		fireable: fire.get(m.giftId) ?? true,
 	}));
-	const cards = pickTwenty(pool, supply, SHARED);
+	const cards = pickTwenty(pool, supply, SHARED, used);
+	for (const c of cards) {
+		if (!SHARED.includes(c.giftId)) used.add(c.giftId);
+	}
 	return {
 		id: s.id, name: s.name, roster: s.roster,
 		supply: { axis: [...supply.axis], attackType: [...supply.attackType] },
@@ -131,6 +155,18 @@ for (const d of decks) {
 	console.log(`  축 공급   ${d.supply.axis.map(([k, v]) => `${k} ${v}`).join(' · ')}`);
 	console.log(`  기프트    ${d.cards.length} · 등급 ${[...byTier].sort().map(([k, v]) => `${k}:${v}`).join(' ')}`);
 	console.log(`  안 켜짐   ${d.cards.filter((c) => !c.fireable).length}`);
+}
+
+const all = new Set(decks.flatMap((d) => d.cards.map((c) => c.giftId)));
+console.log(`\n서로 다른 기프트 ${all.size} (덱 ${decks.length} × ${decks[0]?.cards.length ?? 0})`);
+for (let i = 0; i < decks.length; i += 1) {
+	for (let j = i + 1; j < decks.length; j += 1) {
+		const a = decks[i] as { id: string; cards: GiftCard[] };
+		const b = decks[j] as { id: string; cards: GiftCard[] };
+		const bIds = new Set(b.cards.map((c) => c.giftId));
+		const both = a.cards.filter((c) => bIds.has(c.giftId)).length;
+		console.log(`  ${a.id}∩${b.id} ${both} (공통 ${SHARED.length} 이어야 한다)`);
+	}
 }
 
 writeFileSync(out, JSON.stringify({ decks }, null, '\t'), 'utf8');
