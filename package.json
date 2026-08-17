@@ -14,7 +14,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.pipeline.json && tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test \"lib/**/*.test.ts\" \"src/**/*.test.ts\"",
+    "test": "tsx --test \"lib/**/*.test.ts\" \"src/**/*.test.ts\" \"scripts/rank/*.test.ts\"",
     "fetch": "tsx src/fetch.ts",
     "assets": "tsx src/assets.ts",
     "db:up": "docker compose up -d --wait",
