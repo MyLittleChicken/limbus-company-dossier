@@ -48,7 +48,12 @@ const outIdx = argv.indexOf('--out');
  * 커밋되는 것이 판정 60줄뿐이면 그 줄들의 뜻을 정하는 것(덱별 축 공급 · 카드별
  * `fireable`)이 재부팅이면 사라지는 `/tmp` 에만 남는다. `cleanRows` 는 giftId 가
  * 후보 밖일 때만 막으므로, id 는 그대로인데 공급이 7→6 으로 바뀌면 아무 경고 없이
- * 저울추가 다른 수로 나온다. 우리가 만든 파생이라 저작물 스냅샷 훅에 안 걸린다.
+ * 저울추가 다른 수로 나온다.
+ *
+ * **이 파일에는 원문이 들어 있다.** 편성·공급·`fireable` 은 우리가 셈한 파생이지만
+ * `name`·`desc` 는 `canonical.gift_stage_text` 의 한국어 원문 그대로다. 저작물
+ * 스냅샷 훅(`data/` 만 본다)에는 안 걸리고, `gift-ability.jsonl` 이 `sourceText` 를
+ * 원문 그대로 커밋해 온 것과 같은 취급이다.
  */
 const out = outIdx >= 0 ? String(argv[outIdx + 1]) : 'src/v2/authored/gift-rank-candidates.json';
 
@@ -171,16 +176,20 @@ for (const d of decks) {
 	 * 이 수가 0 이나 1 이면 그 덱의 판정 스물은 적합도에 대해 아무 말도 못 한다 —
 	 * 등급과 전용만으로 순서가 다 설명되어 저울추가 갈리지 않는다. 손으로 세 보게
 	 * 두면 아무도 안 세므로 여기서 찍는다.
+	 *
+	 * **죽은 카드는 빼고 센다.** `pairsOf` 가 안 켜지는 기프트로는 짝을 안 만들어,
+	 * 죽은 카드는 저울추에 한 글자도 못 보탠다 — 그것까지 세면 이 수가 정직하라고
+	 * 넣은 자리에서 되레 부풀린다.
 	 */
 	const supply = { axis: new Map(d.supply.axis), attackType: new Map(d.supply.attackType) };
-	const fits = d.cards.map((c) => fitOfKeyword(c.keywordId, supply));
+	const fits = d.cards.filter((c) => c.fireable).map((c) => fitOfKeyword(c.keywordId, supply));
 	const strong = fits.filter((f) => f >= 0.5).length;
 	const partial = fits.filter((f) => f > 0 && f < 0.5).length;
 
 	console.log(`덱 ${d.id} ${d.name}`);
 	console.log(`  축 공급   ${d.supply.axis.map(([k, v]) => `${k} ${v}`).join(' · ')}`);
 	console.log(`  기프트    ${d.cards.length} · 등급 ${[...byTier].sort().map(([k, v]) => `${k}:${v}`).join(' ')}`);
-	console.log(`  적합 있음 ${strong + partial} (강 ${strong} · 곁다리 ${partial})`);
+	console.log(`  적합 있음 ${strong + partial} (강 ${strong} · 곁다리 ${partial}) — 켜지는 것만`);
 	console.log(`  안 켜짐   ${d.cards.filter((c) => !c.fireable).length}`);
 }
 
