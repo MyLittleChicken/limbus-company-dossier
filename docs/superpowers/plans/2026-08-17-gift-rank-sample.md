@@ -21,7 +21,14 @@
 - **저작 파일은 `src/v2/authored/` 에 둔다.** `data/` 아래는 커밋 훅이 막는다(Project Moon 저작물 스냅샷 정책).
 - **페이지는 자기완결이어야 한다** — 외부 요청은 CSP 로 막힌다. CSS·JS 를 인라인한다.
 - **모든 주석과 커밋 메시지는 한국어.** 무엇을 하는지가 아니라 왜 그런지를 적는다.
-- **값 import 는 확장자 없이, 타입 import 는 `.js` 로.** 저장소 규칙이다.
+- **`scripts/` 안에서는 값 import 도 `.js` 를 붙인다.** 기존 스크립트가 그렇게
+  쓴다(`scripts/split-clauses.ts` → `from './gift-shapes.js'`). 확장자를 빼는
+  규칙은 `lib/` 에만 해당한다 — 그쪽은 Turbopack 이 번들하는데 TypeScript
+  원본을 `.js` 로 못 풀기 때문이다. `scripts/` 는 tsx 만 돌리므로 상관없다.
+- **`tsconfig.json` 의 `include` 는 `scripts/` 를 안 덮는다**(`app`·`lib`·
+  `components`·`src` 만). `npx tsc --noEmit -p tsconfig.json | grep scripts`
+  는 **언제나 비므로 검사가 아니다.** 타입을 보려면 파일을 직접 지목한다:
+  `npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 <파일들>`
 
 ---
 
