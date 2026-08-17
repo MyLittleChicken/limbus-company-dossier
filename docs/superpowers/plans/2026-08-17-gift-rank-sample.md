@@ -685,14 +685,30 @@ import type { DeckSupply, GiftCard } from './types.js';
 
 const SUPPLY: DeckSupply = {
 	axis: new Map([['COMBUSTION', 6], ['SINKING', 1]]),
-	attackType: new Map([['slash', 4]]),
+	// 참격·타격을 둘 다 4로 둔다 — 둘 다 「강」이라 「약」은 침잠만 남는다
+	attackType: new Map([['slash', 4], ['hit', 4]]),
 };
 
-/** 등급·키워드·전용·켜짐을 골고루 섞은 못 */
+/**
+ * 등급·키워드·전용·켜짐을 골고루 섞은 못.
+ *
+ * **못의 모양이 곧 검사의 이빨이다.** 「앞에서 giftId 순으로 스물」만 집는
+ * 엉터리 구현이 통과하면 안 되므로, 앞 스물이 어느 갈래도 다 덮지 못하게
+ * 짠다.
+ *
+ * ```
+ * 등급 한 덩어리 = 6키워드 × 2 × 2 = 24 > 20     앞 스물은 1등급뿐이다
+ * 침잠(유일한 「약」)을 키워드 목록 맨 뒤에 둔다   앞 스물에 「약」이 없다
+ * ```
+ *
+ * 이렇게 두면 엉터리 구현이 「등급 덮임」과 「키워드 셋」에서 걸린다.
+ * **줄이지 마라** — 5키워드로 되돌리면 24가 20이 되어 1등급 덩어리 하나가
+ * 모든 조합을 담고, 검사가 통째로 무력해진다.
+ */
 function makePool(): GiftCard[] {
 	const out: GiftCard[] = [];
 	const tiers: Array<number | null> = [1, 2, 3, 4, 5, null];
-	const keywords = ['Combustion', 'Sinking', 'Slash', 'None', null];
+	const keywords = ['Combustion', 'Slash', 'Hit', 'None', null, 'Sinking'];
 	let n = 0;
 	for (const tier of tiers) {
 		for (const keywordId of keywords) {
@@ -714,12 +730,22 @@ test('스무 개를 고른다', () => {
 	assert.equal(pickTwenty(makePool(), SUPPLY, []).length, 20);
 });
 
-test('공통 기프트를 반드시 넣는다', () => {
-	const picked = pickTwenty(makePool(), SUPPLY, ['g001', 'g010', 'g020']);
-	for (const id of ['g001', 'g010', 'g020']) {
+test('공통 기프트를 반드시 넣는다 — 앞 스물 밖에 있어도', () => {
+	// g024·g100 은 giftId 순으로 스물 밖이다. 공통을 안 챙기는 구현은 여기서 걸린다
+	const shared = ['g001', 'g024', 'g100'];
+	const picked = pickTwenty(makePool(), SUPPLY, shared);
+	for (const id of shared) {
 		assert.ok(picked.some((c) => c.giftId === id), `${id} 이 빠졌다`);
 	}
 	assert.equal(picked.length, 20);
+});
+
+test('앞에서 스물을 집는 것과 다르다 — 검사에 이빨이 있는지 못 박는다', () => {
+	// 이 검사가 없으면 나머지가 우연히 통과하는 못으로 되돌아가도 아무도 모른다
+	const pool = makePool();
+	const naive = [...pool].sort((a, b) => a.giftId.localeCompare(b.giftId)).slice(0, 20);
+	const picked = pickTwenty(pool, SUPPLY, []);
+	assert.notDeepEqual(picked.map((c) => c.giftId), naive.map((c) => c.giftId));
 });
 
 test('등급을 고르게 덮는다 — 한 등급에 몰리지 않는다', () => {
@@ -878,7 +904,7 @@ export function pickTwenty(
 - [ ] **Step 4: 테스트가 통과하는지 본다**
 
 Run: `npx tsx --test scripts/rank/pick.test.ts`
-Expected: PASS 8건
+Expected: PASS 9건
 
 - [ ] **Step 5: 커밋**
 
