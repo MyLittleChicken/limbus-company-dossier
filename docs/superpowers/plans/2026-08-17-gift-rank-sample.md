@@ -419,10 +419,10 @@ fireable 이 거짓인 기프트는 뺀다. scorePack 이 후보에서 아예 �
 - Consumes: Task 1 의 `GiftCard` · `DeckSupply`, Task 2 의 `Pair`
 - Produces:
   - `interface Weights { fit: number; tier: number; exclusive: number }`
-  - `interface Scored { giftId: string; deck: string; value: number }`
   - `valueOf(card: GiftCard, supply: DeckSupply, w: Weights): number`
   - `agreementOf(pairs: Pair[], value: (deck: string, giftId: string) => number): { hit: number; total: number }`
-  - `searchWeights(pairs: Pair[], value: (deck: string, giftId: string, w: Weights) => number, steps?: number): { best: Weights; hit: number; total: number }`
+  - `searchWeights(pairs: Pair[], value: (deck: string, giftId: string, w: Weights) => number, scale?: readonly number[]): { best: Weights; hit: number; total: number }`
+  - **`Pair` 는 `./pairs.js` 에서 가져온다** — `./types.js` 가 아니다. Task 2 가 거기 두었다.
 
 - [ ] **Step 1: 테스트를 쓴다**
 
