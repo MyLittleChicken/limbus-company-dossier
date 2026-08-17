@@ -101,7 +101,8 @@ textarea { width:100%; height:11rem; margin-top:.6rem; font:12px/1.5 ui-monospac
 <h1>기프트 순위 표본 — ${total}판정</h1>
 <p class="lead">기프트를 네 칸 중 하나로 끌어다 놓으세요. <strong>칸 안의 순서는 안 봅니다.</strong>
 붉은 테두리는 이 편성에서 <strong>안 켜지는</strong> 기프트입니다 — 그것도 판정해 주셔야
-「안 켜지면 뺀다」는 지금 규칙이 옳은지 정해집니다.</p>
+「안 켜지면 뺀다」는 지금 규칙이 옳은지 정해집니다.<br>
+<strong>판정은 이 브라우저에 자동 저장됩니다</strong> — 새로고침해도 그대로입니다.</p>
 ${decks.map((d) => `
 <section class="deck" data-deck="${esc(d.id)}">
   <h2>덱 ${esc(d.id)} · ${esc(d.name)}</h2>
@@ -139,7 +140,7 @@ for (const col of document.querySelectorAll('.col')) {
   col.addEventListener('dragover', (e) => { e.preventDefault(); });
   col.addEventListener('drop', (e) => {
     e.preventDefault();
-    if (dragged !== null) { col.appendChild(dragged); dragged = null; tally(); }
+    if (dragged !== null) { col.appendChild(dragged); dragged = null; tally(); save(); }
   });
 }
 function tally() {
@@ -165,6 +166,34 @@ document.getElementById('export').addEventListener('click', () => {
   box.value = lines.join('\\n');
   box.select();
 });
+// 판정을 브라우저에 남긴다. 새로고침 한 번에 60판정이 날아가면 다시 하는 수밖에
+// 없는데, **두 번째 판정은 첫 번째의 기억에 오염된다** — 표본의 독립성이 상한다
+const KEY = 'gift-rank-v1';
+function save() {
+  const at = {};
+  for (const sec of document.querySelectorAll('.deck')) {
+    for (const col of sec.querySelectorAll('.col')) {
+      for (const card of col.querySelectorAll('.card')) {
+        at[sec.dataset.deck + '\\t' + card.dataset.gift] = col.dataset.bucket;
+      }
+    }
+  }
+  try { localStorage.setItem(KEY, JSON.stringify(at)); } catch (e) { /* 사파리 비공개 창 */ }
+}
+function restore() {
+  let at = null;
+  try { at = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { at = null; }
+  if (at === null) return;
+  for (const sec of document.querySelectorAll('.deck')) {
+    for (const card of sec.querySelectorAll('.card')) {
+      const b = at[sec.dataset.deck + '\\t' + card.dataset.gift];
+      if (b === undefined) continue;
+      const col = sec.querySelector('.col[data-bucket="' + b + '"]');
+      if (col !== null) col.appendChild(card);
+    }
+  }
+}
+restore();
 tally();
 </script>
 </body></html>`;
