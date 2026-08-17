@@ -31,10 +31,36 @@ const arg = (k: string, d: string): string => {
 
 const { decks } = JSON.parse(readFileSync(arg('--in', '/tmp/rank-candidates.json'), 'utf8')) as { decks: DeckJson[] };
 
+/**
+ * 표본을 줄 단위로 읽는다. **어느 줄이 깨졌는지 말해 준다.**
+ *
+ * 이 파일은 사람이 페이지의 텍스트 상자에서 60줄을 복사해 붙여넣는 것이라,
+ * 잘리거나 두 줄이 붙는 일이 실제로 생긴다. 그냥 `JSON.parse` 하면 Node 스택이
+ * **이 스크립트**를 가리켜서, 정작 고칠 자리가 표본 몇째 줄인지 안 나온다.
+ *
+ * `cleanRows` 가 후보 밖·중복에 대해 하는 것과 같은 태도다 — 의심스러우면
+ * 멈추되, 어디를 고쳐야 하는지 함께 말한다.
+ */
+const parseLine = (line: string, n: number): RankRow => {
+	try {
+		const o = JSON.parse(line) as { deck: string; giftId: string; bucket: number };
+		if (typeof o.deck !== 'string' || typeof o.giftId !== 'string') {
+			throw new Error('deck 이나 giftId 가 글자가 아니다');
+		}
+		if (![0, 1, 2, 3].includes(o.bucket)) throw new Error(`bucket 이 ${String(o.bucket)} 이다`);
+		return { deck: o.deck, giftId: o.giftId, bucket: o.bucket as Bucket };
+	} catch (e) {
+		console.error(`표본 ${n}번째 줄을 못 읽었다 — ${(e as Error).message}`);
+		console.error(`  ${line.slice(0, 80)}`);
+		process.exit(1);
+	}
+};
+
 const rows: RankRow[] = readFileSync(arg('--sample', SAMPLE), 'utf8')
-	.split('\n').map((l) => l.trim()).filter((l) => l !== '')
-	.map((l) => JSON.parse(l) as { deck: string; giftId: string; bucket: number })
-	.map((r) => ({ deck: r.deck, giftId: r.giftId, bucket: r.bucket as Bucket }));
+	.split('\n')
+	.map((l, i) => ({ line: l.trim(), n: i + 1 }))
+	.filter((x) => x.line !== '')
+	.map((x) => parseLine(x.line, x.n));
 
 if (rows.length === 0) {
 	console.error(`표본이 비었다 — ${SAMPLE}`);
