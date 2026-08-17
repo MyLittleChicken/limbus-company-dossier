@@ -82,6 +82,27 @@ test('답을 아는 표본에서 답을 찾는다 — 적합도만 말하는 세
 	assert.ok(r.best.fit > 0, JSON.stringify(r.best));
 });
 
+test('동점 저울추를 전부 돌려준다 — 하나만 내면 답인 척하게 된다', () => {
+	// 짝이 없으면 512 격자점이 전부 hit 0 으로 동점이다
+	const r = searchWeights([], () => 0);
+	assert.equal(r.tied.length, 512);
+	assert.ok(r.tied.some((w) => w.fit === r.best.fit && w.tier === r.best.tier
+		&& w.exclusive === r.best.exclusive), 'best 가 tied 에 없다');
+});
+
+test('대표는 항을 적게 쓰는 쪽이다 — 주석과 코드가 어긋나면 안 된다', () => {
+	const cards = new Map<string, GiftCard>([
+		['hi', card({ giftId: 'hi', tier: 5 })],
+		['lo', card({ giftId: 'lo', tier: 1 })],
+	]);
+	const r = searchWeights([{ deck: 'A', hi: 'hi', lo: 'lo' }],
+		(_d, g, w) => valueOf(cards.get(g) as GiftCard, SUPPLY, w));
+	// 등급만으로 갈리는 표본이므로 적합·전용은 0 이어야 한다
+	assert.equal(r.best.fit, 0);
+	assert.equal(r.best.exclusive, 0);
+	assert.ok(r.best.tier > 0);
+});
+
 test('못 맞히는 표본에서는 못 맞혔다고 답한다 — 억지로 채우지 않는다', () => {
 	// 같은 카드 둘을 서로 위라고 하면 어떤 저울추로도 둘 다 못 지킨다
 	const c = card({ giftId: 'a' });

@@ -32,12 +32,6 @@ export function valueOf(card: GiftCard, supply: DeckSupply, w: Weights): number 
 		+ w.exclusive * (card.exclusive ? 1 : 0);
 }
 
-export interface Scored {
-	giftId: string;
-	deck: string;
-	value: number;
-}
-
 /**
  * 제약을 몇 개나 지켰나.
  *
@@ -58,34 +52,54 @@ export function agreementOf(
 /** 훑을 값. 0 은 「이 항을 안 쓴다」다 */
 const SCALE = [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 
+export interface SearchResult {
+	best: Weights;
+	hit: number;
+	total: number;
+	/** `best` 와 **같은 점수**를 내는 저울추 전부. `best` 도 들어 있다 */
+	tied: Weights[];
+}
+
 /**
  * 격자를 훑어 가장 많이 맞히는 저울추를 고른다.
  *
- * **같은 점수면 저울추 합이 작은 쪽을 고른다.** 항을 덜 쓰고 같은 성적을
- * 내면 그쪽이 설명하기 쉽고, 표본에 억지로 맞춘 것일 가능성도 낮다.
+ * **동점을 감추지 않는다.** 정확도는 순서만 보므로 저울추의 배율에 불변이다 —
+ * 512 격자점 중 수십 개가 같은 점수를 내는데 하나만 돌려주면, 표본이 안 가른
+ * 것을 격자 순회 순서가 가른 셈이 된다.
  */
 export function searchWeights(
 	pairs: Pair[],
 	value: (deck: string, giftId: string, w: Weights) => number,
 	scale: readonly number[] = SCALE,
-): { best: Weights; hit: number; total: number } {
-	let best: Weights = { fit: 0, tier: 0, exclusive: 0 };
+): SearchResult {
 	let bestHit = -1;
-	let bestSum = Number.POSITIVE_INFINITY;
+	let tied: Weights[] = [];
 
 	for (const fit of scale) {
 		for (const tier of scale) {
 			for (const exclusive of scale) {
 				const w = { fit, tier, exclusive };
 				const { hit } = agreementOf(pairs, (d, g) => value(d, g, w));
-				const sum = fit + tier + exclusive;
-				if (hit > bestHit || (hit === bestHit && sum < bestSum)) {
-					best = w;
+				if (hit > bestHit) {
 					bestHit = hit;
-					bestSum = sum;
+					tied = [w];
+				} else if (hit === bestHit) {
+					tied.push(w);
 				}
 			}
 		}
 	}
-	return { best, hit: Math.max(0, bestHit), total: pairs.length };
+
+	/**
+	 * **대표를 고르되 그것이 답인 척하지 않는다.** 정확도는 배율에 불변이라
+	 * 동점이 수십 개 나온다 — 항을 적게 쓰는 쪽을 대표로 삼고, 몇 개가 동점인지는
+	 * 호출자가 함께 보고한다.
+	 */
+	const used = (w: Weights): number =>
+		(w.fit > 0 ? 1 : 0) + (w.tier > 0 ? 1 : 0) + (w.exclusive > 0 ? 1 : 0);
+	const sum = (w: Weights): number => w.fit + w.tier + w.exclusive;
+	const best = [...tied].sort((a, b) => used(a) - used(b) || sum(a) - sum(b))[0]
+		?? { fit: 0, tier: 0, exclusive: 0 };
+
+	return { best, hit: Math.max(0, bestHit), total: pairs.length, tied };
 }

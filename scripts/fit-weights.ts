@@ -138,6 +138,29 @@ console.log(`표본 ${clean.length}판정 (그중 켜지는 것 ${live}) · 덱 
 const pct = (h: number, t: number): string =>
 	t === 0 ? '  —  ' : `${((h / t) * 100).toFixed(1).padStart(5)}%`;
 
+/**
+ * 동점 저울추가 무엇을 안 가르는지 말한다.
+ *
+ * **폭이 곧 표본이 못 정한 것이다.** 「적합이 값의 33~67%」라면 표본은 적합이
+ * 등급보다 크다는 것까지만 정했고 얼마나 큰지는 안 정했다는 뜻이다 — 그것을
+ * 하나의 수로 찍으면 지어내기가 된다.
+ */
+function spread(tied: Weights[]): string[] {
+	const shares = tied
+		.map((w) => ({ w, s: w.fit + w.tier + w.exclusive }))
+		.filter((x) => x.s > 0);
+	if (shares.length === 0) return ['  (전부 0 인 저울추뿐이다 — 표본이 아무것도 안 갈랐다)'];
+	const pct = (pick: (w: Weights) => number): string => {
+		const vs = shares.map((x) => (pick(x.w) / x.s) * 100);
+		return `${Math.min(...vs).toFixed(0)}% ~ ${Math.max(...vs).toFixed(0)}%`;
+	};
+	return [
+		`  적합이 차지하는 몫   ${pct((w) => w.fit)}`,
+		`  등급이 차지하는 몫   ${pct((w) => w.tier)}`,
+		`  전용이 차지하는 몫   ${pct((w) => w.exclusive)}`,
+	];
+}
+
 console.log('덱 하나를 빼고 맞춘 뒤, 뺀 덱으로 확인한다');
 console.log('  확인 덱   맞춘 쪽            확인 쪽            저울추 (적합·등급·전용)');
 for (const held of deckIds) {
@@ -153,6 +176,9 @@ for (const held of deckIds) {
 const all = searchWeights(allPairs, value);
 console.log(`\n전부로 맞춘 저울추   적합 ${all.best.fit} · 등급 ${all.best.tier} · 전용 ${all.best.exclusive}`);
 console.log(`정확도               ${pct(all.hit, all.total)} (${all.hit}/${all.total})`);
+
+console.log(`\n같은 점수를 내는 저울추 ${all.tied.length}가지 — 표본이 하나로 못 좁혔다`);
+for (const line of spread(all.tied)) console.log(line);
 
 /** 어느 갈래를 못 맞히나 — 모양이 틀렸는지 여기서 보인다 */
 const missed = allPairs.filter((p) =>
