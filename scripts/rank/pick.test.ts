@@ -137,12 +137,11 @@ test('안 켜지는 기프트도 넣는다 — 거르기가 옳은지를 표본�
 	assert.ok(picked.some((c) => !c.fireable), '안 켜지는 것이 없다');
 });
 
-test('자리 메우기는 희귀 등급을 안 건드린다 — 뒤 덱이 되쓰게 된다', () => {
-	// EX 를 두 장만 둔 못. ②단계가 하나를 덮으면 ③단계는 나머지를 남겨야 한다
+test('자리 메우기는 희귀 등급을 안 건드린다 — 셋이어도 첫 덱이 쓸어 가면 안 된다', () => {
+	// 문턱이 3 이면 EX 가 셋일 때 켜져서 한 덱이 세 장을 다 가져간다
 	const pool = makePool().filter((c) => c.tier !== null)
-		.concat(makePool().filter((c) => c.tier === null).slice(0, 2));
-	const picked = pickTwenty(pool, SUPPLY, []);
-	assert.equal(picked.filter((c) => c.tier === null).length, 1);
+		.concat(makePool().filter((c) => c.tier === null).slice(0, 3));
+	assert.equal(pickTwenty(pool, SUPPLY, []).filter((c) => c.tier === null).length, 1);
 });
 
 test('같은 못이면 같은 답이 나온다 — 무작위가 아니다', () => {

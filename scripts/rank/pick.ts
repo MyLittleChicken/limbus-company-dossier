@@ -34,25 +34,31 @@ function keywordClassOf(c: GiftCard, supply: DeckSupply): '강' | '약' | '없�
 	return fitOfKeyword(c.keywordId, supply) >= 0.5 ? '강' : '약';
 }
 
-/** 「곁다리」가 실재하는 칸인지 못 박는다 — 0 도 1 도 아닌 것이 하나는 있어야 한다 */
+/**
+ * 「곁다리」가 실재하는 칸인지 못 박는다 — 0 도 1 도 아닌 것이 하나는 있어야 한다.
+ *
+ * **켜지는 것만 센다.** 죽은 기프트는 `pairsOf` 가 짝을 안 만들어 저울추에 한
+ * 글자도 못 보탠다 — 죽은 곁다리 한 장으로 이 칸을 채우면 「fit 이 연속값이다」를
+ * 표본이 여전히 한 번도 안 보여 준다(실측: 덱 B 의 유일한 곁다리가 죽어 있었다).
+ */
 const partialFit = (supply: DeckSupply) => (c: GiftCard): boolean => {
+	if (!c.fireable) return false;
 	const f = fitOfKeyword(c.keywordId, supply);
 	return f > 0 && f < 0.5;
 };
 
 /**
- * ③단계가 돌릴 등급 — **못에 세 장 이상 있는 것만.**
+ * ③단계가 돌릴 등급 — **혼자서 한 덱을 채울 만큼 있는 것만.**
  *
- * 표본이 덱 셋이라 한 등급을 세 덱이 나눠 쓰려면 최소 셋은 있어야 한다.
- * 5등급과 EX 는 거울 던전 전체에 둘씩뿐이라 그 문턱에 못 미친다 — 자리
- * 메우기가 그것까지 돌리면 첫 덱이 둘을 다 집어 가고 뒤 덱은 되쓴다
- * (실측 2026-08-17: 서로 다른 기프트가 46에서 44로 떨어졌다).
+ * 3 으로는 모자란다. ③단계는 한 번 돌 때 등급마다 한 장씩 집고 세 번쯤 도니
+ * 한 덱이 한 등급에서 세 장까지 가져간다 — 못에 셋뿐인 등급은 첫 덱이 다
+ * 쓸어 가고 뒤 덱은 되쓴다. 문턱을 「그 등급만으로 스무 장을 채울 수 있나」로
+ * 두면 희귀 등급이 몇 장으로 늘든 안 걸린다.
  *
- * 덮임은 ②가 이미 보장했으므로 ③이 희귀 등급을 건드릴 이유가 없다.
+ * 덮임은 ②가 이미 보장하므로 ③이 희귀 등급을 건드릴 이유가 애초에 없다.
  */
-const DECKS = 3;
 const abundantTiers = (pool: GiftCard[]): Array<number | null> =>
-	TIERS.filter((t) => pool.filter((c) => c.tier === t).length >= DECKS);
+	TIERS.filter((t) => pool.filter((c) => c.tier === t).length >= WANT);
 
 /**
  * 반드시 하나씩은 들어가야 하는 갈래.
@@ -142,9 +148,12 @@ export function pickTwenty(
 	 * 첫 덱이 자리를 메우려고 둘뿐인 EX 를 다 집어 가면 뒤 덱은 ②단계에서
 	 * 되쓸 수밖에 없다.
 	 */
+	// **못을 기준으로 한 번만 센다** — 남은 것이 아니라 못이 정하는 값이고,
+	// 고리 안에서 부르면 460장짜리 못을 매 회 다시 훑는다
+	const fillTiers = abundantTiers(pool);
 	while (picked.length < WANT) {
 		let added = false;
-		for (const t of abundantTiers(pool)) {
+		for (const t of fillTiers) {
 			if (picked.length >= WANT) break;
 			const c = sorted.find((x) =>
 				!taken.has(x.giftId) && !avoid.has(x.giftId) && x.tier === t);
