@@ -8,8 +8,10 @@ import type { DeckSupply, GiftCard } from './types.js';
 
 const SUPPLY: DeckSupply = {
 	axis: new Map([['COMBUSTION', 6], ['SINKING', 1]]),
-	// 참격·타격을 둘 다 4로 둔다 — 둘 다 「강」이라 「약」은 침잠만 남는다
-	attackType: new Map([['slash', 4], ['hit', 4]]),
+	// 참격·타격을 둘 다 4로 둔다 — 둘 다 「강」이라 「약」은 침잠만 남는다.
+	// **타격의 공급 표 이름은 blunt 다** — 'hit' 로 두면 고정물이 코드의 버그를
+	// 따라가 「Hit 이 강」이라는 이 고정물의 뜻이 조용히 뒤집힌다
+	attackType: new Map([['slash', 4], ['blunt', 4]]),
 };
 
 /**

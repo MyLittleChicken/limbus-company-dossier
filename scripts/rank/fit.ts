@@ -14,8 +14,26 @@ import type { DeckSupply } from './types.js';
 const AXES = new Set(['COMBUSTION', 'LACERATION', 'BURST', 'BREATH',
 	'VIBRATION', 'SINKING', 'CHARGE']);
 
-/** 공격 타입 셋. `keywordId` 에 축과 섞여 들어 있다 */
-const ATTACK_TYPES = new Set(['SLASH', 'PENETRATE', 'HIT']);
+/**
+ * 키워드가 쓰는 말 → 공급 표가 쓰는 말.
+ *
+ * **둘이 다르다.** `gift.keyword_id` 는 `Hit`·`Penetrate` 인데
+ * `skill.attack_type` 은 `blunt`·`pierce` 다. 소문자로만 바꿔 찾으면 둘은
+ * 영영 안 만나고, `?? 0` 이 삼켜 예외도 안 난다 — 공격 타입 기프트 60건 중
+ * 35건이 조용히 `fit = 0` 이 된다(실측 2026-08-17).
+ */
+const ATTACK_TYPE_OF = new Map([
+	['SLASH', 'slash'],
+	['PENETRATE', 'pierce'],
+	['HIT', 'blunt'],
+]);
+
+/** 이 키워드를 잴 수 있나 — 축이거나 공격 타입이면 잰다 */
+export function inVocabulary(keywordId: string | null): boolean {
+	if (keywordId === null) return false;
+	const k = keywordId.toUpperCase();
+	return AXES.has(k) || ATTACK_TYPE_OF.has(k);
+}
 
 /** 그 갈래에서 이 덱이 가장 많이 가진 수. 0 이면 나누지 않는다 */
 function maxOf(m: Map<string, number>): number {
@@ -36,9 +54,10 @@ export function fitOfKeyword(keywordId: string | null, supply: DeckSupply): numb
 		const max = maxOf(supply.axis);
 		return max === 0 ? 0 : (supply.axis.get(k) ?? 0) / max;
 	}
-	if (ATTACK_TYPES.has(k)) {
+	const supplyKey = ATTACK_TYPE_OF.get(k);
+	if (supplyKey !== undefined) {
 		const max = maxOf(supply.attackType);
-		return max === 0 ? 0 : (supply.attackType.get(k.toLowerCase()) ?? 0) / max;
+		return max === 0 ? 0 : (supply.attackType.get(supplyKey) ?? 0) / max;
 	}
 	// 'None' 그리고 어휘 밖 — 범용 기프트다. 등급 항이 값을 낸다
 	return 0;
