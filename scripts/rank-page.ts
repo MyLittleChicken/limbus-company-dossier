@@ -9,6 +9,7 @@
  *
  * 실행: npm run rank:page -- --out /tmp/rank.html
  */
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 // 「None」을 막는 자리는 하나여야 한다 — 페이지와 진단 줄이 따로 가지면 한쪽만 샌다
 import { keywordLabel } from './rank/fit.js';
@@ -35,6 +36,24 @@ const out = arg('--out', '/tmp/rank.html');
 
 const { decks } = JSON.parse(readFileSync(input, 'utf8')) as { decks: Deck[] };
 const total = decks.reduce((s, d) => s + d.cards.length, 0);
+
+/**
+ * 이 후보 셋의 지문. **저장 열쇠에 섞는다.**
+ *
+ * 열쇠가 고정이면 `rank:deck` 을 다시 돌린 뒤에도 옛 판정이 되살아난다 — 덱은
+ * 그대로인데 축 공급이 바뀌어 뜻이 달라진 카드에 옛 판정이 조용히 다시 붙는
+ * 것이라, `cleanRows` 가 파일 쪽에서 막는 것과 같은 사고를 화면 쪽에서 낸다.
+ * 후보가 바뀌면 열쇠도 바뀌어 빈 화면에서 다시 시작한다.
+ */
+const stamp = createHash('sha1')
+	.update(decks.map((d) => [
+		d.id,
+		// **공급도 섞는다.** 카드 목록이 그대로여도 축 공급이 7→6 으로 바뀌면 그
+		// 카드가 무엇을 뜻하는지가 달라진다 — 지문이 안 바뀌면 그때가 제일 위험하다
+		JSON.stringify(d.supply),
+		d.cards.map((c) => `${c.giftId}${c.fireable ? '' : '!'}`).join(','),
+	].join(':')).join('|'))
+	.digest('hex').slice(0, 8);
 
 /**
  * 따옴표까지 막는다 — `data-gift="…"` 처럼 큰따옴표 속성 안에 값이 들어가서,
@@ -159,7 +178,7 @@ document.getElementById('export').addEventListener('click', () => {
 });
 // 판정을 브라우저에 남긴다. 새로고침 한 번에 60판정이 날아가면 다시 하는 수밖에
 // 없는데, **두 번째 판정은 첫 번째의 기억에 오염된다** — 표본의 독립성이 상한다
-const KEY = 'gift-rank-v1';
+const KEY = 'gift-rank-v1-${stamp}';
 function save() {
   const at = {};
   for (const sec of document.querySelectorAll('.deck')) {
