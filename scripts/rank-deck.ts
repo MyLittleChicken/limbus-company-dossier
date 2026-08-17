@@ -9,7 +9,7 @@
  *
  * **덱 C 가 핵심이다.** `w_등급` 은 저 덱에서만 정해진다.
  *
- * 실행: npm run rank:deck -- --out /tmp/rank-candidates.json
+ * 실행: npm run rank:deck
  */
 import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
@@ -21,7 +21,7 @@ import type { DeckSupply, GiftCard } from './rank/types.js';
 const ROSTER = 12;
 const FIELD = 7;
 
-/** 세 덱 공통으로 넣을 여섯. 성격이 갈리게 손으로 골랐다 */
+/** 세 덱 공통으로 넣을 일곱. 성격이 갈리게 손으로 골랐다 */
 const SHARED = [
 	'9083', // 달의 기억 — 5등급 · 범용 · 모든 적 내성이 취약
 	'9754', // 굴레 — 4등급 · 범용 · 최대 체력 +20%
@@ -33,11 +33,23 @@ const SHARED = [
 	// 「소속을 요구하는 기프트」의 자리는 여전히 보인다
 	'9262',
 	'9021', // 쪽빛 지포라이터 — 1등급 · 범용 · E.G.O 자원
+	// 부화하지 않은 불씨 — 4등급 · 화상 · **무조건 절이라 어느 덱에서도 안 죽는다.**
+	// 위 넷은 전부 fit 0 인 범용이고 진혼·뼈대는 어딘가에서 죽어 짝에서 빠지므로,
+	// 이것이 없으면 「적합도가 실재하나」를 물을 카드가 표본에 하나도 없다
+	'9756',
 ];
 
 const argv = process.argv.slice(2);
 const outIdx = argv.indexOf('--out');
-const out = outIdx >= 0 ? String(argv[outIdx + 1]) : '/tmp/rank-candidates.json';
+/**
+ * 후보 셋은 **저작 자리에 둔다.**
+ *
+ * 커밋되는 것이 판정 60줄뿐이면 그 줄들의 뜻을 정하는 것(덱별 축 공급 · 카드별
+ * `fireable`)이 재부팅이면 사라지는 `/tmp` 에만 남는다. `cleanRows` 는 giftId 가
+ * 후보 밖일 때만 막으므로, id 는 그대로인데 공급이 7→6 으로 바뀌면 아무 경고 없이
+ * 저울추가 다른 수로 나온다. 우리가 만든 파생이라 저작물 스냅샷 훅에 안 걸린다.
+ */
+const out = outIdx >= 0 ? String(argv[outIdx + 1]) : 'src/v2/authored/gift-rank-candidates.json';
 
 const prisma = new PrismaClient();
 const data = await loadEngineData(prisma);
@@ -111,7 +123,7 @@ const specs = [
 ];
 
 /**
- * 앞 덱들이 이미 쓴 기프트. **공통 여섯은 안 넣는다** — 그건 일부러 겹친다.
+ * 앞 덱들이 이미 쓴 기프트. **공통 일곱은 안 넣는다** — 그건 일부러 겹친다.
  *
  * 이것이 없으면 세 덱이 거의 같은 스물을 보여 준다. 갈래 채우기 조건 대부분이
  * 덱을 안 보기 때문에 `find` 가 매번 같은 카드를 집는다(실측: 덱 A 와 B 가

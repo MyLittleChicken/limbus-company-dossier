@@ -1,0 +1,714 @@
+{
+	"decks": [
+		{
+			"id": "A",
+			"name": "화상 덱 — 축이 선명하다",
+			"roster": [
+				"10112",
+				"10211",
+				"10216",
+				"10311",
+				"10407",
+				"10415",
+				"10502",
+				"10512",
+				"10514",
+				"10604",
+				"10714",
+				"10715"
+			],
+			"supply": {
+				"axis": [
+					[
+						"BREATH",
+						2
+					],
+					[
+						"VIBRATION",
+						1
+					],
+					[
+						"LACERATION",
+						1
+					],
+					[
+						"COMBUSTION",
+						7
+					]
+				],
+				"attackType": [
+					[
+						"blunt",
+						2
+					],
+					[
+						"slash",
+						4
+					],
+					[
+						"pierce",
+						3
+					]
+				]
+			},
+			"cards": [
+				{
+					"giftId": "9083",
+					"name": "달의 기억",
+					"desc": "모든 적(환상체일 경우, 모든 부위)의 물리 내성과 속성 내성이 취약으로 변경됨.",
+					"tier": 5,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9754",
+					"name": "굴레",
+					"desc": "스테이지 시작 시 (현재 층 x 2)%만큼 모든 아군의 최대 체력이 증가 (최대 20%)",
+					"tier": 4,
+					"keywordId": "None",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9035",
+					"name": "저주 인형",
+					"desc": "턴 시작 시, 적 전체에게 3만큼 질투 피해를 입힘.\n\n대상의 체력이 33% 미만이면 위력 감소 1 부여.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9088",
+					"name": "진혼",
+					"desc": "턴 시작 시, 화상 위력, 화상 횟수 또는 특수 화상을 부여하는 공격 스킬을 보유한 인격이 5인 이상이면, 이번 전투 동안 발동 (E.G.O 스킬 제외. 대기 인원 제외)\n\n턴 시작 시, 모든 적(환상체일 경우, 모든 부위)의 화상 횟수가 6 증가하고 화상 위력 15를 무작위로 나누어 부여. (웨이브 당 최대 1회)\n\n화상 위력, 화상 횟수 또는 특수 화상을 부여하는 더하기 코인 스킬의 최종 위력 +1, 코인 위력 +1, 화상 위력 부여 값 +1, 화상 횟수 부여 값 +1.\n- 빼기 코인 스킬일 경우, 코인 위력 대신 기본 위력 +(4/코인 수) (최소 1, 소수점 버림)\n\n화상 위력, 횟수, 특수 화상을 부여하는 스킬로 합 승리 시, (남은 코인 수 + 1)만큼 대상 적에게 화상 위력을 부여",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9262",
+					"name": "모든 것의 뼈대",
+					"desc": "약지 소속 인격 공격 종료시 대상에게 무작위 물리 내성 약화 1 부여 (턴당 2회)\n\n약지 소속 인격이 가하는 피해량 +10%",
+					"tier": 2,
+					"keywordId": "None",
+					"exclusive": true,
+					"fireable": false
+				},
+				{
+					"giftId": "9021",
+					"name": "쪽빛 지포라이터",
+					"desc": "턴 시작 시, 우울 속성 E.G.O 자원 +1, 나머지 속성의 E.G.O 자원 중 무작위 2종 +1.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9756",
+					"name": "부화하지 않은 불씨",
+					"desc": "사망할 정도의 피해를 입었다면, 해당 공격동안 체력이 1로 유지되고 해당 공격 종료시 전체 체력의 20%만큼 회복함. (전투당 1회 발동)",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9011",
+					"name": "여우비",
+					"desc": "나태 완전 공명을 발동하였거나 공격 가중치가 2 이상인 스킬을 사용하는 경우 발동.\n\n전투 시작 시, 아군 전체의 스킬 위력 +2.",
+					"tier": 3,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9799",
+					"name": "어떤 철학",
+					"desc": "기프트 합성 확률이 항상 100%로 적용됨",
+					"tier": null,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9005",
+					"name": "상처붙이",
+					"desc": "출혈 위력 또는 특수 출혈을 부여하는 스킬을 사용하여 적에게 적중 시, 대상에게 출혈 위력 4 부여.",
+					"tier": 2,
+					"keywordId": "Laceration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9002",
+					"name": "도착증",
+					"desc": "공격 스킬을 사용하여 적을 하나 이상 처치하였다면 해당 스킬 속성의 E.G.O 자원을 다음 턴 시작 시 얻음.\n\n분노 속성 공격 스킬을 사용할 경우, 효과가 강화되어 해당 아군이 보유한 모든 공격 스킬 속성의 E.G.O 자원을 다음 턴 시작 시 얻음.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9001",
+					"name": "지옥나비의 꿈",
+					"desc": "화상 또는 특수 화상에 걸린 적에게 스킬 효과로 화상 위력 또는 특수 화상을 부여할 경우, 모든 적에게 화상 위력 3 무작위로 나누어 부여.\n\n분노 완전 공명을 발동하였다면 전투 시작 시, 모든 적에게 화상 위력 5 무작위로 나누어 부여.",
+					"tier": 2,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9014",
+					"name": "녹슨 기념 주화",
+					"desc": "전투 시작 시 처음으로 사용된 아군의 단일 코인 공격 스킬로 대상이 되는 적이 아무도 사망하지 않았다면, 해당 스킬을 한 번 더 사용함.\n\n단일 코인 공격 스킬 또는 나태 속성의 스킬로 적을 처치한 경우, 다음 턴 동안 해당 아군의 스킬 위력 +1.",
+					"tier": 3,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9045",
+					"name": "불꽃의 편린",
+					"desc": "턴 종료 시, 화상 상태인 적에게 대상이 보유한 화상 횟수의 절반 만큼을 소모하여 (화상 위력 x 소모한 화상 횟수)만큼 추가 분노 피해를 입힘.(화상 횟수 최대 5 소모)\n\n불꽃의 편린 효과로 소모한 화상 횟수만큼, 다음 턴 동안 대상의 방어 레벨이 감소 (최대 3).",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9995",
+					"name": "달의 잔영",
+					"desc": "5등급 E.G.O 기프트로 취급되며, 상점에서 판매하거나 합성에서 재료로 사용할 수 있다.",
+					"tier": 5,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9800",
+					"name": "부",
+					"desc": "모든 기프트 구매 및 강화 비용이 1로 고정됨.\n\n보유한 코스트 500 당 모든 아군이 공격 레벨 증가 1 얻음 (최대 20)",
+					"tier": null,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9003",
+					"name": "재에서 재로",
+					"desc": "전투 시작 시 모든 적(환상체일 경우, 모든 부위)이 화상 또는 특수 화상에 걸린 경우, 적 전체(환상체일 경우, 모든 부위)에게 화상 위력 2 부여.",
+					"tier": 1,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9006",
+					"name": "커피와 종이학",
+					"desc": "턴 시작 시, 직전 턴에 사용한 공격 스킬 속성에 해당하지 않는 나머지 모든 속성의 E.G.O 자원 중 무작위 하나 +1.\n\n사용한 공격 스킬 속성 중 색욕이 존재할 경우, 효과가 강화되어 이전 턴에 사용한 공격 스킬 속성에 해당하지 않는 나머지 모든 속성의 E.G.O 자원 전부 +1.",
+					"tier": 2,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9022",
+					"name": "환상통",
+					"desc": "공격 가중치가 1인 스킬을 사용할 경우, 가하는 피해량 +15%.\n\n우울 완전 공명을 발동하였다면 전투 시작 시, 모든 아군이 공격 레벨 증가 2 얻음.",
+					"tier": 3,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9050",
+					"name": "붉게 물든 목화",
+					"desc": "스테이지 첫 턴 시작 시, 모든 적(환상체일 경우, 모든 부위)에게 출혈 위력 1, 출혈 횟수 15 부여.\n\n턴 시작 시 출혈 상태인 적의 공격 레벨과 방어 레벨이 이번 턴 동안 (출혈 위력 / 3)만큼 감소 (출혈 위력 30 스택 시, 효과 최대).",
+					"tier": 4,
+					"keywordId": "Laceration",
+					"exclusive": false,
+					"fireable": true
+				}
+			]
+		},
+		{
+			"id": "B",
+			"name": "약지 소속 덱 — 소속 요구가 켜진다",
+			"roster": [
+				"10109",
+				"10215",
+				"10515",
+				"10614",
+				"10915",
+				"11109",
+				"10101",
+				"10102",
+				"10103",
+				"10104",
+				"10105",
+				"10106"
+			],
+			"supply": {
+				"axis": [
+					[
+						"SINKING",
+						3
+					],
+					[
+						"CHARGE",
+						2
+					],
+					[
+						"LACERATION",
+						6
+					]
+				],
+				"attackType": [
+					[
+						"blunt",
+						2
+					],
+					[
+						"slash",
+						3
+					],
+					[
+						"pierce",
+						4
+					]
+				]
+			},
+			"cards": [
+				{
+					"giftId": "9083",
+					"name": "달의 기억",
+					"desc": "모든 적(환상체일 경우, 모든 부위)의 물리 내성과 속성 내성이 취약으로 변경됨.",
+					"tier": 5,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9754",
+					"name": "굴레",
+					"desc": "스테이지 시작 시 (현재 층 x 2)%만큼 모든 아군의 최대 체력이 증가 (최대 20%)",
+					"tier": 4,
+					"keywordId": "None",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9035",
+					"name": "저주 인형",
+					"desc": "턴 시작 시, 적 전체에게 3만큼 질투 피해를 입힘.\n\n대상의 체력이 33% 미만이면 위력 감소 1 부여.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9088",
+					"name": "진혼",
+					"desc": "턴 시작 시, 화상 위력, 화상 횟수 또는 특수 화상을 부여하는 공격 스킬을 보유한 인격이 5인 이상이면, 이번 전투 동안 발동 (E.G.O 스킬 제외. 대기 인원 제외)\n\n턴 시작 시, 모든 적(환상체일 경우, 모든 부위)의 화상 횟수가 6 증가하고 화상 위력 15를 무작위로 나누어 부여. (웨이브 당 최대 1회)\n\n화상 위력, 화상 횟수 또는 특수 화상을 부여하는 더하기 코인 스킬의 최종 위력 +1, 코인 위력 +1, 화상 위력 부여 값 +1, 화상 횟수 부여 값 +1.\n- 빼기 코인 스킬일 경우, 코인 위력 대신 기본 위력 +(4/코인 수) (최소 1, 소수점 버림)\n\n화상 위력, 횟수, 특수 화상을 부여하는 스킬로 합 승리 시, (남은 코인 수 + 1)만큼 대상 적에게 화상 위력을 부여",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": false
+				},
+				{
+					"giftId": "9262",
+					"name": "모든 것의 뼈대",
+					"desc": "약지 소속 인격 공격 종료시 대상에게 무작위 물리 내성 약화 1 부여 (턴당 2회)\n\n약지 소속 인격이 가하는 피해량 +10%",
+					"tier": 2,
+					"keywordId": "None",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9021",
+					"name": "쪽빛 지포라이터",
+					"desc": "턴 시작 시, 우울 속성 E.G.O 자원 +1, 나머지 속성의 E.G.O 자원 중 무작위 2종 +1.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9756",
+					"name": "부화하지 않은 불씨",
+					"desc": "사망할 정도의 피해를 입었다면, 해당 공격동안 체력이 1로 유지되고 해당 공격 종료시 전체 체력의 20%만큼 회복함. (전투당 1회 발동)",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9023",
+					"name": "벼락가지",
+					"desc": "스킬 효과로 파열 위력을 부여할 때마다 대상에게 파열 위력 1, 파열 횟수 1 부여.",
+					"tier": 3,
+					"keywordId": "Burst",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9799",
+					"name": "어떤 철학",
+					"desc": "기프트 합성 확률이 항상 100%로 적용됨",
+					"tier": null,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9008",
+					"name": "늘어붙은 쇠말뚝",
+					"desc": "단일 코인 스킬을 사용하여 적에게 적중 시, 대상에게 출혈 위력 1 부여하고 다음 턴까지 방어 레벨 감소 2 부여.\n\n대상이 출혈또는 특수 출혈에 걸린 상태일 경우, 효과가 강화되어 출혈 위력 3 부여.",
+					"tier": 1,
+					"keywordId": "Laceration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9043",
+					"name": "사원증",
+					"desc": "분노 완전 공명을 발동하였거나 충전 횟수 또는 특수 충전을 획득하거나 부여하는 스킬을 사용할 경우, 다음 턴 시작 시 모든 아군이 충전 횟수 3 증가 (턴 당 1회 발동).",
+					"tier": 2,
+					"keywordId": "Charge",
+					"exclusive": false,
+					"fireable": false
+				},
+				{
+					"giftId": "9004",
+					"name": "혈액 포집팩",
+					"desc": "스킬을 사용하여 적에게 적중 시, 해당 아군이 잃은 체력의 12.5%만큼 체력을 회복(인격마다 턴 당 1회 발동).\n\n분노 속성 스킬을 사용할 경우, 효과가 강화되어 잃은 체력의 25%만큼 체력을 회복.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9007",
+					"name": "주홍 나방떼",
+					"desc": "턴 시작 시, 처음으로 적에게 피해를 입힌 공격 스킬의 피해량 절반만큼 무작위 대상 하나에게 고정 피해를 입힘.\n\n색욕 속성의 공격 스킬을 사용할 경우, 효과가 강화되어 무작위 대상 둘에게 고정 피해를 입힘.",
+					"tier": 2,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9024",
+					"name": "녹아내린 눈알",
+					"desc": "진동 폭발된 적에게 다음 턴에 공격 레벨 감소 5와 방어 레벨 감소 5 부여. (턴 당 최대 3회)",
+					"tier": 3,
+					"keywordId": "Vibration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9055",
+					"name": "폭우",
+					"desc": "턴 시작 시, 모든 적(환상체일 경우, 모든 부위)에게 진동 위력을 (현재 턴 x 2) 부여, 진동 횟수 2 부여.\n\n턴 종료 시, 모든 적(환상체일 경우, 모든 부위)에게 진동 폭발 효과 부여.",
+					"tier": 4,
+					"keywordId": "Vibration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9010",
+					"name": "블러디 가젯",
+					"desc": "턴 시작 시, 무작위 아군 하나가 피해량 증가 2 얻음.\n\n색욕 속성 공격 스킬을 보유한 아군에게 우선으로 적용되며, 이 경우에는 피해량 증가 1 추가로 얻음.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9009",
+					"name": "작열우모",
+					"desc": "화상 위력 또는 특수 화상을 부여하는 스킬 또는 색욕 속성의 스킬을 사용하여 적에게 적중 시, 대상에게 화상 위력 3 부여.\n\n턴 시작 시 화상 위력 20 이상을 보유한 적의 경우, 화상 위력이 2배로 증가.",
+					"tier": 2,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9033",
+					"name": "근무용 통상 배터리",
+					"desc": "스킬을 사용하여 적에게 적중 시, 대상에게 파열 위력 3 부여.\n\n질투 속성 스킬을 사용할 경우, 효과가 강화되어 대상에게 파열 위력 5 부여.",
+					"tier": 3,
+					"keywordId": "Burst",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9060",
+					"name": "쾌감",
+					"desc": "턴 시작 시, 적 전체(환상체일 경우, 모든 부위)에게 파열 위력 3, 파열 횟수 3 부여.\n\n턴 종료 시, 모든 적(환상체일 경우, 모든 부위)이 (파열 위력 x 파열 횟수)만큼 탐식 피해를 입음. (파열 횟수 최대 5까지 적용)",
+					"tier": 4,
+					"keywordId": "Burst",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9013",
+					"name": "부적 묶음",
+					"desc": "스킬을 사용하여 적에게 적중 시 12 이상의 체력 피해를 입혔다면, 대상에게 파열 위력 2 부여.\n\n참격 스킬을 사용할 경우, 효과가 강화되어 파열 위력 4 부여.",
+					"tier": 1,
+					"keywordId": "Burst",
+					"exclusive": false,
+					"fireable": true
+				}
+			]
+		},
+		{
+			"id": "C",
+			"name": "섞인 덱 — 축이 흩어져 적합도가 낮다",
+			"roster": [
+				"10103",
+				"10110",
+				"10102",
+				"10106",
+				"10112",
+				"10107",
+				"10101",
+				"10105",
+				"10406",
+				"10116",
+				"10211",
+				"10109"
+			],
+			"supply": {
+				"axis": [
+					[
+						"SINKING",
+						2
+					],
+					[
+						"BURST",
+						2
+					],
+					[
+						"BREATH",
+						2
+					],
+					[
+						"CHARGE",
+						1
+					],
+					[
+						"LACERATION",
+						1
+					],
+					[
+						"COMBUSTION",
+						1
+					],
+					[
+						"BULLET",
+						1
+					]
+				],
+				"attackType": [
+					[
+						"blunt",
+						1
+					],
+					[
+						"slash",
+						4
+					],
+					[
+						"pierce",
+						5
+					]
+				]
+			},
+			"cards": [
+				{
+					"giftId": "9083",
+					"name": "달의 기억",
+					"desc": "모든 적(환상체일 경우, 모든 부위)의 물리 내성과 속성 내성이 취약으로 변경됨.",
+					"tier": 5,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9754",
+					"name": "굴레",
+					"desc": "스테이지 시작 시 (현재 층 x 2)%만큼 모든 아군의 최대 체력이 증가 (최대 20%)",
+					"tier": 4,
+					"keywordId": "None",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9035",
+					"name": "저주 인형",
+					"desc": "턴 시작 시, 적 전체에게 3만큼 질투 피해를 입힘.\n\n대상의 체력이 33% 미만이면 위력 감소 1 부여.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9088",
+					"name": "진혼",
+					"desc": "턴 시작 시, 화상 위력, 화상 횟수 또는 특수 화상을 부여하는 공격 스킬을 보유한 인격이 5인 이상이면, 이번 전투 동안 발동 (E.G.O 스킬 제외. 대기 인원 제외)\n\n턴 시작 시, 모든 적(환상체일 경우, 모든 부위)의 화상 횟수가 6 증가하고 화상 위력 15를 무작위로 나누어 부여. (웨이브 당 최대 1회)\n\n화상 위력, 화상 횟수 또는 특수 화상을 부여하는 더하기 코인 스킬의 최종 위력 +1, 코인 위력 +1, 화상 위력 부여 값 +1, 화상 횟수 부여 값 +1.\n- 빼기 코인 스킬일 경우, 코인 위력 대신 기본 위력 +(4/코인 수) (최소 1, 소수점 버림)\n\n화상 위력, 횟수, 특수 화상을 부여하는 스킬로 합 승리 시, (남은 코인 수 + 1)만큼 대상 적에게 화상 위력을 부여",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": false,
+					"fireable": false
+				},
+				{
+					"giftId": "9262",
+					"name": "모든 것의 뼈대",
+					"desc": "약지 소속 인격 공격 종료시 대상에게 무작위 물리 내성 약화 1 부여 (턴당 2회)\n\n약지 소속 인격이 가하는 피해량 +10%",
+					"tier": 2,
+					"keywordId": "None",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9021",
+					"name": "쪽빛 지포라이터",
+					"desc": "턴 시작 시, 우울 속성 E.G.O 자원 +1, 나머지 속성의 E.G.O 자원 중 무작위 2종 +1.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9756",
+					"name": "부화하지 않은 불씨",
+					"desc": "사망할 정도의 피해를 입었다면, 해당 공격동안 체력이 1로 유지되고 해당 공격 종료시 전체 체력의 20%만큼 회복함. (전투당 1회 발동)",
+					"tier": 4,
+					"keywordId": "Combustion",
+					"exclusive": true,
+					"fireable": true
+				},
+				{
+					"giftId": "9038",
+					"name": "환상 사냥",
+					"desc": "집중 전투 방식의 전투 스테이지 입장 시, 아군 전체에게 피해량 증가 2 부여.",
+					"tier": 3,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9799",
+					"name": "어떤 철학",
+					"desc": "기프트 합성 확률이 항상 100%로 적용됨",
+					"tier": null,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9012",
+					"name": "오늘의 표정",
+					"desc": "타격 스킬 또는 나태 속성 스킬로 공격 종료시 적이 사망했으면, 해당 아군이 이번 턴을 제외한 다음 턴부터 2턴 동안 타격 스킬 위력 +2.",
+					"tier": 2,
+					"keywordId": "Hit",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9016",
+					"name": "초록빛 결실",
+					"desc": "흐트러짐 상태가 아닌 적에게 탐식 속성 스킬을 사용하여 적중하였거나 또는 스킬 효과로 진동 위력을 부여할 경우, 모든 적(환상체일 경우, 모든 부위)에게 진동 위력 4 무작위로 나누어 부여.",
+					"tier": 1,
+					"keywordId": "Vibration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9015",
+					"name": "고혈",
+					"desc": "흐트러짐 상태의 적에게 스킬을 사용하여 가하는 피해량 +10%.\n\n진동 위력, 진동 횟수를 부여하거나, 진폭 변환, 진동 폭발, 진폭 얽힘 효과를 보유한 스킬 또는 나태 속성 스킬을 사용할 경우, 효과가 강화되어 피해량 +20%.",
+					"tier": 2,
+					"keywordId": "Vibration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9042",
+					"name": "연기와 철조망",
+					"desc": "아군이 스킬 효과로 적에게 부여하는 출혈 위력 수치가 2배로 적용.\n\n턴 종료 시 출혈 또는 특수 출혈에 걸린 적들이 다음 턴에 속도가 2만큼 감소.",
+					"tier": 3,
+					"keywordId": "Laceration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9065",
+					"name": "미적 감각",
+					"desc": "정신력 감소로 인하여 부정적 효과(사기저하, 패닉)를 얻은 적에게 입히는 피해량 35% 증가.\n\n침잠 위력을 부여하거나 횟수를 증가시키는 스킬일 경우, 추가로 피해량 10% 증가 (특수 침잠 포함)\n\n정신력이 없는 적에게 침잠 효과가 적용될 경우, 우울 속성 피해를 입히는 대신 이를 포함한 죄악 속성 중 가장 효과적인 속성 피해로 변경.",
+					"tier": 4,
+					"keywordId": "Sinking",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9017",
+					"name": "문자 석판",
+					"desc": "적이 흐트러짐 상태에 빠질 때마다 아군 중 가장 체력이 적은 인격이 최대 체력의 5%만큼 체력을 회복.\n\n회복 효과를 받는 인격이 탐식 속성 공격 스킬을 보유한 경우, 효과가 강화되어 최대 체력의 10%만큼을 회복.",
+					"tier": 1,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9020",
+					"name": "흰 목화",
+					"desc": "턴 시작 시 흐트러짐 상태인 적들이 있을 경우, 대상은 흐트러짐 상태에서 풀려나는 대신 (8+흐트러짐 단계x4)만큼 출혈 위력을 얻고 그 수치의 절반만큼 이번 턴과 다음 턴 동안 대상에게 공격 레벨 감소 부여(동일한 적에게는 전투 당 1회 발동하며, 흐트러짐 상태에서 풀려나지 않는 특정 적에게는 발동하지 않음).",
+					"tier": 2,
+					"keywordId": "Laceration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9048",
+					"name": "녹슨 커터 나이프",
+					"desc": "흐트러짐 상태가 아닌 적에게 스킬 효과로 출혈 위력 또는 특수 출혈을 부여할 때마다 대상에게 출혈 위력 1, 출혈 횟수 1 부여.\n\n색욕 속성 스킬을 사용할 경우, 효과가 강화되어 출혈 위력 3, 출혈 횟수 1 부여.",
+					"tier": 3,
+					"keywordId": "Laceration",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9070",
+					"name": "명경지수",
+					"desc": "아군이 치명타로 가하는 피해량이 1.2배에서 1.7배로 증가.\n\n치명타가 발생하여 호흡 횟수를 소모하였을 경우, 해당 인격이 다음 턴에 공격 레벨 증가 10 얻음 (인격 별로 턴 당 1회 발동).",
+					"tier": 4,
+					"keywordId": "Breath",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9018",
+					"name": "장미 면류관",
+					"desc": "턴 시작 시, 무작위 적 하나(환상체일 경우, 모든 부위)에게 파열 위력 4 부여.\n\n탐식 완전 공명을 발동하였다면 전투 시작 시, 모든 적에게 파열 위력 2 부여.",
+					"tier": 1,
+					"keywordId": "Burst",
+					"exclusive": false,
+					"fireable": true
+				},
+				{
+					"giftId": "9025",
+					"name": "잿빛 코트",
+					"desc": "공격 가중치가 2 이상인 스킬을 사용하여 적에게 적중 시, 가하는 피해량 +20%.\n\n공격 가중치가 2 이상인 스킬 또는 우울 속성 스킬을 사용하여 적에게 적중 시, 입힌 피해량의 20%만큼 해당 아군이 체력을 회복.",
+					"tier": 2,
+					"keywordId": "None",
+					"exclusive": false,
+					"fireable": true
+				}
+			]
+		}
+	]
+}

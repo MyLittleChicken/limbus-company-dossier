@@ -7,7 +7,7 @@
  * **자기완결이어야 한다** — Artifact 는 외부 요청이 CSP 로 막힌다. CSS·JS 를
  * 인라인한다.
  *
- * 실행: npm run rank:page -- --in /tmp/rank-candidates.json --out /tmp/rank.html
+ * 실행: npm run rank:page -- --out /tmp/rank.html
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -26,7 +26,9 @@ const arg = (k: string, d: string): string => {
 	const i = argv.indexOf(k);
 	return i >= 0 ? String(argv[i + 1]) : d;
 };
-const input = arg('--in', '/tmp/rank-candidates.json');
+// 후보 셋은 저작 자리에서 읽는다 — 페이지가 보여 준 카드와 저울추가 쓴 카드가
+// 같은 파일에서 나와야 판정의 뜻이 흔들리지 않는다
+const input = arg('--in', 'src/v2/authored/gift-rank-candidates.json');
 const out = arg('--out', '/tmp/rank.html');
 
 const { decks } = JSON.parse(readFileSync(input, 'utf8')) as { decks: Deck[] };

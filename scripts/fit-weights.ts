@@ -29,7 +29,9 @@ const arg = (k: string, d: string): string => {
 	return i >= 0 ? String(argv[i + 1]) : d;
 };
 
-const { decks } = JSON.parse(readFileSync(arg('--in', '/tmp/rank-candidates.json'), 'utf8')) as { decks: DeckJson[] };
+// 후보 셋은 저작 자리에서 읽는다 — `/tmp` 에 두면 판정 줄의 뜻을 정하는 것(덱별
+// 공급 · 카드별 fireable)이 재부팅이면 사라져 저울추를 재현할 수 없다
+const { decks } = JSON.parse(readFileSync(arg('--in', 'src/v2/authored/gift-rank-candidates.json'), 'utf8')) as { decks: DeckJson[] };
 
 /**
  * 표본을 줄 단위로 읽는다. **어느 줄이 깨졌는지 말해 준다.**
