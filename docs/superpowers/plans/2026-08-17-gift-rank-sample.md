@@ -1520,10 +1520,36 @@ const arg = (k: string, d: string): string => {
 const { decks } = JSON.parse(readFileSync(arg('--in', '/tmp/rank-candidates.json'), 'utf8'))
 	as { decks: DeckJson[] };
 
+/**
+ * 표본을 줄 단위로 읽는다. **어느 줄이 깨졌는지 말해 준다.**
+ *
+ * 이 파일은 사람이 페이지의 텍스트 상자에서 60줄을 복사해 붙여넣는 것이라,
+ * 잘리거나 두 줄이 붙는 일이 실제로 생긴다. 그냥 `JSON.parse` 하면 Node 스택이
+ * **이 스크립트**를 가리켜서, 정작 고칠 자리가 표본 몇째 줄인지 안 나온다.
+ *
+ * `cleanRows` 가 후보 밖·중복에 대해 하는 것과 같은 태도다 — 의심스러우면
+ * 멈추되, 어디를 고쳐야 하는지 함께 말한다.
+ */
+const parseLine = (line: string, n: number): RankRow => {
+	try {
+		const o = JSON.parse(line) as { deck: string; giftId: string; bucket: number };
+		if (typeof o.deck !== 'string' || typeof o.giftId !== 'string') {
+			throw new Error('deck 이나 giftId 가 글자가 아니다');
+		}
+		if (![0, 1, 2, 3].includes(o.bucket)) throw new Error(`bucket 이 ${String(o.bucket)} 이다`);
+		return { deck: o.deck, giftId: o.giftId, bucket: o.bucket as Bucket };
+	} catch (e) {
+		console.error(`표본 ${n}번째 줄을 못 읽었다 — ${(e as Error).message}`);
+		console.error(`  ${line.slice(0, 80)}`);
+		process.exit(1);
+	}
+};
+
 const rows: RankRow[] = readFileSync(arg('--sample', SAMPLE), 'utf8')
-	.split('\n').map((l) => l.trim()).filter((l) => l !== '')
-	.map((l) => JSON.parse(l) as { deck: string; giftId: string; bucket: number })
-	.map((r) => ({ deck: r.deck, giftId: r.giftId, bucket: r.bucket as Bucket }));
+	.split('\n')
+	.map((l, i) => ({ line: l.trim(), n: i + 1 }))
+	.filter((x) => x.line !== '')
+	.map((x) => parseLine(x.line, x.n));
 
 if (rows.length === 0) {
 	console.error(`표본이 비었다 — ${SAMPLE}`);
@@ -1689,11 +1715,23 @@ head -1 /tmp/fake-rank.jsonl >> /tmp/dirty-dupe.jsonl
 npm run rank:fit -- --sample /tmp/dirty-dupe.jsonl; echo "exit=$?"
 ```
 
+```bash
+# 4 깨진 줄 — 붙여넣기가 잘리거나 두 줄이 붙는 상황이다
+cp /tmp/fake-rank.jsonl /tmp/dirty-broken.jsonl
+printf '\n{"deck":"A","giftId":"9083"\n' >> /tmp/dirty-broken.jsonl
+npm run rank:fit -- --sample /tmp/dirty-broken.jsonl; echo "exit=$?"
+```
+
 Expected:
 - ① `후보 밖 기프트가 1줄 있다` · **exit 1**
 - ② `같은 기프트에 판정이 둘이다` · **exit 1**
 - ③ `중복 1줄을 지웠다` 를 내고 **exit 0**, 그리고 **정확도·짝 수가 ②단계
   깨끗한 표본과 똑같다** — 중복이 결과를 안 바꿔야 한다
+- ④ `표본 N번째 줄을 못 읽었다` 를 내고 **exit 1**. **줄 번호가 실제로 깨진
+  줄을 가리켜야 한다** — Node 스택이 아니라
+
+**①~③의 표본 파일은 끝 줄바꿈이 없다.** `echo >>` 로 덧붙이면 마지막 줄에
+붙어 버려 다른 것을 시험하게 된다. 덧붙이기 전에 줄바꿈을 넣어라.
 
 셋 다 확인한 콘솔 출력을 보고서에 붙인다. ③에서 짝 수가 깨끗한 표본보다 크면
 중복 제거가 안 된 것이다.
