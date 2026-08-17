@@ -105,17 +105,35 @@ export function pickTwenty(
 		if (c !== undefined) add(c);
 	}
 
-	// ③ 남은 자리는 등급을 돌아가며 채운다 — 한 등급에 몰리지 않게
+	/**
+	 * ③ 남은 자리는 등급을 돌아가며 채운다 — 한 등급에 몰리지 않게.
+	 *
+	 * **여기서는 피할 것으로 되돌아가지 않는다**(`findFor` 를 안 쓴다). 갈래
+	 * 덮임은 ②가 이미 보장했고, 남은 것은 자리를 메우는 일이라 남의 덱 카드를
+	 * 다시 쓸 이유가 없다.
+	 *
+	 * 되돌아가면 **희귀 등급이 세 덱을 돌아다닌다.** 거울 던전에 5등급은 2개,
+	 * EX 는 2개뿐이라(실측 2026-08-17), 매 회차 5등급·EX 를 요구하는 이 고리가
+	 * 되돌아가기를 허용하면 같은 서너 장이 세 덱에 다 들어간다. 실측으로 덱
+	 * 쌍마다 9장씩 겹쳤다 — 공통 여섯에 희귀 셋이 얹힌 수다.
+	 */
 	while (picked.length < WANT) {
 		let added = false;
 		for (const t of TIERS) {
 			if (picked.length >= WANT) break;
-			const c = findFor((x) => x.tier === t);
+			const c = sorted.find((x) =>
+				!taken.has(x.giftId) && !avoid.has(x.giftId) && x.tier === t);
 			if (c === undefined) continue;
 			add(c);
 			added = true;
 		}
-		if (!added) break; // 못이 말랐다
+		if (!added) break; // 안 겹치는 것이 말랐다
+	}
+
+	// ④ 그래도 자리가 남으면 피할 것까지 쓴다 — 스무 장을 채우는 것이 먼저다
+	for (const c of sorted) {
+		if (picked.length >= WANT) break;
+		if (!taken.has(c.giftId)) add(c);
 	}
 	return picked;
 }
