@@ -49,7 +49,8 @@
     "public:restore": "tsx scripts/retire-public.ts restore",
     "gift:verdict-diff": "tsx --env-file-if-exists=.env scripts/verdict-diff.ts",
     "rank:deck": "tsx --env-file-if-exists=.env scripts/rank-deck.ts",
-    "rank:page": "tsx scripts/rank-page.ts"
+    "rank:page": "tsx scripts/rank-page.ts",
+    "rank:fit": "tsx scripts/fit-weights.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
