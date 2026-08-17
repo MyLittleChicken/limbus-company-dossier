@@ -15,6 +15,7 @@ import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { loadEngineData } from '../lib/engine/v2/load.js';
 import { evaluateGifts } from '../lib/engine/v2/evaluate.js';
+import { fitOfKeyword } from './rank/fit.js';
 import { pickTwenty } from './rank/pick.js';
 import type { DeckSupply, GiftCard } from './rank/types.js';
 
@@ -163,9 +164,23 @@ for (const d of decks) {
 		const k = c.tier === null ? 'EX' : String(c.tier);
 		byTier.set(k, (byTier.get(k) ?? 0) + 1);
 	}
+
+	/**
+	 * **`w_적합` 을 정할 수 있는 카드가 몇 장인가.**
+	 *
+	 * 이 수가 0 이나 1 이면 그 덱의 판정 스물은 적합도에 대해 아무 말도 못 한다 —
+	 * 등급과 전용만으로 순서가 다 설명되어 저울추가 갈리지 않는다. 손으로 세 보게
+	 * 두면 아무도 안 세므로 여기서 찍는다.
+	 */
+	const supply = { axis: new Map(d.supply.axis), attackType: new Map(d.supply.attackType) };
+	const fits = d.cards.map((c) => fitOfKeyword(c.keywordId, supply));
+	const strong = fits.filter((f) => f >= 0.5).length;
+	const partial = fits.filter((f) => f > 0 && f < 0.5).length;
+
 	console.log(`덱 ${d.id} ${d.name}`);
 	console.log(`  축 공급   ${d.supply.axis.map(([k, v]) => `${k} ${v}`).join(' · ')}`);
 	console.log(`  기프트    ${d.cards.length} · 등급 ${[...byTier].sort().map(([k, v]) => `${k}:${v}`).join(' ')}`);
+	console.log(`  적합 있음 ${strong + partial} (강 ${strong} · 곁다리 ${partial})`);
 	console.log(`  안 켜짐   ${d.cards.filter((c) => !c.fireable).length}`);
 }
 

@@ -41,6 +41,20 @@ const partialFit = (supply: DeckSupply) => (c: GiftCard): boolean => {
 };
 
 /**
+ * ③단계가 돌릴 등급 — **못에 세 장 이상 있는 것만.**
+ *
+ * 표본이 덱 셋이라 한 등급을 세 덱이 나눠 쓰려면 최소 셋은 있어야 한다.
+ * 5등급과 EX 는 거울 던전 전체에 둘씩뿐이라 그 문턱에 못 미친다 — 자리
+ * 메우기가 그것까지 돌리면 첫 덱이 둘을 다 집어 가고 뒤 덱은 되쓴다
+ * (실측 2026-08-17: 서로 다른 기프트가 46에서 44로 떨어졌다).
+ *
+ * 덮임은 ②가 이미 보장했으므로 ③이 희귀 등급을 건드릴 이유가 없다.
+ */
+const DECKS = 3;
+const abundantTiers = (pool: GiftCard[]): Array<number | null> =>
+	TIERS.filter((t) => pool.filter((c) => c.tier === t).length >= DECKS);
+
+/**
  * 반드시 하나씩은 들어가야 하는 갈래.
  *
  * **칸의 곱집합을 라운드 로빈으로 돌면 안 된다.** 칸 이름을 정렬하면 등급별로
@@ -123,10 +137,14 @@ export function pickTwenty(
 	 * EX 는 2개뿐이라(실측 2026-08-17), 매 회차 5등급·EX 를 요구하는 이 고리가
 	 * 되돌아가기를 허용하면 같은 서너 장이 세 덱에 다 들어간다. 실측으로 덱
 	 * 쌍마다 9장씩 겹쳤다 — 공통 여섯에 희귀 셋이 얹힌 수다.
+	 *
+	 * 되돌아가지 않는 것만으로는 모자란다 — **희귀 등급을 아예 안 돌린다.**
+	 * 첫 덱이 자리를 메우려고 둘뿐인 EX 를 다 집어 가면 뒤 덱은 ②단계에서
+	 * 되쓸 수밖에 없다.
 	 */
 	while (picked.length < WANT) {
 		let added = false;
-		for (const t of TIERS) {
+		for (const t of abundantTiers(pool)) {
 			if (picked.length >= WANT) break;
 			const c = sorted.find((x) =>
 				!taken.has(x.giftId) && !avoid.has(x.giftId) && x.tier === t);
