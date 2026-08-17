@@ -10,6 +10,8 @@
  * 실행: npm run rank:page -- --out /tmp/rank.html
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+// 「None」을 막는 자리는 하나여야 한다 — 페이지와 진단 줄이 따로 가지면 한쪽만 샌다
+import { keywordLabel } from './rank/fit.js';
 
 interface Card {
 	giftId: string; name: string; desc: string;
@@ -42,17 +44,6 @@ const total = decks.reduce((s, d) => s + d.cards.length, 0);
 const esc = (s: string): string => s
 	.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 	.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-/**
- * 키워드를 사람이 읽는 말로.
- *
- * **`'None'` 은 문자열이다.** `canonical.gift.keyword_id` 에 JSON `null` 이
- * 아니라 글자 그대로 `None` 이 들어 있는 행이 있고(적재 때 파이썬 `None` 이
- * 글자로 굳은 것으로 보인다), 그대로 두면 60장 중 32장에 「None」이 뜬다.
- * 판정하는 사람에게 보일 자리라 여기서 막는다 — 뿌리(적재)는 이 PR 밖이다.
- */
-const keywordLabel = (k: string | null): string =>
-	k === null || k === 'None' ? '키워드 없음' : k;
 
 const BUCKETS = [
 	{ key: 3, label: '반드시 집는다' },

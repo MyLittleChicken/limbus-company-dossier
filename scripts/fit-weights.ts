@@ -11,6 +11,7 @@
  * 실행: npm run rank:fit
  */
 import { readFileSync } from 'node:fs';
+import { keywordLabel } from './rank/fit.js';
 import { pairsOf } from './rank/pairs.js';
 import { searchWeights, valueOf, agreementOf, type Weights } from './rank/grid.js';
 import type { Bucket, DeckSupply, GiftCard, RankRow } from './rank/types.js';
@@ -58,14 +59,18 @@ const parseLine = (line: string, n: number): RankRow => {
 	}
 };
 
-const rows: RankRow[] = readFileSync(arg('--sample', SAMPLE), 'utf8')
+// **읽은 자리를 기억해 둔다.** 오류는 상수가 아니라 실제로 읽은 경로를 찍어야
+// 한다 — `--sample` 로 딴 파일을 준 사람에게 엉뚱한 자리를 고치라고 하게 된다
+const samplePath = arg('--sample', SAMPLE);
+
+const rows: RankRow[] = readFileSync(samplePath, 'utf8')
 	.split('\n')
 	.map((l, i) => ({ line: l.trim(), n: i + 1 }))
 	.filter((x) => x.line !== '')
 	.map((x) => parseLine(x.line, x.n));
 
 if (rows.length === 0) {
-	console.error(`표본이 비었다 — ${SAMPLE}`);
+	console.error(`표본이 비었다 — ${samplePath}`);
 	console.error('npm run rank:page 로 페이지를 만들어 판정한 뒤 내보낸 것을 넣어라.');
 	process.exit(1);
 }
@@ -190,7 +195,9 @@ if (missed.length > 0) {
 	for (const p of missed.slice(0, 12)) {
 		const hi = cardOf.get(`${p.deck}\t${p.hi}`);
 		const lo = cardOf.get(`${p.deck}\t${p.lo}`);
+		// 키워드는 `keywordLabel` 을 거친다 — 날것으로 찍으면 글자 'None' 이 그대로 샌다
 		console.log(`  ${p.deck}  ${hi?.name ?? p.hi} > ${lo?.name ?? p.lo}`
-			+ `   (${hi?.tier ?? 'EX'}등급 ${hi?.keywordId ?? '-'} vs ${lo?.tier ?? 'EX'}등급 ${lo?.keywordId ?? '-'})`);
+			+ `   (${hi?.tier ?? 'EX'}등급 ${keywordLabel(hi?.keywordId ?? null)}`
+			+ ` vs ${lo?.tier ?? 'EX'}등급 ${keywordLabel(lo?.keywordId ?? null)})`);
 	}
 }

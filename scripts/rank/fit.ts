@@ -64,6 +64,18 @@ export function fitOfKeyword(keywordId: string | null, supply: DeckSupply): numb
 }
 
 /**
+ * 키워드를 사람이 읽는 말로.
+ *
+ * **`'None'` 은 문자열이다.** `canonical.gift.keyword_id` 에 JSON `null` 이
+ * 아니라 글자 그대로 `None` 이 들어 있는 행이 있고(적재 때 파이썬 `None` 이
+ * 글자로 굳은 것으로 보인다), 그대로 두면 판정 페이지에도 진단 줄에도 「None」이
+ * 뜬다. 사람이 볼 자리는 다 여기를 거친다 — 뿌리(적재)는 이 PR 밖이다.
+ */
+export function keywordLabel(k: string | null): string {
+	return k === null || k === 'None' ? '키워드 없음' : k;
+}
+
+/**
  * 등급을 0~1 로 편다. `fit` 과 같은 자로 재야 저울추를 견줄 수 있다.
  *
  * EX(등급 없음)는 1.0 이다 — 5등급 위이지만 5등급도 2건뿐이라 갈라 봐야
