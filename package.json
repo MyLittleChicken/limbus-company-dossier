@@ -47,7 +47,8 @@
     "golden:compare": "tsx --env-file-if-exists=.env scripts/golden-queries.ts compare",
     "public:retire": "tsx scripts/retire-public.ts retire",
     "public:restore": "tsx scripts/retire-public.ts restore",
-    "gift:verdict-diff": "tsx --env-file-if-exists=.env scripts/verdict-diff.ts"
+    "gift:verdict-diff": "tsx --env-file-if-exists=.env scripts/verdict-diff.ts",
+    "rank:deck": "tsx --env-file-if-exists=.env scripts/rank-deck.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
