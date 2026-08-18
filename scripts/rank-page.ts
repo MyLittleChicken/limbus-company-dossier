@@ -43,9 +43,8 @@ interface Entry {
 	card: Card;
 	/** '확실히 좋다' · '엇갈린다' · '확실히 아니다' */
 	stratum: string;
-	/** 왜 그 무더기인가. 사람이 알아야 판정이 일관된다 */
+	/** 무엇이 서로 어긋나는가. 「애매한 것」에서만 보인다 */
 	why: string;
-	branch?: number;
 	fusion: Fusion[];
 }
 interface Deck {
@@ -106,17 +105,30 @@ const BUCKETS = [
 ];
 
 /**
- * 무더기를 보이는 차례. **엇갈린다가 가운데에 온다.**
+ * 화면의 무더기는 **둘뿐이다.** 「확실히 좋다」와 「확실히 아니다」를 한 묶음으로 합친다.
  *
- * 저울추는 오직 엇갈린 무더기에서만 정해진다 — 「4등급이 1등급보다 낫다」는
- * 짝은 어떤 저울추로도 맞으므로 아무것도 안 가른다. 그 무더기가 화면에서
- * 파묻히면 사람은 쉬운 것부터 매기다 지쳐 정작 값어치 있는 판정을 대충 한다.
- * 그래서 가장 눈에 띄는 자리에 두고, 왜 중요한지도 화면에 적는다.
+ * 소제목은 `why` 보다 더 노골적으로 답을 흘린다. 「확실히 좋다」라는 글자를 187장
+ * 위에 붙여 놓으면, `why` 를 지운 것이 무의미해진다 — 근거는 지우고 결론만 남긴
+ * 꼴이다. 사람은 그 칸을 통째로 「반드시 집는다」에 던지게 되고, 그러면 그 187판정은
+ * **무더기 안 짝을 하나도 안 만든다**(연막 실측: 확실히 좋다 0/0 · 확실히 아니다 0/0).
+ *
+ * 실제로 위험한 자리가 있다. 덱 9(관통 덱)의 「확실히 좋다」 9장은 관통 2 + 열상 7
+ * 이다 — 출격 7인 중 열상을 대는 인격이 더 많아서 셈은 맞다. 그러나 「관통 덱」
+ * 제목 아래 「확실히 좋다」 칸에서 열상 일곱 장을 보면 사람은 혼란에 빠지거나
+ * 제목을 믿고 그냥 던진다.
+ *
+ * 「애매한 것」은 남긴다. 그것은 결론이 아니라 **신호가 서로 어긋난다는 사실**이고,
+ * 저울추가 정해지는 유일한 자리라 사람이 힘을 어디 쓸지 알아야 한다.
+ *
+ * **`stratum` 은 JSON 과 내보내기에 그대로 남는다** — 저울추 보고의 무더기별
+ * 정확도가 그것을 쓴다. 바뀌는 것은 화면 표시뿐이다.
  */
-const STRATA: Array<{ key: string; note: string }> = [
-	{ key: '확실히 좋다', note: '' },
-	{ key: '엇갈린다', note: '여기가 핵심입니다' },
-	{ key: '확실히 아니다', note: '' },
+const TANGLED = '엇갈린다';
+const PILES: Array<{ label: string; note: string; has: (s: string) => boolean }> = [
+	// 애매한 것을 맨 위에 둔다. 사람은 쉬운 것부터 매기다 지치는데, 지친 뒤에 오는
+	// 판정이 하필 저울추를 정하는 유일한 무더기면 표본이 통째로 헐거워진다
+	{ label: '애매한 것', note: '여기가 핵심입니다', has: (s) => s === TANGLED },
+	{ label: '나머지', note: '', has: (s) => s !== TANGLED },
 ];
 
 /**
@@ -153,11 +165,16 @@ const fusionLine = (f: Fusion): string => {
  * 카드만 봐서는 바로 안 보이고, 판정을 흐리는 게 아니라 무엇을 저울질할지를
  * 알려 준다. 저울추가 정해지는 유일한 무더기라 그 도움은 남긴다.
  */
-const WHY_SHOWN = '엇갈린다';
+const WHY_SHOWN = TANGLED;
 
-/** 카드 하나. 이름 · 꼬리표 · 설명문 전문 · (엇갈린다면) 무엇이 어긋나는지 · 합성 재료 줄 */
-const cardHtml = (e: Entry): string => `
-      <div class="card${e.card.fireable ? '' : ' dead'}" draggable="true" data-gift="${esc(e.card.giftId)}">
+/**
+ * 카드 하나. 이름 · 꼬리표 · 설명문 전문 · (애매한 것이면) 무엇이 어긋나는지 · 합성 재료 줄.
+ *
+ * `data-pile` 은 이 카드가 원래 있던 무더기다. **되돌릴 자리를 카드가 스스로
+ * 들고 있어야 한다** — 안 그러면 새로고침 뒤 미판정 카드를 제 무더기로 못 보낸다.
+ */
+const cardHtml = (e: Entry, pile: number): string => `
+      <div class="card${e.card.fireable ? '' : ' dead'}" draggable="true" data-gift="${esc(e.card.giftId)}" data-pile="${pile}">
         <div class="nm">${esc(e.card.name)}</div>
         <div class="tag">${e.card.tier === null ? 'EX' : `${String(e.card.tier)}등급`} ·
           ${esc(keywordLabel(e.card.keywordId))} · ${e.card.exclusive ? '전용' : '공용'}${e.card.fireable ? '' : ' · 안 켜짐'}</div>
@@ -221,8 +238,8 @@ textarea { width:100%; height:11rem; margin-top:.6rem; font:12px/1.5 ui-monospac
 <h1>기프트 순위 표본 — ${total}판정</h1>
 <p class="lead">덱 ${decks.length}개 · 판정 ${total}개입니다. 기프트를 네 칸 중 하나로 끌어다 놓으세요.
 <strong>칸 안의 순서는 안 봅니다.</strong><br>
-<strong>「엇갈린다」 무더기가 가장 중요합니다</strong> — 4등급이 1등급보다 낫다는 판정은 어떤 저울추로도
-맞아서 아무것도 안 가릅니다. 저울추는 오직 엇갈린 무더기에서 정해집니다.<br>
+<strong>「애매한 것」 무더기가 가장 중요합니다</strong> — 4등급이 1등급보다 낫다는 판정은 어떤 저울추로도
+맞아서 아무것도 안 가릅니다. 저울추는 오직 애매한 무더기에서 정해집니다.<br>
 애매한 무더기의 설명은 「무엇이 서로 어긋나는가」이지 답이 아닙니다.
 <strong>설명을 따라가지 마시고 직접 판단해 주십시오</strong> — 그래야 이 표본이 쓸모가 있습니다.<br>
 카드는 <strong>거울 던전에서 집을 수 있는 것</strong>뿐입니다 — 진혼·달의 기억처럼 합성으로만 나오는
@@ -236,17 +253,19 @@ ${decks.map((d) => `
   <h2>덱 ${esc(d.id)} · ${esc(d.name)}</h2>
   <p class="squad"><b>출격</b>${d.field.map((n) => esc(n)).join(' · ') || '없음'}</p>
   <p class="squad"><b>대기</b>${d.waiting.map((n) => esc(n)).join(' · ') || '없음'}</p>
-  <p class="supply">축 ${d.supply.axis.map(([k, v]) => `${esc(k)} ${v}`).join(' · ') || '없음'}
-    &nbsp;|&nbsp; 공격 ${d.supply.attackType.map(([k, v]) => `${esc(k)} ${v}`).join(' · ') || '없음'}</p>
+  <p class="supply">축 ${d.supply.axis.map(([k, v]) => `${esc(k)} ${v}/${d.supply.fieldSize}`).join(' · ') || '없음'}
+    &nbsp;|&nbsp; 공격 ${d.supply.attackType.map(([k, v]) => `${esc(k)} ${v}/${d.supply.fieldSize}`).join(' · ') || '없음'}</p>
   <div class="cols">
     <div class="col" data-bucket="none"><h3>아직 안 정함</h3>
-      ${STRATA.map((s) => {
-		const mine = d.cards.filter((c) => c.stratum === s.key);
-		// 빈 무더기는 소제목도 안 낸다 — 덱 11 은 「확실히 좋다」가 0장이라
-		// 제목만 남으면 카드를 잃어버린 것처럼 보인다
+      ${PILES.map((p, i) => {
+		// **`giftId` 순으로 섞는다.** 좋은 것끼리·아닌 것끼리 뭉쳐 있으면 소제목을
+		// 없앤 뜻이 없다 — 사람이 덩어리의 경계를 눈으로 찾아내 그대로 던진다
+		const mine = d.cards.filter((c) => p.has(c.stratum))
+			.sort((a, b) => a.card.giftId.localeCompare(b.card.giftId));
+		// 빈 무더기는 소제목도 안 낸다 — 카드 없는 제목만 남으면 잃어버린 것처럼 보인다
 		if (mine.length === 0) return '';
-		const note = s.note === '' ? '' : ` <span class="note">← ${s.note}</span>`;
-		return `<div class="pile"><h4>${esc(s.key)} ${mine.length}${note}</h4>${mine.map((e) => cardHtml(e)).join('')}
+		const note = p.note === '' ? '' : ` <span class="note">← ${p.note}</span>`;
+		return `<div class="pile" data-pile="${i}"><h4>${esc(p.label)} ${mine.length}${note}</h4>${mine.map((e) => cardHtml(e, i)).join('')}
       </div>`;
 	}).join('')}
     </div>
@@ -272,7 +291,12 @@ for (const col of document.querySelectorAll('.col')) {
   col.addEventListener('dragover', (e) => { e.preventDefault(); });
   col.addEventListener('drop', (e) => {
     e.preventDefault();
-    if (dragged !== null) { col.appendChild(dragged); dragged = null; tally(); save(); }
+    if (dragged === null) return;
+    // 미판정 칸으로 되돌리면 원래 무더기 안으로 넣는다. 칸에 그냥 붙이면 카드가
+    // 소제목 밖으로 나가 어느 무더기였는지 영영 알 수 없게 된다
+    const home = col.dataset.bucket === 'none' ? homeOf(col.closest('.deck'), dragged) : null;
+    (home || col).appendChild(dragged);
+    dragged = null; tally(); save();
   });
 }
 function tally() {
@@ -298,13 +322,19 @@ document.getElementById('export').addEventListener('click', () => {
   box.value = lines.join('\\n');
   box.select();
 });
-// 판정을 브라우저에 남긴다. 새로고침 한 번에 60판정이 날아가면 다시 하는 수밖에
+// 판정을 브라우저에 남긴다. 새로고침 한 번에 300판정이 날아가면 다시 하는 수밖에
 // 없는데, **두 번째 판정은 첫 번째의 기억에 오염된다** — 표본의 독립성이 상한다
 const KEY = 'gift-rank-v1-${stamp}';
+// **미판정 카드는 안 담는다.** 'none' 을 담으면 restore 가 그 값으로 미판정 칸을
+// 찾아 appendChild 하는데, 그 칸은 실재하므로 카드가 제 무더기(.pile) 밖으로
+// 끌려나온다 — 한 장 판정하고 새로고침하면 남은 300장이 소제목 없는 평평한 목록이
+// 되고, 위에는 카드 없는 「애매한 것 10 ← 여기가 핵심입니다」만 남는다. 내보내기는
+// 'none' 을 건너뛰어 데이터는 안 깨지므로 관문은 전부 초록인 채 화면만 무너진다
 function save() {
   const at = {};
   for (const sec of document.querySelectorAll('.deck')) {
     for (const col of sec.querySelectorAll('.col')) {
+      if (col.dataset.bucket === 'none') continue;
       for (const card of col.querySelectorAll('.card')) {
         at[sec.dataset.deck + '\\t' + card.dataset.gift] = col.dataset.bucket;
       }
@@ -319,11 +349,20 @@ function restore() {
   for (const sec of document.querySelectorAll('.deck')) {
     for (const card of sec.querySelectorAll('.card')) {
       const b = at[sec.dataset.deck + '\\t' + card.dataset.gift];
-      if (b === undefined) continue;
+      // 옛 저장분에는 'none' 이 들어 있을 수 있다. 그 값으로 옮기면 카드가 제
+      // 무더기 밖으로 나가므로, 미판정은 손대지 않고 원래 자리에 둔다
+      if (b === undefined || b === 'none') continue;
       const col = sec.querySelector('.col[data-bucket="' + b + '"]');
       if (col !== null) col.appendChild(card);
     }
   }
+}
+// 판정 칸에서 미판정 칸으로 되돌릴 때 쓴다. **카드가 제 무더기로 돌아가야 한다** —
+// 미판정 칸에 그냥 붙이면 소제목 밖 평평한 목록에 쌓여, 다시 볼 때 그 카드가
+// 애매한 것이었는지 나머지였는지 알 길이 없다
+// 빈 무더기는 아예 안 그리므로 자리 번호가 아니라 data-pile 값으로 찾는다
+function homeOf(sec, card) {
+  return sec.querySelector('.col[data-bucket="none"] .pile[data-pile="' + card.dataset.pile + '"]');
 }
 restore();
 tally();
