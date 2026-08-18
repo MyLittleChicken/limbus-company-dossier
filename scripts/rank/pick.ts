@@ -1,173 +1,217 @@
 /**
- * 덱 하나에 보여 줄 기프트 20개를 고른다.
+ * 기프트 서른 개를 세 무더기로 고른다 — 심리검사처럼, 확실한 것과 애매한 것을
+ * 일부러 갈라서 올린다.
  *
- * **네 축을 고르게 덮어야 한다.** 한쪽에 몰리면 그 축의 저울추만 정해지고
- * 나머지는 표본이 말해 주는 것이 없다.
- *
- * ```
- * 등급     1 · 2 · 3 · 4 · 5 · EX
- * 키워드   강(주력 축) · 약(곁다리) · 없음
- * 팩       전용 · 공용
- * 요구     켜짐 · 안 켜짐
- * ```
- *
- * **무작위를 안 쓴다.** 표본을 다시 짤 일이 생겼을 때 같은 기준으로 짜야 하고,
- * 무작위면 「왜 이 스물인가」를 답할 수 없다.
+ * **엇갈리는 열 장이 이 표본의 전부다.** 「확실히 좋다」·「확실히 아니다」는
+ * 방향을 고정해 모형이 뒤집히지 않는지 보는 용도이고, 「적합도가 등급보다
+ * 얼마나 무거운가」는 엇갈린 열 장에서만 정해진다. 앞선 회차(`pickTwenty`)가
+ * 등급·키워드·전용·켜짐을 고르게 덮어 서른 장을 골랐더니 대부분이 자명한
+ * 판정이라 저울추가 안 좁혀졌다 — 그래서 「고르게」 대신 「갈라서」로 바꾼다.
  */
-import { fitOfKeyword, inVocabulary } from './fit.js';
+import { fitOfKeyword, tierOf } from './fit.js';
+import { roleOf } from './fusion.js';
+import type { FusionRole } from './fusion.js';
 import type { DeckSupply, GiftCard } from './types.js';
 
-const WANT = 20;
+export type Stratum = '확실히 좋다' | '확실히 아니다' | '엇갈린다';
 
-/** 등급 여섯. `null` 은 EX 다 */
-const TIERS: ReadonlyArray<number | null> = [1, 2, 3, 4, 5, null];
+export interface Picked {
+	card: GiftCard;
+	stratum: Stratum;
+	why: string;
+}
 
-/**
- * 이 기프트의 키워드가 이 덱에 얼마나 맞나 — **셋으로 나눈다.**
- *
- * **어휘 소속을 먼저 본다.** 문턱만 보면 「어휘 밖이라 정의상 0」과 「어휘 안인데
- * 이 덱엔 적다」가 한 칸에 뭉친다. 실측으로 덱 B 의 「약」 10장이 전부 fit 이
- * 정확히 0 이었다 — 갈래는 셋인데 뜻은 둘이었다.
- */
-function keywordClassOf(c: GiftCard, supply: DeckSupply): '강' | '약' | '없음' {
-	if (!inVocabulary(c.keywordId)) return '없음';
-	return fitOfKeyword(c.keywordId, supply) >= 0.5 ? '강' : '약';
+/** 무더기마다 낼 장수. 모자라면 있는 만큼만 — 다른 무더기로 안 메운다 */
+const WANT = 10;
+
+/** 등급을 사람이 읽는 말로. `null` 은 EX 다 */
+function tierLabel(tier: number | null): string {
+	return tier === null ? 'EX' : `${tier}등급`;
 }
 
 /**
- * 「곁다리」가 실재하는 칸인지 못 박는다 — 0 도 1 도 아닌 것이 하나는 있어야 한다.
+ * 분류된 카드 하나. **엇갈린다의 네 갈래 중 어느 것인지도 여기서 못 박는다.**
  *
- * **켜지는 것만 센다.** 죽은 기프트는 `pairsOf` 가 짝을 안 만들어 저울추에 한
- * 글자도 못 보탠다 — 죽은 곁다리 한 장으로 이 칸을 채우면 「fit 이 연속값이다」를
- * 표본이 여전히 한 번도 안 보여 준다(실측: 덱 B 의 유일한 곁다리가 죽어 있었다).
+ * `branch` 는 엇갈린다일 때만 뜻이 있다(0=고등급 축 불일치 · 1=저등급 축 일치 ·
+ * 2=저등급 상위 재료 · 3=전용인데 저등급). 라운드 로빈이 이 번호로 갈래를
+ * 나눈다 — `why` 문자열을 파싱해서 갈래를 되짚는 것보다 한 번 정한 값을
+ * 들고 다니는 편이 덜 깨진다.
  */
-const partialFit = (supply: DeckSupply) => (c: GiftCard): boolean => {
-	if (!c.fireable) return false;
-	const f = fitOfKeyword(c.keywordId, supply);
-	return f > 0 && f < 0.5;
-};
-
-/**
- * ③단계가 돌릴 등급 — **혼자서 한 덱을 채울 만큼 있는 것만.**
- *
- * 3 으로는 모자란다. ③단계는 한 번 돌 때 등급마다 한 장씩 집고 세 번쯤 도니
- * 한 덱이 한 등급에서 세 장까지 가져간다 — 못에 셋뿐인 등급은 첫 덱이 다
- * 쓸어 가고 뒤 덱은 되쓴다. 문턱을 「그 등급만으로 스무 장을 채울 수 있나」로
- * 두면 희귀 등급이 몇 장으로 늘든 안 걸린다.
- *
- * 덮임은 ②가 이미 보장하므로 ③이 희귀 등급을 건드릴 이유가 애초에 없다.
- */
-const abundantTiers = (pool: GiftCard[]): Array<number | null> =>
-	TIERS.filter((t) => pool.filter((c) => c.tier === t).length >= WANT);
-
-/**
- * 반드시 하나씩은 들어가야 하는 갈래.
- *
- * **칸의 곱집합을 라운드 로빈으로 돌면 안 된다.** 칸 이름을 정렬하면 등급별로
- * 뭉쳐서, 0회차가 1등급 칸을 전부 돌다 스무 자리를 다 써 버린다 — 4·5·EX 는
- * 차례가 안 온다. 갈래마다 「아직 없으면 하나」를 먼저 채우는 쪽이 덮임을
- * 보장한다.
- */
-function needsOf(supply: DeckSupply): Array<(c: GiftCard) => boolean> {
-	return [
-		...TIERS.map((t) => (c: GiftCard) => c.tier === t),
-		...(['강', '약', '없음'] as const).map((k) =>
-			(c: GiftCard) => keywordClassOf(c, supply) === k),
-		// 「곁다리」는 0 도 1 도 아닌 자리다. 이것이 없으면 fit 이 연속값이라는
-		// 것을 표본이 한 번도 안 보여 준다
-		partialFit(supply),
-		(c: GiftCard) => c.exclusive,
-		(c: GiftCard) => !c.exclusive,
-		(c: GiftCard) => !c.fireable,
-	];
+interface Classified {
+	card: GiftCard;
+	stratum: Stratum;
+	branch: -1 | 0 | 1 | 2 | 3;
+	why: string;
 }
 
-export function pickTwenty(
-	pool: GiftCard[],
+/**
+ * 카드 하나를 무더기로 분류한다. 어디에도 안 맞으면 `undefined` —
+ * 확실히 좋지도 나쁘지도 엇갈리지도 않는 카드는 이 표본에 낄 이유가 없다.
+ *
+ * **판정 순서가 곧 우선순위다.** 확실히 좋다 → 확실히 아니다 → 엇갈린다(그
+ * 안에서 다시 네 갈래 순서대로). 한 카드가 여러 조건에 걸쳐도(예: 등급 낮고
+ * 축은 안 맞는데 동시에 상위 재료다 — 확실히 아니다와 갈래 c 가 둘 다 맞는다)
+ * 앞선 것 하나로만 넣는다. 브리프의 "갈래가 겹치면 위 순서대로 먼저 맞는 것"을
+ * 그대로 코드 순서로 옮긴 것이다.
+ *
+ * **합성 결과물은 여기서 막는다.** 호출자가 이미 걸렀더라도 두 곳에서 막는
+ * 편이 낫다 — 집을 수 없는 것을 두 번 세지 않는 게 아니라, 한 곳이 빠뜨려도
+ * 다른 곳이 잡는다.
+ */
+function classify(
+	card: GiftCard,
 	supply: DeckSupply,
-	shared: string[],
-	/**
-	 * 다른 덱이 이미 쓴 기프트. **공통은 여기 안 든다.**
-	 *
-	 * 이것이 없으면 세 덱이 거의 같은 기프트를 보여 준다 — 갈래 채우기 조건
-	 * 대부분(등급·전용)이 `supply` 를 안 보기 때문에, `find` 가 매번 giftId 가
-	 * 가장 작은 것을 집어 덱이 달라도 같은 카드가 나온다. 실측으로 덱 A 와
-	 * 덱 B 의 스무 장이 통째로 같았고 세 덱 통틀어 서로 다른 기프트가 21개뿐
-	 * 이었다(목표 48). 60판정이 21개어치 정보밖에 안 되는 것이다.
-	 */
-	avoid: ReadonlySet<string> = new Set(),
-): GiftCard[] {
-	const sorted = [...pool].sort((a, b) => a.giftId.localeCompare(b.giftId));
-	const byId = new Map(sorted.map((c) => [c.giftId, c]));
-	const picked: GiftCard[] = [];
-	const taken = new Set<string>();
-	const add = (c: GiftCard): void => {
-		picked.push(c);
-		taken.add(c.giftId);
-	};
+	roles: Map<string, FusionRole>,
+	byId: ReadonlyMap<string, GiftCard>,
+): Classified | undefined {
+	const role = roleOf(roles, card.giftId);
+	if (role.madeOnly) return undefined;
 
-	/**
-	 * 조건에 맞는 것 하나. **피할 것은 뒤로 미룬다.**
-	 *
-	 * 피할 것밖에 없으면 그냥 쓴다 — 자리를 비우느니 겹치는 편이 낫다.
-	 * 갈래를 덮는 것이 겹침을 피하는 것보다 중요하다.
-	 */
-	const findFor = (ok: (c: GiftCard) => boolean): GiftCard | undefined =>
-		sorted.find((x) => !taken.has(x.giftId) && !avoid.has(x.giftId) && ok(x))
-		?? sorted.find((x) => !taken.has(x.giftId) && ok(x));
+	const fit = fitOfKeyword(card.keywordId, supply);
+	const t = tierOf(card.tier);
 
-	// ① 공통 기프트를 먼저 넣는다 — 겹침이 없으면 덱 간 견줌이 안 된다.
-	//    **`avoid` 보다 우선한다** — 공통은 일부러 겹치라고 둔 것이다
-	for (const id of shared) {
-		if (picked.length >= WANT) break;
-		const c = byId.get(id);
-		if (c !== undefined && !taken.has(id)) add(c);
+	if (fit >= 0.5 && t >= 0.75 && card.fireable) {
+		return {
+			card, stratum: '확실히 좋다', branch: -1,
+			why: `${tierLabel(card.tier)}이고 이 덱 축과 맞는다`,
+		};
 	}
-
-	// ② 갈래마다 아직 없으면 하나 채운다
-	for (const ok of needsOf(supply)) {
-		if (picked.length >= WANT) break;
-		if (picked.some(ok)) continue;
-		const c = findFor(ok);
-		if (c !== undefined) add(c);
+	if (fit === 0 && t <= 0.25) {
+		return {
+			card, stratum: '확실히 아니다', branch: -1,
+			why: `${tierLabel(card.tier)}이고 이 덱 축과도 안 맞는다`,
+		};
 	}
+	if (t >= 0.75 && fit === 0) {
+		return {
+			card, stratum: '엇갈린다', branch: 0,
+			why: `${tierLabel(card.tier)}인데 이 덱 축과 안 맞는다`,
+		};
+	}
+	if (t <= 0.25 && fit >= 0.5) {
+		return {
+			card, stratum: '엇갈린다', branch: 1,
+			why: `${tierLabel(card.tier)}인데 이 덱 축과 맞는다`,
+		};
+	}
+	if (t <= 0.25 && role.makes.length > 0) {
+		// 재료가 여러 상위로 가는 길이 있어도 첫 번째만 이름에 쓴다 — 한 줄이라 다
+		// 못 담고, 사람은 대표 하나만 알아도 「집을 값어치」를 가늠할 수 있다
+		const result = role.makes[0]?.result ?? '';
+		const resultName = byId.get(result)?.name ?? result;
+		return {
+			card, stratum: '엇갈린다', branch: 2,
+			why: `${tierLabel(card.tier)}인데 ${resultName}의 재료다`,
+		};
+	}
+	if (card.exclusive && t <= 0.25) {
+		return {
+			card, stratum: '엇갈린다', branch: 3,
+			why: `전용인데 ${tierLabel(card.tier)}이다`,
+		};
+	}
+	return undefined;
+}
 
-	/**
-	 * ③ 남은 자리는 등급을 돌아가며 채운다 — 한 등급에 몰리지 않게.
-	 *
-	 * **여기서는 피할 것으로 되돌아가지 않는다**(`findFor` 를 안 쓴다). 갈래
-	 * 덮임은 ②가 이미 보장했고, 남은 것은 자리를 메우는 일이라 남의 덱 카드를
-	 * 다시 쓸 이유가 없다.
-	 *
-	 * 되돌아가면 **희귀 등급이 세 덱을 돌아다닌다.** 거울 던전에 5등급은 2개,
-	 * EX 는 2개뿐이라(실측 2026-08-17), 매 회차 5등급·EX 를 요구하는 이 고리가
-	 * 되돌아가기를 허용하면 같은 서너 장이 세 덱에 다 들어간다. 실측으로 덱
-	 * 쌍마다 9장씩 겹쳤다 — 공통 여섯에 희귀 셋이 얹힌 수다.
-	 *
-	 * 되돌아가지 않는 것만으로는 모자란다 — **희귀 등급을 아예 안 돌린다.**
-	 * 첫 덱이 자리를 메우려고 둘뿐인 EX 를 다 집어 가면 뒤 덱은 ②단계에서
-	 * 되쓸 수밖에 없다.
-	 */
-	// **못을 기준으로 한 번만 센다** — 남은 것이 아니라 못이 정하는 값이고,
-	// 고리 안에서 부르면 460장짜리 못을 매 회 다시 훑는다
-	const fillTiers = abundantTiers(pool);
-	while (picked.length < WANT) {
-		let added = false;
-		for (const t of fillTiers) {
-			if (picked.length >= WANT) break;
-			const c = sorted.find((x) =>
-				!taken.has(x.giftId) && !avoid.has(x.giftId) && x.tier === t);
-			if (c === undefined) continue;
-			add(c);
-			added = true;
+/** giftId 오름차순 — 동점 처리는 이 하나로 통일한다 */
+const byGiftId = (a: Classified, b: Classified): number =>
+	a.card.giftId.localeCompare(b.card.giftId);
+
+/**
+ * 갈래(들) 안에서 `want` 장까지 라운드 로빈으로 채운다.
+ *
+ * **avoid 는 값을 다 채운 뒤가 아니라 갈래마다 뒤로 미룬다.** 이러면 avoid
+ * 카드가 필요할 때만 라운드 로빈 순서 뒤쪽에서 등장하고, 있는데도 피하는
+ * 카드부터 도는 일이 없다.
+ */
+function roundRobinFill(branches: Classified[][], want: number): Classified[] {
+	const idx = branches.map(() => 0);
+	const picked: Classified[] = [];
+	let progressed = true;
+	while (picked.length < want && progressed) {
+		progressed = false;
+		for (let b = 0; b < branches.length; b++) {
+			if (picked.length >= want) break;
+			if (idx[b]! < branches[b]!.length) {
+				picked.push(branches[b]![idx[b]!]!);
+				idx[b]! += 1;
+				progressed = true;
+			}
 		}
-		if (!added) break; // 안 겹치는 것이 말랐다
-	}
-
-	// ④ 그래도 자리가 남으면 피할 것까지 쓴다 — 스무 장을 채우는 것이 먼저다
-	for (const c of sorted) {
-		if (picked.length >= WANT) break;
-		if (!taken.has(c.giftId)) add(c);
 	}
 	return picked;
+}
+
+/**
+ * 갈래 하나 안에서 avoid 를 뒤로 미룬 순서. **피할 것뿐이면 그냥 쓴다** —
+ * `roundRobinFill` 이 avoid 목록도 넘겨받아 자리가 남으면 거기서 채운다.
+ */
+function orderedByAvoid(cards: Classified[], avoid: ReadonlySet<string>): {
+	preferred: Classified[]; fallback: Classified[];
+} {
+	const sorted = [...cards].sort(byGiftId);
+	return {
+		preferred: sorted.filter((c) => !avoid.has(c.card.giftId)),
+		fallback: sorted.filter((c) => avoid.has(c.card.giftId)),
+	};
+}
+
+/**
+ * 무더기(엇갈린다가 아닌 것) 하나를 채운다 — avoid 없는 것 먼저, 모자라면
+ * avoid 로 채운다. 둘 다로도 `want` 에 못 미치면 있는 만큼만 낸다.
+ */
+function pickPlain(cards: Classified[], avoid: ReadonlySet<string>, want: number): Classified[] {
+	const { preferred, fallback } = orderedByAvoid(cards, avoid);
+	return [...preferred, ...fallback].slice(0, want);
+}
+
+/**
+ * 엇갈린다 무더기를 채운다 — 네 갈래를 라운드 로빈으로 돌되, **avoid 없는
+ * 패스를 통째로 먼저 돈 뒤에야 avoid 패스로 넘어간다.**
+ *
+ * 갈래마다 avoid 유무로 먼저 나누면 「이 무더기 전체에 avoid 아닌 것이
+ * 있는 한 그것부터 쓴다」는 규칙과 「네 갈래가 고르게 섞인다」는 규칙을 함께
+ * 지킬 수 있다 — 갈래 하나가 avoid 아닌 패로 일찍 마르면 그 갈래만 avoid
+ * 패로 넘어가고, 다른 갈래는 여전히 avoid 아닌 것부터 돈다.
+ */
+function pickTangled(cards: Classified[], avoid: ReadonlySet<string>, want: number): Classified[] {
+	const byBranch: Classified[][] = [[], [], [], []];
+	for (const c of cards) byBranch[c.branch]!.push(c);
+
+	const preferredBranches = byBranch.map((b) => orderedByAvoid(b, avoid).preferred);
+	const fallbackBranches = byBranch.map((b) => orderedByAvoid(b, avoid).fallback);
+
+	const picked = roundRobinFill(preferredBranches, want);
+	if (picked.length < want) {
+		picked.push(...roundRobinFill(fallbackBranches, want - picked.length));
+	}
+	return picked;
+}
+
+/**
+ * 세 무더기를 고른다. **무작위 없음** — 같은 입력이면 같은 답, 동점은
+ * giftId 오름차순.
+ */
+export function pickThirty(
+	pool: GiftCard[],
+	supply: DeckSupply,
+	roles: Map<string, FusionRole>,
+	avoid: ReadonlySet<string>,
+): Picked[] {
+	const byId = new Map(pool.map((c) => [c.giftId, c]));
+	const classified = pool
+		.map((card) => classify(card, supply, roles, byId))
+		.filter((c): c is Classified => c !== undefined);
+
+	const good = classified.filter((c) => c.stratum === '확실히 좋다');
+	const bad = classified.filter((c) => c.stratum === '확실히 아니다');
+	const tangled = classified.filter((c) => c.stratum === '엇갈린다');
+
+	const result = [
+		...pickPlain(good, avoid, WANT),
+		...pickPlain(bad, avoid, WANT),
+		...pickTangled(tangled, avoid, WANT),
+	];
+
+	return result.map(({ card, stratum, why }) => ({ card, stratum, why }));
 }
