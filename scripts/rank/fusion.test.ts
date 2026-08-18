@@ -47,13 +47,18 @@ test('재료는 makes 에 상위와 함께 필요한 재료를 담는다', () =>
 	assert.equal(role?.makes.length, 1);
 	assert.equal(role?.makes[0]?.result, REQUIEM);
 	// 9002 는 첫 레시피(9001·9002·9003)에만 있다 — 함께 필요한 건 9001·9003
-	assert.deepEqual(role?.makes[0]?.withOthers, ['9001', '9003']);
+	// 다들 단일 칸이라 칸마다 길이 1짜리 배열이다
+	assert.deepEqual(role?.makes[0]?.withOthers, [['9001'], ['9003']]);
 });
 
 test('자기 자신은 withOthers 에 안 들어간다', () => {
 	const roles = fusionRolesOf(requiemRecipes);
 	for (const [gift, role] of roles) {
-		for (const m of role.makes) assert.ok(!m.withOthers.includes(gift), `${gift} 가 자기 자신의 withOthers 에 있다`);
+		for (const m of role.makes) {
+			for (const slot of m.withOthers) {
+				assert.ok(!slot.includes(gift), `${gift} 가 자기 자신의 withOthers 에 있다`);
+			}
+		}
 	}
 });
 
@@ -63,7 +68,7 @@ test('레시피가 여럿인 결과물은 makes 에 한 번만 잡힌다', () =>
 	const roles = fusionRolesOf(requiemRecipes);
 	const role = roles.get('9001');
 	assert.equal(role?.makes.length, 1);
-	assert.deepEqual(role?.makes[0]?.withOthers, ['9002', '9003']);
+	assert.deepEqual(role?.makes[0]?.withOthers, [['9002'], ['9003']]);
 });
 
 test('둘째 레시피에만 있는 재료는 그 레시피 기준으로 withOthers 를 적는다', () => {
@@ -71,7 +76,7 @@ test('둘째 레시피에만 있는 재료는 그 레시피 기준으로 withOth
 	const roles = fusionRolesOf(requiemRecipes);
 	const role = roles.get('9004');
 	assert.equal(role?.makes.length, 1);
-	assert.deepEqual(role?.makes[0]?.withOthers, ['9001', '9005', '9006']);
+	assert.deepEqual(role?.makes[0]?.withOthers, [['9001'], ['9005'], ['9006']]);
 });
 
 test('선택지형 칸의 후보 전부가 재료로 잡힌다', () => {
@@ -84,20 +89,24 @@ test('선택지형 칸의 후보 전부가 재료로 잡힌다', () => {
 	}
 });
 
-test('선택지형 칸의 형제 후보는 withOthers 에 안 들어간다 — 함께 필요한 게 아니라 대안이다', () => {
+test('자기가 선택지형 칸에 있으면 그 칸이 통째로 빠진다', () => {
 	const roles = fusionRolesOf([moonRecipe]);
 	const role = roles.get('9105');
-	// 다른 칸(단일 칸 셋)만 담고, 같은 칸의 나머지 여섯 후보는 안 담는다
-	assert.deepEqual(role?.makes[0]?.withOthers, ['9142', '9147', '9152']);
+	// 다른 칸(단일 칸 셋)만 담고, 같은 칸의 나머지 여섯 후보는 안 담는다 —
+	// 9110 이 어디에도 없어야 한다(펴서 담았다면 여기 섞여 들어온다)
+	assert.deepEqual(role?.makes[0]?.withOthers, [['9142'], ['9147'], ['9152']]);
 });
 
-test('단일 칸 재료의 withOthers 에는 선택지형 칸의 후보 전부가 들어간다', () => {
-	// 9142 입장에서는 선택지형 칸 중 "어느 하나"가 함께 필요하다 — 어느 것인지
-	// 정할 수 없으므로 그 칸의 후보 전부를 「함께 필요한 것」으로 담는다.
+test('선택지형 칸은 한 덩어리로 남는다 — 펴지지 않는다', () => {
+	// 9142 입장에서는 선택지형 칸 중 "어느 하나"가 함께 필요하다 — 그 칸을
+	// 펴서 다른 단일 칸들과 섞으면 「9개 다 필요」로 잘못 읽힌다. 칸 하나가
+	// 배열 하나로 남아야 「셋 다 필요」와 「일곱 중 하나」가 구별된다.
 	const roles = fusionRolesOf([moonRecipe]);
 	const role = roles.get('9142');
 	assert.deepEqual(role?.makes[0]?.withOthers, [
-		'9105', '9110', '9116', '9121', '9126', '9131', '9136', '9147', '9152',
+		['9105', '9110', '9116', '9121', '9126', '9131', '9136'],
+		['9147'],
+		['9152'],
 	]);
 });
 
@@ -107,7 +116,7 @@ test('재료이면서 동시에 결과물인 중간 기프트는 둘 다로 답�
 	assert.equal(role?.madeOnly, true); // 9201·9202 로 합성된 결과물이기도 하다
 	assert.equal(role?.makes.length, 1);
 	assert.equal(role?.makes[0]?.result, '9200'); // 9200 의 재료이기도 하다
-	assert.deepEqual(role?.makes[0]?.withOthers, ['9203']);
+	assert.deepEqual(role?.makes[0]?.withOthers, [['9203']]);
 });
 
 test('레시피에 안 나오는 기프트는 맵에 없다', () => {

@@ -23,8 +23,15 @@ export interface FusionRole {
 	/** 이 기프트가 재료로 쓰이는 상위들. 재료가 아니면 빈 배열 */
 	makes: Array<{
 		result: string;
-		/** 그 레시피에서 함께 필요한 다른 재료. 자기 자신과 같은 칸의 형제 후보는 안 담는다 */
-		withOthers: string[];
+		/**
+		 * 함께 필요한 **다른 칸**들. 칸 하나가 배열 하나다.
+		 *
+		 * **평평하게 펴면 안 된다.** 칸 안의 후보는 서로 대체재라 하나만 있으면
+		 * 되는데, 펴 놓으면 전부 필요한 것처럼 읽힌다 — 9142 를 집을지 정하는
+		 * 사람에게 「함께 필요 9개」와 「함께 필요 3칸」은 전혀 다른 무게다.
+		 * 자기 자신이 든 칸은 통째로 뺀다.
+		 */
+		withOthers: string[][];
 	}>;
 }
 
@@ -40,12 +47,12 @@ export interface FusionRole {
 export function fusionRolesOf(recipes: Recipe[]): Map<string, FusionRole> {
 	const madeOnly = new Set<string>();
 
-	// 재료 기프트 → (결과물 → 함께 필요한 재료 집합).
+	// 재료 기프트 → (결과물 → 함께 필요한 다른 칸들, 칸 단위로 뭉친 채).
 	// 결과물이 같은 레시피가 여럿이어도(진혼처럼) 재료마다 "처음 등장한
 	// 레시피"의 withOthers 만 남긴다 — 뒤 레시피에서 같은 재료가 다시 나와도
 	// 무시한다. 재료가 레시피마다 다를 수 있으므로 이건 레시피 단위가 아니라
 	// (결과물, 재료) 쌍 단위로 판단해야 한다.
-	const makesByGift = new Map<string, Map<string, Set<string>>>();
+	const makesByGift = new Map<string, Map<string, string[][]>>();
 
 	for (const recipe of recipes) {
 		madeOnly.add(recipe.result);
@@ -60,15 +67,17 @@ export function fusionRolesOf(recipes: Recipe[]): Map<string, FusionRole> {
 				}
 				if (byResult.has(recipe.result)) continue; // 이 재료는 이 결과물에서 이미 첫 등장을 기록했다
 
-				// 다른 칸의 후보 전부가 "함께 필요한 것" — 선택지형 칸이면 그중
-				// 하나만 실제로 쓰이지만, 어느 것인지는 이 함수의 관심사가 아니다.
-				// 같은 칸(i)의 형제 후보는 뺀다 — 그건 대안이지 동반이 아니다.
-				const others = new Set<string>();
+				// 다른 칸이 "함께 필요한 것" — 칸 하나를 배열 하나로 그대로 둔다.
+				// 펴서 하나의 집합으로 합치면 「일곱 중 하나면 된다」와
+				// 「셋 다 필요하다」를 구별할 수 없게 된다. 자기 자신이 든 칸(i)은
+				// 통째로 뺀다 — 그 칸의 형제 후보는 대안이지 동반이 아니다.
+				const others: string[][] = [];
 				for (let j = 0; j < recipe.slots.length; j++) {
 					if (j === i) continue;
-					for (const other of recipe.slots[j] ?? []) others.add(other);
+					const candidates = (recipe.slots[j] ?? []).filter((c) => c !== gift);
+					if (candidates.length > 0) others.push([...candidates].sort());
 				}
-				others.delete(gift); // 같은 기프트가 다른 칸에도 후보로 있을 경우의 방어
+				others.sort((a, b) => (a[0] ?? '').localeCompare(b[0] ?? ''));
 
 				byResult.set(recipe.result, others);
 			}
@@ -81,7 +90,7 @@ export function fusionRolesOf(recipes: Recipe[]): Map<string, FusionRole> {
 		const byResult = makesByGift.get(gift);
 		const makes = byResult
 			? [...byResult.entries()]
-					.map(([result, others]) => ({ result, withOthers: [...others].sort() }))
+					.map(([result, withOthers]) => ({ result, withOthers }))
 					.sort((a, b) => a.result.localeCompare(b.result))
 			: [];
 		roles.set(gift, { madeOnly: madeOnly.has(gift), makes });
