@@ -44,13 +44,3 @@ export interface RankRow {
 	giftId: string;
 	bucket: Bucket;
 }
-
-/** 덱 하나 */
-export interface DeckSpec {
-	/** 'A' · 'B' · 'C' */
-	id: string;
-	name: string;
-	/** 편성 12인. 앞 7인이 출격이다 */
-	roster: string[];
-	supply: DeckSupply;
-}

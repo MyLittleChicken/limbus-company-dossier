@@ -56,7 +56,7 @@ const { decks } = JSON.parse(readFileSync(arg('--in', 'src/v2/authored/gift-rank
 /**
  * 표본을 줄 단위로 읽는다. **어느 줄이 깨졌는지 말해 준다.**
  *
- * 이 파일은 사람이 페이지의 텍스트 상자에서 60줄을 복사해 붙여넣는 것이라,
+ * 이 파일은 사람이 페이지의 텍스트 상자에서 307줄을 복사해 붙여넣는 것이라,
  * 잘리거나 두 줄이 붙는 일이 실제로 생긴다. 그냥 `JSON.parse` 하면 Node 스택이
  * **이 스크립트**를 가리켜서, 정작 고칠 자리가 표본 몇째 줄인지 안 나온다.
  *
@@ -216,14 +216,16 @@ function spread(tied: Weights[]): string[] {
 		.map((w) => ({ w, s: w.fit + w.tier + w.exclusive }))
 		.filter((x) => x.s > 0);
 	if (shares.length === 0) return ['  (전부 0 인 저울추뿐이다 — 표본이 아무것도 안 갈랐다)'];
-	const pct = (pick: (w: Weights) => number): string => {
+	// 바깥 `pct`(맞힌 비율)와 이름이 겹치면 안 된다 — 여기 것은 「몫의 폭」이라
+	// 뜻이 아예 다르고, 가려 놓으면 나중에 한쪽을 다른 쪽으로 착각해 고치게 된다
+	const range = (pick: (w: Weights) => number): string => {
 		const vs = shares.map((x) => (pick(x.w) / x.s) * 100);
 		return `${Math.min(...vs).toFixed(0)}% ~ ${Math.max(...vs).toFixed(0)}%`;
 	};
 	return [
-		`  적합이 차지하는 몫   ${pct((w) => w.fit)}`,
-		`  등급이 차지하는 몫   ${pct((w) => w.tier)}`,
-		`  전용이 차지하는 몫   ${pct((w) => w.exclusive)}`,
+		`  적합이 차지하는 몫   ${range((w) => w.fit)}`,
+		`  등급이 차지하는 몫   ${range((w) => w.tier)}`,
+		`  전용이 차지하는 몫   ${range((w) => w.exclusive)}`,
 	];
 }
 
@@ -312,6 +314,31 @@ for (const k of KINDS) {
 const counted = KINDS.reduce((s, k) => s + allPairs.filter((p) => strataOfPair(p) === k.key).length, 0);
 if (counted !== allPairs.length) {
 	console.log(`  (어느 무더기에도 안 든 짝 ${allPairs.length - counted} — 후보 셋에 낯선 무더기 이름이 있다)`);
+}
+
+/**
+ * 안 켜지는 카드가 어느 칸에 갔나. **이것을 안 내면 그 카드를 넣은 이유가 사라진다.**
+ *
+ * 사양 §3.3 은 죽은 카드를 후보에 넣은 까닭을 「그 거르기가 옳은지를 표본이
+ * 판정하기 때문」이라고 못 박았다. 사람이 「안 집는다」에 두면 `scorePack` 의
+ * 거르기가 맞고, 「보통」 이상에 두면 그 거르기가 너무 세다는 뜻이다.
+ *
+ * 그런데 `pairsOf` 는 그 행을 짝에서 빼므로 위 수치 어디에도 안 나온다 — 보고가
+ * 「307판정(그중 켜지는 것 277)」만 찍으면 나머지 30장의 답이 통째로 사라진다.
+ * 그 30장 중 여럿은 귀한 「엇갈린다」 자리를 쓴 것이라 더 아깝다.
+ */
+const dead = clean.filter((r) => !fireable(r.deck, r.giftId));
+if (dead.length > 0) {
+	console.log(`\n안 켜지는 카드 ${dead.length}장의 판정 — 「안 켜지면 뺀다」가 옳은지 여기서 보인다`);
+	const LABEL: Record<number, string> = { 0: '안 집는다', 1: '보통', 2: '좋다', 3: '반드시 집는다' };
+	console.log('  ' + [0, 1, 2, 3]
+		.map((b) => `${LABEL[b]} ${dead.filter((r) => r.bucket === b).length}`)
+		.join(' · '));
+	// 「안 집는다」가 아닌 것이 있으면 그 규칙이 너무 세다는 신호다. 수만 찍고
+	// 판정은 사람에게 맡긴다 — 여기서 단정하면 표본이 말할 것을 스크립트가 가로챈다
+	const kept = dead.filter((r) => r.bucket > 0).length;
+	console.log(`  그중 ${kept}장은 「안 집는다」가 아니다`
+		+ (kept === 0 ? ' — 지금 거르기와 어긋나는 판정이 없다' : ' — 지금 거르기가 너무 센지 다시 볼 자리다'));
 }
 
 console.log(`\n같은 점수를 내는 저울추 ${all.tied.length}가지 — 표본이 하나로 못 좁혔다`);
