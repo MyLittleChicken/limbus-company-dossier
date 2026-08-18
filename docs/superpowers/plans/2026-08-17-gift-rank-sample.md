@@ -1330,6 +1330,11 @@ h1 { font-size:1.3rem; margin:0 0 .3rem; }
 .cols { display:grid; grid-template-columns:repeat(5,1fr); gap:.6rem; align-items:start; }
 @media (max-width:1000px) { .cols { grid-template-columns:1fr; } }
 .col { border:1px dashed var(--line); border-radius:6px; padding:.5rem; min-height:6rem; }
+/* 판정 칸은 화면에 붙어 따라온다. 덱 하나가 화면 두 개 반 높이(3,100px)라
+   안 붙이면 열다섯째 카드를 보이지도 않는 칸으로 끌어야 한다 */
+.col[data-bucket]:not([data-bucket="none"]) {
+  position:sticky; top:.6rem; background:var(--bg); z-index:2;
+  max-height:calc(100vh - 6rem); overflow-y:auto; }
 .col > h3 { font-size:.85rem; margin:0 0 .5rem; color:var(--muted);
   text-transform:none; letter-spacing:.02em; }
 .card { border:1px solid var(--line); border-radius:5px; background:var(--card);
