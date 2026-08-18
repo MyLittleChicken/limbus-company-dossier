@@ -1,12 +1,17 @@
 /**
  * 표본을 읽어 저울추를 찾고 보고한다.
  *
- * **두 덱으로 맞추고 남은 덱으로 확인한다.** 60개에 저울추 셋이면 외워버릴
- * 위험이 크진 않지만, 확인 없이 「맞췄다」고 하면 그것은 증명이 아니다.
- * 세 갈래를 모두 돌려 셋 다 보고한다.
+ * **덱 하나를 빼고 맞춘 뒤 뺀 덱으로 확인한다.** 덱이 열하나이므로 갈래도
+ * 열하나다. 307판정에 저울추 셋이면 외워버릴 위험이 크진 않지만, 확인 없이
+ * 「맞췄다」고 하면 그것은 증명이 아니다. 갈래를 모두 돌려 전부 보고한다.
  *
  * 확인 덱의 정확도가 맞춘 덱보다 **크게 낮으면 모양이 틀린 것**이다 —
  * 저울추를 더 늘리지 말고 그 사실을 적는다.
+ *
+ * **전체 정확도는 부풀기 쉽다.** 짝의 대부분은 「확실히 좋다 > 확실히 아니다」라
+ * 어떤 저울추로도 맞는다 — 저울추를 하나도 안 가르는 짝이다. 그래서 무더기별로
+ * 따로 세서, 엇갈린 무더기 안에서 몇 개나 맞혔는지를 함께 낸다. 그 수가 이
+ * 표본이 실제로 정한 것이다.
  *
  * 실행: npm run rank:fit
  */
@@ -33,7 +38,9 @@ interface DeckJson {
 	id: string; name: string;
 	// `fieldSize` 는 적합도의 분모다 — 없으면 저울추가 후보 셋과 다른 자로 셈한다
 	supply: { axis: Array<[string, number]>; attackType: Array<[string, number]>; fieldSize: number };
-	cards: Array<{ card: GiftCard }>;
+	// `stratum` 은 무더기별 정확도의 열쇠다 — 없으면 전체 정확도만 남아 「쉬운
+	// 짝이 대부분」이라는 사실이 가려진다
+	cards: Array<{ card: GiftCard; stratum: string }>;
 }
 
 const argv = process.argv.slice(2);
@@ -113,6 +120,13 @@ for (const d of decks) {
 		console.error('npm run rank:deck 을 다시 돌려라.');
 		process.exit(1);
 	}
+	// 무더기가 없으면 무더기별 정확도가 통째로 「없음」이 되는데, 그때 남는 것은
+	// 부풀기 쉬운 전체 정확도뿐이라 조용히 틀린 결론으로 간다 — 여기서 멈춘다
+	if (first !== undefined && typeof first.stratum !== 'string') {
+		console.error(`덱 ${d.id} 의 카드에 stratum 이 없다 — 후보 셋이 낡았다`);
+		console.error('npm run rank:deck 을 다시 돌려라.');
+		process.exit(1);
+	}
 }
 
 const supplyOf = new Map<string, DeckSupply>(decks.map((d) => [d.id, {
@@ -120,7 +134,11 @@ const supplyOf = new Map<string, DeckSupply>(decks.map((d) => [d.id, {
 	fieldSize: d.supply.fieldSize,
 }]));
 const cardOf = new Map<string, GiftCard>();
-for (const d of decks) for (const c of d.cards) cardOf.set(`${d.id}\t${c.card.giftId}`, c.card);
+const stratumOf = new Map<string, string>();
+for (const d of decks) for (const c of d.cards) {
+	cardOf.set(`${d.id}\t${c.card.giftId}`, c.card);
+	stratumOf.set(`${d.id}\t${c.card.giftId}`, c.stratum);
+}
 
 const fireable = (deck: string, giftId: string): boolean =>
 	cardOf.get(`${deck}\t${giftId}`)?.fireable ?? false;
@@ -240,6 +258,61 @@ for (const held of deckIds) {
 const all = searchWeights(allPairs, value);
 console.log(`\n전부로 맞춘 저울추   적합 ${all.best.fit} · 등급 ${all.best.tier} · 전용 ${all.best.exclusive}`);
 console.log(`정확도               ${pct(all.hit, all.total)} (${all.hit}/${all.total})`);
+
+/**
+ * 짝이 어느 무더기의 싸움인가.
+ *
+ * **두 카드의 무더기가 다르면 「섞임」이다.** 「확실히 좋다 > 확실히 아니다」는
+ * 후보를 고를 때 이미 그렇게 갈라 놓은 것이라, 그 짝을 맞히는 것은 저울추의
+ * 성적이 아니라 후보 고르기의 성적이다. 그것을 어느 한쪽 무더기로 밀어 넣으면
+ * 그 무더기의 수치가 통째로 부풀어, 정작 봐야 할 「엇갈린다」 안의 성적이
+ * 가려진다. 그래서 따로 센다.
+ */
+const strataOfPair = (p: { deck: string; hi: string; lo: string }): string => {
+	const hi = stratumOf.get(`${p.deck}\t${p.hi}`) ?? '알 수 없음';
+	const lo = stratumOf.get(`${p.deck}\t${p.lo}`) ?? '알 수 없음';
+	return hi === lo ? hi : '섞임';
+};
+
+/**
+ * 무더기별 정확도. **전체 정확도보다 이쪽이 표본의 값어치다.**
+ *
+ * 전체가 98% 라도 그 대부분이 섞임 짝이면 저울추는 아무것도 안 배운 것이다 —
+ * 「4등급이 1등급보다 낫다」는 어떤 저울추로도 맞는다. 엇갈린 무더기 안의 짝만이
+ * 적합·등급·전용의 몫을 실제로 가른다.
+ */
+/**
+ * 터미널 폭으로 맞춘다 — 한글 한 글자는 두 칸을 먹는다.
+ *
+ * `padEnd` 는 글자 수로 세므로 「엇갈린다」(4자)와 「확실히 아니다」(7자)를
+ * 같은 폭으로 못 맞춘다. 줄이 어긋나면 넷을 나란히 견주라고 낸 표가 도리어
+ * 읽기 어려워진다.
+ */
+const padK = (s: string, width: number): string => {
+	const w = [...s].reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2e7f ? 2 : 1), 0);
+	return s + ' '.repeat(Math.max(0, width - w));
+};
+
+console.log('\n무더기별 정확도');
+const KINDS: Array<{ key: string; note: string }> = [
+	{ key: '확실히 좋다', note: '' },
+	{ key: '확실히 아니다', note: '' },
+	{ key: '엇갈린다', note: '← 이 수가 이 표본의 값어치다' },
+	// 무더기가 서로 다른 짝. 후보 고르기가 이미 갈라 놓은 것이라 저울추의 성적이 아니다
+	{ key: '섞임', note: '(무더기가 서로 달라 애초에 갈려 있던 짝)' },
+];
+for (const k of KINDS) {
+	const mine = allPairs.filter((p) => strataOfPair(p) === k.key);
+	const a = agreementOf(mine, (d, g) => value(d, g, all.best));
+	console.log(`  ${padK(k.key, 14)}${pct(a.hit, a.total)} (${a.hit}/${a.total})`
+		+ (k.note === '' ? '' : `   ${k.note}`));
+}
+// 위 넷의 합이 전체와 같은지 그 자리에서 보인다 — 새 무더기 이름이 생겨 조용히
+// 어느 줄에도 안 들어가는 짝이 나오면 여기서 드러난다
+const counted = KINDS.reduce((s, k) => s + allPairs.filter((p) => strataOfPair(p) === k.key).length, 0);
+if (counted !== allPairs.length) {
+	console.log(`  (어느 무더기에도 안 든 짝 ${allPairs.length - counted} — 후보 셋에 낯선 무더기 이름이 있다)`);
+}
 
 console.log(`\n같은 점수를 내는 저울추 ${all.tied.length}가지 — 표본이 하나로 못 좁혔다`);
 for (const line of spread(all.tied)) console.log(line);
