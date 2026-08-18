@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pickThirty as pickThirtyRaw } from './pick.js';
-import type { Picked } from './pick.js';
+import type { Picked, Quota } from './pick.js';
 import type { FusionRole } from './fusion.js';
 import type { DeckSupply, GiftCard } from './types.js';
 
@@ -91,7 +91,8 @@ const nameOf = (giftId: string): string => NAMES.get(giftId) ?? giftId;
 const pickThirty = (
 	pool: GiftCard[], supply: DeckSupply,
 	roles: Map<string, FusionRole>, avoid: ReadonlySet<string>,
-): Picked[] => pickThirtyRaw(pool, supply, roles, avoid, nameOf);
+	quota?: Quota,
+): Picked[] => pickThirtyRaw(pool, supply, roles, avoid, nameOf, quota);
 
 test('무더기마다 열 장을 낸다 — 재료가 넉넉할 때', () => {
 	const { pool, roles } = buildPool({ good: 25, bad: 25, a: 25, b: 25, c: 25, d: 25 });
@@ -315,6 +316,47 @@ test('경계값 — fit 0.5·t 0.75 인데 안 켜지면 확실히 좋다가 아
 	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
 	assert.ok(!picked.some((p) => p.card.giftId === 'bnd_nofire'),
 		'안 켜지는데 확실히 좋다에 들어갔다 — fireable 게이트가 없다');
+});
+
+test('몫을 바꿔 부르면 그 수만큼 낸다', () => {
+	// 「확실히 좋다」가 원리적으로 0 인 덱(방향미정)에 그 몫을 엇갈림으로 옮기는
+	// 자리다. 무더기 정의는 그대로이므로 낼 장수만 달라져야 한다
+	const { pool, roles } = buildPool({ good: 25, bad: 25, a: 25, b: 25, c: 25, d: 25 });
+	const quota: Quota = { good: 0, bad: 5, tangled: 20, turns: [1, 1, 1, 1] };
+	const picked = pickThirty(pool, SUPPLY, roles, NONE, quota);
+	assert.equal(stratumOf(picked, '확실히 좋다').length, 0);
+	assert.equal(stratumOf(picked, '확실히 아니다').length, 5);
+	assert.equal(stratumOf(picked, '엇갈린다').length, 20);
+	assert.equal(picked.length, 25);
+});
+
+test('갈래 차례를 키우면 그 갈래가 더 많이 나온다 — 다른 갈래를 죽이지는 않는다', () => {
+	const { pool, roles } = buildPool({ good: 0, bad: 0, a: 25, b: 25, c: 25, d: 25 });
+	const quota: Quota = { good: 10, bad: 10, tangled: 20, turns: [2, 1, 1, 1] };
+	const tangled = stratumOf(pickThirty(pool, SUPPLY, roles, NONE, quota), '엇갈린다');
+	assert.equal(tangled.length, 20);
+	const byBranch = [0, 1, 2, 3].map((b) => tangled.filter((p) => p.branch === b).length);
+	// 한 바퀴에 2·1·1·1 이면 스무 장은 8·4·4·4 다
+	assert.deepEqual(byBranch, [8, 4, 4, 4]);
+});
+
+test('기본 몫은 예전과 같다 — 10·10·10 에 갈래 고르게', () => {
+	const { pool, roles } = buildPool({ good: 25, bad: 25, a: 25, b: 25, c: 25, d: 25 });
+	const withDefault = pickThirty(pool, SUPPLY, roles, NONE).map((p) => p.card.giftId);
+	const explicit = pickThirty(pool, SUPPLY, roles, NONE,
+		{ good: 10, bad: 10, tangled: 10, turns: [1, 1, 1, 1] }).map((p) => p.card.giftId);
+	assert.deepEqual(withDefault, explicit);
+});
+
+test('갈래를 밖으로 낸다 — why 를 뜯어 되짚지 않아도 되게', () => {
+	const { pool, roles } = buildPool({ good: 1, bad: 1, a: 1, b: 1, c: 1, d: 1 });
+	const byId = new Map(pickThirty(pool, SUPPLY, roles, NONE).map((p) => [p.card.giftId, p.branch]));
+	assert.equal(byId.get('good001'), -1);
+	assert.equal(byId.get('bad001'), -1);
+	assert.equal(byId.get('branchA001'), 0);
+	assert.equal(byId.get('branchB001'), 1);
+	assert.equal(byId.get('branchC001'), 2);
+	assert.equal(byId.get('branchD001'), 3);
 });
 
 test('갈래 c 의 why 는 못에 없는 결과물의 이름을 부른다', () => {

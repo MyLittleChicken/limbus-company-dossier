@@ -32,8 +32,8 @@ import { evaluateGifts } from '../lib/engine/v2/evaluate.js';
 import { fitOfKeyword, keywordKindOf, supplyKeyOf } from './rank/fit.js';
 import { fusionRolesOf, roleOf } from './rank/fusion.js';
 import type { Recipe } from './rank/fusion.js';
-import { pickThirty } from './rank/pick.js';
-import type { Picked } from './rank/pick.js';
+import { DEFAULT_QUOTA, pickThirty } from './rank/pick.js';
+import type { Picked, Quota } from './rank/pick.js';
 import { buildSquad, labelOf } from './rank/squad.js';
 import type { Identity } from './rank/squad.js';
 import type { DeckSupply, GiftCard } from './rank/types.js';
@@ -283,6 +283,25 @@ const specs: DeckSpec[] = [
 ];
 
 /**
+ * 이 덱에 무더기 몫을 얼마나 줄까.
+ *
+ * **방향미정 덱만 다르다.** 그 덱은 어느 키워드도 적합 0.5 를 못 넘어야 뜻이
+ * 서는 덱이라(위 관문), 「확실히 좋다」(적합 ≥ 0.5 가 조건)를 **원리적으로**
+ * 못 만든다 — 두 요구가 서로 배타적이다. 그 열 자리를 비워 두면 이 덱은 20판정
+ * 짜리가 되는데, 같은 열 장을 엇갈림에 주면 **이 덱이 존재하는 이유**인 갈래
+ * 0(고등급인데 적합 0 — 「등급만으로 얼마나 가나」)을 그만큼 더 물을 수 있다.
+ * 갈래 0 의 차례를 둘로 준 것은 나머지 갈래(재료·전용)를 죽이지 않으면서 그
+ * 물음의 몫을 절반까지 올리는 가장 작은 손질이다.
+ *
+ * **무더기 정의도 문턱도 안 건드린다** — 몫만 다르다. 「엇갈린다」가 무엇을
+ * 뜻하는지가 덱마다 같으므로 덱 간 비교는 그대로다.
+ */
+const quotaOf = (spec: DeckSpec): Quota =>
+	spec.kind === 'none'
+		? { good: 10, bad: 10, tangled: 20, turns: [2, 1, 1, 1] }
+		: DEFAULT_QUOTA;
+
+/**
  * 앞 덱들이 이미 쓴 기프트.
  *
  * 이것이 없으면 열한 덱이 거의 같은 서른을 보여 준다 — 무더기 판정은 덱의
@@ -347,7 +366,7 @@ for (const spec of specs) {
 
 	// **이름표는 기프트 전체를 안다.** 못에서 찾으면 갈래 c 가 부르는 합성
 	// 결과물이 거기 없어 id 가 찍힌다 — `pickThirty` 의 주석 참조
-	const picked = pickThirty(cards, supply, roles, used, nameOf);
+	const picked = pickThirty(cards, supply, roles, used, nameOf, quotaOf(spec));
 	for (const p of picked) used.add(p.card.giftId);
 
 	decks.push({
@@ -384,16 +403,22 @@ for (const spec of specs) {
 	let okLead: boolean;
 	if (spec.kind === 'none') {
 		/**
-		 * 방향미정 덱은 거꾸로 묻는다 — 축이 **작아야** 「적합도가 없을 때 등급이
-		 * 얼마나 말하는가」를 잰다.
+		 * 방향미정 덱은 거꾸로 묻는다 — **어느 키워드도 크게 안 맞아야** 「적합도가
+		 * 없을 때 등급이 얼마나 말하는가」를 잰다.
 		 *
-		 * **문턱의 뜻이 바뀌었다.** 분모가 「그 갈래의 최댓값」이던 때 이 문턱은
-		 * 의도와 반대 방향이었다 — 축 최댓값이 1 이면 `1/1 = 1.0` 이라 **작을수록
-		 * 부풀었다**. 분모가 출격 인원이 된 지금은 `≤ 3` 이 곧 「어느 축도 출격
-		 * 7인의 절반을 못 넘는다」(3/7 ≈ 0.43 < 0.5)라는 뜻이다.
+		 * **축만 보면 안 된다.** 처음엔 `axisMax <= 3` 이었는데, 이 덱의 `prefer` 는
+		 * `-축 수` 라 공격 타입을 아예 안 본다 — 지금 공격 공급이 3·3·3 인 것은
+		 * 우연이고, 인격 하나만 바뀌어 blunt 가 4 가 되면 적합도 0.57 짜리 키워드가
+		 * 생기는데 축 문턱은 여전히 통과한다. 게다가 리터럴 `3` 은 출격 인원과
+		 * 무관해서, 출격 수가 바뀌면 뜻이 또 달라진다.
+		 *
+		 * 그래서 **진단 줄이 이미 세는 값을 그대로 문으로 쓴다** — 축과 공격 타입을
+		 * 함께 덮고 `fieldSize` 에 따라 저절로 맞춰진다. 이 문이 서야 「이 덱의
+		 * 확실히 좋다가 0 인 것은 우연이 아니라 구조」가 참이 된다.
 		 */
-		okLead = axisMax <= 3;
-		leadLine = `축 최댓값 ${axisMax} / 출격 ${supply.fieldSize} — 어느 축도 출격의 절반을 못 넘는다 (≤ 3)`;
+		const fitMax = Math.max(...KEYWORDS.map((k) => fitOfKeyword(k, supply)));
+		okLead = KEYWORDS.every((k) => fitOfKeyword(k, supply) < 0.5);
+		leadLine = `키워드별 fit 최댓값 ${fitMax.toFixed(2)} (0.50 미만이어야 한다) · 축 최댓값 ${axisMax} / 출격 ${supply.fieldSize}`;
 	} else {
 		const m = spec.kind === 'axis' ? supply.axis : supply.attackType;
 		const mine = m.get(spec.key ?? '') ?? 0;
@@ -405,9 +430,13 @@ for (const spec of specs) {
 	}
 	if (!okLead) broken.push(`덱 ${spec.id} 주력 — ${leadLine}`);
 
-	const strata = ['확실히 좋다', '확실히 아니다', '엇갈린다'] as const;
+	const quota = quotaOf(spec);
+	const strata = [
+		['확실히 좋다', quota.good], ['확실히 아니다', quota.bad], ['엇갈린다', quota.tangled],
+	] as const;
 	const countOf = (s: string): number => picked.filter((p) => p.stratum === s).length;
-	const short = strata.filter((s) => countOf(s) < 10);
+	// **몫과 견준다.** 10 을 리터럴로 박으면 몫이 다른 덱에서 「모자라다」를 잘못 말한다
+	const short = strata.filter(([s, want]) => countOf(s) < want);
 
 	const madeIn = picked.filter((p) => roleOf(roles, p.card.giftId).madeOnly).length;
 	if (madeIn > 0) broken.push(`덱 ${spec.id} 합성 결과물 ${madeIn}장`);
@@ -430,7 +459,10 @@ for (const spec of specs) {
 	console.log(`  축 공급   ${[...supply.axis].map(([k, v]) => `${k} ${v}`).join(' · ') || '없다'}`);
 	console.log(`  공격 공급 ${[...supply.attackType].map(([k, v]) => `${k} ${v}`).join(' · ') || '없다'}`);
 	console.log(`  1위       ${leadLine} — ${okLead ? '맞다' : '어긋난다'}`);
-	console.log(`  무더기    ${strata.map((s) => `${s} ${countOf(s)}`).join(' · ')}`);
+	console.log(`  무더기    ${strata.map(([s, want]) => `${s} ${countOf(s)}/${want}`).join(' · ')}`);
+	// 엇갈림이 어느 갈래로 갔나 — 이 덱이 무엇을 묻고 있는지가 여기서 보인다
+	const branchCount = [0, 1, 2, 3].map((b) => picked.filter((p) => p.branch === b).length);
+	console.log(`  엇갈림 갈래 고등급·부적합 ${branchCount[0]} · 저등급·적합 ${branchCount[1]} · 상위 재료 ${branchCount[2]} · 전용·저등급 ${branchCount[3]}`);
 	if (short.length > 0) {
 		/**
 		 * 「왜 모자랐나」의 답은 하나뿐이다 — `pickThirty` 는 다른 무더기로 메우지도
@@ -445,7 +477,7 @@ for (const spec of specs) {
 		const strongKeys = KEYWORDS.filter((k) => fitOfKeyword(k, supply) >= 0.5);
 		const inPool = (k: string): number =>
 			pickable.filter((m) => (m.keywordId ?? '').toUpperCase() === k.toUpperCase()).length;
-		console.log(`            모자람: ${short.map((s) => `${s} ${countOf(s)}장 — 그 무더기 조건을 다 만족하는 카드가 후보 ${pickable.length}장 중 그만큼뿐이다`).join(' / ')}`);
+		console.log(`            모자람: ${short.map(([s, want]) => `${s} ${countOf(s)}/${want}장 — 그 무더기 조건을 다 만족하는 카드가 후보 ${pickable.length}장 중 그만큼뿐이다`).join(' / ')}`);
 		console.log(`            적합 0.5 이상인 키워드: ${strongKeys.map((k) => `${k}(못 ${inPool(k)}장)`).join(' · ') || '없다'}`);
 	}
 	console.log(`  합성 결과물 ${madeIn}장 — 0 이어야 한다`);
@@ -489,8 +521,13 @@ console.log(`\n집을 수 있는 기프트 ${pickable.length} = 원문 ${meta.le
 // **뺀 것을 이름과 id 로 남긴다.** 적재 결손이면 나중에 표를 고쳐 되돌려야 하는데,
 // 무엇이 빠졌는지 안 적어 두면 되돌릴 것이 무엇인지도 모르게 된다
 console.log(`  획득 경로 없음(팩·전용팩·선택사건·시작 어디에도 없다): ${noPathInMeta.map((m) => `${m.giftId} ${m.name}`).join(' · ') || '없다'}`);
-// 「× 30」이 아니라 「× 최대 30」이다 — 무더기가 모자란 덱이 있으면 총합이 덜 나온다
-console.log(`서로 다른 기프트 ${all.size} / 판정 ${total} (덱 ${decks.length} × 최대 30 = ${decks.length * 30})`);
+// 상한은 덱마다 다르다(방향미정 덱은 확실히 좋다 몫을 엇갈림으로 옮겼다) —
+// 「11 × 30」으로 적으면 없는 자리를 있는 것처럼 말하게 된다
+const capacity = specs.reduce((s, sp) => {
+	const q = quotaOf(sp);
+	return s + q.good + q.bad + q.tangled;
+}, 0);
+console.log(`서로 다른 기프트 ${all.size} / 판정 ${total} (몫 상한 ${capacity})`);
 
 let maxOverlap = 0;
 let maxPair = '';

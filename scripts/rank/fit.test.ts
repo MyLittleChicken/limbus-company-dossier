@@ -102,6 +102,24 @@ test('출격이 0 이면 0 이다 — 0 으로 나누지 않는다', () => {
 	assert.equal(fitOfKeyword('Combustion', noField), 0);
 });
 
+test('fieldSize 가 없거나 NaN 이어도 0 이다 — NaN 은 조용히 흐른다', () => {
+	/**
+	 * 낡은 후보 셋(`fieldSize` 가 없는 JSON)을 읽으면 `undefined <= 0` 이 거짓이라
+	 * 문을 통과해 적합도가 `NaN` 이 됐다. `NaN` 은 모든 비교를 거짓으로 만들어
+	 * 저울추가 전부 0% 로 나오고 아무거나 「대표」로 뽑힌다. 타입은 JSON 경계에서
+	 * 아무것도 안 막으므로 여기서 못 박는다.
+	 */
+	const missing = {
+		axis: new Map([['COMBUSTION', 3]]), attackType: new Map(),
+	} as unknown as DeckSupply;
+	assert.equal(fitOfKeyword('Combustion', missing), 0);
+
+	const nan: DeckSupply = {
+		axis: new Map([['COMBUSTION', 3]]), attackType: new Map(), fieldSize: Number.NaN,
+	};
+	assert.equal(fitOfKeyword('Combustion', nan), 0);
+});
+
 test('키워드 갈래를 답한다 — why 가 「축」인지 「공격 타입」인지 가른다', () => {
 	assert.equal(keywordKindOf('Combustion'), 'axis');
 	assert.equal(keywordKindOf('Slash'), 'attack');

@@ -19,10 +19,41 @@ export interface Picked {
 	card: GiftCard;
 	stratum: Stratum;
 	why: string;
+	/**
+	 * 엇갈림의 어느 갈래인가(0=고등급 축 불일치 · 1=저등급 축 일치 · 2=저등급
+	 * 상위 재료 · 3=전용인데 저등급). 엇갈림이 아니면 -1.
+	 *
+	 * **밖으로 낸다.** 안 내면 호출자가 `why` 문자열을 뜯어 갈래를 되짚게 되는데
+	 * (「덱 11 의 엇갈림이 어느 갈래로 갔나」를 보고해야 한다), 그건 문구를
+	 * 고칠 때마다 조용히 깨지는 종류의 셈이다.
+	 */
+	branch: -1 | 0 | 1 | 2 | 3;
 }
 
-/** 무더기마다 낼 장수. 모자라면 있는 만큼만 — 다른 무더기로 안 메운다 */
-const WANT = 10;
+/**
+ * 무더기마다 낼 장수와 엇갈림 네 갈래의 차례 배분.
+ *
+ * **몫은 덱마다 다를 수 있어도 무더기의 뜻은 안 바뀐다.** 「확실히 좋다」가
+ * 원리적으로 0 인 덱(어느 키워드도 적합 0.5 를 못 넘는 방향미정 덱)은 그
+ * 자리를 영영 못 채우는데, 그 열 장을 엇갈림에 주면 **그 덱이 답해야 할 물음**
+ * (「적합도가 없을 때 등급이 얼마나 말하는가」)을 더 많이 물을 수 있다.
+ * 문턱도 갈래 판정도 그대로이므로 덱 간 비교는 안 깨진다 — 표본 수만 다르다.
+ */
+export interface Quota {
+	good: number;
+	bad: number;
+	tangled: number;
+	/**
+	 * 엇갈림 갈래 0~3 이 **한 바퀴에 몇 장씩** 내나. 기본은 1·1·1·1(고르게).
+	 *
+	 * 갈래 0(고등급인데 적합 0)이 곧 「등급만으로 얼마나 가나」를 묻는 자리라,
+	 * 그 물음이 덱의 전부인 경우에는 여기를 키운다.
+	 */
+	turns: [number, number, number, number];
+}
+
+/** 무더기마다 열 장, 갈래는 고르게. 모자라면 있는 만큼만 — 다른 무더기로 안 메운다 */
+export const DEFAULT_QUOTA: Quota = { good: 10, bad: 10, tangled: 10, turns: [1, 1, 1, 1] };
 
 /** 등급을 사람이 읽는 말로. `null` 은 EX 다 */
 function tierLabel(tier: number | null): string {
@@ -146,19 +177,28 @@ const byGiftId = (a: Classified, b: Classified): number =>
  * 정한 것이다. 그래서 "그 갈래에 뭐가 남았나"만 보고, "그 갈래에 avoid
  * 아닌 게 남았나"는 보지 않는다 — 이 구분이 다른 갈래의 차례를 지킨다.
  */
-function roundRobinFill(branches: Classified[][], want: number): Classified[] {
+function roundRobinFill(
+	branches: Classified[][],
+	want: number,
+	/** 갈래가 한 바퀴에 낼 장수. 전부 1 이면 예전과 같은 고른 배분이다 */
+	turns: readonly number[],
+): Classified[] {
 	const idx = branches.map(() => 0);
 	const picked: Classified[] = [];
 	let progressed = true;
 	while (picked.length < want && progressed) {
 		progressed = false;
 		for (let b = 0; b < branches.length; b++) {
-			if (picked.length >= want) break;
-			if (idx[b]! < branches[b]!.length) {
+			// 이 갈래의 차례 — 몇 장을 몰아 낼지는 호출자가 정한다. 차례가 여러
+			// 장이어도 **한 바퀴 안에서** 끝나므로 다른 갈래의 차례를 뺏지 않는다
+			for (let t = 0; t < (turns[b] ?? 1); t++) {
+				if (picked.length >= want) break;
+				if (idx[b]! >= branches[b]!.length) break;
 				picked.push(branches[b]![idx[b]!]!);
 				idx[b]! += 1;
 				progressed = true;
 			}
+			if (picked.length >= want) break;
 		}
 	}
 	return picked;
@@ -203,7 +243,10 @@ function pickPlain(cards: Classified[], avoid: ReadonlySet<string>, want: number
  * 안 건너뛴다. 「자리를 비우느니 겹친다」는 그대로 지키되, 그것이 다른
  * 갈래의 차례를 뺏는 대가로 오면 안 된다.
  */
-function pickTangled(cards: Classified[], avoid: ReadonlySet<string>, want: number): Classified[] {
+function pickTangled(
+	cards: Classified[], avoid: ReadonlySet<string>, want: number,
+	turns: readonly number[],
+): Classified[] {
 	const byBranch: Classified[][] = [[], [], [], []];
 	for (const c of cards) byBranch[c.branch]!.push(c);
 
@@ -213,7 +256,7 @@ function pickTangled(cards: Classified[], avoid: ReadonlySet<string>, want: numb
 		const { preferred, fallback } = orderedByAvoid(b, avoid);
 		return [...preferred, ...fallback];
 	});
-	return roundRobinFill(queues, want);
+	return roundRobinFill(queues, want, turns);
 }
 
 /**
@@ -235,6 +278,8 @@ export function pickThirty(
 	 * 그래서 기프트 **전체**를 아는 호출자에게 물어본다.
 	 */
 	nameOf: (giftId: string) => string,
+	/** 무더기별 몫. 기본은 10·10·10 에 갈래 고르게 — 덱마다 다르게 줄 수 있다 */
+	quota: Quota = DEFAULT_QUOTA,
 ): Picked[] {
 	const classified = pool
 		.map((card) => classify(card, supply, roles, nameOf))
@@ -245,10 +290,10 @@ export function pickThirty(
 	const tangled = classified.filter((c) => c.stratum === '엇갈린다');
 
 	const result = [
-		...pickPlain(good, avoid, WANT),
-		...pickPlain(bad, avoid, WANT),
-		...pickTangled(tangled, avoid, WANT),
+		...pickPlain(good, avoid, quota.good),
+		...pickPlain(bad, avoid, quota.bad),
+		...pickTangled(tangled, avoid, quota.tangled, quota.turns),
 	];
 
-	return result.map(({ card, stratum, why }) => ({ card, stratum, why }));
+	return result.map(({ card, stratum, why, branch }) => ({ card, stratum, why, branch }));
 }

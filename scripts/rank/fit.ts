@@ -75,8 +75,13 @@ export function inVocabulary(keywordId: string | null): boolean {
  * 쓴다는 것(저울추 하나로 덮는다)은 그대로 지켜진다.
  */
 export function fitOfKeyword(keywordId: string | null, supply: DeckSupply): number {
-	// 출격이 없으면 잴 것이 없다. 0 으로 나누지 않는다
-	if (supply.fieldSize <= 0) return 0;
+	/**
+	 * 출격이 없으면 잴 것이 없다. **`> 0` 을 부정으로 쓴다** — `fieldSize <= 0`
+	 * 로 적으면 `undefined`(낡은 후보 셋)나 `NaN` 이 그 문을 그냥 통과해 적합도가
+	 * `NaN` 이 된다. `NaN` 은 모든 비교를 거짓으로 만들어 저울추가 전부 0% 로
+	 * 나오고 아무거나 「대표」로 뽑힌다 — 틀린 값이 조용히 흐르는 최악의 모양이다.
+	 */
+	if (!(supply.fieldSize > 0)) return 0;
 
 	const kind = keywordKindOf(keywordId);
 	const key = supplyKeyOf(keywordId);

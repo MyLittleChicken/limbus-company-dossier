@@ -18,11 +18,22 @@ import type { Bucket, DeckSupply, GiftCard, RankRow } from './rank/types.js';
 
 const SAMPLE = 'src/v2/authored/gift-rank.jsonl';
 
+/**
+ * 후보 셋 JSON 의 덱 하나.
+ *
+ * **카드는 한 겹 싸여 있다.** `rank-deck.ts` 가 내는 것은 `GiftCard` 가 아니라
+ * `{ card, stratum, why, fusion }` 이다. 여기서 `GiftCard[]` 로 받으면 타입은
+ * 조용히 통과하고 `c.giftId` 가 전부 `undefined` 가 되어, 열쇠가 죄다
+ * `덱\tundefined` 로 잡힌다 — 그러면 **모든 판정이 「후보 밖」으로 걸려**
+ * `cleanRows` 가 42줄을 다 막고 exit 1 한다(실측). 게다가 안내문이
+ * 「표본을 다시 받아라」라고 해서 원인을 가린다. JSON 경계에서 타입은 아무것도
+ * 보장하지 않으므로, 모양을 정직하게 적는 것 말고는 막을 방법이 없다.
+ */
 interface DeckJson {
 	id: string; name: string;
 	// `fieldSize` 는 적합도의 분모다 — 없으면 저울추가 후보 셋과 다른 자로 셈한다
 	supply: { axis: Array<[string, number]>; attackType: Array<[string, number]>; fieldSize: number };
-	cards: GiftCard[];
+	cards: Array<{ card: GiftCard }>;
 }
 
 const argv = process.argv.slice(2);
@@ -76,12 +87,40 @@ if (rows.length === 0) {
 	process.exit(1);
 }
 
+/**
+ * 후보 셋이 성한지 **읽는 자리에서** 확인한다.
+ *
+ * `fieldSize` 가 없거나 글자면 적합도가 `NaN` 이 되고, `NaN` 은 모든 비교를
+ * 거짓으로 만들어 **저울추 전부가 0% 로 나오고 아무거나 「대표」로 뽑힌다** —
+ * 틀린 답이 조용히 나오는 최악의 모양이다. 낡은 후보 파일을 `--in` 으로 주면
+ * 바로 닿는 길이라, 타입 선언만으로는 못 막는다.
+ *
+ * 카드가 `{ card: … }` 로 싸여 있는지도 함께 본다. 안 싸여 있으면 열쇠가
+ * `덱\tundefined` 로 잡혀 모든 판정이 「후보 밖」이 된다.
+ *
+ * `cleanRows` 와 같은 태도다 — 의심스러우면 멈추되 어디를 고칠지 말한다.
+ */
+for (const d of decks) {
+	const n = d.supply?.fieldSize;
+	if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) {
+		console.error(`덱 ${d.id} 의 supply.fieldSize 가 ${JSON.stringify(n)} 이다 — 적합도의 분모라 양수여야 한다`);
+		console.error('후보 셋이 낡았다. npm run rank:deck 을 다시 돌려라.');
+		process.exit(1);
+	}
+	const first = d.cards[0];
+	if (first !== undefined && typeof first.card?.giftId !== 'string') {
+		console.error(`덱 ${d.id} 의 카드가 { card: … } 모양이 아니다 — 후보 셋이 낡았다`);
+		console.error('npm run rank:deck 을 다시 돌려라.');
+		process.exit(1);
+	}
+}
+
 const supplyOf = new Map<string, DeckSupply>(decks.map((d) => [d.id, {
 	axis: new Map(d.supply.axis), attackType: new Map(d.supply.attackType),
 	fieldSize: d.supply.fieldSize,
 }]));
 const cardOf = new Map<string, GiftCard>();
-for (const d of decks) for (const c of d.cards) cardOf.set(`${d.id}\t${c.giftId}`, c);
+for (const d of decks) for (const c of d.cards) cardOf.set(`${d.id}\t${c.card.giftId}`, c.card);
 
 const fireable = (deck: string, giftId: string): boolean =>
 	cardOf.get(`${deck}\t${giftId}`)?.fireable ?? false;
