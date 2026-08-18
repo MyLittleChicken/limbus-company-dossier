@@ -14,7 +14,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.pipeline.json && tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test \"lib/**/*.test.ts\" \"src/**/*.test.ts\"",
+    "test": "tsx --test \"lib/**/*.test.ts\" \"src/**/*.test.ts\" \"scripts/rank/*.test.ts\"",
     "fetch": "tsx src/fetch.ts",
     "assets": "tsx src/assets.ts",
     "db:up": "docker compose up -d --wait",
@@ -47,7 +47,10 @@
     "golden:compare": "tsx --env-file-if-exists=.env scripts/golden-queries.ts compare",
     "public:retire": "tsx scripts/retire-public.ts retire",
     "public:restore": "tsx scripts/retire-public.ts restore",
-    "gift:verdict-diff": "tsx --env-file-if-exists=.env scripts/verdict-diff.ts"
+    "gift:verdict-diff": "tsx --env-file-if-exists=.env scripts/verdict-diff.ts",
+    "rank:deck": "tsx --env-file-if-exists=.env scripts/rank-deck.ts",
+    "rank:page": "tsx scripts/rank-page.ts",
+    "rank:fit": "tsx scripts/fit-weights.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
