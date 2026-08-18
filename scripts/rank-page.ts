@@ -138,14 +138,31 @@ const fusionLine = (f: Fusion): string => {
 	return `▸ ${esc(f.resultName)}(${tier}) 의 재료${needs}${paths}`;
 };
 
-/** 카드 하나. 이름 · 꼬리표 · 설명문 전문 · 왜 이 무더기인지 · 합성 재료 줄 */
+/**
+ * `why` 를 보일 무더기. **엇갈린다에서만 보인다.**
+ *
+ * `why` 는 `rank-deck.ts` 가 고르기 규칙에서 기계적으로 만든 줄이다. 「확실히
+ * 좋다」·「확실히 아니다」에서 그것은 **모형의 결론**이지 사실이 아니고, 그 사실은
+ * 이미 카드에 다 나와 있다 — 「4등급 · Combustion · 공용」과 덱 머리의 공급 줄로
+ * 사람이 직접 읽을 수 있다. 결론까지 얹으면 정보는 안 늘고 답만 흘린다. 사람이
+ * 그걸 따라 매기면 표본은 고르기 규칙을 그대로 되돌려줄 뿐이고, 그 표본으로 맞춘
+ * 저울추는 아무것도 안 배운 것이 된다.
+ *
+ * 엇갈린다는 다르다. 거기서 `why` 는 결론이 아니라 **어느 신호가 서로 어긋나는지**를
+ * 말한다(「4등급인데 이 덱 축과 안 맞는다」·「1등급인데 진혼의 재료다」). 그건
+ * 카드만 봐서는 바로 안 보이고, 판정을 흐리는 게 아니라 무엇을 저울질할지를
+ * 알려 준다. 저울추가 정해지는 유일한 무더기라 그 도움은 남긴다.
+ */
+const WHY_SHOWN = '엇갈린다';
+
+/** 카드 하나. 이름 · 꼬리표 · 설명문 전문 · (엇갈린다면) 무엇이 어긋나는지 · 합성 재료 줄 */
 const cardHtml = (e: Entry): string => `
       <div class="card${e.card.fireable ? '' : ' dead'}" draggable="true" data-gift="${esc(e.card.giftId)}">
         <div class="nm">${esc(e.card.name)}</div>
         <div class="tag">${e.card.tier === null ? 'EX' : `${String(e.card.tier)}등급`} ·
           ${esc(keywordLabel(e.card.keywordId))} · ${e.card.exclusive ? '전용' : '공용'}${e.card.fireable ? '' : ' · 안 켜짐'}</div>
         <div class="ds">${esc(e.card.desc)}</div>
-        <div class="why">${esc(e.why)}</div>
+        ${e.stratum === WHY_SHOWN ? `<div class="why">${esc(e.why)}</div>` : ''}
         ${e.fusion.map((f) => `<div class="fz">${fusionLine(f)}</div>`).join('')}
       </div>`;
 
@@ -206,6 +223,8 @@ textarea { width:100%; height:11rem; margin-top:.6rem; font:12px/1.5 ui-monospac
 <strong>칸 안의 순서는 안 봅니다.</strong><br>
 <strong>「엇갈린다」 무더기가 가장 중요합니다</strong> — 4등급이 1등급보다 낫다는 판정은 어떤 저울추로도
 맞아서 아무것도 안 가릅니다. 저울추는 오직 엇갈린 무더기에서 정해집니다.<br>
+애매한 무더기의 설명은 「무엇이 서로 어긋나는가」이지 답이 아닙니다.
+<strong>설명을 따라가지 마시고 직접 판단해 주십시오</strong> — 그래야 이 표본이 쓸모가 있습니다.<br>
 카드는 <strong>거울 던전에서 집을 수 있는 것</strong>뿐입니다 — 진혼·달의 기억처럼 합성으로만 나오는
 결과물은 집는 게 아니라 만드는 것이라 애초에 카드로 안 나옵니다. 대신 그 재료인 카드에는
 ▸ 줄로 무엇을 만드는지 적어 두었습니다.<br>
