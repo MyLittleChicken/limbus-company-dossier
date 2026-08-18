@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fusionRolesOf } from './fusion.js';
+import { fusionRolesOf, roleOf } from './fusion.js';
 import type { Recipe } from './fusion.js';
 
 /** 진혼 꼴 — 결과물 하나에 레시피 둘, 재료 3~4개 */
@@ -133,6 +133,34 @@ test('같은 입력이면 같은 답 — makes 와 withOthers 정렬로 순서�
 	// 9002 는 첫 레시피에만 있으니 레시피 순서를 바꿔도 결과가 같다
 	assert.deepEqual(a.get('9002'), b.get('9002'));
 	assert.deepEqual(a.get(REQUIEM), b.get(REQUIEM));
+});
+
+test('레시피 순서를 뒤집어도 같은 답이 나온다 — "첫 등장"은 호출 순서가 아니라 데이터의 성질이다', () => {
+	// 9001 은 두 레시피 모두에 있다. 배열 순서로 "첫 등장"을 정하면 호출자가
+	// 레시피를 어느 순서로 넘기느냐(예: DB 쿼리에 ORDER BY 가 없을 때)에 따라
+	// withOthers 가 바뀐다 — 카드에 적힌 "함께 필요"가 조회마다 달라지면 안 된다.
+	const forward = fusionRolesOf(requiemRecipes);
+	const reversed = fusionRolesOf([requiemRecipes[1]!, requiemRecipes[0]!]);
+	assert.deepEqual(forward.get('9001'), reversed.get('9001'));
+});
+
+test('길이 여럿이면 recipeCount 가 그 수다', () => {
+	const roles = fusionRolesOf(requiemRecipes);
+	// 9001 은 두 레시피 모두에 있지만, recipeCount 는 "이 재료가 몇 레시피에
+	// 있나"가 아니라 "이 결과물을 만드는 길이 몇 개인가" — 진혼은 길이 둘이다
+	assert.equal(roles.get('9001')?.makes[0]?.recipeCount, 2);
+	// 9002 는 첫 레시피에만 있지만, 결과물(진혼) 자체는 길이 둘이므로 똑같이 2
+	assert.equal(roles.get('9002')?.makes[0]?.recipeCount, 2);
+});
+
+test('길이 하나인 결과물은 recipeCount 가 1이다', () => {
+	const roles = fusionRolesOf([moonRecipe]);
+	assert.equal(roles.get('9142')?.makes[0]?.recipeCount, 1);
+});
+
+test('roleOf 가 레시피에 없는 기프트에 빈 역할을 낸다', () => {
+	const roles = fusionRolesOf(requiemRecipes);
+	assert.deepEqual(roleOf(roles, '9999'), { madeOnly: false, makes: [] });
 });
 
 test('결합된 전체 목록에서도 결과물·재료·중간 기프트가 함께 맞는다', () => {
