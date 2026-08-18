@@ -10,8 +10,11 @@ import type { DeckSupply, GiftCard } from './types.js';
 import type { Pair } from './pairs.js';
 
 const SUPPLY: DeckSupply = {
+	// 출격 6인이 전원 화상이라 화상 적합도가 1.0 이다 — 아래 검사들이 그 1.0 에
+	// 기대어 세 항이 각각 더해지는지를 본다
 	axis: new Map([['COMBUSTION', 6]]),
 	attackType: new Map([['slash', 4]]),
+	fieldSize: 6,
 };
 const card = (o: Partial<GiftCard> = {}): GiftCard => ({
 	giftId: 'g', name: '이름', desc: '설명', tier: 3,

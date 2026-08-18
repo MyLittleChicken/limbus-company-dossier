@@ -29,7 +29,7 @@ import { writeFileSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { loadEngineData } from '../lib/engine/v2/load.js';
 import { evaluateGifts } from '../lib/engine/v2/evaluate.js';
-import { fitOfKeyword } from './rank/fit.js';
+import { fitOfKeyword, keywordKindOf, supplyKeyOf } from './rank/fit.js';
 import { fusionRolesOf, roleOf } from './rank/fusion.js';
 import type { Recipe } from './rank/fusion.js';
 import { pickThirty } from './rank/pick.js';
@@ -110,6 +110,7 @@ const skillRows = await prisma.$queryRaw<Array<{ identityId: string; attackType:
 	JOIN canonical.skill s ON s.id = i.skill_id
 	WHERE s.attack_type IS NOT NULL
 	GROUP BY 1, 2
+	ORDER BY 1, 2
 `;
 const attackCount = new Map<string, Map<string, number>>();
 for (const r of skillRows) {
@@ -162,11 +163,33 @@ const recipes: Recipe[] = data.recipes.map((r) => ({
 const roles = fusionRolesOf(recipes);
 
 /**
+ * **획득 경로가 하나도 없는 기프트.** 팩에도, 전용 팩에도, 선택 사건에도,
+ * 시작 기프트에도 안 나오고 합성 결과물도 아니다.
+ *
+ * 이것도 「집을 수 없는 것을 집겠냐고 묻는」 부류다 — 합성 결과물과 뿌리가
+ * 같다. 적재 결손일 수도 있지만, 그렇더라도 **DB 상 경로가 없는 것을 사람에게
+ * 묻지 않는 것**이 옳다. id 를 손으로 적지 않고 네 표의 부재로 판정하므로,
+ * 적재가 고쳐지면 이 목록은 저절로 줄어든다.
+ */
+const noPathRows = await prisma.$queryRaw<Array<{ giftId: string }>>`
+	SELECT g.id AS "giftId"
+	FROM canonical.gift g
+	WHERE g.domain = 'mirror_dungeon'
+	  AND NOT EXISTS (SELECT 1 FROM canonical.gift_pack p WHERE p.gift_id = g.id)
+	  AND NOT EXISTS (SELECT 1 FROM canonical.gift_exclusive_pack x WHERE x.gift_id = g.id)
+	  AND NOT EXISTS (SELECT 1 FROM canonical.choice_event_gift c WHERE c.gift_id = g.id)
+	  AND NOT EXISTS (SELECT 1 FROM canonical.start_gift s WHERE s.gift_id = g.id)
+	  AND NOT EXISTS (SELECT 1 FROM canonical.fusion_slot f WHERE f.gift_id = g.id)
+	ORDER BY g.id
+`;
+const noPath = new Set(noPathRows.map((r) => r.giftId));
+
+/**
  * 집을 수 있는 기프트만 후보다. **합성 결과물은 뺀다** — 진혼·달의 기억은 만드는
  * 것이지 팩에서 뽑는 것이 아니다. v1 은 그 둘을 공통 카드로 물었고, 사용자가
- * 「이건 못 고른다」고 잡았다.
+ * 「이건 못 고른다」고 잡았다. 획득 경로가 없는 것도 같은 이유로 뺀다.
  */
-const pickable = meta.filter((m) => !roleOf(roles, m.giftId).madeOnly);
+const pickable = meta.filter((m) => !roleOf(roles, m.giftId).madeOnly && !noPath.has(m.giftId));
 
 /** 이 인격들이 무엇을 얼마나 공급하나. **출격 7인만 센다** */
 function supplyOf(field: string[]): DeckSupply {
@@ -178,7 +201,13 @@ function supplyOf(field: string[]): DeckSupply {
 		}
 		return o;
 	};
-	return { axis: count(data.supply.axisTag), attackType: count(data.supply.attackType) };
+	return {
+		axis: count(data.supply.axisTag),
+		attackType: count(data.supply.attackType),
+		// **적합도의 분모다.** 표의 최댓값으로 나누면 공급이 평평한 덱에서
+		// 한 명짜리 축도 1.0 이 된다 — `fit.ts` 의 긴 주석이 그 사고를 적어 뒀다
+		fieldSize: field.length,
+	};
 }
 
 /**
@@ -281,7 +310,9 @@ interface DeckOut {
 	roster: string[];
 	field: string[];
 	waiting: string[];
-	supply: { axis: Array<[string, number]>; attackType: Array<[string, number]> };
+	supply: {
+		axis: Array<[string, number]>; attackType: Array<[string, number]>; fieldSize: number;
+	};
 	cards: Array<Picked & { fusion: FusionInfo[] }>;
 }
 
@@ -314,7 +345,9 @@ for (const spec of specs) {
 		fireable: fire.get(m.giftId) ?? true,
 	}));
 
-	const picked = pickThirty(cards, supply, roles, used);
+	// **이름표는 기프트 전체를 안다.** 못에서 찾으면 갈래 c 가 부르는 합성
+	// 결과물이 거기 없어 id 가 찍힌다 — `pickThirty` 의 주석 참조
+	const picked = pickThirty(cards, supply, roles, used, nameOf);
 	for (const p of picked) used.add(p.card.giftId);
 
 	decks.push({
@@ -322,7 +355,11 @@ for (const spec of specs) {
 		roster: rosterIds,
 		field: squad.slice(0, FIELD).map(labelOf),
 		waiting: squad.slice(FIELD).map(labelOf),
-		supply: { axis: [...supply.axis], attackType: [...supply.attackType] },
+		supply: {
+			axis: [...supply.axis], attackType: [...supply.attackType],
+			// 적합도의 분모. 이것 없이 JSON 만 보면 저울추가 다른 자로 셈한다
+			fieldSize: supply.fieldSize,
+		},
 		cards: picked.map((p) => ({
 			...p,
 			fusion: roleOf(roles, p.card.giftId).makes.map((mk) => ({
@@ -346,9 +383,17 @@ for (const spec of specs) {
 	let leadLine: string;
 	let okLead: boolean;
 	if (spec.kind === 'none') {
-		// 방향미정 덱은 거꾸로 묻는다 — 축이 **작아야** 「적합도가 없을 때」를 잰다
+		/**
+		 * 방향미정 덱은 거꾸로 묻는다 — 축이 **작아야** 「적합도가 없을 때 등급이
+		 * 얼마나 말하는가」를 잰다.
+		 *
+		 * **문턱의 뜻이 바뀌었다.** 분모가 「그 갈래의 최댓값」이던 때 이 문턱은
+		 * 의도와 반대 방향이었다 — 축 최댓값이 1 이면 `1/1 = 1.0` 이라 **작을수록
+		 * 부풀었다**. 분모가 출격 인원이 된 지금은 `≤ 3` 이 곧 「어느 축도 출격
+		 * 7인의 절반을 못 넘는다」(3/7 ≈ 0.43 < 0.5)라는 뜻이다.
+		 */
 		okLead = axisMax <= 3;
-		leadLine = `축 최댓값 ${axisMax} (≤ 3 이어야 한다)`;
+		leadLine = `축 최댓값 ${axisMax} / 출격 ${supply.fieldSize} — 어느 축도 출격의 절반을 못 넘는다 (≤ 3)`;
 	} else {
 		const m = spec.kind === 'axis' ? supply.axis : supply.attackType;
 		const mine = m.get(spec.key ?? '') ?? 0;
@@ -392,24 +437,60 @@ for (const spec of specs) {
 		 * 않고 `avoid` 때문에 자리를 비우지도 않으므로(피할 것뿐이면 그냥 쓴다),
 		 * 낸 수가 곧 **후보에 그 무더기가 그만큼밖에 없었다**는 뜻이다.
 		 *
-		 * 함께 찍는 「적합 0.5 이상인 키워드」가 그 사실의 까닭이다. 적합도는 그
-		 * 덱이 가장 많이 가진 것으로 나눈 값이라, 공급이 한쪽으로 쏠린 덱일수록
-		 * 0.5 를 넘는 키워드가 적어지고 「확실히 좋다」의 못 자체가 좁아진다.
+		 * 함께 찍는 「적합 0.5 이상인 키워드」와 그 키워드를 단 후보 장수가 그
+		 * 사실의 까닭이다. 「확실히 좋다」의 못은 **그 키워드들을 단 카드**로
+		 * 한정되고, 거기서 다시 고등급이며 켜지는 것만 남는다 — 못이 21장이면
+		 * 열 장을 못 채우는 것이 이상한 일이 아니다.
 		 */
 		const strongKeys = KEYWORDS.filter((k) => fitOfKeyword(k, supply) >= 0.5);
+		const inPool = (k: string): number =>
+			pickable.filter((m) => (m.keywordId ?? '').toUpperCase() === k.toUpperCase()).length;
 		console.log(`            모자람: ${short.map((s) => `${s} ${countOf(s)}장 — 그 무더기 조건을 다 만족하는 카드가 후보 ${pickable.length}장 중 그만큼뿐이다`).join(' / ')}`);
-		console.log(`            적합 0.5 이상인 키워드: ${strongKeys.join(' · ') || '없다'}`);
+		console.log(`            적합 0.5 이상인 키워드: ${strongKeys.map((k) => `${k}(못 ${inPool(k)}장)`).join(' · ') || '없다'}`);
 	}
-	console.log(`  합성 결과물 ${madeIn}장 — ${madeIn === 0 ? '맞다' : '어긋난다'}`);
+	console.log(`  합성 결과물 ${madeIn}장 — 0 이어야 한다`);
 	console.log(`  적합 있음 ${strong + partial} (강 ${strong} · 곁다리 ${partial}) — 켜지는 것만`);
 	console.log(`  안 켜짐   ${picked.filter((p) => !p.card.fireable).length}`);
+
+	/**
+	 * **「확실히 좋다」가 무엇으로 채워졌나.**
+	 *
+	 * 이 무더기는 `w_적합` 의 **부호를 못 박으라고** 만든 것이라, 여기 든 카드가
+	 * 사람 눈에 「이 덱과 맞는 카드」로 보여야 뜻이 선다. 최댓값 정규화 때에는
+	 * 참격 덱에 화상 기프트가 들어와 106장 중 65장이 부호를 거꾸로 가르쳤다 —
+	 * 그런 일이 다시 나면 여기 「다른 축」 칸의 수로 곧장 보인다.
+	 */
+	const good = picked.filter((p) => p.stratum === '확실히 좋다');
+	const kindCount = { 주력: 0, 다른축: 0, 곁다리공격: 0, 키워드없음: 0 };
+	for (const p of good) {
+		const key = supplyKeyOf(p.card.keywordId);
+		if (key === null) kindCount.키워드없음 += 1;
+		else if (key === spec.key) kindCount.주력 += 1;
+		else if (keywordKindOf(p.card.keywordId) === 'axis') kindCount.다른축 += 1;
+		else kindCount.곁다리공격 += 1;
+	}
+	console.log(`  확실히 좋다 ${good.length}장 = 주력 ${kindCount.주력} · 다른 축 ${kindCount.다른축} · 곁다리 공격 ${kindCount.곁다리공격} · 키워드 없음 ${kindCount.키워드없음}`);
+
+	// 방향미정 덱은 **어떤 키워드도 크게 안 맞아야** 대조군이 된다. 최댓값 하나로
+	// 그것이 지켜졌는지 보인다 — 예전에는 여기가 1.0 이었다
+	if (spec.kind === 'none') {
+		const fitsByKeyword = KEYWORDS.map((k) => [k, fitOfKeyword(k, supply)] as const)
+			.sort((a, b) => b[1] - a[1]);
+		console.log(`  키워드별 fit ${fitsByKeyword.map(([k, f]) => `${k} ${f.toFixed(2)}`).join(' · ')}`);
+	}
 }
 
 // ── 덱을 통틀어 보는 관문 ────────────────────────────────────────────────
 const all = new Set(decks.flatMap((d) => d.cards.map((c) => c.card.giftId)));
 const total = decks.reduce((s, d) => s + d.cards.length, 0);
-console.log(`\n집을 수 있는 기프트 ${pickable.length} (원문 ${meta.length} 중 합성 결과물 ${meta.length - pickable.length} 제외)`);
-console.log(`서로 다른 기프트 ${all.size} / 판정 ${total} (덱 ${decks.length} × 30)`);
+const madeCount = meta.filter((m) => roleOf(roles, m.giftId).madeOnly).length;
+const noPathInMeta = meta.filter((m) => noPath.has(m.giftId) && !roleOf(roles, m.giftId).madeOnly);
+console.log(`\n집을 수 있는 기프트 ${pickable.length} = 원문 ${meta.length} − 합성 결과물 ${madeCount} − 획득 경로 없음 ${noPathInMeta.length}`);
+// **뺀 것을 이름과 id 로 남긴다.** 적재 결손이면 나중에 표를 고쳐 되돌려야 하는데,
+// 무엇이 빠졌는지 안 적어 두면 되돌릴 것이 무엇인지도 모르게 된다
+console.log(`  획득 경로 없음(팩·전용팩·선택사건·시작 어디에도 없다): ${noPathInMeta.map((m) => `${m.giftId} ${m.name}`).join(' · ') || '없다'}`);
+// 「× 30」이 아니라 「× 최대 30」이다 — 무더기가 모자란 덱이 있으면 총합이 덜 나온다
+console.log(`서로 다른 기프트 ${all.size} / 판정 ${total} (덱 ${decks.length} × 최대 30 = ${decks.length * 30})`);
 
 let maxOverlap = 0;
 let maxPair = '';
@@ -426,6 +507,19 @@ for (let i = 0; i < decks.length; i += 1) {
 	}
 }
 console.log(`덱쌍 겹침 최댓값 ${maxOverlap} (${maxPair})`);
+
+/**
+ * 갈래 c 의 `why` 표본. **이름이 찍히는지 눈으로 본다.**
+ *
+ * 「저등급인데 집을 값어치가 있나」를 묻는 유일한 갈래인데, 이름 대신 id 가
+ * 찍히면(「9170의 재료다」) 그 물음이 사람에게 아무 뜻도 없다. 세 장만 보면
+ * 폴백이 도는지 아닌지가 바로 드러난다.
+ */
+const materialWhy = decks.flatMap((d) => d.cards)
+	.filter((c) => c.why.endsWith('의 재료다'))
+	.map((c) => `${c.card.name} — ${c.why}`);
+console.log(`\n갈래 c(상위 재료) ${materialWhy.length}장 · why 표본 셋`);
+for (const w of materialWhy.slice(0, 3)) console.log(`  ${w}`);
 
 /**
  * **`pick.ts` 가 기대는 것을 실제 레시피에 대고 확인한다.**

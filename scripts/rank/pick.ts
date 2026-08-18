@@ -8,7 +8,7 @@
  * 등급·키워드·전용·켜짐을 고르게 덮어 서른 장을 골랐더니 대부분이 자명한
  * 판정이라 저울추가 안 좁혀졌다 — 그래서 「고르게」 대신 「갈라서」로 바꾼다.
  */
-import { fitOfKeyword, tierOf } from './fit.js';
+import { fitOfKeyword, keywordKindOf, tierOf } from './fit.js';
 import { roleOf } from './fusion.js';
 import type { FusionRole } from './fusion.js';
 import type { DeckSupply, GiftCard } from './types.js';
@@ -27,6 +27,27 @@ const WANT = 10;
 /** 등급을 사람이 읽는 말로. `null` 은 EX 다 */
 function tierLabel(tier: number | null): string {
 	return tier === null ? 'EX' : `${tier}등급`;
+}
+
+/**
+ * 적합도가 **무엇과** 맞는지를 가리키는 말.
+ *
+ * 「축」으로 고정해 두면 안 된다 — 참격·관통·타격 기프트는 축이 아니고
+ * (실측 65장), 키워드가 아예 없는 범용 기프트도 있다(66장). 셈은 맞는데
+ * 설명이 어긋나면 사람은 설명을 믿고 판정한다.
+ */
+function fitNoun(keywordId: string | null): string {
+	const kind = keywordKindOf(keywordId);
+	if (kind === 'axis') return '이 덱 축';
+	if (kind === 'attack') return '이 덱 공격 타입';
+	return '이 덱';
+}
+
+/** 키워드가 없는 카드는 「안 맞는다」가 아니라 **맞출 것이 없다** */
+function noFitWhy(card: GiftCard): string | null {
+	return keywordKindOf(card.keywordId) === 'none'
+		? `${tierLabel(card.tier)}이고 키워드가 없어 이 덱과 맞출 것이 없다`
+		: null;
 }
 
 /**
@@ -62,7 +83,7 @@ function classify(
 	card: GiftCard,
 	supply: DeckSupply,
 	roles: Map<string, FusionRole>,
-	byId: ReadonlyMap<string, GiftCard>,
+	nameOf: (giftId: string) => string,
 ): Classified | undefined {
 	const role = roleOf(roles, card.giftId);
 	if (role.madeOnly) return undefined;
@@ -73,32 +94,32 @@ function classify(
 	if (fit >= 0.5 && t >= 0.75 && card.fireable) {
 		return {
 			card, stratum: '확실히 좋다', branch: -1,
-			why: `${tierLabel(card.tier)}이고 이 덱 축과 맞는다`,
+			why: `${tierLabel(card.tier)}이고 ${fitNoun(card.keywordId)}과 맞는다`,
 		};
 	}
 	if (fit === 0 && t <= 0.25) {
 		return {
 			card, stratum: '확실히 아니다', branch: -1,
-			why: `${tierLabel(card.tier)}이고 이 덱 축과도 안 맞는다`,
+			why: noFitWhy(card) ?? `${tierLabel(card.tier)}이고 ${fitNoun(card.keywordId)}과도 안 맞는다`,
 		};
 	}
 	if (t >= 0.75 && fit === 0) {
 		return {
 			card, stratum: '엇갈린다', branch: 0,
-			why: `${tierLabel(card.tier)}인데 이 덱 축과 안 맞는다`,
+			why: noFitWhy(card) ?? `${tierLabel(card.tier)}인데 ${fitNoun(card.keywordId)}과 안 맞는다`,
 		};
 	}
 	if (t <= 0.25 && fit >= 0.5) {
 		return {
 			card, stratum: '엇갈린다', branch: 1,
-			why: `${tierLabel(card.tier)}인데 이 덱 축과 맞는다`,
+			why: `${tierLabel(card.tier)}인데 ${fitNoun(card.keywordId)}과 맞는다`,
 		};
 	}
 	if (t <= 0.25 && role.makes.length > 0) {
 		// 재료가 여러 상위로 가는 길이 있어도 첫 번째만 이름에 쓴다 — 한 줄이라 다
 		// 못 담고, 사람은 대표 하나만 알아도 「집을 값어치」를 가늠할 수 있다
 		const result = role.makes[0]?.result ?? '';
-		const resultName = byId.get(result)?.name ?? result;
+		const resultName = nameOf(result);
 		return {
 			card, stratum: '엇갈린다', branch: 2,
 			why: `${tierLabel(card.tier)}인데 ${resultName}의 재료다`,
@@ -204,10 +225,19 @@ export function pickThirty(
 	supply: DeckSupply,
 	roles: Map<string, FusionRole>,
 	avoid: ReadonlySet<string>,
+	/**
+	 * 기프트 id → 이름. **못(`pool`)에서 찾으면 안 된다.**
+	 *
+	 * 갈래 c 의 `why` 가 부르는 이름은 **합성 결과물**의 이름인데, 못은 그
+	 * 결과물이 이미 빠진 목록이다(집을 수 없으니까). 못에서 찾으면 폴백이
+	 * 100% 발동해 「1등급인데 9170의 재료다」가 되고, 「저등급인데 집을 값어치가
+	 * 있나」를 묻는 **유일한** 갈래의 신호가 통째로 사라진다(실측 21장 전부).
+	 * 그래서 기프트 **전체**를 아는 호출자에게 물어본다.
+	 */
+	nameOf: (giftId: string) => string,
 ): Picked[] {
-	const byId = new Map(pool.map((c) => [c.giftId, c]));
 	const classified = pool
-		.map((card) => classify(card, supply, roles, byId))
+		.map((card) => classify(card, supply, roles, nameOf))
 		.filter((c): c is Classified => c !== undefined);
 
 	const good = classified.filter((c) => c.stratum === '확실히 좋다');

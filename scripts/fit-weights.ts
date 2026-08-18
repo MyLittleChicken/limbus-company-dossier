@@ -20,7 +20,8 @@ const SAMPLE = 'src/v2/authored/gift-rank.jsonl';
 
 interface DeckJson {
 	id: string; name: string;
-	supply: { axis: Array<[string, number]>; attackType: Array<[string, number]> };
+	// `fieldSize` 는 적합도의 분모다 — 없으면 저울추가 후보 셋과 다른 자로 셈한다
+	supply: { axis: Array<[string, number]>; attackType: Array<[string, number]>; fieldSize: number };
 	cards: GiftCard[];
 }
 
@@ -77,6 +78,7 @@ if (rows.length === 0) {
 
 const supplyOf = new Map<string, DeckSupply>(decks.map((d) => [d.id, {
 	axis: new Map(d.supply.axis), attackType: new Map(d.supply.attackType),
+	fieldSize: d.supply.fieldSize,
 }]));
 const cardOf = new Map<string, GiftCard>();
 for (const d of decks) for (const c of d.cards) cardOf.set(`${d.id}\t${c.giftId}`, c);

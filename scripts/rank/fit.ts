@@ -28,39 +28,64 @@ const ATTACK_TYPE_OF = new Map([
 	['HIT', 'blunt'],
 ]);
 
-/** 이 키워드를 잴 수 있나 — 축이거나 공격 타입이면 잰다 */
-export function inVocabulary(keywordId: string | null): boolean {
-	if (keywordId === null) return false;
-	const k = keywordId.toUpperCase();
-	return AXES.has(k) || ATTACK_TYPE_OF.has(k);
-}
+/** 이 키워드가 무엇을 재는 말인가. 어휘 밖·`None`·null 은 `none` 이다 */
+export type KeywordKind = 'axis' | 'attack' | 'none';
 
-/** 그 갈래에서 이 덱이 가장 많이 가진 수. 0 이면 나누지 않는다 */
-function maxOf(m: Map<string, number>): number {
-	const vs = [...m.values()];
-	return vs.length > 0 ? Math.max(...vs) : 0;
+/** 키워드 하나의 갈래. **어휘를 아는 곳을 이 파일 하나로 묶는다** */
+export function keywordKindOf(keywordId: string | null): KeywordKind {
+	if (keywordId === null) return 'none';
+	const k = keywordId.toUpperCase();
+	if (AXES.has(k)) return 'axis';
+	if (ATTACK_TYPE_OF.has(k)) return 'attack';
+	return 'none';
 }
 
 /**
- * 0~1. **분모는 둘 다 「그 덱이 가장 많이 가진 것」이다.**
+ * 이 키워드가 **공급 표의 어느 열쇠**를 보는가. 축은 대문자 그대로, 공격
+ * 타입은 소문자로 바뀐 말이다(Hit → blunt). 어휘 밖이면 null.
  *
- * 공격 타입만 인원으로 나누면 축과 다른 자가 되어 저울추 하나로 못 덮는다.
+ * 호출자가 「이 카드의 키워드가 이 덱의 주력인가」를 물으려면 이 다리가
+ * 필요하다 — 다리를 밖에서 다시 놓으면 `Hit`/`blunt` 를 또 어긋나게 짝짓는다.
+ */
+export function supplyKeyOf(keywordId: string | null): string | null {
+	if (keywordId === null) return null;
+	const k = keywordId.toUpperCase();
+	if (AXES.has(k)) return k;
+	return ATTACK_TYPE_OF.get(k) ?? null;
+}
+
+/** 이 키워드를 잴 수 있나 — 축이거나 공격 타입이면 잰다 */
+export function inVocabulary(keywordId: string | null): boolean {
+	return keywordKindOf(keywordId) !== 'none';
+}
+
+/**
+ * 0~1. **분모는 둘 다 「출격 인원」이다** — 「출격 7명 중 몇 명이 이것을 대나」.
+ *
+ * **최댓값으로 나누면 안 된다**(2026-08-18 에 고침). 그전에는 「그 갈래에서 이
+ * 덱이 가장 많이 가진 수」로 나눴는데, 그 자는 주력이 뚜렷한 덱에서만 맞는다.
+ * 공급이 평평하거나 낮은 갈래에서는 한 명짜리 축도 1.0 이 되어 「이 덱과
+ * 맞는다」가 거짓이 된다 — 실측: 참격 덱의 축 공급이 `BREATH 3 · LACERATION 3
+ * · COMBUSTION 3` 이라 화상 기프트가 3/3 = 1.0 을 받고 「확실히 좋다」에 들어갔고,
+ * 방향미정 덱은 축 최댓값이 1 이라 **한 명짜리 축이 1.0** 이 됐다. 사람은 그런
+ * 카드를 당연히 낮게 매기므로, 부호를 못 박으라고 만든 무더기가 거꾸로
+ * `w_적합` 을 0 쪽으로 끌어내린다.
+ *
+ * 출격 인원은 덱과 무관한 고정된 자라 그런 부풀림이 없다. 두 갈래가 같은 자를
+ * 쓴다는 것(저울추 하나로 덮는다)은 그대로 지켜진다.
  */
 export function fitOfKeyword(keywordId: string | null, supply: DeckSupply): number {
-	if (keywordId === null) return 0;
-	const k = keywordId.toUpperCase();
+	// 출격이 없으면 잴 것이 없다. 0 으로 나누지 않는다
+	if (supply.fieldSize <= 0) return 0;
 
-	if (AXES.has(k)) {
-		const max = maxOf(supply.axis);
-		return max === 0 ? 0 : (supply.axis.get(k) ?? 0) / max;
-	}
-	const supplyKey = ATTACK_TYPE_OF.get(k);
-	if (supplyKey !== undefined) {
-		const max = maxOf(supply.attackType);
-		return max === 0 ? 0 : (supply.attackType.get(supplyKey) ?? 0) / max;
-	}
-	// 'None' 그리고 어휘 밖 — 범용 기프트다. 등급 항이 값을 낸다
-	return 0;
+	const kind = keywordKindOf(keywordId);
+	const key = supplyKeyOf(keywordId);
+	if (key === null) return 0; // 'None' 그리고 어휘 밖 — 범용이다. 등급 항이 값을 낸다
+
+	const have = kind === 'axis'
+		? supply.axis.get(key) ?? 0
+		: supply.attackType.get(key) ?? 0;
+	return have / supply.fieldSize;
 }
 
 /**

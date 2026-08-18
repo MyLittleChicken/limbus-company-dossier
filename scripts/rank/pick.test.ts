@@ -4,18 +4,19 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickThirty } from './pick.js';
+import { pickThirty as pickThirtyRaw } from './pick.js';
 import type { Picked } from './pick.js';
 import type { FusionRole } from './fusion.js';
 import type { DeckSupply, GiftCard } from './types.js';
 
 /**
- * COMBUSTION 이 강한 축(공급 6, 최대치), SINKING 은 곁다리(1/6 ≈ 0.167 —
- * 0 도 1 도 아니다), BURST 는 어휘 안인데 이 덱 공급이 0(정확히 fit 0).
+ * 출격 7인. COMBUSTION 이 강한 축(6/7 ≈ 0.857), SINKING 은 곁다리(1/7 ≈ 0.14 —
+ * 0 도 0.5 도 아니다), BURST 는 어휘 안인데 이 덱 공급이 0(정확히 fit 0).
  */
 const SUPPLY: DeckSupply = {
 	axis: new Map([['COMBUSTION', 6], ['SINKING', 1]]),
 	attackType: new Map([['slash', 4], ['blunt', 4]]),
+	fieldSize: 7,
 };
 
 interface Built { pool: GiftCard[]; roles: Map<string, FusionRole> }
@@ -78,6 +79,19 @@ function buildPool(counts: {
 const NONE = new Set<string>();
 const stratumOf = (picked: Picked[], s: Picked['stratum']): Picked[] =>
 	picked.filter((p) => p.stratum === s);
+
+/**
+ * 기프트 **전체**의 이름표. 합성 결과물(`g_result`)이 여기 들어 있는 것이
+ * 요점이다 — 못에는 없는 이름을 갈래 c 의 `why` 가 불러야 한다.
+ */
+const NAMES = new Map([['g_result', '기프트 결과'], ['g_x', '기프트 엑스']]);
+const nameOf = (giftId: string): string => NAMES.get(giftId) ?? giftId;
+
+/** 검사마다 이름표를 다시 적지 않게 감싼다 */
+const pickThirty = (
+	pool: GiftCard[], supply: DeckSupply,
+	roles: Map<string, FusionRole>, avoid: ReadonlySet<string>,
+): Picked[] => pickThirtyRaw(pool, supply, roles, avoid, nameOf);
 
 test('무더기마다 열 장을 낸다 — 재료가 넉넉할 때', () => {
 	const { pool, roles } = buildPool({ good: 25, bad: 25, a: 25, b: 25, c: 25, d: 25 });
@@ -245,8 +259,12 @@ test('why 가 갈래를 설명한다', () => {
  * 확인: 12/12 그대로 통과). 아래는 그 사각을 메운다.
  */
 const BOUNDARY_SUPPLY: DeckSupply = {
+	// 출격 6인 중 화상 3 — 정확히 0.5 다. LACERATION 6 을 함께 둔 것은 **다른
+	// 축이 아무리 커도 분모(출격 인원)가 안 바뀐다**는 것을 고정물로 못 박기
+	// 위해서다. 최댓값으로 나누던 때에는 이 6 이 분모였다
 	axis: new Map([['COMBUSTION', 3], ['LACERATION', 6]]),
 	attackType: new Map(),
+	fieldSize: 6,
 };
 
 test('경계값 — fit 0.5·t 0.75 정확히·켜짐 → 확실히 좋다', () => {
@@ -297,6 +315,42 @@ test('경계값 — fit 0.5·t 0.75 인데 안 켜지면 확실히 좋다가 아
 	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
 	assert.ok(!picked.some((p) => p.card.giftId === 'bnd_nofire'),
 		'안 켜지는데 확실히 좋다에 들어갔다 — fireable 게이트가 없다');
+});
+
+test('갈래 c 의 why 는 못에 없는 결과물의 이름을 부른다', () => {
+	/**
+	 * 회귀 검사. 이름표를 못(`pool`)에서 찾던 때에는 **합성 결과물이 못에서 이미
+	 * 빠져 있어** 폴백이 100% 발동했고 「1등급인데 9170의 재료다」가 나왔다
+	 * (실측 21장 전부). 여기서는 못에 결과물을 아예 안 넣어 그 상황을 만든다.
+	 */
+	const card: GiftCard = {
+		giftId: 'mat001', name: '재료', desc: '설명',
+		tier: 1, keywordId: 'Sinking', exclusive: false, fireable: true,
+	};
+	const roles = new Map<string, FusionRole>([
+		['mat001', { madeOnly: false, makes: [{ result: 'g_result', withOthers: [], recipeCount: 1 }] }],
+	]);
+	const picked = pickThirty([card], SUPPLY, roles, NONE);
+	assert.equal(picked[0]?.stratum, '엇갈린다');
+	assert.match(picked[0]?.why ?? '', /기프트 결과의 재료다/, picked[0]?.why);
+});
+
+test('why 가 축과 공격 타입과 키워드 없음을 갈라 적는다', () => {
+	// 셈은 맞는데 설명이 「축」으로 고정돼 있으면 사람은 설명을 믿고 판정한다.
+	// SUPPLY 는 slash 4 / 출격 7 ≈ 0.57 이라 참격은 「맞는다」 쪽이다
+	const slash: GiftCard = {
+		giftId: 'atk001', name: '참격', desc: '설명',
+		tier: 5, keywordId: 'Slash', exclusive: false, fireable: true,
+	};
+	const plain: GiftCard = {
+		giftId: 'none001', name: '범용', desc: '설명',
+		tier: 1, keywordId: 'None', exclusive: false, fireable: true,
+	};
+	const picked = pickThirty([slash, plain], SUPPLY, new Map(), NONE);
+	const byId = new Map(picked.map((p) => [p.card.giftId, p.why]));
+	assert.match(byId.get('atk001') ?? '', /공격 타입과 맞는다/, byId.get('atk001'));
+	assert.doesNotMatch(byId.get('atk001') ?? '', /축/, '참격을 축이라 적었다');
+	assert.match(byId.get('none001') ?? '', /키워드가 없어/, byId.get('none001'));
 });
 
 test('무더기가 겹치면 앞선 것 하나로만 들어간다 — 확실히 아니다가 엇갈린다(재료)보다 앞선다', () => {
