@@ -155,15 +155,40 @@ test('피할 것뿐이면 그냥 쓴다 — 자리를 비우느니 겹친다', (
 	assert.equal(stratumOf(picked, '확실히 좋다').length, 5, '피할 것뿐인데 비웠다');
 });
 
-test('엇갈린다도 avoid 없는 패스를 먼저 다 돈 뒤에 avoid 로 넘어간다', () => {
-	// branchA 는 avoid 아닌 것 하나, avoid 인 것 여럿. 다른 세 갈래는 avoid 없이
-	// 넉넉하다. avoid 아닌 branchA 카드 하나는 반드시 들어가야 한다
+test('갈래 안에서는 avoid 아닌 것을 먼저 쓴다', () => {
+	// branchA 는 avoid 아닌 것 하나, avoid 인 것 여럿. avoid 는 갈래 자기 차례
+	// 안의 우선순위일 뿐이다 — avoid 아닌 branchA 카드 하나는 반드시 들어가야 한다
 	const { pool, roles } = buildPool({ good: 0, bad: 0, a: 6, b: 6, c: 6, d: 6 });
 	const branchAIds = pool.filter((c) => c.giftId.startsWith('branchA')).map((c) => c.giftId);
 	const avoid = new Set(branchAIds.slice(1)); // 첫 장만 avoid 아니다
 	const tangled = stratumOf(pickThirty(pool, SUPPLY, roles, avoid), '엇갈린다');
 	assert.ok(tangled.some((p) => p.card.giftId === branchAIds[0]),
 		'avoid 아닌 branchA 카드가 안 들어갔다');
+});
+
+test('avoid 가 갈래 하나를 통째로 굶겨도 다른 세 갈래가 차례를 잃지 않는다', () => {
+	// 리뷰어가 재현한 회귀: branchA 는 avoid 없이 넉넉하고, branchB·C·D 는
+	// 전부 avoid 다. "avoid 아닌 패를 먼저 통째로 돈다"로 짰던 이전 구현은
+	// branchA 가 열 장을 혼자 다 먹고 나머지 세 갈래는 0장이었다(10/0/0/0) —
+	// avoid 가 다른 갈래의 차례 자체를 뺏은 것이다. 지금은 갈래마다 자기
+	// 차례에서 "가장 나은 것"(avoid 아닌 게 없으면 avoid 라도)을 내야 한다
+	const { pool, roles } = buildPool({ good: 0, bad: 0, a: 15, b: 15, c: 15, d: 15 });
+	const avoid = new Set(
+		pool
+			.filter((c) => /^branch[BCD]/.test(c.giftId))
+			.map((c) => c.giftId),
+	);
+	const tangled = stratumOf(pickThirty(pool, SUPPLY, roles, avoid), '엇갈린다');
+	assert.equal(tangled.length, 10);
+	const byPrefix = new Map<string, number>();
+	for (const p of tangled) {
+		const prefix = p.card.giftId.replace(/\d+$/, '');
+		byPrefix.set(prefix, (byPrefix.get(prefix) ?? 0) + 1);
+	}
+	assert.equal(byPrefix.size, 4, `네 갈래가 다 나와야 한다: ${JSON.stringify([...byPrefix])}`);
+	for (const [prefix, n] of byPrefix) {
+		assert.ok(n <= 4, `${prefix} 가 ${n}장으로 몰렸다(10/0/0/0 회귀): ${JSON.stringify([...byPrefix])}`);
+	}
 });
 
 test('같은 못이면 같은 답이 나온다 — 무작위가 아니다', () => {
@@ -208,4 +233,83 @@ test('why 가 갈래를 설명한다', () => {
 	assert.match(byId.get('branchC001') ?? '', /재료다/);
 	assert.match(byId.get('branchC001') ?? '', /기프트 결과/, 'why 에 상위 이름이 없다');
 	assert.match(byId.get('branchD001') ?? '', /전용/);
+});
+
+/**
+ * 경계값 전용 공급 — COMBUSTION 을 **정확히 0.5** 에 오게 짠다(3 / 최대치 6).
+ * 등급 경계는 `tierOf` 가 이미 정확한 자를 준다(4등급→0.75 · 2등급→0.25).
+ *
+ * **`buildPool` 은 이 경계를 한 번도 안 건드린다** — tier ∈ {1,5}(t ∈
+ * {0,1})·fit ∈ {0, ~0.167, 1.0}뿐이라, `>=`/`<=` 를 `>`/`<` 로 바꿔도 그
+ * 갈래에 든 카드는 여전히 같은 무더기에 남는다(리뷰어가 뮤테이션으로
+ * 확인: 12/12 그대로 통과). 아래는 그 사각을 메운다.
+ */
+const BOUNDARY_SUPPLY: DeckSupply = {
+	axis: new Map([['COMBUSTION', 3], ['LACERATION', 6]]),
+	attackType: new Map(),
+};
+
+test('경계값 — fit 0.5·t 0.75 정확히·켜짐 → 확실히 좋다', () => {
+	const card: GiftCard = {
+		giftId: 'bnd_good', name: '경계 좋음', desc: '설명',
+		tier: 4, keywordId: 'Combustion', exclusive: false, fireable: true,
+	};
+	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
+	assert.equal(picked[0]?.stratum, '확실히 좋다', JSON.stringify(picked));
+});
+
+test('경계값 — fit 0·t 0.25 정확히 → 확실히 아니다', () => {
+	const card: GiftCard = {
+		giftId: 'bnd_bad', name: '경계 나쁨', desc: '설명',
+		tier: 2, keywordId: 'Burst', exclusive: false, fireable: true,
+	};
+	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
+	assert.equal(picked[0]?.stratum, '확실히 아니다', JSON.stringify(picked));
+});
+
+test('경계값 — t 0.75 정확히·fit 0 → 엇갈린다(고등급 축 불일치)', () => {
+	const card: GiftCard = {
+		giftId: 'bnd_a', name: '경계 갈래a', desc: '설명',
+		tier: 4, keywordId: 'Burst', exclusive: false, fireable: true,
+	};
+	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
+	assert.equal(picked[0]?.stratum, '엇갈린다', JSON.stringify(picked));
+	assert.match(picked[0]?.why ?? '', /4등급.*안 맞는다/);
+});
+
+test('경계값 — t 0.25 정확히·fit 0.5 → 엇갈린다(저등급 축 일치)', () => {
+	const card: GiftCard = {
+		giftId: 'bnd_b', name: '경계 갈래b', desc: '설명',
+		tier: 2, keywordId: 'Combustion', exclusive: false, fireable: true,
+	};
+	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
+	assert.equal(picked[0]?.stratum, '엇갈린다', JSON.stringify(picked));
+	assert.match(picked[0]?.why ?? '', /2등급.*맞는다/);
+});
+
+test('경계값 — fit 0.5·t 0.75 인데 안 켜지면 확실히 좋다가 아니다', () => {
+	// 등급·적합도는 확실히 좋다감인데 fireable 게이트가 막는다. 게이트가
+	// 빠지면 이 카드가 확실히 좋다로 들어온다 — 그게 이 검사가 잡는 것이다
+	const card: GiftCard = {
+		giftId: 'bnd_nofire', name: '경계 안켜짐', desc: '설명',
+		tier: 4, keywordId: 'Combustion', exclusive: false, fireable: false,
+	};
+	const picked = pickThirty([card], BOUNDARY_SUPPLY, new Map(), NONE);
+	assert.ok(!picked.some((p) => p.card.giftId === 'bnd_nofire'),
+		'안 켜지는데 확실히 좋다에 들어갔다 — fireable 게이트가 없다');
+});
+
+test('무더기가 겹치면 앞선 것 하나로만 들어간다 — 확실히 아니다가 엇갈린다(재료)보다 앞선다', () => {
+	// fit=0·t≤0.25(확실히 아니다 조건)이면서 동시에 상위 재료(엇갈린다 갈래 c
+	// 조건)인 카드. 판정 순서상 확실히 아니다가 먼저이므로 갈래 c 로는 안 간다
+	const card: GiftCard = {
+		giftId: 'overlap001', name: '겹침', desc: '설명',
+		tier: 1, keywordId: 'Burst', exclusive: false, fireable: true,
+	};
+	const roles = new Map<string, FusionRole>([
+		['overlap001', { madeOnly: false, makes: [{ result: 'g_x', withOthers: [], recipeCount: 1 }] }],
+	]);
+	const picked = pickThirty([card], SUPPLY, roles, NONE);
+	assert.equal(picked.length, 1);
+	assert.equal(picked[0]?.stratum, '확실히 아니다', JSON.stringify(picked));
 });

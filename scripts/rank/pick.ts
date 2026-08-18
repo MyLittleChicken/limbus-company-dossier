@@ -118,11 +118,12 @@ const byGiftId = (a: Classified, b: Classified): number =>
 	a.card.giftId.localeCompare(b.card.giftId);
 
 /**
- * 갈래(들) 안에서 `want` 장까지 라운드 로빈으로 채운다.
+ * 갈래(큐)들을 한 번의 라운드 로빈으로 `want` 장까지 채운다.
  *
- * **avoid 는 값을 다 채운 뒤가 아니라 갈래마다 뒤로 미룬다.** 이러면 avoid
- * 카드가 필요할 때만 라운드 로빈 순서 뒤쪽에서 등장하고, 있는데도 피하는
- * 카드부터 도는 일이 없다.
+ * **큐 하나가 이번 라운드에 낼 게 있으면 반드시 낸다.** 큐 안의 순서(어떤
+ * 것이 avoid 인지)는 여기서 안 따진다 — 그건 호출자가 큐를 만들 때 이미
+ * 정한 것이다. 그래서 "그 갈래에 뭐가 남았나"만 보고, "그 갈래에 avoid
+ * 아닌 게 남았나"는 보지 않는다 — 이 구분이 다른 갈래의 차례를 지킨다.
  */
 function roundRobinFill(branches: Classified[][], want: number): Classified[] {
 	const idx = branches.map(() => 0);
@@ -166,26 +167,32 @@ function pickPlain(cards: Classified[], avoid: ReadonlySet<string>, want: number
 }
 
 /**
- * 엇갈린다 무더기를 채운다 — 네 갈래를 라운드 로빈으로 돌되, **avoid 없는
- * 패스를 통째로 먼저 돈 뒤에야 avoid 패스로 넘어간다.**
+ * 엇갈린다 무더기를 채운다 — 네 갈래를 **한 번에** 라운드 로빈으로 돈다.
  *
- * 갈래마다 avoid 유무로 먼저 나누면 「이 무더기 전체에 avoid 아닌 것이
- * 있는 한 그것부터 쓴다」는 규칙과 「네 갈래가 고르게 섞인다」는 규칙을 함께
- * 지킬 수 있다 — 갈래 하나가 avoid 아닌 패로 일찍 마르면 그 갈래만 avoid
- * 패로 넘어가고, 다른 갈래는 여전히 avoid 아닌 것부터 돈다.
+ * **avoid 를 별도 패스로 나누면 안 된다.** 처음엔 "avoid 아닌 패를 통째로
+ * 먼저 돈 뒤에야 avoid 패로 넘어간다"로 짰는데, 그러면 한 갈래가 avoid
+ * 없이 넉넉할 때 그 갈래만의 패스에서 `want` 를 혼자 다 채워 버리고, avoid
+ * 뿐인 다른 세 갈래는 자기 차례를 통째로 잃는다 — 실측(리뷰어 재현):
+ * branchA 15(avoid 없음) · branchB/C/D 15(전부 avoid)에서 10/0/0/0 이 나왔다.
+ * 이건 엇갈린다가 존재하는 이유(네 갈래를 다 보여준다)를 정확히 깬다.
+ *
+ * 고침: 갈래마다 **자기 차례에서 가장 나은 것 하나**(avoid 아닌 것 우선,
+ * 없으면 avoid 라도)를 내는 라운드 로빈 하나로 돈다. 갈래가 차례를 건너뛰는
+ * 경우는 그 갈래에 정말 아무것도 안 남았을 때뿐이다 — avoid 유무로는 절대
+ * 안 건너뛴다. 「자리를 비우느니 겹친다」는 그대로 지키되, 그것이 다른
+ * 갈래의 차례를 뺏는 대가로 오면 안 된다.
  */
 function pickTangled(cards: Classified[], avoid: ReadonlySet<string>, want: number): Classified[] {
 	const byBranch: Classified[][] = [[], [], [], []];
 	for (const c of cards) byBranch[c.branch]!.push(c);
 
-	const preferredBranches = byBranch.map((b) => orderedByAvoid(b, avoid).preferred);
-	const fallbackBranches = byBranch.map((b) => orderedByAvoid(b, avoid).fallback);
-
-	const picked = roundRobinFill(preferredBranches, want);
-	if (picked.length < want) {
-		picked.push(...roundRobinFill(fallbackBranches, want - picked.length));
-	}
-	return picked;
+	// 갈래 하나의 큐: avoid 아닌 것을 앞에, avoid 를 뒤에 — 같은 갈래 **안**의
+	// 순서일 뿐, 갈래끼리를 가르는 패스가 아니다
+	const queues = byBranch.map((b) => {
+		const { preferred, fallback } = orderedByAvoid(b, avoid);
+		return [...preferred, ...fallback];
+	});
+	return roundRobinFill(queues, want);
 }
 
 /**
