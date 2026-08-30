@@ -49,11 +49,18 @@
 
 ## gift-rank.jsonl · gift-rank-candidates.json
 
-기프트 순위 표본. `gift-rank.jsonl` 이 사람의 판정 **307줄**이고,
+기프트 순위 표본. `gift-rank.jsonl` 이 판정 **304줄**이고,
 `gift-rank-candidates.json` 은 그 줄들이 무엇을 가리키는지 정하는 후보 셋이다 —
 **덱 열하나**의 편성(출격 7 · 대기 5)과 축·공격 공급, 적합도의 분모인
 `fieldSize`, 카드마다의 `fireable`·무더기(`stratum`)·합성 관계, 그리고 판정하는
 사람이 읽을 `name`·`desc` 가 들어 있다.
+
+**지금 들어 있는 304줄은 사람 판정이 아니라 LLM 판정 초안이다**(2026-08-31).
+덱마다 독립한 판정자 11개가 공통 지침(효과 본문 우선 · 무더기 이름에 안 끌려가기 ·
+fireable=false 는 편성 고정을 전제로 낮게)으로 매겼고, `why` 칸에 한 줄 근거가
+남아 있다(`rank:fit` 은 그 칸을 안 읽는다). 사람이 `rank:page` 로 검토·수정하면
+그 판이 이것을 대체한다 — 판정 방법과 결과 수치는
+`docs/superpowers/specs/2026-08-17-gift-score-design-결과.md` 에 있다.
 
 **둘을 함께 커밋한다.** 판정 줄만 남기면 그 뜻을 정하는 것이 `/tmp` 에만 있어
 재부팅이면 사라지고, 덱 공급이 7→6 으로 바뀌어도 giftId 는 그대로라 아무 경고
