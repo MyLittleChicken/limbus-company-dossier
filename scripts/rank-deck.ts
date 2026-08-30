@@ -25,7 +25,7 @@
  *
  * 실행: npm run rank:deck
  */
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { PrismaClient } from '../src/v2/generated/client.js';
 import { loadEngineData } from '../lib/engine/v2/load.js';
 import { evaluateGifts } from '../lib/engine/v2/evaluate.js';
@@ -185,11 +185,64 @@ const noPathRows = await prisma.$queryRaw<Array<{ giftId: string }>>`
 const noPath = new Set(noPathRows.map((r) => r.giftId));
 
 /**
+ * **한정 기프트 — 지금은 얻을 수 없다.**
+ *
+ * DB 만으로는 못 잡는 부류다. `gift` 표에 「한정」 칸이 없고, 이것들은 팩에
+ * **들어 있어서** 위의 「획득 경로 없음」 규칙에도 안 걸린다. 표가 말해 주지
+ * 않는 것을 아는 것은 게임을 하는 사람뿐이라, 사람이 적은 목록으로 받는다.
+ *
+ * 사용자가 판정 표본을 읽다가 잡았다(2026-08-30) — 9837 금속 구성체가 파열·충전
+ * 덱의 「확실히 좋다」에, 9838 달을 담은 술잔이 호흡 덱의 「확실히 좋다」에 들어
+ * 있었다. 못 얻는 것을 「좋은가」 물으면 그 답은 저울추에 쓸 수 없다.
+ *
+ * **네 표 + `fusion_slot` 규칙은 그대로 두고 그 위에 얹는다.** 자동 판정을
+ * 사람 목록으로 바꾸는 것이 아니라 자동이 원리적으로 못 보는 자리만 덮는 것이라,
+ * 적재가 고쳐지면 위 규칙은 그대로 저절로 줄어든다. 한정이 풀리면 이 파일에서
+ * 그 줄을 지우면 된다 — 코드는 안 건드린다.
+ *
+ * 파일이 없거나 비어 있으면 빈 목록이다. 없다고 죽으면 이 파일이 있는 브랜치
+ * 밖에서 `rank:deck` 이 안 돈다.
+ */
+interface Unobtainable {
+	giftId: string;
+	name: string;
+	why: string;
+	by: string;
+}
+const UNOBTAINABLE_PATH = 'src/v2/authored/gift-unobtainable.jsonl';
+const readUnobtainable = (): Unobtainable[] => {
+	let raw: string;
+	try {
+		raw = readFileSync(UNOBTAINABLE_PATH, 'utf8');
+	} catch {
+		return [];
+	}
+	return raw.split('\n').map((l) => l.trim()).filter((l) => l !== '')
+		.map((l) => JSON.parse(l) as Unobtainable);
+};
+const unobtainableRows = readUnobtainable();
+const unobtainable = new Set(unobtainableRows.map((r) => r.giftId));
+
+/**
  * 집을 수 있는 기프트만 후보다. **합성 결과물은 뺀다** — 진혼·달의 기억은 만드는
  * 것이지 팩에서 뽑는 것이 아니다. v1 은 그 둘을 공통 카드로 물었고, 사용자가
- * 「이건 못 고른다」고 잡았다. 획득 경로가 없는 것도 같은 이유로 뺀다.
+ * 「이건 못 고른다」고 잡았다. 획득 경로가 없는 것도, 한정도 같은 이유로 뺀다.
  */
-const pickable = meta.filter((m) => !roleOf(roles, m.giftId).madeOnly && !noPath.has(m.giftId));
+const pickable = meta.filter((m) => !roleOf(roles, m.giftId).madeOnly
+	&& !noPath.has(m.giftId) && !unobtainable.has(m.giftId));
+
+/**
+ * **뺀 것을 그 자리에서 찍는다.** 목록에 적혀 있는데 실제로 안 빠졌으면(id 오타·
+ * 이미 다른 규칙에 걸림) 그것도 알아야 하므로, 목록 전건을 「뺐다/이미 없다」로
+ * 가른다. 나중에 한정이 풀렸을 때 무엇을 되돌리는지가 이 줄에 남는다.
+ */
+const cutByHand = unobtainableRows.filter((r) => meta.some((m) => m.giftId === r.giftId)
+	&& !roleOf(roles, r.giftId).madeOnly && !noPath.has(r.giftId));
+console.log(`한정으로 뺀 기프트 ${cutByHand.length}장 (목록 ${unobtainableRows.length}줄 · ${UNOBTAINABLE_PATH})`);
+for (const r of unobtainableRows) {
+	const cut = cutByHand.some((c) => c.giftId === r.giftId);
+	console.log(`  ${cut ? '뺐다  ' : '이미 없다'} ${r.giftId} ${r.name} — ${r.why} (${r.by})`);
+}
 
 /** 이 인격들이 무엇을 얼마나 공급하나. **출격 7인만 센다** */
 function supplyOf(field: string[]): DeckSupply {
@@ -517,7 +570,7 @@ const all = new Set(decks.flatMap((d) => d.cards.map((c) => c.card.giftId)));
 const total = decks.reduce((s, d) => s + d.cards.length, 0);
 const madeCount = meta.filter((m) => roleOf(roles, m.giftId).madeOnly).length;
 const noPathInMeta = meta.filter((m) => noPath.has(m.giftId) && !roleOf(roles, m.giftId).madeOnly);
-console.log(`\n집을 수 있는 기프트 ${pickable.length} = 원문 ${meta.length} − 합성 결과물 ${madeCount} − 획득 경로 없음 ${noPathInMeta.length}`);
+console.log(`\n집을 수 있는 기프트 ${pickable.length} = 원문 ${meta.length} − 합성 결과물 ${madeCount} − 획득 경로 없음 ${noPathInMeta.length} − 한정 ${cutByHand.length}`);
 // **뺀 것을 이름과 id 로 남긴다.** 적재 결손이면 나중에 표를 고쳐 되돌려야 하는데,
 // 무엇이 빠졌는지 안 적어 두면 되돌릴 것이 무엇인지도 모르게 된다
 console.log(`  획득 경로 없음(팩·전용팩·선택사건·시작 어디에도 없다): ${noPathInMeta.map((m) => `${m.giftId} ${m.name}`).join(' · ') || '없다'}`);
