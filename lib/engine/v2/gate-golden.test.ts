@@ -84,10 +84,11 @@ test('강화판의 조건은 blocking 이 아니다', DB, () => {
  * 틀렸다는 실측이 있었다. 절 모형은 조건을 문장에서 뽑으므로 그 종류의
  * 어림이 없다.
  */
-test('실측 — 죽는 기프트가 130 에서 68 로 줄었다', DB, () => {
+test('실측 — 죽는 기프트가 130 에서 67 로 줄었다', DB, () => {
 	// 절 모형으로 옮겨 73 이 됐고, 문단 분해 결함(머리·게이트가 끝줄을 보던 것 ·
-	// 넓히는 불릿이 본체에 붙어 있던 것)을 고쳐 68 이 됐다
+	// 넓히는 불릿이 본체에 붙어 있던 것)을 고쳐 68 이 됐다. 「N배로」 배수 불릿도
+	// 넓힘으로 떼면서(9252·9277·9278) 본체가 조건 없이 살아나 67 이 됐다
 	const dead = verdicts.filter((v) => !v.fireable).length;
-	assert.equal(dead, 68);
-	assert.equal(verdicts.length - dead, 388);
+	assert.equal(dead, 67);
+	assert.equal(verdicts.length - dead, 389);
 });

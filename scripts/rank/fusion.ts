@@ -1,0 +1,143 @@
+/**
+ * 합성 관계: 이 기프트가 무엇을 만드는 재료인가.
+ *
+ * 거울 던전에서 상위 기프트(진혼 9088·달의 기억 9083)는 합성으로만 나온다 —
+ * 집을 수 없다. 그리고 하위(재료) 기프트를 집는 데엔 상위를 만들려는 목적이
+ * 있다 — 「재에서 재로」를 집는 이유는 그 자체 효과가 아니라 진혼으로 가는
+ * 길인 경우가 많다. 사람이 하위 기프트를 판정하려면 무엇을 만드는 재료인지
+ * 알아야 한다. 이 파일은 그 관계만 답하는 순수 함수다 — 값 판단은 안 한다.
+ */
+
+export interface Recipe {
+	result: string;
+	/**
+	 * 칸의 배열. 칸마다 후보가 여럿일 수 있다(선택지형 칸) — 그중 **하나만**
+	 * 들어간다. 예: 달의 기억은 슬롯0 이 일곱 후보 중 하나, 슬롯1~3 은 단일이다.
+	 */
+	slots: string[][];
+}
+
+export interface FusionRole {
+	/** 어떤 레시피의 결과물이면 참. 호출자는 이것을 보고 후보에서 뺀다 */
+	madeOnly: boolean;
+	/** 이 기프트가 재료로 쓰이는 상위들. 재료가 아니면 빈 배열 */
+	makes: Array<{
+		result: string;
+		/**
+		 * 함께 필요한 **다른 칸**들. 칸 하나가 배열 하나다.
+		 *
+		 * **평평하게 펴면 안 된다.** 칸 안의 후보는 서로 대체재라 하나만 있으면
+		 * 되는데, 펴 놓으면 전부 필요한 것처럼 읽힌다 — 9142 를 집을지 정하는
+		 * 사람에게 「함께 필요 9개」와 「함께 필요 3칸」은 전혀 다른 무게다.
+		 * 자기 자신이 든 칸은 통째로 뺀다.
+		 */
+		withOthers: string[][];
+		/**
+		 * 이 결과물을 만드는 길이 몇 개인가. **1 보다 크면 위 `withOthers` 는
+		 * 그중 한 길일 뿐이다.** 화면이 「길이 둘이다」를 말할 수 있어야, 재료
+		 * 하나를 집는 값어치를 사람이 제대로 잰다 — 다른 길이 더 쉬울 수도 있다.
+		 */
+		recipeCount: number;
+	}>;
+}
+
+/**
+ * `roles.get(giftId)` 의 기본값 하나를 한 곳에서 정의한다.
+ *
+ * `fusionRolesOf` 는 레시피에 안 나온 기프트를 맵에 안 넣는다(그게 맞다 —
+ * 아래 주석 참조). 그런데 호출부마다 `?? { madeOnly: false, makes: [] }` 를
+ * 따로 적으면 언젠가 하나는 빠뜨린다. 여기 하나로 모아 그 실수를 없앤다.
+ */
+export function roleOf(roles: Map<string, FusionRole>, giftId: string): FusionRole {
+	return roles.get(giftId) ?? { madeOnly: false, makes: [] };
+}
+
+/**
+ * 레시피 목록에서 기프트별 합성 역할을 뽑는다.
+ *
+ * **레시피가 없는 기프트는 맵에 안 넣는다.** `madeOnly: false · makes: []` 를
+ * 기본값으로 돌려줘도 맞지만, 그러면 무한한 기프트 전체에 대해 항목을 만들
+ * 근거가 없다 — 호출자가 `map.get(id) ?? { madeOnly: false, makes: [] }` 로
+ * 기본값을 채우는 쪽이 "이 기프트가 레시피에 한 번도 안 나온다"는 사실을
+ * 맵의 부재로 드러내 더 정직하다.
+ */
+export function fusionRolesOf(recipes: Recipe[]): Map<string, FusionRole> {
+	const madeOnly = new Set<string>();
+
+	// 재료 기프트 → (결과물 → 함께 필요한 다른 칸들, 칸 단위로 뭉친 채).
+	// 결과물이 같은 레시피가 여럿이어도(진혼처럼) 재료마다 "처음 등장한
+	// 레시피"의 withOthers 만 남긴다 — 뒤 레시피에서 같은 재료가 다시 나와도
+	// 무시한다. 재료가 레시피마다 다를 수 있으므로 이건 레시피 단위가 아니라
+	// (결과물, 재료) 쌍 단위로 판단해야 한다.
+	//
+	// **"첫 등장"은 배열 순서가 아니라 데이터 자체의 성질이어야 한다.** 이
+	// 함수는 호출자가 넘긴 recipes 배열 순서를 그대로 믿으면 안 된다 —
+	// Task 4 는 이 레시피를 DB 조회로 채우는데, ORDER BY 없는 쿼리나 사소한
+	// 쿼리 변경이 행 순서를 흔들 수 있다. 그러면 같은 데이터인데 카드에 적힌
+	// "함께 필요"가 조회할 때마다 달라진다 — 이 표본이 막으려는 바로 그
+	// 종류의 조용한 오염이다. 그래서 처리 전에 내용 기반 키로 정렬해
+	// "첫 등장"을 레시피 집합의 성질로 고정한다.
+	const canonicalKey = (r: Recipe): string =>
+		// 구분자는 **이스케이프로 적는다.** 날것 NUL 바이트를 소스에 두면 git 이 이
+		// 파일을 바이너리로 보아 어떤 diff 에도 안 나오고 `grep` 도 못 찾는다 —
+		// 140줄이 검수에서 통째로 사라진다. 런타임 값은 똑같다
+		`${r.result}\u0000${r.slots.map((slot) => [...slot].sort().join(',')).sort().join('|')}`;
+	const orderedRecipes = [...recipes].sort((a, b) => canonicalKey(a).localeCompare(canonicalKey(b)));
+
+	const makesByGift = new Map<string, Map<string, string[][]>>();
+
+	for (const recipe of orderedRecipes) {
+		madeOnly.add(recipe.result);
+
+		for (let i = 0; i < recipe.slots.length; i++) {
+			const slot = recipe.slots[i] ?? [];
+			for (const gift of slot) {
+				let byResult = makesByGift.get(gift);
+				if (!byResult) {
+					byResult = new Map();
+					makesByGift.set(gift, byResult);
+				}
+				if (byResult.has(recipe.result)) continue; // 이 재료는 이 결과물에서 이미 첫 등장을 기록했다
+
+				// 다른 칸이 "함께 필요한 것" — 칸 하나를 배열 하나로 그대로 둔다.
+				// 펴서 하나의 집합으로 합치면 「일곱 중 하나면 된다」와
+				// 「셋 다 필요하다」를 구별할 수 없게 된다. 자기 자신이 든 칸(i)은
+				// 통째로 뺀다 — 그 칸의 형제 후보는 대안이지 동반이 아니다.
+				const others: string[][] = [];
+				for (let j = 0; j < recipe.slots.length; j++) {
+					if (j === i) continue;
+					const candidates = (recipe.slots[j] ?? []).filter((c) => c !== gift);
+					if (candidates.length > 0) others.push([...candidates].sort());
+				}
+				others.sort((a, b) => (a[0] ?? '').localeCompare(b[0] ?? ''));
+
+				byResult.set(recipe.result, others);
+			}
+		}
+	}
+
+	// 결과물 → 그것을 만드는 레시피(=길) 개수. 재료가 어느 레시피에 있는지와
+	// 무관하게, "이 결과물로 가는 길이 몇 개인가"를 답한다 — 진혼은 재료
+	// 9002 가 첫 레시피에만 있어도 recipeCount 는 여전히 2 다.
+	const recipeCountByResult = new Map<string, number>();
+	for (const recipe of recipes) {
+		recipeCountByResult.set(recipe.result, (recipeCountByResult.get(recipe.result) ?? 0) + 1);
+	}
+
+	const allGifts = new Set<string>([...madeOnly, ...makesByGift.keys()]);
+	const roles = new Map<string, FusionRole>();
+	for (const gift of allGifts) {
+		const byResult = makesByGift.get(gift);
+		const makes = byResult
+			? [...byResult.entries()]
+					.map(([result, withOthers]) => ({
+						result,
+						withOthers,
+						recipeCount: recipeCountByResult.get(result) ?? 1,
+					}))
+					.sort((a, b) => a.result.localeCompare(b.result))
+			: [];
+		roles.set(gift, { madeOnly: madeOnly.has(gift), makes });
+	}
+	return roles;
+}
