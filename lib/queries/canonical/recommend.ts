@@ -51,6 +51,8 @@ export interface GiftLine {
 	icon: string | null;
 	/** 기프트 분류. 덱 적합도의 재료다 — 축이 아닌 값(None · Slash …)도 그대로 낸다 */
 	keywordId: string | null;
+	/** 게임이 매긴 등급 1~5. EX 는 null — 값 모형이 1.0 으로 편다 */
+	tier: number | null;
 	grade: 'A' | 'B' | 'C';
 	/** 판정 가능한 참조 중 충족한 수 */
 	satisfied: number;
@@ -196,7 +198,8 @@ export async function recommendForDeck(
 		})
 		.filter((s) => s.count > 0)
 		.sort((a, b) => b.count - a.count || a.refId.localeCompare(b.refId));
-	const axisSupply = axisSupplyOf(supplyRows);
+	// 분모는 출격 인원 — 덱과 무관한 고정된 자다(설계 §4.3). 최댓값 정규화는 회귀다
+	const axisSupply = axisSupplyOf(supplyRows, field.length);
 	// 문자열 id 로 통일해 둔다 — 점수 재료(scoreInput)와 합성 셈(fusionOf) 양쪽이 쓴다
 	const ownedSet = new Set(ownedIds.map(String));
 
@@ -208,11 +211,9 @@ export async function recommendForDeck(
 		select: { id: true, keywordId: true },
 		orderBy: { id: 'asc' },
 	});
-	// 결과물의 전용 여부는 팩과 무관하게 본다 — 합성 결과는 팩에서 안 나오므로
-	// 「이 팩에서만」이라는 물음이 성립하지 않는다. 전용으로 친다
-	const resultFit = new Map(
-		resultGifts.map((g) => [g.id, fitOf(g.keywordId, axisSupply, true)]),
-	);
+	// 합성 도달 C 는 지금 셈 그대로다(설계 §7) — 결과물의 순수 적합도만 본다.
+	// 전용·등급 항을 여기 넣는 것은 C 의 재설계이고 이 단계 밖이다
+	const resultFit = new Map(resultGifts.map((g) => [g.id, fitOf(g.keywordId, axisSupply)]));
 
 	const packs: PackLine[] = packRows.map((p) => {
 		const gifts: GiftLine[] = p.gifts.map((row) => {
@@ -222,6 +223,7 @@ export async function recommendForDeck(
 				name: nameOf(row.gift.stages[0]?.texts ?? [], locale)?.name ?? null,
 				icon: giftIcon(row.gift.sprite),
 				keywordId: row.gift.keywordId,
+				tier: row.gift.tier,
 				// 판정이 없는 기프트는 트리거가 아예 없는 것이다 — C 로 둔다
 				grade: v?.grade ?? 'C',
 				satisfied: v?.satisfied ?? 0,
@@ -244,6 +246,7 @@ export async function recommendForDeck(
 		// 조회하면 같은 셈이 두 벌이 되고, 한쪽만 고쳐질 때 조용히 갈린다
 		const scoreInput: ScoreGift[] = gifts.map((g) => ({
 			keywordId: g.keywordId,
+			tier: g.tier,
 			total: g.total,
 			satisfied: g.satisfied,
 			reasons: g.reasons,
