@@ -26,6 +26,7 @@ test('능력 하나와 조건 하나를 편다', () => {
 	const out = buildGiftAbility({ authored: [row()], giftIds: GIFTS }, meta);
 	assert.equal(out.abilities.length, 1);
 	assert.equal(out.conds.length, 1);
+	assert.ok(out.conds[0]);
 	assert.equal(out.conds[0].refId, 'RING_FINGER');
 	assert.equal(out.conds[0].giftId, '9262');
 	assert.equal(out.conds[0].ordinal, 0);
@@ -57,6 +58,7 @@ test('threshold 가 null 이면 결손을 남긴다', () => {
 	const meta = new Meta();
 	const p = payload({ conds: [cond({ op: 'gte', threshold: null })] });
 	const out = buildGiftAbility({ authored: [row({ payload: p })], giftIds: GIFTS }, meta);
+	assert.ok(out.conds[0]);
 	assert.equal(out.conds[0].threshold, null);
 	assert.equal(meta.gaps.some((g) => g.field === 'threshold'), true);
 });
@@ -65,6 +67,7 @@ test("op='has' 의 threshold=null 은 결손이 아니다", () => {
 	// 「약지 소속 인격이」는 수가 아니라 존재가 조건이다. 문턱값이 없는 것이 옳다.
 	const meta = new Meta();
 	const out = buildGiftAbility({ authored: [row()], giftIds: GIFTS }, meta);
+	assert.ok(out.conds[0]);
 	assert.equal(out.conds[0].threshold, null);
 	assert.equal(meta.gaps.some((g) => g.field === 'threshold'), false);
 });
@@ -73,6 +76,7 @@ test("timing='other' 는 결손을 남긴다", () => {
 	const meta = new Meta();
 	const p = payload({ timing: 'other', unconditional: true, conds: [] });
 	const out = buildGiftAbility({ authored: [row({ payload: p })], giftIds: GIFTS }, meta);
+	assert.ok(out.abilities[0]);
 	assert.equal(out.abilities[0].timing, 'other');
 	assert.equal(meta.gaps.some((g) => g.field === 'timing'), true);
 });
@@ -82,6 +86,7 @@ test('refines 가 없는 ordinal 을 가리키면 버리고 결손으로 남긴�
 	const meta = new Meta();
 	const p = payload({ unconditional: true, refines: 5, conds: [] });
 	const out = buildGiftAbility({ authored: [row({ payload: p })], giftIds: GIFTS }, meta);
+	assert.ok(out.abilities[0]);
 	assert.equal(out.abilities[0].refines, null);
 	assert.equal(meta.gaps.some((g) => g.field === 'refines'), true);
 });

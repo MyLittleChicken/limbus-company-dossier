@@ -149,6 +149,7 @@ export function buildGiftAbility(
 	for (const [key, rows] of byGift) {
 		if (rows.some((r) => r.refines === null)) continue;
 		const first = [...rows].sort((a, b) => a.ordinal - b.ordinal)[0];
+		if (first === undefined) throw new Error(`기프트 능력 그룹이 비어 있다: ${key}`);
 		meta.gap('gift', first.giftId, 'refines',
 			`${key.replace('\t', ' 단계 ')} 의 능력이 전부 강화판이라 켜질 수 없다 — ordinal ${first.ordinal} 을 독립으로 만든다`,
 			EVIDENCE);
