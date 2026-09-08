@@ -50,7 +50,11 @@
     "gift:verdict-diff": "tsx --env-file-if-exists=.env scripts/verdict-diff.ts",
     "rank:deck": "tsx --env-file-if-exists=.env scripts/rank-deck.ts",
     "rank:page": "tsx scripts/rank-page.ts",
-    "rank:fit": "tsx scripts/fit-weights.ts"
+    "rank:fit": "tsx scripts/fit-weights.ts",
+    "update:collect": "tsx scripts/update/collect.ts",
+    "update:validate": "tsx scripts/update/validate.ts",
+    "update:run": "node --env-file-if-exists=.env --import tsx scripts/update/run.mts",
+    "update:apply": "node --env-file-if-exists=.env --import tsx scripts/update/run.mts --apply"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

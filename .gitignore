@@ -102,3 +102,6 @@ src/v2/generated/
 
 # SDD 임시 산출물
 build/tmp/
+
+# Source update staging, raw game files and operational reports
+/var/updates/

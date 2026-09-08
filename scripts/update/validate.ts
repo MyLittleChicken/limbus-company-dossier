@@ -1,0 +1,10 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { verifyDownload } from '../../src/update/fetch.js';
+const work=process.argv[2];
+if(!work||!work.startsWith('/tmp/')) throw Error('Usage: npm run update:validate -- /tmp/staging');
+const manifest=await verifyDownload(work);
+const required=['entities/identities/limbus-assets/identities.json','entities/egos/limbus-assets/egos.json'];
+for(const p of required) await readFile(join(work,p));
+const files=manifest.files.filter(f=>f.path.startsWith('entities/identity')||f.path.startsWith('entities/ego')||f.path.startsWith('assets/identit')||f.path.startsWith('assets/ego'));
+console.log(JSON.stringify({ok:true,snapshot:manifest.id,heads:manifest.heads,files:files.length,removedPolicy:'report-only'},null,2));

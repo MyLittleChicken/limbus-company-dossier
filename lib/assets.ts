@@ -11,8 +11,8 @@ import { join } from 'node:path';
  * 기프트 456종 중 파일명이 숫자인 것은 76종뿐이고 나머지는 게임 내부 스프라이트 키,
  * 즉 영문 이름이다. id 로 추정해 찾으면 대부분 실패한다.
  *
- * 인덱스는 첫 사용 때 한 번 만들고 프로세스가 사는 동안 재사용한다.
- * 스냅샷은 실행 중에 바뀌지 않는다(`02-pipeline.md` 5절 원칙 5).
+ * 디렉터리가 바뀌면 인덱스를 갱신하고 파일 수정 시 URL 버전을 갱신한다.
+ * 운영 중 적재된 파일은 동적 /media 라우트가 제공한다.
  */
 
 const ASSET_ROOT = join(process.cwd(), 'data', 'assets');
@@ -31,41 +31,51 @@ export type AssetCategory =
 	| 'sinners'
 	| 'icons';
 
-const indexes = new Map<AssetCategory, Map<string, string>>();
+interface AssetFile { path: string; url: string }
+const indexes = new Map<AssetCategory, { stamp: string; files: Map<string, AssetFile> }>();
 
-function buildIndex(category: AssetCategory): Map<string, string> {
-	const map = new Map<string, string>();
+function directoryStamp(base: string): string {
+	if (!existsSync(base)) return '';
+	const dirs = [base, ...readdirSync(base, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory()).map((entry) => join(base, entry.name))];
+	return dirs.map((dir) => {
+		const stat = statSync(dir);
+		return `${dir}:${stat.ino}:${stat.mtimeMs}:${stat.ctimeMs}`;
+	}).join('|');
+}
+
+function buildIndex(category: AssetCategory): Map<string, AssetFile> {
+	const map = new Map<string, AssetFile>();
 	const base = join(ASSET_ROOT, category);
 	if (!existsSync(base)) return map;
-
-	const sources = readdirSync(base)
-		.filter((name) => statSync(join(base, name)).isDirectory())
+	const sources = readdirSync(base, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
 		.sort((a, b) => {
 			const ai = SOURCE_PRIORITY.indexOf(a);
 			const bi = SOURCE_PRIORITY.indexOf(b);
-			return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+			return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || a.localeCompare(b);
 		});
-
 	for (const source of sources) {
 		for (const file of readdirSync(join(base, source))) {
+			if (!/\.(webp|png|jpg|jpeg)$/i.test(file)) continue;
+			const path = join(base, source, file);
+			if (!statSync(path).isFile()) continue;
 			const key = file.replace(/\.(webp|png|jpg|jpeg)$/i, '');
-			// 파일명에 공백과 아포스트로피가 흔하다(`Ashes to Ashes.webp`). URL 로 나갈 때
-			// 인코딩하지 않으면 경로가 깨진다. 조각 단위로 인코딩해 `/` 는 남긴다.
-			const url = `/assets/${category}/${source}/${encodeURIComponent(file)}`;
-			// 우선순위가 높은 출처를 먼저 훑으므로 이미 있으면 덮지 않는다.
-			if (!map.has(key)) map.set(key, url);
+			if (!map.has(key)) map.set(key, { path,
+				url: `/media/${category}/${encodeURIComponent(source)}/${encodeURIComponent(file)}` });
 		}
 	}
 	return map;
 }
 
-function indexFor(category: AssetCategory): Map<string, string> {
+function indexFor(category: AssetCategory): Map<string, AssetFile> {
+	const stamp = directoryStamp(join(ASSET_ROOT, category));
 	let found = indexes.get(category);
-	if (!found) {
-		found = buildIndex(category);
+	if (!found || found.stamp !== stamp) {
+		found = { stamp, files: buildIndex(category) };
 		indexes.set(category, found);
 	}
-	return found;
+	return found.files;
 }
 
 /**
@@ -89,7 +99,10 @@ function lookup(category: AssetCategory, key: string | null | undefined): string
 	const index = indexFor(category);
 	for (const candidate of candidates(String(key))) {
 		const hit = index.get(candidate);
-		if (hit) return hit;
+		if (hit && existsSync(hit.path)) {
+			const stat = statSync(hit.path);
+			return `${hit.url}?v=${stat.mtimeMs.toString(36)}-${stat.ctimeMs.toString(36)}-${stat.size.toString(36)}`;
+		}
 	}
 	return null;
 }
