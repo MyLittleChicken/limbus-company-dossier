@@ -5,18 +5,20 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validatePayload, type AbilityPayload } from './ability-payload.js';
+import { validatePayload, type AbilityCond, type AbilityPayload } from './ability-payload.js';
+
+const okCond: AbilityCond = {
+	group: 0, idx: 0, refKind: 'association', refId: 'RING_FINGER',
+	op: 'has', threshold: null, scope: 'roster', supply: 'tag',
+	slot: null, runtime: false, resonanceMode: null,
+};
 
 const ok: AbilityPayload = {
 	timing: 'turn_start',
 	unconditional: false,
 	refines: null,
 	sourceText: '약지 소속 인격이 가하는 피해량 +10%',
-	conds: [{
-		group: 0, idx: 0, refKind: 'association', refId: 'RING_FINGER',
-		op: 'has', threshold: null, scope: 'roster', supply: 'tag',
-		slot: null, runtime: false, resonanceMode: null,
-	}],
+	conds: [okCond],
 };
 
 test('제대로 된 payload 는 문제가 없다', () => {
@@ -41,25 +43,25 @@ test('timing 어휘 밖은 잡는다', () => {
 });
 
 test('scope=slot 이면 slot 이 1~7 이어야 한다', () => {
-	const c = { ...ok.conds[0], scope: 'slot' as const, slot: 9 };
+	const c = { ...okCond, scope: 'slot' as const, slot: 9 };
 	assert.deepEqual(validatePayload({ ...ok, conds: [c] }), ['조건 0/0 의 slot 이 1~7 이 아니다: 9']);
 });
 
 test('출격이 7인이므로 7번 자리는 있다', () => {
 	// 9759 불 꺼진 랜턴이 「[편성 7번 인격 전용 효과]」다. 1~5 로 두면 죽는다.
-	const c = { ...ok.conds[0], scope: 'slot' as const, slot: 7 };
+	const c = { ...okCond, scope: 'slot' as const, slot: 7 };
 	assert.deepEqual(validatePayload({ ...ok, conds: [c] }), []);
 });
 
 test('scope 가 slot 이 아니면 slot 은 null 이어야 한다', () => {
-	const c = { ...ok.conds[0], slot: 3 };
+	const c = { ...okCond, slot: 3 };
 	assert.deepEqual(validatePayload({ ...ok, conds: [c] }), ["조건 0/0 은 scope='slot' 이 아닌데 slot 이 있다: 3"]);
 });
 
 test('group 과 idx 는 0 부터 빈틈없이 이어져야 한다', () => {
 	const conds = [
-		{ ...ok.conds[0], group: 0, idx: 0 },
-		{ ...ok.conds[0], group: 0, idx: 2 },
+		{ ...okCond, group: 0, idx: 0 },
+		{ ...okCond, group: 0, idx: 2 },
 	];
 	assert.deepEqual(validatePayload({ ...ok, conds }), ['group 0 의 idx 가 0..1 로 이어지지 않는다: 0,2']);
 });
@@ -67,17 +69,17 @@ test('group 과 idx 는 0 부터 빈틈없이 이어져야 한다', () => {
 test('supply=skill 은 축으로만 셀 수 있다', () => {
 	// 스킬이 실제로 그 상태를 주는가는 coin_token 으로 세는데, coin_token 은
 	// 축만 안다. 소속을 스킬로 셀 방법이 없다.
-	const c = { ...ok.conds[0], supply: 'skill' as const };
+	const c = { ...okCond, supply: 'skill' as const };
 	assert.deepEqual(validatePayload({ ...ok, conds: [c] }), ["조건 0/0 은 supply='skill' 인데 refKind 가 axis 가 아니다: association"]);
 });
 
 test('threshold 는 null 이거나 1 이상이다', () => {
-	const c = { ...ok.conds[0], threshold: 0 };
+	const c = { ...okCond, threshold: 0 };
 	assert.deepEqual(validatePayload({ ...ok, conds: [c] }), ['조건 0/0 의 threshold 가 1 미만이다: 0']);
 });
 
 test('resonanceMode 는 resonance 조건에만 붙는다', () => {
-	const c = { ...ok.conds[0], resonanceMode: 'absolute' };
+	const c = { ...okCond, resonanceMode: 'absolute' };
 	assert.deepEqual(validatePayload({ ...ok, conds: [c] }), ['조건 0/0 은 refKind 가 resonance 가 아닌데 resonanceMode 가 있다: absolute']);
 });
 

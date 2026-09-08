@@ -291,11 +291,13 @@ test('기프트 능력 — 형식이 틀어진 payload 도 굽기 직전에 잡�
 
 test('지문 — 기프트 능력이 바뀌면 달라진다', () => {
 	const base = withAbility([ABILITY_COND]);
+	const ability = base.giftAbility[0];
+	assert.ok(ability);
 	const changed: Authored = {
 		...base,
 		giftAbility: [{
-			...base.giftAbility[0],
-			payload: { ...base.giftAbility[0].payload, timing: 'turn_start' },
+			...ability,
+			payload: { ...ability.payload, timing: 'turn_start' },
 		}],
 	};
 	assert.notEqual(authoredDigest(base), authoredDigest(changed));
