@@ -1,12 +1,13 @@
 import Link from 'next/link';
+import {ListMemory} from '@/components/list-memory';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { listPacks, readPackFilter } from '@/lib/queries/canonical/packs';
 import { multi, type SearchParams } from '@/lib/queries/shared';
-import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
-import { Empty, Name, SecLabel } from '@/components/ui';
+import { ChipFilter, QueryFilters } from '@/components/filters';
+import { Empty, Name } from '@/components/ui';
 import { PackArt } from '@/components/pack-art';
 import {
 	comparePackKind,
@@ -77,32 +78,22 @@ export default async function PacksPage({
 
 	return (
 		<>
-			<SecLabel
-				title={t.nav.packs}
-				sub={ko ? '층 진입 시 선택하는 단위' : 'Chosen on entering a floor'}
-				hint={`${sorted.length}`}
-			/>
-
-			<Suspense fallback={<div className="filters" />}>
-				<div className="filters">
-					<SearchBox placeholder={ko ? '팩 이름 검색' : 'Search pack name'} />
-					<ClearFilters label={ko ? '필터 해제' : 'Clear'} />
-				</div>
-				<div className="filter-axes">
-					<ChipFilter
-						param="kind"
-						label={ko ? '종류' : 'Kind'}
-						options={kindOptions}
-					/>
-				</div>
+			<Suspense fallback={null}>
+				<ListMemory />
+				<QueryFilters title={t.nav.packs} placeholder={ko ? '팩 이름 검색' : 'Search pack name'}>
+					<ChipFilter param="kind" label={ko ? '종류' : 'Kind'} options={kindOptions} />
+				</QueryFilters>
 			</Suspense>
+			<div className="catalogue-results">
+				{ko ? `${sorted.length}개 항목` : `${sorted.length} entries`}
+			</div>
 
 			{sorted.length === 0 ? (
 				<Empty message={t.empty} />
 			) : (
-				<ul className="cardgrid cardgrid-wide">
+				<ul className="cardgrid cardgrid-wide pack-catalogue">
 					{sorted.map(({ pack: p, kind }) => (
-						<li key={p.id}>
+						<li key={p.id} data-entry-id={p.id}>
 							<Link href={`/${locale}/packs/${p.id}`} className="card unit">
 								{/* 이름을 맨 위 좌측에 둔다 — 인격·E.G.O 카드와 같은 골격이다. */}
 								<strong className="unit-name" title={p.text?.name ?? undefined}>

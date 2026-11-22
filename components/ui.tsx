@@ -7,14 +7,17 @@ export function SecLabel({
 	title,
 	sub,
 	hint,
+	level = 1,
 }: {
 	title: string;
 	sub?: string | undefined;
 	hint?: ReactNode;
+	level?: 1 | 2;
 }) {
+	const Heading = level === 1 ? 'h1' : 'h2';
 	return (
 		<div className="seclabel">
-			<h2>{title}</h2>
+			<Heading>{title}</Heading>
 			{sub ? <span className="kr">{sub}</span> : null}
 			<span className="rule" />
 			{hint ? <span className="hint">{hint}</span> : null}

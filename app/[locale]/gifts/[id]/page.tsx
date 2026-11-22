@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import {DetailNavigation} from '@/components/detail-navigation';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
@@ -26,11 +27,42 @@ export default async function GiftDetailPage({
 
 	return (
 		<>
+			<DetailNavigation locale={locale} section="gifts" label={t.nav.gifts} name={base?.text?.name ?? id} />
 			<SecLabel
 				title={base?.text?.name ?? (ko ? '이름 없음' : 'Unnamed')}
 				sub={t.nav.gifts}
-				hint={<Link href={`/${locale}/gifts`}>{ko ? '목록으로' : 'Back to list'}</Link>}
 			/>
+
+			<div className="reference-summary">
+				<Panel title={ko ? '속성' : 'Attributes'}>
+					<div className="hero-icon">
+						<Icon src={gift.icon} alt="" size={96} />
+					</div>
+					<Facts
+						rows={[
+							[ko ? '등급' : 'Tier', gift.tier],
+							[
+								ko ? '키워드' : 'Keyword',
+								gift.keyword ? (
+									<IconTag src={keywordIcon(gift.keywordId ?? '')}>{gift.keyword.name}</IconTag>
+								) : (
+									// 120종이 키워드를 갖지 않는다. 결손이 아니다.
+									<Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>
+								),
+							],
+							[ko ? '강화 가능' : 'Enhanceable', gift.enhanceable ? 'O' : 'X'],
+							[ko ? 'hard 전용' : 'Hard only', gift.hardOnly ? 'O' : 'X'],
+							[
+								ko ? 'MD 코스트' : 'MD cost',
+								gift.mdCost ?? (
+									// 441/456 만 값을 갖는다. 보강 출처에 없는 15종이다.
+									<Nothing kind="missing">{ko ? '출처에 없음' : 'Not in source'}</Nothing>
+								),
+							],
+						]}
+					/>
+				</Panel>
+			</div>
 
 			<div className="grid2">
 				<div>
@@ -86,7 +118,10 @@ export default async function GiftDetailPage({
 					)}
 
 					{gift.usedIn.length > 0 && (
-						<Panel title={ko ? '이 기프트를 재료로 쓰는 합성' : 'Used as material'} hint={gift.usedIn.length}>
+						<Panel
+							title={ko ? '이 기프트를 재료로 쓰는 합성' : 'Used as material'}
+							hint={gift.usedIn.length}
+						>
 							<ul className="inline-list">
 								{gift.usedIn.map((u) => (
 									<li key={u.id}>
@@ -102,39 +137,7 @@ export default async function GiftDetailPage({
 				</div>
 
 				<aside>
-					<Panel title={ko ? '속성' : 'Attributes'}>
-						<div className="hero-icon">
-							<Icon src={gift.icon} alt="" size={96} />
-						</div>
-						<Facts
-							rows={[
-								[ko ? '등급' : 'Tier', gift.tier],
-								[
-									ko ? '키워드' : 'Keyword',
-									gift.keyword ? (
-										<IconTag src={keywordIcon(gift.keywordId ?? '')}>{gift.keyword.name}</IconTag>
-									) : (
-										// 120종이 키워드를 갖지 않는다. 결손이 아니다.
-										<Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>
-									),
-								],
-								[ko ? '강화 가능' : 'Enhanceable', gift.enhanceable ? 'O' : 'X'],
-								[ko ? 'hard 전용' : 'Hard only', gift.hardOnly ? 'O' : 'X'],
-								[
-									ko ? 'MD 코스트' : 'MD cost',
-									gift.mdCost ?? (
-										// 441/456 만 값을 갖는다. 보강 출처에 없는 15종이다.
-										<Nothing kind="missing">{ko ? '출처에 없음' : 'Not in source'}</Nothing>
-									),
-								],
-							]}
-						/>
-					</Panel>
-
-					<Panel
-						title={ko ? '전용 팩' : 'Exclusive packs'}
-						hint={gift.exclusivePacks.length}
-					>
+					<Panel title={ko ? '전용 팩' : 'Exclusive packs'} hint={gift.exclusivePacks.length}>
 						{gift.exclusivePacks.length === 0 ? (
 							// 범용 226종. 비어 있는 것이 정상이다(02-data-model 3.5).
 							<Nothing kind="absent">
@@ -144,7 +147,7 @@ export default async function GiftDetailPage({
 							<ul className="inline-list">
 								{gift.exclusivePacks.map((p) => (
 									<li key={p.id}>
-										<Link href={`/${locale}/packs/${p.id}`}>
+										<Link href={`/${locale}/packs/${p.id}`} data-preview>
 											<Name value={p.text} notice={t.fallbackNotice} />
 										</Link>
 									</li>
@@ -160,7 +163,7 @@ export default async function GiftDetailPage({
 							<ul className="inline-list">
 								{gift.packs.map((p) => (
 									<li key={p.id}>
-										<Link href={`/${locale}/packs/${p.id}`}>
+										<Link href={`/${locale}/packs/${p.id}`} data-preview>
 											<Name value={p.text} notice={t.fallbackNotice} />
 										</Link>
 									</li>

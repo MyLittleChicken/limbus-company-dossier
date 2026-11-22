@@ -2,10 +2,14 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
-import { listGlossaryAxes, listStatuses, readGlossaryFilter } from '@/lib/queries/canonical/reference';
+import {
+	listGlossaryAxes,
+	listStatuses,
+	readGlossaryFilter,
+} from '@/lib/queries/canonical/reference';
 import type { SearchParams } from '@/lib/queries/shared';
-import { ChipFilter, ClearFilters, SearchBox } from '@/components/filters';
-import { Empty, Icon, IconTag, Name, Nothing, Pager, Panel, SecLabel } from '@/components/ui';
+import { ChipFilter, QueryFilters } from '@/components/filters';
+import { Empty, Icon, IconTag, Name, Nothing, Pager, Panel } from '@/components/ui';
 import { keywordIcon, sinIcon } from '@/lib/assets';
 
 export default async function GlossaryPage({
@@ -29,32 +33,24 @@ export default async function GlossaryPage({
 
 	return (
 		<>
-			<SecLabel
-				title={t.nav.glossary}
-				sub={ko ? '상태 · 죄악 · 키워드' : 'Statuses, sins, keywords'}
-				hint={`${statuses.total}`}
-			/>
+			<Suspense fallback={null}>
+				<QueryFilters
+					title={t.nav.glossary}
+					placeholder={ko ? '상태 이름·설명 검색' : 'Search status'}
+				>
+					<ChipFilter
+						param="buff"
+						label={ko ? '성격' : 'Type'}
+						options={axes.buffTypes.map((b) => ({ value: b.id, label: `${b.id} ${b.count}` }))}
+					/>
+				</QueryFilters>
+			</Suspense>
+			<div className="catalogue-results">
+				{ko ? `${statuses.total}개 항목` : `${statuses.total} entries`}
+			</div>
 
 			<div className="grid2">
 				<div>
-					<Suspense fallback={<div className="filters" />}>
-						<div className="filters">
-							<SearchBox placeholder={ko ? '상태 이름·설명 검색' : 'Search status'} />
-							<ClearFilters label={ko ? '필터 해제' : 'Clear'} />
-						</div>
-						<div className="filter-axes">
-							{/* 판정은 이름이 아니라 buffType 메타데이터로 한다(02-data-model 3.10). */}
-							<ChipFilter
-								param="buff"
-								label={ko ? '성격' : 'Type'}
-								options={axes.buffTypes.map((b) => ({
-									value: b.id,
-									label: `${b.id} ${b.count}`,
-								}))}
-							/>
-						</div>
-					</Suspense>
-
 					{statuses.items.length === 0 ? (
 						<Empty message={t.empty} />
 					) : (

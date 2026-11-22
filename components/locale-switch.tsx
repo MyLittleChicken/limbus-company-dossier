@@ -29,7 +29,7 @@ export function LocaleSwitch({ locale }: { locale: Locale }) {
 						{LOCALE_LABEL[code]}
 					</span>
 				) : (
-					<Link key={code} href={swap(code)} hrefLang={code}>
+					<Link key={code} href={swap(code)} hrefLang={code} scroll={false}>
 						{LOCALE_LABEL[code]}
 					</Link>
 				),

@@ -18,7 +18,7 @@ export function targetPath(source: string, path: string): string | null {
  if (source.startsWith('loc-') && !path.includes('/') && path.endsWith('.json')) {
   if (/^(Egos|EgoSkills|EgoPassive|Skills_Ego|Passive_Ego)/.test(path)) return `entities/egos/${source}/${path}`;
   if (/^(Personalities|Skills|Passive|AssociationName|UnitKeyword)/.test(path)) return `entities/identities/${source}/${path}`;
-  if (/^(Bufs|BattleKeywords)/.test(path)) return `entities/mechanics/${source}/${path}`;
+  if (/^(Bufs|BattleKeywords|SkillTag)/.test(path)) return `entities/mechanics/${source}/${path}`;
  }
  return null;
 }

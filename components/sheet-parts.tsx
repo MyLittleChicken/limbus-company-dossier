@@ -69,6 +69,8 @@ export const SwapIcon = () => (
 const TOKEN = /^\[([^\]\n]{1,40})\]/;
 const HAS_LETTER = /[A-Za-z가-힣]/;
 
+type StatusNames = Map<string,string> & {icons?:Map<string,string|null>};
+
 export function paint(line: string, names: Map<string, string>, key: string) {
 	const out: ReactNode[] = [];
 	let buffer = '';
@@ -93,7 +95,8 @@ export function paint(line: string, names: Map<string, string>, key: string) {
 				flush();
 				out.push(
 					<a key={`${key}-n${at}`} className="fx-st" href={`#st-${id}`}>
-						{name}
+						{(names as StatusNames).icons?.get(id)&&<img src={(names as StatusNames).icons!.get(id)!} alt="" width={16} height={16}/>}
+                        {name}
 					</a>,
 				);
 				at += name.length;
@@ -111,7 +114,8 @@ export function paint(line: string, names: Map<string, string>, key: string) {
 			out.push(
 				name ? (
 					<a key={`${key}-t${at}`} className="fx-st" href={`#st-${id}`}>
-						{name}
+						{(names as StatusNames).icons?.get(id)&&<img src={(names as StatusNames).icons!.get(id)!} alt="" width={16} height={16}/>}
+                        {name}
 					</a>
 				) : (
 					<span key={`${key}-t${at}`} className="fx-when">
@@ -221,10 +225,10 @@ export function StatusPanel({
 
 /** 긴 이름을 먼저 자르려고 길이 내림차순으로 둔다 — 짧은 이름이 긴 이름 안에 들면 조각난다. */
 export const nameMap = (
-	statuses: Array<{ id: string; text: { name: string } }>,
-): Map<string, string> =>
-	new Map(
+	statuses: Array<{ id: string; text: { name: string }; icon?:string|null }>,
+): StatusNames =>
+	Object.assign(new Map(
 		[...statuses]
 			.sort((a, b) => b.text.name.length - a.text.name.length)
 			.map((s) => [s.id, s.text.name] as const),
-	);
+	),{icons:new Map(statuses.map(s=>[s.id,s.icon??null]))});

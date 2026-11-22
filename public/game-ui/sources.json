@@ -1,0 +1,10 @@
+{
+  "owner": "Project Moon",
+  "use": "Game UI assets selected as catalogue symbols, not claimed to be the game's exact navigation icons.",
+  "assets": [
+    {"file":"identity-recruitment.png","role":"identities","original":"Sinner Recruitment Event Icon.png","source":"https://limbuscompany.wiki.gg/wiki/Special:FilePath/Sinner_Recruitment_Event_Icon.png"},
+    {"file":"ego-emblem.webp","role":"egos","original":"E.G.O Passives.webp","source":"https://github.com/eldritchtools/limbus-assets/blob/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/statuses/E.G.O%20Passives.webp"},
+    {"file":"gift-frame.webp","role":"gifts","original":"ego_gift_background.webp","source":"https://github.com/eldritchtools/limbus-assets/blob/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/ego_gift_background.webp"},
+    {"file":"dungeon-entrance.png","role":"packs","original":"Dungeon Entrance Icon.png","source":"https://limbuscompany.wiki.gg/wiki/Special:FilePath/Dungeon_Entrance_Icon.png"}
+  ]
+}

@@ -74,6 +74,17 @@ export function validateCandidate(candidate:Candidate):ValidationResult {
   if(Array.isArray(detail?.['passiveList'])&&passiveLinks.length<detail['passiveList'].length)errors.push(`ego ${id} source passive links incomplete`);
   for(const link of passiveLinks)namesFor('egoPassiveText','passiveId',String(link['passiveId']));
  }
+ // Stage completeness applies to existing units too, not just newly added units.
+ for(const prefix of ['skill','egoSkill']){
+  const texts=candidate.tables[`${prefix}StageText`]??[];
+  for(const stage of candidate.tables[`${prefix}Stage`]??[]){
+   const available=texts.filter(t=>t['skillId']===stage['skillId']&&t['uptie']===stage['uptie']&&typeof t['name']==='string'&&t['name'].trim());
+   if(!available.some(t=>t['locale']==='ko'||t['locale']==='en'))errors.push(`${prefix}Stage ${String(stage['skillId'])}/${String(stage['uptie'])} display name missing`);
+   for(const locale of ['ko','en','ja']){
+    if(texts.some(t=>t['skillId']===stage['skillId']&&Number(t['uptie'])<Number(stage['uptie'])&&t['locale']===locale)&&!available.some(t=>t['locale']===locale))errors.push(`${prefix}Stage ${String(stage['skillId'])}/${String(stage['uptie'])} ${locale} inherited name missing`);
+   }
+  }
+ }
  for(const [kind,ids] of Object.entries(candidate.removed))if(ids.length)warnings.push(`${kind} removed upstream; retained: ${ids.join(',')}`);
  if(candidate.meta.gaps.length)warnings.push(`field gaps: ${candidate.meta.gaps.length}`);
  return result(errors,warnings);

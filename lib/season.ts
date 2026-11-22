@@ -14,11 +14,17 @@
  * **목록과 상세가 같은 말을 하도록 한 곳에 둔다.** 목록(`components/unit-list.tsx`)이 쓰던
  * 것을 여기로 옮겼다.
  */
-export function seasonLabel(raw: number | null | undefined): string | null {
+export function seasonLabel(
+	raw: number | null | undefined,
+	locale: 'ko' | 'en' = 'ko',
+): string | null {
 	if (raw === null || raw === undefined) return null;
 	const n = String(raw);
-	if (n === '0') return '통상';
-	if (n === '8000') return '콜라보';
-	if (n.startsWith('91') && n.length === 4) return `발푸르기스의 밤 ${Number(n.slice(2))}회`;
-	return `시즌 ${n}`;
+	if (n === '0') return locale === 'ko' ? '통상' : 'Standard';
+	if (n === '8000') return locale === 'ko' ? '콜라보' : 'Collaboration';
+	if (n.startsWith('91') && n.length === 4)
+		return locale === 'ko'
+			? `발푸르기스의 밤 ${Number(n.slice(2))}회`
+			: `Walpurgis Night ${Number(n.slice(2))}`;
+	return locale === 'ko' ? `시즌 ${n}` : `Season ${n}`;
 }

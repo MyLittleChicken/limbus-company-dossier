@@ -255,13 +255,13 @@ model Pack {
   /// assets overlayImage. 41건
   overlaySprite String?      @map("overlay_sprite")
   /// 6–10층 구간에 배정되는 중첩 팩
-  superposition Boolean      @default(false)
+  superposition Boolean?     @default(false)
   /// 11–15층 구간에 배정되는 극한 팩
-  extreme       Boolean      @default(false)
+  extreme       Boolean?     @default(false)
   /// 복각 여부
-  bokgak        Boolean      @default(false)
+  bokgak        Boolean?     @default(false)
   /// 팩이 차지하는 층 수
-  floorLength   Int          @map("floor_length")
+  floorLength   Int?         @map("floor_length")
   /// 이름 표시색. 6자리 16진수. 61건 결손 → NULL (field_gap 참조)
   textColor     String?      @map("text_color")
   /// packs_detail.unlock.unlockCode. 2건 결손

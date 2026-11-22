@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import {DetailArt} from './detail-art';
+import {useDetailQuery} from './use-detail-query';
 import Link from 'next/link';
 import type { Locale } from '@/lib/locale';
 import type { IdentityDetail } from '@/lib/queries/canonical/detail';
@@ -93,8 +94,9 @@ function SkillRow({
 							<ol className="fx-coins">
 								{stage.coins.map((c, i) => (
 									<li key={c.index}>
-										<span className="coin-r">{ROMAN[i + 1] ?? i + 1}</span>
-										<div>
+										<span className="coin-r" aria-label={`${ko ? '코인' : 'Coin'} ${i+1}`}>{icons.coin&&<img src={icons.coin} alt="" width={24} height={24}/>}<span>{ROMAN[i + 1] ?? i + 1}</span></span>
+										<div className="coin-effect">
+                                            {!c.desc?.trim()&&<span className="coin-empty">{ko?'추가 효과 없음':'No additional effect'}</span>}
 											<Lines
 												text={c.desc === null ? null : { name: '', desc: c.desc }}
 												names={names}
@@ -164,9 +166,14 @@ export function IdentitySheetView({
 }) {
 	const ko = locale === 'ko';
 	const upties = [...new Set(sheet.speeds.map((s) => s.uptie))].sort((a, b) => a - b);
-	const [level, setLevel] = useState(MAX_LEVEL);
-	const [uptie, setUptie] = useState(upties[upties.length - 1] ?? 1);
-	const [awakened, setAwakened] = useState(false);
+	const query=useDetailQuery();
+	const requestedLevel=Number(query.params.get('level'));
+	const level=Number.isInteger(requestedLevel)&&requestedLevel>=1&&requestedLevel<=MAX_LEVEL?requestedLevel:MAX_LEVEL;
+	const setLevel=(value:number)=>query.set('level',String(value));
+	const uptie=query.stage(upties);
+	const setUptie=(value:number)=>query.set('uptie',String(value));
+	const awakened=query.params.get('art')==='awakened';
+	const setAwakened=(fn:(v:boolean)=>boolean)=>query.set('art',fn(awakened)?'awakened':'normal');
 
 	const names = nameMap(sheet.statuses);
 	const labels = { sin: sheet.sinNames, atk: sheet.atkNames };
@@ -191,10 +198,10 @@ export function IdentitySheetView({
 
 	return (
 		<>
-			<section className="f-card">
-				<div className="f-art">
+			<section className="f-card f-card--identity">
+				<div className="f-art-stage"><div className="f-art">
 					{/* eslint-disable-next-line @next/next/no-img-element */}
-					{art ? <img src={art} alt="" /> : <span className="f-art-none" />}
+					{art ? <DetailArt src={art} width={1920} height={1080} /> : <span className="f-art-none" />}
 					<i className="f-mount" />
 					<button
 						type="button"
@@ -208,8 +215,9 @@ export function IdentitySheetView({
 					</button>
 				</div>
 
-				<div className="f-body">
-					<header className="f-head">
+				</div>
+
+				<header className="f-head">
 						<div className="f-ident">
 							<div className="f-title">
 								{/* eslint-disable-next-line @next/next/no-img-element */}
@@ -255,7 +263,7 @@ export function IdentitySheetView({
 							</div>
 							<div>
 								<dt>{ko ? '시즌' : 'Season'}</dt>
-								<dd>{seasonLabel(sheet.season) ?? '—'}</dd>
+								<dd>{seasonLabel(sheet.season, locale) ?? '—'}</dd>
 							</div>
 							<div>
 								<dt>{ko ? '출시' : 'Released'}</dt>
@@ -264,6 +272,7 @@ export function IdentitySheetView({
 						</dl>
 					</header>
 
+				<div className="f-body">
 					<div className="f-picks">
 						<div className="f-pick f-pick--lv">
 							<span className="f-lab">{ko ? '레벨' : 'Level'}</span>

@@ -35,10 +35,10 @@ export interface PackRow {
 	variant: string | null;
 	sprite: string;
 	overlaySprite: string | null;
-	superposition: boolean;
-	extreme: boolean;
-	bokgak: boolean;
-	floorLength: number;
+	superposition: boolean | null;
+	extreme: boolean | null;
+	bokgak: boolean | null;
+	floorLength: number | null;
 	textColor: string | null;
 	unlockCode: number | null;
 }
@@ -176,6 +176,28 @@ export function buildPacks(input: PackInput, meta: Meta): PackTables {
 			packCategoryPath.push({ packId: id, depth, value: String(value) });
 		});
 		if (path.length > 0) meta.source('pack', id, 'categoryPath', 'assets-only', [ASSETS]);
+	}
+
+	// New packs may arrive in assets before the older mj mirror. Keep unknown
+	// mechanics null rather than copying values from a neighbouring pack.
+	for (const [id, a] of input.assets) {
+		if (input.mjPacks.has(id)) continue;
+		const path = strArr(a, 'category');
+		if (path[0] !== 'Canto' && path[0] !== 'Walpurgisnacht') throw new Error(`Unsupported assets-only pack category: ${id} ${path}`);
+		const chapters = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII'];
+		const chapter = path[0] === 'Canto' ? chapters.indexOf(path[1] ?? '') + 1 : null;
+		const sprite = str(a, 'image');
+		if ((path[0] === 'Canto' && !chapter) || !sprite) throw new Error(`Incomplete assets-only pack: ${id}`);
+		pack.push({id, category:path[0] === 'Canto' ? 'canto' : 'walpurgis', chapter, variant:null, sprite,
+			overlaySprite:str(a,'overlayImage'), superposition:null, extreme:null,
+			bokgak:null, floorLength:null, textColor:null, unlockCode:null});
+		for (const field of ['variant','superposition','extreme','bokgak','floorLength','textColor','unlockCode'])
+			meta.gap('pack',id,field,'Not supplied by assets-only pack source',EVIDENCE);
+		for (const field of ['category','chapter','sprite']) meta.source('pack',id,field,'assets-only',[ASSETS]);
+		for (const [locale, loc] of [['ko',input.locKo],['en',input.locEn],['ja',input.locJa]] as const)
+			pushText(packText,meta,id,locale,str(loc.get(id)??{},'name'),locale==='en'?str(a,'name'):null,`loc-${locale}`);
+		for (const tag of strArr(a,'tags')) packTag.push({packId:id,tag});
+		path.forEach((value,depth)=>packCategoryPath.push({packId:id,depth,value}));
 	}
 
 	// ── 층별 등장 팩 — assets 가 정본 ────────────────────────────────

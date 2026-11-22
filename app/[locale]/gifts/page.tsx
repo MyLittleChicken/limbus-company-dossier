@@ -9,7 +9,6 @@ import {
 	listKeywords,
 } from '@/lib/queries/canonical/gifts';
 import { keywordIcon } from '@/lib/assets';
-import { SecLabel } from '@/components/ui';
 import { UnitList, type Axis, type Section, type Unit } from '@/components/unit-list';
 
 /**
@@ -102,12 +101,8 @@ export default async function GiftsPage({ params }: { params: Promise<{ locale: 
 
 	return (
 		<>
-			<SecLabel
-				title={t.nav.gifts}
-				sub={ko ? '거울 던전에서 획득하는 강화 요소' : 'Mirror Dungeon rewards'}
-				hint={units.length}
-			/>
 			<UnitList
+				title={t.nav.gifts}
 				units={units}
 				axes={axes}
 				sections={sections}

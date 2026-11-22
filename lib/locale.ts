@@ -27,6 +27,20 @@ export function isLocale(value: string): value is Locale {
 	return (LOCALES as readonly string[]).includes(value);
 }
 
+/** Proxy owns this request header; it is overwritten from the actual URL, never trusted from callers. */
+export const DOCUMENT_PATH_HEADER = 'x-dossier-document-path';
+
+/** Shared by initial SSR and client navigation, including invalid document routes. */
+export function localeFromPathname(pathname: string): Locale {
+	if (!pathname.startsWith('/')) return DEFAULT_LOCALE;
+	try {
+		const segment = decodeURIComponent(pathname.split('/')[1] ?? '');
+		return isLocale(segment) ? segment : DEFAULT_LOCALE;
+	} catch {
+		return DEFAULT_LOCALE;
+	}
+}
+
 /** 언어 전환 버튼에 쓰는 표기. 각 언어를 그 언어로 적는다. */
 export const LOCALE_LABEL: Record<Locale, string> = {
 	ko: '한국어',

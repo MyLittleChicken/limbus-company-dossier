@@ -47,3 +47,20 @@ test('atomic image replacement changes the URL revision without restarting the r
 	assert.notEqual(after, before);
 	assert.ok(new URL(after, 'http://localhost').searchParams.get('v'));
 });
+
+
+test('canonical keyword IDs resolve the same asset as their display names',()=>{
+ const dir=join(workspace,'data/assets/icons/limbus-assets');mkdirSync(dir,{recursive:true});
+ for(const [id,name] of Object.entries({Combustion:'Burn',Laceration:'Bleed',Vibration:'Tremor',Burst:'Rupture',Breath:'Poise',Penetrate:'Pierce',Hit:'Blunt'})){
+  writeFileSync(join(dir,name+'.webp'),'icon');assert.equal(assets.keywordIcon(id),assets.keywordIcon(name));assert.ok(assets.keywordIcon(id));
+ }
+});
+
+test('pack dimensions reserve the exact original aspect before image decode',async()=>{
+ const {default:sharp}=await import('sharp');
+ const dir=join(workspace,'data/assets/packs/limbus-assets');mkdirSync(dir,{recursive:true});
+ await sharp({create:{width:317,height:628,channels:4,background:'#000'}}).webp().toFile(join(dir,'test-pack.webp'));
+ const url=assets.packIcon('test-pack');assert.ok(url);
+ assert.deepEqual(await assets.assetDimensions(url),{width:317,height:628});
+ assert.equal(await assets.assetDimensions('/media/packs/limbus-assets/missing.webp'),null);
+});

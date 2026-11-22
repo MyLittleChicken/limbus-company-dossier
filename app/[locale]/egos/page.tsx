@@ -3,7 +3,6 @@ import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { listAxisLabels, listEgosFull, listSinners } from '@/lib/queries/canonical/list';
 import { egoRankIcon, keywordIcon, sinIcon } from '@/lib/assets';
-import { SecLabel } from '@/components/ui';
 import { UnitList, type Axis, type Unit } from '@/components/unit-list';
 
 /**
@@ -71,9 +70,9 @@ export default async function EgosPage({ params }: { params: Promise<{ locale: s
 		},
 	];
 
-
 	const units: Unit[] = rows.map((e) => ({
 		id: e.id,
+        isBase: e.isBase,
 		sectionId: String(e.sinnerId),
 		rankIcon: e.rank ? egoRankIcon(e.rank) : null,
 		rankLabel: e.rank ?? '',
@@ -94,12 +93,9 @@ export default async function EgosPage({ params }: { params: Promise<{ locale: s
 
 	return (
 		<>
-			<SecLabel
-				title={t.nav.egos}
-				sub={ko ? '인격에 장착하는 특수 기술' : 'Special abilities equipped to identities'}
-				hint={units.length}
-			/>
 			<UnitList
+				title={t.nav.egos}
+				gradeOrder="none"
 				units={units}
 				axes={axes}
 				sections={sinners.map((s) => ({

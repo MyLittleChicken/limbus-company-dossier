@@ -1,3 +1,5 @@
+import {cacheReference} from '@/lib/query-cache';
+import {createKoreanMatcher,canSearch} from '@/lib/korean-search';
 import type { Locale } from '@/lib/locale';
 import type { $Enums, Prisma } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
@@ -120,36 +122,13 @@ export function readGlossaryFilter(params: SearchParams): GlossaryFilter {
 	};
 }
 
+const statusCorpus=cacheReference(()=>canonical.status.findMany({orderBy:{id:'asc'},include:{texts:{where:{locale:{in:['ko','en']}}}}}));
 export async function listStatuses(locale: Locale, filter: GlossaryFilter) {
-	const and: Prisma.StatusWhereInput[] = [];
-	if (filter.buffTypes.length) {
-		and.push({ buffType: { in: filter.buffTypes as $Enums.BuffType[] } });
-	}
-	if (filter.q) {
-		and.push({
-			texts: {
-				some: {
-					locale: { in: [locale, 'en'] },
-					OR: [
-						{ name: { contains: filter.q, mode: 'insensitive' } },
-						{ desc: { contains: filter.q, mode: 'insensitive' } },
-					],
-				},
-			},
-		});
-	}
-	const where = and.length ? { AND: and } : {};
-
-	const [total, rows] = await Promise.all([
-		canonical.status.count({ where }),
-		canonical.status.findMany({
-			where,
-			orderBy: { id: 'asc' },
-			skip: (filter.page - 1) * GLOSSARY_PAGE,
-			take: GLOSSARY_PAGE,
-			include: { texts: localeRows(locale) },
-		}),
-	]);
+ const matches=createKoreanMatcher(filter.q??'');
+ const candidates=(await statusCorpus()).filter(s=>!filter.buffTypes.length||filter.buffTypes.includes(s.buffType??''));
+ const matched=candidates.filter(s=>!filter.q||s.texts.some(t=>matches(t.name)||matches(t.desc)));
+ const total=matched.length;
+ const rows=matched.slice((filter.page-1)*GLOSSARY_PAGE,filter.page*GLOSSARY_PAGE);
 
 	return {
 		total,
@@ -165,7 +144,7 @@ export async function listStatuses(locale: Locale, filter: GlossaryFilter) {
 	};
 }
 
-export async function listGlossaryAxes(locale: Locale) {
+export const listGlossaryAxes=cacheReference(async(locale: Locale)=>{
 	const [sins, keywords, counts] = await Promise.all([
 		canonical.sinInfo.findMany({ orderBy: { order: 'asc' }, include: { texts: localeRows(locale) } }),
 		canonical.keyword.findMany({ orderBy: { order: 'asc' }, include: { texts: localeRows(locale) } }),
@@ -177,7 +156,7 @@ export async function listGlossaryAxes(locale: Locale) {
 		keywords: keywords.map((k) => ({ id: k.id, text: nameOf(k.texts, locale) })),
 		buffTypes: counts.map((c) => ({ id: c.buffType, count: c._count })),
 	};
-}
+});
 
 /**
  * 이 데이터가 무엇에서 나왔나. 조회 화면에서도 확인 가능해야 한다(05-ui-foundation 10절).
@@ -237,44 +216,28 @@ export interface SearchHit {
 	meta: string;
 }
 
+const searchCorpus=cacheReference(async()=>{
+ const searchableTexts={where:{locale:{in:['ko','en'] as $Enums.Locale[]}}};
+ // Match the small canonical text corpus on the server, before limiting each group.
+ // SQL contains cannot match Korean initial consonants or unfinished IME syllables.
+ return Promise.all([
+  canonical.gift.findMany({where:{domain:'mirror_dungeon'},orderBy:{id:'asc'},include:{stages:{orderBy:{level:'asc'},include:{texts:searchableTexts}}}}),
+  canonical.pack.findMany({orderBy:{id:'asc'},include:{texts:searchableTexts}}),
+  canonical.identity.findMany({orderBy:{id:'asc'},include:{texts:searchableTexts}}),
+  canonical.ego.findMany({where:{presentationOnly:false},orderBy:{id:'asc'},include:{texts:searchableTexts}}),
+ ]);
+});
+
 export async function searchAll(query: string, locale: Locale): Promise<SearchHit[]> {
 	const q = query.trim();
-	if (q.length === 0) return [];
+	if (!canSearch(q)) return [];
 
-	const like = { contains: q, mode: 'insensitive' as const };
-	const locales = { in: [locale, 'en'] as $Enums.Locale[] };
-
-	const [gifts, packs, identities, egos] = await Promise.all([
-		canonical.gift.findMany({
-			// 거울 던전 기프트만 찾는다 — 목록·상세와 같은 범위다
-			where: {
-				domain: 'mirror_dungeon',
-				stages: { some: { texts: { some: { locale: locales, OR: [{ name: like }, { desc: like }] } } } },
-			},
-			take: PER_KIND,
-			orderBy: { id: 'asc' },
-			include: { stages: { where: { level: 0 }, include: { texts: localeRows(locale) } } },
-		}),
-		canonical.pack.findMany({
-			where: { texts: { some: { locale: locales, name: like } } },
-			take: PER_KIND,
-			orderBy: { id: 'asc' },
-			include: { texts: localeRows(locale) },
-		}),
-		canonical.identity.findMany({
-			// 인격 이름은 title 이다 — name 은 수감자 이름이라 검색이 엉뚱하게 걸린다
-			where: { texts: { some: { locale: locales, title: like } } },
-			take: PER_KIND,
-			orderBy: { id: 'asc' },
-			include: { texts: localeRows(locale) },
-		}),
-		canonical.ego.findMany({
-			where: { presentationOnly: false, texts: { some: { locale: locales, name: like } } },
-			take: PER_KIND,
-			orderBy: { id: 'asc' },
-			include: { texts: localeRows(locale) },
-		}),
-	]);
+	const matches=createKoreanMatcher(q);
+ const [giftRows,packRows,identityRows,egoRows]=await searchCorpus();
+ const gifts=giftRows.filter(g=>g.stages.some(s=>s.texts.some(t=>matches(t.name)||matches(t.desc)))).slice(0,PER_KIND);
+ const packs=packRows.filter(p=>p.texts.some(t=>matches(t.name))).slice(0,PER_KIND);
+ const identities=identityRows.filter(i=>i.texts.some(t=>matches(t.title))).slice(0,PER_KIND);
+ const egos=egoRows.filter(e=>e.texts.some(t=>matches(t.name))).slice(0,PER_KIND);
 
 	const hits: SearchHit[] = [];
 
@@ -331,7 +294,7 @@ export async function searchAll(query: string, locale: Locale): Promise<SearchHi
 }
 
 /** 적재된 테이블별 행 수. 고지 화면이 데이터의 범위를 밝히는 데 쓴다. */
-export async function getCounts() {
+export const getCounts=cacheReference(async()=>{
 	const [gifts, packs, identities, egos, skills, statuses, affiliations, relations] =
 		await Promise.all([
 			canonical.gift.count(),
@@ -344,4 +307,4 @@ export async function getCounts() {
 			canonical.giftPack.count(),
 		]);
 	return { gifts, packs, identities, egos, skills, statuses, affiliations, relations };
-}
+});

@@ -491,33 +491,28 @@ function pushSkillStages(
 	numbers: Map<number, StageNumbers>,
 ): void {
 	const upties = new Set<number>(numbers.keys());
+	// Numeric changes and localized snapshots have independent, sparse stage axes.
 	for (const locale of LOCALES) {
-		const entry = skillLoc[locale].get(skillId);
-		if (entry === undefined) continue;
-		for (const raw of arr(entry, 'levelList')) {
-			const l = obj(raw);
-			const uptie = num(l, 'level');
-			if (uptie === null) continue;
-			upties.add(uptie);
+		for (const raw of arr(skillLoc[locale].get(skillId) ?? {}, 'levelList')) {
+			const level = num(obj(raw), 'level');
+			if (level !== null) upties.add(level);
+		}
+	}
+	for (const locale of LOCALES) {
+		const snapshots = arr(skillLoc[locale].get(skillId) ?? {}, 'levelList')
+			.map(obj).filter(l => num(l, 'level') !== null)
+			.sort((a,b) => num(a,'level')! - num(b,'level')!);
+		for (const uptie of [...upties].sort((a,b) => a-b)) {
+			// Never borrow a future unlock. An explicit empty snapshot replaces earlier effects.
+			const l = snapshots.filter(l => num(l,'level')! <= uptie).at(-1);
+			if (!l) continue;
 			const name = str(l, 'name');
-			if (name !== null) {
-				t.egoSkillStageText.push({
-					skillId,
-					uptie,
-					locale,
-					name,
-					...descOf(str(l, 'desc')),
-					abName: str(l, 'abName'),
-				});
-			}
+			if (name !== null) t.egoSkillStageText.push({skillId, uptie, locale, name,
+				...descOf(str(l, 'desc')), abName: str(l, 'abName')});
 			arr(l, 'coinlist').forEach((coinRaw, index) => {
-				// **효과 문구가 없어도 코인 행은 남긴다.** 원본이 coindescs 를 [{}] 로 두는
-				// 스킬이 있는데(2120611 · 2120911 — 위키 coin=1), 초판은 그것을 코인 0개로
-				// 만들어 버렸다. 코인 수는 클래시 계산의 입력이라 잃으면 안 된다(감사 §3.5)
 				const effects = arr(obj(coinRaw), 'coindescs')
-					.map((d) => str(obj(d), 'desc'))
-					.filter((d): d is string => d !== null);
-				t.egoSkillCoin.push({ skillId, uptie, index, locale, effects });
+					.map(d => str(obj(d), 'desc')).filter((d): d is string => d !== null);
+				t.egoSkillCoin.push({skillId, uptie, index, locale, effects});
 			});
 		}
 	}

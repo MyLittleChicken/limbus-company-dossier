@@ -39,8 +39,12 @@ export function hasMarkup(text: string): boolean {
  * 마크업이 없으면 `descRaw` 는 null 이다 — `desc` 가 곧 원문이므로 중복 저장할
  * 이유가 없다. 있으면 원문을 남겨 파싱이 틀려도 되돌릴 수 있다.
  */
-export function descOf(raw: string | null): { desc: string | null; descRaw: string | null } {
+export function descOf(raw: string | null, dict?: ReadonlyMap<string, string>): { desc: string | null; descRaw: string | null } {
 	if (raw === null) return { desc: null, descRaw: null };
+	if (dict) {
+		const desc = substituteTokens(raw, dict).text;
+		return { desc, descRaw: desc === raw ? null : raw };
+	}
 	if (!hasMarkup(raw)) return { desc: raw, descRaw: null };
 	return { desc: stripMarkup(raw), descRaw: raw };
 }

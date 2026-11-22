@@ -1,15 +1,29 @@
 import type { ReactNode } from 'react';
+import { headers } from 'next/headers';
+import { DOCUMENT_PATH_HEADER, localeFromPathname } from '@/lib/locale';
+import { DocumentLanguage } from '@/components/document-language';
 import './tokens.css';
 import './globals.css';
+import './dossier.css';
+import './experience.css';
+import './motion.css';
 
-/**
- * 루트 레이아웃. `lang` 은 로케일 세그먼트를 아는 하위 레이아웃이 정할 수 없으므로
- * 여기서는 기본값만 두고 `app/[locale]/layout.tsx` 가 문서 언어를 다시 알린다.
- */
-export default function RootLayout({ children }: { children: ReactNode }) {
+/** The proxy supplies the document path for SSR; the client bridge handles subsequent navigation. */
+export default async function RootLayout({ children }: { children: ReactNode }) {
+	const requestHeaders = await headers();
+	const locale = localeFromPathname(requestHeaders.get(DOCUMENT_PATH_HEADER) ?? '/');
 	return (
-		<html lang="ko">
-			<body>{children}</body>
+		<html lang={locale} suppressHydrationWarning>
+			<head><link rel="preload" href="/fonts/pretendard.woff2" as="font" type="font/woff2" crossOrigin="anonymous"/><link rel="preload" href="/fonts/chakra.ttf" as="font" type="font/ttf" crossOrigin="anonymous"/></head>
+            <body>
+				<script
+					dangerouslySetInnerHTML={{
+						__html: `(function(){try{var t=localStorage.getItem('dossier-theme');document.documentElement.dataset.theme=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light'}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}})()`,
+					}}
+				/>
+				<DocumentLanguage />
+				{children}
+			</body>
 		</html>
 	);
 }

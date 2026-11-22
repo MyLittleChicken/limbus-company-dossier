@@ -2,9 +2,9 @@ import {Prisma} from '../v2/generated/client.js';
 import type {Candidate,Row} from './candidate.js';
 
 // The updater may synchronize only these models; app, gifts, packs and root deletions are excluded.
-const ALLOW=new Set(['association','associationText','status','statusText','statusCategory','skill','skillStage','skillStageText','skillCoin','passive','passiveRequirement','passiveText','identity','identityText','identityResist','identitySpeed','identitySkill','identityPassive','identityAssociation','identityKeyword','identityUnitKeyword','identityStatus','ego','egoText','egoResist','egoCost','egoCorrosion','egoRequirement','egoSkill','egoSkillStage','egoSkillStageText','egoSkillCoin','egoPassive','egoPassiveText','egoPassiveLink','egoStatus']);
+const ALLOW=new Set(['term','termText','association','associationText','status','statusText','statusCategory','skill','skillStage','skillStageText','skillCoin','passive','passiveRequirement','passiveText','identity','identityText','identityResist','identitySpeed','identitySkill','identityPassive','identityAssociation','identityKeyword','identityUnitKeyword','identityStatus','ego','egoText','egoResist','egoCost','egoCorrosion','egoRequirement','egoSkill','egoSkillStage','egoSkillStageText','egoSkillCoin','egoPassive','egoPassiveText','egoPassiveLink','egoStatus']);
 const models=new Map(Prisma.dmmf.datamodel.models.map(m=>[m.name[0]!.toLowerCase()+m.name.slice(1),m]));
-const roots=new Set(['association','status','skill','passive','identity','ego','egoPassive']);
+const roots=new Set(['term','association','status','skill','passive','identity','ego','egoPassive']);
 const quote=(value:string)=>'"'+value.replaceAll('"','""')+'"';
 
 export function validateCandidateShape(c:Candidate):string[]{
@@ -64,6 +64,7 @@ export async function applyCandidate(tx:Prisma.TransactionClient,c:Candidate):Pr
   else if(key.startsWith('skill')){field='skillId';owners=ids('skill');}
   else if(key.startsWith('passive')){field='passiveId';owners=ids('passive');}
   else if(key.startsWith('status')){field='statusId';owners=ids('status');}
+  else if(key==='termText'){field='termId';owners=ids('term');}
   else if(key.startsWith('association')){field='associationId';owners=ids('association');}
   else throw Error(`missing owner scope ${key}`);
   if(!owners.length)continue;

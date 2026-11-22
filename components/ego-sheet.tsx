@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import {DetailArt} from './detail-art';
+import {useDetailQuery} from './use-detail-query';
 import Link from 'next/link';
 import type { Locale } from '@/lib/locale';
 import type { EgoDetail } from '@/lib/queries/canonical/detail';
@@ -96,8 +97,9 @@ function SkillRow({
 							<ol className="fx-coins">
 								{stage.coins.map((c, i) => (
 									<li key={c.index}>
-										<span className="coin-r">{ROMAN[i + 1] ?? i + 1}</span>
-										<div>
+										<span className="coin-r" aria-label={`${ko ? '코인' : 'Coin'} ${i+1}`}>{coin&&<img src={coin} alt="" width={24} height={24}/>}<span>{ROMAN[i + 1] ?? i + 1}</span></span>
+										<div className="coin-effect">
+                                            {!c.desc?.trim()&&<span className="coin-empty">{ko?'추가 효과 없음':'No additional effect'}</span>}
 											<Lines
 												text={c.desc === null ? null : { name: '', desc: c.desc }}
 												names={names}
@@ -138,13 +140,16 @@ export function EgoSheetView({
 	const upties = [...new Set(sheet.skills.flatMap((s) => s.stages.map((st) => st.uptie)))].sort(
 		(a, b) => a - b,
 	);
-	const [uptie, setUptie] = useState(upties[upties.length - 1] ?? 1);
-	const [corroded, setCorroded] = useState(false);
+	const query=useDetailQuery();
+	const uptie=query.stage(upties);
+	const setUptie=(value:number)=>query.set('uptie',String(value));
+	const corroded=query.params.get('art')==='corrosion';
+	const setCorroded=(fn:(v:boolean)=>boolean)=>query.set('art',fn(corroded)?'corrosion':'normal');
 
 	const names = nameMap(sheet.statuses);
 	/* 침식 그림이 없는 E.G.O 가 12종이다 — 결손이 아니라 부재다. 그때는 단추를 두지 않는다. */
 	const canCorrode = Boolean(sheet.images.erosion);
-	const art = corroded && canCorrode ? sheet.images.erosion : sheet.images.awaken;
+	const art = corroded && canCorrode ? sheet.images.erosion : (sheet.images.cg ?? sheet.images.awaken);
 
 	const awakening = sheet.skills.filter((s) => s.role === 'awakening');
 	const corrosion = sheet.skills.filter((s) => s.role === 'corrosion');
@@ -154,10 +159,10 @@ export function EgoSheetView({
 
 	return (
 		<>
-			<section className="f-card">
-				<div className="f-art">
+			<section className="f-card f-card--ego">
+				<div className="f-art-stage"><div className="f-art">
 					{/* eslint-disable-next-line @next/next/no-img-element */}
-					{art ? <img src={art} alt="" /> : <span className="f-art-none" />}
+					{art ? <DetailArt src={art} width={1024} height={1024} /> : <span className="f-art-none" />}
 					<i className="f-mount" />
 					{canCorrode ? (
 						<button
@@ -165,7 +170,7 @@ export function EgoSheetView({
 							className="f-swap"
 							onClick={() => setCorroded((v) => !v)}
 							aria-pressed={corroded}
-							title={ko ? '각성 · 침식 그림 바꾸기' : 'Toggle awaken / corrosion art'}
+							title={ko ? '전체 일러스트 · 침식 프로필 바꾸기' : 'Toggle full illustration / corrosion portrait'}
 							aria-label={ko ? '그림 바꾸기' : 'Toggle art'}
 						>
 							<SwapIcon />
@@ -173,8 +178,9 @@ export function EgoSheetView({
 					) : null}
 				</div>
 
-				<div className="f-body">
-					<header className="f-head">
+				</div>
+
+				<header className="f-head">
 						<div className="f-ident">
 							<div className="f-title">
 								{/* eslint-disable-next-line @next/next/no-img-element */}
@@ -205,7 +211,7 @@ export function EgoSheetView({
 							</div>
 							<div>
 								<dt>{ko ? '시즌' : 'Season'}</dt>
-								<dd>{seasonLabel(sheet.season) ?? '—'}</dd>
+								<dd>{seasonLabel(sheet.season, locale) ?? '—'}</dd>
 							</div>
 							<div>
 								<dt>{ko ? '출시' : 'Released'}</dt>
@@ -216,6 +222,7 @@ export function EgoSheetView({
 						</dl>
 					</header>
 
+				<div className="f-body">
 					<div className="f-picks">
 						<div className="f-pick">
 							<span className="f-lab">{ko ? '해석' : 'Threadspin'}</span>

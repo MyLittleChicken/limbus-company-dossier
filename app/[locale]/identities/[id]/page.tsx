@@ -4,7 +4,7 @@ import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { getIdentity } from '@/lib/queries/canonical/detail';
 import { uiIcon } from '@/lib/assets';
-import { SecLabel } from '@/components/ui';
+import {DetailNavigation} from '@/components/detail-navigation';
 import { IdentitySheetView } from '@/components/identity-sheet';
 
 /**
@@ -53,10 +53,7 @@ export default async function IdentityDetailPage({
 				제목을 여기 두지 않는다 — 바로 아래 카드의 표제가 같은 것을 더 크게 말한다.
 				이 줄은 되돌아가는 길만 진다.
 			*/}
-			<SecLabel
-				title={ko ? '인격' : 'Identity'}
-				hint={<Link href={`/${locale}/identities`}>{ko ? '목록으로' : 'Back to list'}</Link>}
-			/>
+			<DetailNavigation locale={locale} section="identities" label={ko ? '인격' : 'Identities'} name={sheet.text?.name ?? id} />
 
 			<IdentitySheetView sheet={sheet} locale={locale} notice={t.fallbackNotice} icons={icons} />
 

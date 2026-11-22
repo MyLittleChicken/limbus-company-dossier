@@ -18,3 +18,9 @@ test('snapshot identifies source vector not wall clock',()=>{
  assert.equal(snapshotId({b:'2',a:'1'}),snapshotId({a:'1',b:'2'}));
  assert.notEqual(snapshotId({a:'1'}),snapshotId({a:'2'}));
 });
+
+test('localized skill tags are collected so new timing tokens can be displayed', () => {
+ for (const locale of ['ko', 'en', 'ja']) {
+  assert.equal(targetPath(`loc-${locale}`, 'SkillTag.json'), `entities/mechanics/loc-${locale}/SkillTag.json`);
+ }
+});

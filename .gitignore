@@ -105,3 +105,14 @@ build/tmp/
 
 # Source update staging, raw game files and operational reports
 /var/updates/
+
+# Local previews, downloaded research, screenshots and generated ranking reports
+/var/
+/rank.html
+/references/limbus-ing/**/*.js
+/references/limbus-ing/**/*.json
+!/references/limbus-ing/**/manifest.json
+# Game artwork is restored from pinned source manifests, not redistributed in Git.
+/public/current/
+/public/game-ui/*.png
+/public/game-ui/*.webp
