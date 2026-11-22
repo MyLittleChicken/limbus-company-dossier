@@ -161,8 +161,9 @@ export const egoRankIcon = (rank: string): string | null => lookup('icons', rank
  * 기프트 연관 키워드. 상태 7종과 공격 타입 3종을 한 축으로 다룬다(02-data-model 4.3).
  * 파일명이 첫 글자만 대문자라 그대로 쓰면 찾지 못한다.
  */
+const KEYWORD_ASSET_KEYS: Record<string,string> = {Combustion:'Burn',Laceration:'Bleed',Vibration:'Tremor',Burst:'Rupture',Breath:'Poise',Penetrate:'Pierce',Hit:'Blunt'};
 export const keywordIcon = (keywordId: string): string | null =>
-	lookup('icons', capitalize(keywordId));
+	lookup('icons', KEYWORD_ASSET_KEYS[keywordId] ?? capitalize(keywordId));
 
 /** 상태 아이콘. 아이콘이 없는 수치 변화형 상태가 254종 있고 그것은 결손이 아니다. */
 export const statusIcon = (sprite: string | null): string | null => lookup('statuses', sprite);
@@ -233,4 +234,12 @@ export function skillFrame(
 		frame: lookup('skill-frames', key),
 		background: lookup('skill-frames', `${key}-bg`),
 	};
+}
+
+/** Preserve source proportions before the browser has decoded a pack image. */
+export async function assetDimensions(url:string):Promise<{width:number;height:number}|null>{
+ const parts=url.split('?')[0]!.split('/').slice(2).map(decodeURIComponent);
+ if(parts.length!==3||parts.some(p=>p==='..'||p.includes('/')))return null;
+ const {default:sharp}=await import('sharp');
+ try{const info=await sharp(join(ASSET_ROOT,...parts)).metadata();return info.width&&info.height?{width:info.width,height:info.height}:null}catch{return null}
 }

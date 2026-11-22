@@ -44,3 +44,15 @@ test('hasMarkup 은 여러 번 불러도 같은 답이다 — 정규식 상태�
 	assert.equal(hasMarkup(t), true);
 	assert.equal(hasMarkup(t), true);
 });
+
+// Incremental ETL must produce display text without losing the source tokens.
+test('descOf localizes known tokens and preserves the exact raw description', async () => {
+ const { descOf } = await import('./markup.js');
+ const raw = '[BeforeAttack] <b>[Charge]</b> 5 얻음\n[UnknownToken]';
+ const dict = new Map([['BeforeAttack', '[공격 전]'], ['Charge', '충전']]);
+ assert.deepEqual(descOf(raw, dict), {
+  desc: '[공격 전] 충전 5 얻음\n[UnknownToken]', descRaw: raw,
+ });
+ assert.deepEqual(descOf(null, dict), {desc:null,descRaw:null});
+ assert.deepEqual(descOf('[UnknownToken]', dict), {desc:'[UnknownToken]',descRaw:null});
+});

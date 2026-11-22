@@ -1,0 +1,12 @@
+{
+ "reviewedOn":"2026-11-22",
+ "source":"https://github.com/eldritchtools/limbus-assets/blob/11eac57bf565207ed8b15981129f8fcd41b9a22f/data/timers.json",
+ "datePrecision":"day",
+ "season":{"number":8,"name":"Odium","image":"/current/season_8.webp"},
+ "mirror":{"ko":"시지프의 거울","en":"Mirror of Sisyphe"},
+ "pickups":[
+  {"id":"walp10","title":{"ko":"제10회 발푸르기스의 밤","en":"The 10th Walpurgisnacht"},"subtitle":{"ko":"새벽 뒤 꿰뚫어 오는 쐐기","en":"The Wedge in the Wake of Dawnbreak"},"startDate":"2026-11-12","endDate":"2026-11-26","image":"/current/feature_2026-11-12.webp","identities":["10316","11017","11116"],"egos":["20611"]},
+  {"id":"walp56","title":{"ko":"제5·6회 발푸르기스의 밤 복각","en":"Walpurgisnacht 5 & 6 Rerun"},"subtitle":{"ko":"복각 추출","en":"Rerun extraction"},"startDate":"2026-11-12","endDate":"2026-11-26","image":"/current/feature2_2026-11-12.webp","identities":["10312","10913","10611","10711"],"egos":["20309","21108"]}
+ ],
+ "events":[{"id":"walp10","title":{"ko":"제10회 발푸르기스의 밤","en":"The 10th Walpurgisnacht"},"subtitle":{"ko":"새벽 뒤 꿰뚫어 오는 쐐기","en":"The Wedge in the Wake of Dawnbreak"},"startDate":"2026-11-12","endDate":"2026-11-26","image":"/current/walp_10.webp"}]
+}

@@ -1,5 +1,6 @@
+import {cacheReference} from '@/lib/query-cache';
 import type { Locale } from '@/lib/locale';
-import type { Prisma } from '@/src/v2/generated/client';
+import {createKoreanMatcher} from '@/lib/korean-search';
 import { canonical } from '@/lib/db-canonical';
 import { packIcon } from '@/lib/assets';
 import { one, type SearchParams } from '@/lib/queries/shared';
@@ -15,13 +16,13 @@ import { localeRows, nameOf } from './locale';
  * 지금 필요한 것은 콜라보 판정 하나다. 이름으로 짐작하거나 id 를 박아 넣지 않고
  * **데이터가 가진 태그를 읽는다** — 실측 1 건이며 명일방주 「선의의 순례」다.
  */
-export async function listCollabPackIds(): Promise<Set<string>> {
+export const listCollabPackIds=cacheReference(async(): Promise<Set<string>>=>{
 	const rows = await canonical.packTag.findMany({
 		where: { tag: 'Collab' },
 		select: { packId: true },
 	});
 	return new Set(rows.map((r) => r.packId));
-}
+});
 
 export interface PackFilter {
 	q?: string | undefined;
@@ -37,30 +38,25 @@ export function readPackFilter(params: SearchParams): PackFilter {
  * **이 함수가 서면 팩 목록 화면이 한 층만 읽는다.** 지금까지는 이 파일의
  * `listCollabPackIds` 와 현행 `lib/queries/packs.ts` 의 `listPacks` 를 함께 썼다.
  */
-export async function listPacks(locale: Locale, filter: PackFilter) {
-	const and: Prisma.PackWhereInput[] = [];
-	if (filter.q) {
-		and.push({
-			texts: {
-				some: { locale: { in: [locale, 'en'] }, name: { contains: filter.q, mode: 'insensitive' } },
-			},
-		});
-	}
-
-	const rows = await canonical.pack.findMany({
-		where: and.length ? { AND: and } : {},
+const packCorpus=cacheReference(async()=>{
+	return canonical.pack.findMany({
 		// **id 로만 정렬한다.** category 는 enum 이라 선언 순서로 정렬되는데 그 순서가
 		// 캐노니컬과 현행에서 다르다. 화면이 어차피 자기 순서를 쓰므로
 		// (`lib/pack-label.ts` 의 comparePackKind) 질의는 결정적이기만 하면 된다
 		orderBy: { id: 'asc' },
 		include: {
-			texts: localeRows(locale),
+			texts: {where:{locale:{in:['ko','en']}}},
 			floors: true,
 			_count: { select: { gifts: true, exclusiveGifts: true, bosses: true } },
 		},
 	});
+});
+export async function listPacks(locale: Locale, filter: PackFilter) {
+	const matches=createKoreanMatcher(filter.q??'');
 
-	return rows.map((p) => ({
+	const rows=await packCorpus();
+
+	return rows.filter(p=>!filter.q||p.texts.some(t=>matches(t.name))).map((p) => ({
 		id: p.id,
 		category: p.category,
 		variant: p.variant,

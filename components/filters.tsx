@@ -1,7 +1,19 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import {
+	createContext,
+	useContext,
+	useEffect,
+    useRef,
+	useState,
+	useTransition,
+	type ReactNode,
+} from 'react';
+
+import {useLiveSearch} from './use-live-search';
+import {canSearch} from '@/lib/korean-search';
+import { CatalogueToolbar } from './catalogue-toolbar';
 
 /**
  * 필터 상태를 URL 에 담는다(05-ui-foundation 3절).
@@ -10,7 +22,78 @@ import { useEffect, useState, useTransition } from 'react';
  * 질의한다(ADR-05 3.3). 그래야 주소 하나로 화면이 그대로 재현되고 공유된다.
  */
 
+type UpdateContext = {
+	params: URLSearchParams;
+	pending: boolean;
+	apply: (mutate: (sp: URLSearchParams) => void) => void;
+};
+const DraftContext = createContext<UpdateContext | null>(null);
+export function QueryFilters({
+	title,
+	placeholder,
+	children,
+}: {
+	title: string;
+	placeholder: string;
+	children: ReactNode;
+}) {
+	const pathname = usePathname(),
+		router = useRouter(),
+		params = useSearchParams(),
+		serialized = params.toString(),
+		ko = pathname.startsWith('/ko');
+	const [draft, setDraft] = useState(() => new URLSearchParams(serialized)),
+		[pending, startTransition] = useTransition();
+	const liveQuery=useRef<string|null>(null);
+	useEffect(() => {if(liveQuery.current===(params.get('q')??'')){liveQuery.current=null;return;}setDraft(new URLSearchParams(serialized));}, [serialized]);
+	const mutate = (fn: (sp: URLSearchParams) => void) =>
+		setDraft((prev) => {
+			const next = new URLSearchParams(prev);
+			fn(next);
+			return next;
+		});
+	return (
+		<DraftContext.Provider value={{ params: draft, pending, apply: mutate }}>
+			<CatalogueToolbar
+				title={title}
+				placeholder={placeholder}
+				query={draft.get('q') ?? ''}
+				ko={ko}
+				pending={pending}
+				active={[...params.keys()].filter((k) => k !== 'q' && k !== 'page').length}
+				onQuery={(q) =>
+					mutate((sp) => {
+						if (q) sp.set('q', q);
+						else sp.delete('q');
+					})
+				}
+				onAutoQuery={(q)=>{
+                    if(q===(params.get('q')??''))return;
+                    const next=new URLSearchParams(serialized);next.delete('page');
+                    if(q)next.set('q',q);else next.delete('q');
+                    liveQuery.current=q;
+                    startTransition(()=>router.replace(pathname+(next.size?'?'+next:''),{scroll:false}));
+                }}
+                onReset={() => setDraft(new URLSearchParams())}
+				onApply={() => {
+					const next = new URLSearchParams(draft);
+					next.delete('page');
+					const q = next.get('q')?.trim();
+					if (q && canSearch(q)) next.set('q', q);
+					else next.delete('q');
+					startTransition(() =>
+						router.push(pathname + (next.size ? '?' + next : ''), { scroll: false }),
+					);
+				}}
+			>
+				{children}
+			</CatalogueToolbar>
+		</DraftContext.Provider>
+	);
+}
+
 function useUpdate() {
+	const draft = useContext(DraftContext);
 	const router = useRouter();
 	const pathname = usePathname();
 	const params = useSearchParams();
@@ -25,7 +108,7 @@ function useUpdate() {
 		startTransition(() => router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false }));
 	};
 
-	return { apply, params, pending };
+	return draft ?? { apply, params, pending };
 }
 
 export interface ChipOption {
@@ -83,7 +166,8 @@ export function TriFilter({ param, label }: { param: string; label: string }) {
 	const { apply, params } = useUpdate();
 	const current = params.get(param);
 
-	const step = () => (current === undefined || current === null ? '1' : current === '1' ? '0' : null);
+	const step = () =>
+		current === undefined || current === null ? '1' : current === '1' ? '0' : null;
 
 	return (
 		<button
@@ -143,37 +227,46 @@ export function PickFilter({
 /**
  * 이름·설명 검색.
  *
- * 입력마다 질의하지 않는다. 설명문 전문 검색이라 타건마다 보내면 데이터베이스가 상한다.
+ * 완성 글자/초성 길이를 확인하고 400ms 지연 후 검색한다. 서버 참조 데이터는 공유 캐시를 쓴다.
  */
 export function SearchBox({ placeholder }: { placeholder: string }) {
 	const { apply, params, pending } = useUpdate();
 	const initial = params.get('q') ?? '';
 	const [value, setValue] = useState(initial);
+    const liveQuery=useRef<string|null>(null);
+    const commit=(q:string)=>{if(q===initial)return;liveQuery.current=q;apply(sp=>{if(q)sp.set('q',q);else sp.delete('q')})};
+    const composition=useLiveSearch(value,commit,400);
 
 	// 뒤로 가기 등으로 URL 이 바뀌면 입력도 따라간다.
-	useEffect(() => setValue(initial), [initial]);
+	useEffect(() => {if(liveQuery.current===initial){liveQuery.current=null;return;}setValue(initial)}, [initial]);
 
-	useEffect(() => {
-		if (value === initial) return;
-		const timer = setTimeout(() => {
-			apply((sp) => {
-				if (value.trim()) sp.set('q', value.trim());
-				else sp.delete('q');
-			});
-		}, 300);
-		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [value]);
-
+	const pathname = usePathname();
+	const ko = pathname.startsWith('/ko');
 	return (
-		<input
-			className="srch"
-			type="search"
-			value={value}
-			placeholder={placeholder}
-			onChange={(e) => setValue(e.target.value)}
-			aria-busy={pending}
-		/>
+		<form
+			className="standalone-search"
+			onSubmit={(e) => {
+				e.preventDefault();
+				apply((sp) => {
+					if (canSearch(value)) sp.set('q', value.trim());
+					else sp.delete('q');
+				});
+			}}
+		>
+			<input
+				className="srch"
+                {...composition}
+				type="search"
+				value={value}
+				placeholder={placeholder}
+				aria-label={placeholder}
+				onChange={(e) => setValue(e.target.value)}
+				aria-busy={pending}
+			/>
+			<button type="submit" className="ui-button ui-primary" disabled={pending}>
+				{ko ? '검색' : 'Search'}
+			</button>
+		</form>
 	);
 }
 
@@ -182,9 +275,15 @@ export function ClearFilters({ label }: { label: string }) {
 	const { apply, params } = useUpdate();
 	if ([...params.keys()].length === 0) return null;
 	return (
-		<button type="button" className="chip chip-clear" onClick={() => apply((sp) => {
-			for (const key of [...sp.keys()]) sp.delete(key);
-		})}>
+		<button
+			type="button"
+			className="chip chip-clear"
+			onClick={() =>
+				apply((sp) => {
+					for (const key of [...sp.keys()]) sp.delete(key);
+				})
+			}
+		>
 			{label}
 		</button>
 	);

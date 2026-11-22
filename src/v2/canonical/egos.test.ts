@@ -203,9 +203,7 @@ test('ego-details 에 없는 스킬은 수치가 null 이다 — 지어내지 �
 
 test('코인이 coinlist.coindescs 에서 나온다', () => {
 	const t = buildEgos(input(), new Meta());
-	assert.deepEqual(t.egoSkillCoin, [
-		{ skillId: '2010111', uptie: 1, index: 0, locale: 'ko', effects: ['[OnSucceedAttack] 신속 1'] },
-	]);
+	assert.deepEqual(t.egoSkillCoin, [1,3,4].map(uptie => ({skillId:'2010111',uptie,index:0,locale:'ko',effects:['[OnSucceedAttack] 신속 1']})));
 });
 
 test('효과 문자열이 없는 코인도 행으로 남는다 — 코인 수는 클래시 계산 입력이다', () => {
@@ -215,9 +213,7 @@ test('효과 문자열이 없는 코인도 행으로 남는다 — 코인 수는
 		levelList: [{ level: 1, name: '오감도', abName: '이상', desc: '', coinlist: [{ coindescs: [{}] }] }],
 	});
 	const t = buildEgos(i, new Meta());
-	assert.deepEqual(t.egoSkillCoin, [
-		{ skillId: '2010111', uptie: 1, index: 0, locale: 'ko', effects: [] },
-	]);
+	assert.deepEqual(t.egoSkillCoin, [1,3,4].map(uptie => ({skillId:'2010111',uptie,index:0,locale:'ko',effects:[]})));
 });
 
 test('유래 환상체 abName 이 담긴다 — loc 단독 개념', () => {
@@ -238,4 +234,24 @@ test('이름이 loc 우선이고 mj 가 폴백이다', () => {
 	i.locEgoKo.delete('20101');
 	const t = buildEgos(i, new Meta());
 	assert.equal(t.egoText.find((x) => x.egoId === '20101' && x.locale === 'ko')?.name, '오감도');
+});
+
+
+test('numeric-only IV retains III localized snapshot and IV numbers independently',()=>{
+ const i=input();
+ i.locSkillKo.set('2010111',{levelList:[
+  {level:1,name:'I',desc:'old',coinlist:[{coindescs:[{desc:'old coin'}]}]},
+  {level:3,name:'III',desc:'new',coinlist:[{coindescs:[{desc:'new coin'}]}]}
+ ]});
+ const t=buildEgos(i,new Meta());
+ assert.equal(t.egoSkillStage.find(s=>s.uptie===4)?.atkWeight,2);
+ assert.equal(t.egoSkillStageText.find(s=>s.uptie===4&&s.locale==='ko')?.name,'III');
+ assert.deepEqual(t.egoSkillCoin.find(s=>s.uptie===4&&s.locale==='ko')?.effects,['new coin']);
+});
+test('localized snapshots never backfill future unlocks or resurrect explicitly removed coins',()=>{
+ const i=input();i.locSkillKo.set('2010111',{levelList:[{level:3,name:'III',desc:'',coinlist:[]}]});
+ const t=buildEgos(i,new Meta());
+ assert(!t.egoSkillStageText.some(s=>s.uptie===1));
+ assert.equal(t.egoSkillStageText.find(s=>s.uptie===4)?.desc,null);
+ assert.equal(t.egoSkillCoin.length,0);
 });

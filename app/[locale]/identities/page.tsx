@@ -3,7 +3,6 @@ import { isLocale } from '@/lib/locale';
 import { UI } from '@/lib/ui-text';
 import { listAxisLabels, listIdentitiesFull, listSinners } from '@/lib/queries/canonical/list';
 import { keywordIcon, rarityIcon, sinIcon, statusIcon } from '@/lib/assets';
-import { SecLabel } from '@/components/ui';
 import { UnitList, type Axis, type Unit } from '@/components/unit-list';
 
 /**
@@ -26,7 +25,6 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 		listSinners(locale),
 		listAxisLabels(locale),
 	]);
-
 
 	/** 데이터에 실제로 쓰인 값만 축에 올린다. 눌러도 아무것도 걸리지 않는 칩을 두지 않는다. */
 	const used = (pick: (u: (typeof rows)[number]) => string[]) => new Set(rows.flatMap(pick));
@@ -86,6 +84,7 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 
 	const units: Unit[] = rows.map((u) => ({
 		id: u.id,
+        isBase: u.isBase,
 		sectionId: String(u.sinnerId),
 		rankIcon: rarityIcon(u.star),
 		rankLabel: '0'.repeat(u.star),
@@ -107,12 +106,8 @@ export default async function IdentitiesPage({ params }: { params: Promise<{ loc
 
 	return (
 		<>
-			<SecLabel
-				title={t.nav.identities}
-				sub={ko ? '전투에 편성하는 단위' : 'Units you deploy in battle'}
-				hint={units.length}
-			/>
 			<UnitList
+				title={t.nav.identities}
 				units={units}
 				axes={axes}
 				sections={sinners.map((s) => ({

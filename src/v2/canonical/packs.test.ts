@@ -180,3 +180,36 @@ test('assets 에 없는 팩도 버리지 않는다 — mj 가 정본이다', () 
 	assert.equal(t.packTag.length, 0);
 	assert.equal(t.packCategoryPath.length, 0);
 });
+
+test('assets-only Canto pack is retained without inventing missing mechanics', () => {
+ const i = input();
+ i.assets.set('1028', {category:['Canto','X'], image:'Canto_X', name:'Storefront Campout', tags:['Canto X']});
+ i.locKo.set('1028', {name:'매장 앞 야영'});
+ i.floorTable.normal!['1']!.push('1028');
+ const meta = new Meta(); const t=buildPacks(i,meta);
+ const p=t.pack.find(p=>p.id==='1028');
+ assert.ok(p);
+ assert.equal(p.chapter,10);
+ assert.equal(p.floorLength,null);
+ assert.equal(p.superposition,null);
+ assert.equal(t.packText.find(p=>p.packId==='1028'&&p.locale==='ko')?.name,'매장 앞 야영');
+ assert.ok(t.floorPack.some(p=>p.packId==='1028'));
+ assert.ok(meta.gaps.some(g=>g.entityId==='1028'&&g.field==='floorLength'));
+});
+
+test('assets-only Walpurgis pack retains its category and floor membership without guessing mechanics', () => {
+ const i=input();
+ i.assets.set('1129',{category:['Walpurgisnacht'],image:'Walpu10_Dawn',name:'The Wedge in the Wake of Dawnbreak',tags:['Walpurgisnacht']});
+ i.locKo.set('1129',{name:'새벽을 깨우는 쐐기'});
+ i.floorTable={normal:{'5':['1129']},hard:{'5':['1129']}};
+ const t=buildPacks(i,new Meta());const p=t.pack.find(p=>p.id==='1129');
+ assert.equal(p?.category,'walpurgis');assert.equal(p?.chapter,null);
+ assert.equal(p?.floorLength,null);assert.equal(p?.extreme,null);
+ assert.deepEqual(t.packCategoryPath.filter(p=>p.packId==='1129'),[{packId:'1129',depth:0,value:'Walpurgisnacht'}]);
+ assert.equal(t.floorPack.filter(p=>p.packId==='1129').length,2);
+});
+
+test('unknown assets-only pack categories still stop ETL',()=>{
+ const i=input();i.assets.set('9999',{category:['Unverified'],image:'unknown'});
+ assert.throws(()=>buildPacks(i,new Meta()),/Unsupported assets-only pack category/);
+});

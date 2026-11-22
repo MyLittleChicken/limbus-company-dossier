@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import {DetailNavigation} from '@/components/detail-navigation';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/lib/locale';
 import { PACK_CATEGORY, PACK_DIFFICULTY, UI } from '@/lib/ui-text';
@@ -54,18 +55,78 @@ export default async function PackDetailPage({
 
 	return (
 		<>
+			<DetailNavigation locale={locale} section="packs" label={t.nav.packs} name={pack.text?.name ?? id} />
 			<SecLabel
 				title={pack.text?.name ?? (ko ? '이름 없음' : 'Unnamed')}
 				sub={t.nav.packs}
-				hint={<Link href={`/${locale}/packs`}>{ko ? '목록으로' : 'Back to list'}</Link>}
 			/>
+
+			<div className="reference-summary">
+				<Panel title={ko ? '속성' : 'Attributes'}>
+					<div className="hero-icon pack-arts">
+						{/*
+						 * 보스 층 그림이 따로 있으면 여기는 봉지만 낸다 — 둘이 같아지면
+						 * 나란히 둘 이유가 없다. 규칙 밖 7 종은 보스 층 그림이 없으므로
+						 * 이 자리에서 합성한다.
+						 */}
+						<figure>
+							<PackArt
+								id={pack.id}
+								sprite={pack.sprite}
+								name={pack.text?.name ?? null}
+								showBoss={!pack.bossIcon}
+							/>
+							<figcaption>{ko ? '일반 층' : 'Normal floor'}</figcaption>
+						</figure>
+						{/*
+						 * 보스 층. 애셋은 프레임 없는 투명 그림이라 봉지 위에 겹쳐야
+						 * 게임과 같은 카드가 된다. 없는 팩이 있고 Canto 계열은 그 자체가
+						 * 보스전이라 변형을 갖지 않는다.
+						 */}
+						{pack.bossIcon ? (
+							<figure>
+								<PackArt id={pack.id} sprite={pack.sprite} name={pack.text?.name ?? null} />
+								<figcaption>{ko ? '보스 층' : 'Boss floor'}</figcaption>
+							</figure>
+						) : null}
+					</div>
+					<Facts
+						rows={[
+							[ko ? '분류' : 'Category', categoryLabel],
+							[
+								ko ? '변형' : 'Variant',
+								pack.variant ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
+							],
+							[
+								ko ? '장' : 'Chapter',
+								pack.chapter ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
+							],
+							[
+								ko ? '중첩' : 'Superposition',
+								pack.superposition === null
+									? ko
+										? '미확인'
+										: 'Unknown'
+									: pack.superposition
+										? 'O'
+										: 'X',
+							],
+							[
+								ko ? '극한' : 'Extreme',
+								pack.extreme === null ? (ko ? '미확인' : 'Unknown') : pack.extreme ? 'O' : 'X',
+							],
+							[
+								ko ? '차지 층 수' : 'Floor length',
+								pack.floorLength ?? <Nothing kind="absent">{ko ? '미확인' : 'Unknown'}</Nothing>,
+							],
+						]}
+					/>
+				</Panel>
+			</div>
 
 			<div className="grid2">
 				<div>
-					<Panel
-						title={ko ? '전용 기프트' : 'Exclusive gifts'}
-						hint={pack.exclusiveGifts.length}
-					>
+					<Panel title={ko ? '전용 기프트' : 'Exclusive gifts'} hint={pack.exclusiveGifts.length}>
 						{pack.exclusiveGifts.length === 0 ? (
 							<Nothing kind="absent">
 								{ko ? '이 팩에만 나오는 기프트가 없다' : 'No pack-exclusive gifts'}
@@ -102,55 +163,6 @@ export default async function PackDetailPage({
 				</div>
 
 				<aside>
-					<Panel title={ko ? '속성' : 'Attributes'}>
-						<div className="hero-icon pack-arts">
-							{/*
-							 * 보스 층 그림이 따로 있으면 여기는 봉지만 낸다 — 둘이 같아지면
-							 * 나란히 둘 이유가 없다. 규칙 밖 7 종은 보스 층 그림이 없으므로
-							 * 이 자리에서 합성한다.
-							 */}
-							<figure>
-								<PackArt
-									id={pack.id}
-									sprite={pack.sprite}
-									name={pack.text?.name ?? null}
-									showBoss={!pack.bossIcon}
-								/>
-								<figcaption>{ko ? '일반 층' : 'Normal floor'}</figcaption>
-							</figure>
-							{/*
-							 * 보스 층. 애셋은 프레임 없는 투명 그림이라 봉지 위에 겹쳐야
-							 * 게임과 같은 카드가 된다. 없는 팩이 있고 Canto 계열은 그 자체가
-							 * 보스전이라 변형을 갖지 않는다.
-							 */}
-							{pack.bossIcon ? (
-								<figure>
-									<PackArt id={pack.id} sprite={pack.sprite} name={pack.text?.name ?? null} />
-									<figcaption>{ko ? '보스 층' : 'Boss floor'}</figcaption>
-								</figure>
-							) : null}
-						</div>
-						<Facts
-							rows={[
-								[ko ? '분류' : 'Category', categoryLabel],
-								[
-									ko ? '변형' : 'Variant',
-									pack.variant ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
-								],
-								[
-									ko ? '장' : 'Chapter',
-									pack.chapter ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
-								],
-								[ko ? '중첩' : 'Superposition', pack.superposition ? 'O' : 'X'],
-								[ko ? '극한' : 'Extreme', pack.extreme ? 'O' : 'X'],
-								[
-									ko ? '차지 층 수' : 'Floor length',
-									pack.floorLength ?? <Nothing kind="absent">{ko ? '없음' : 'None'}</Nothing>,
-								],
-							]}
-						/>
-					</Panel>
-
 					<Panel title={ko ? '등장 층' : 'Floors'} hint={pack.floors.length}>
 						{pack.floors.length === 0 ? (
 							// 21종이 여기 걸린다. 결손이 아니라 일반 순환에 없다는 뜻이다.
@@ -187,7 +199,7 @@ export default async function PackDetailPage({
 								) : (
 									<ul key={b.encounterId} className="inline-list">
 										{b.targets.map((tg) => (
-											<li key={tg.index} className="tag">
+											<li key={`${tg.groupIndex}:${tg.index}`} className="tag">
 												<Name value={tg.text} notice={t.fallbackNotice} />
 												{/* 등장 수가 원본에 없는 경우가 있다 */}
 												{tg.count !== null ? ` ×${tg.count}` : ''}

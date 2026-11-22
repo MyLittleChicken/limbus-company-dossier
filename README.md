@@ -225,6 +225,21 @@ npm run v2:verify:canonical    # canonical 검증 222건
 Prisma CLI와 Next.js는 `.env`를 스스로 읽지만 tsx 스크립트는 읽지 않는다.
 **이미 설정된 환경변수가 `.env`를 이긴다** — 배포나 CI에서는 `.env` 없이 환경변수만 주면 된다.
 
+### 수동 갱신의 토큰 검증
+
+`npm run update:run -- --collect`는 최신 인격·E.G.O와 언어별 `SkillTag.json`을 수집하고
+적재 후보를 검증한다. `--apply`를 추가한 `npm run update:apply -- --collect`도 같은 검증을
+통과해야 이미지와 DB를 반영한다. 정기 실행은 설정하지 않는다.
+
+한국어·영어 스킬 설명, 코인 효과, 패시브, 적재 대상 상태 설명의 대괄호 토큰을
+반영 후의 용어 사전·상태명과 대조한다. 미해결 토큰이 있으면 종료 코드 1로 중단하고,
+실행 디렉터리의 `token-report.json`에 테이블, ID, 단계, 언어, 필드, 토큰과 문구를 남긴다.
+`result.json`에도 검사 수와 오류를 기록한다. 원문과 표시문을 모두 검사하며,
+정상 번역된 대괄호 표기와 숫자 주석은 오류로 세지 않는다.
+
+`update:validate`는 다운로드 파일 검사용이다. 의미 검증과 반영 전 검증은 `update:run` /
+`update:apply` 경로를 사용한다.
+
 ### 웹 애플리케이션
 
 데이터베이스가 채워진 뒤에 실행한다. 결정 근거는 [adr/05](docs/adr/05-web-serving.md)에 있다.
@@ -292,3 +307,16 @@ Limbus Company와 Project Moon의 저작물(게임 데이터·텍스트·이미�
 
 Project Moon은 2차 창작 가이드라인을 공표하고 있으며 **게임 이미지 리소스의 사용을 제한한다.**
 공개 배포 전에 원문을 확인하고 준수 여부를 판단해야 한다(`docs/01-data-source.md` 7절).
+
+### 2026-11-23 작업 상태와 UI 어셋 복원
+
+최종 정렬 규칙, 상세 배치, ETL 단계 누락 수정 및 검증 범위는
+[최신 작업 기록](docs/audits/2026-11-23-workspace-release.md)을 참고한다.
+게임 이미지 원문은 Git에 포함하지 않는다. 홈 배너와 대표 아이콘은 다음 명령으로 고정된 출처에서 복원한다.
+
+```sh
+node scripts/restore-ui-assets.mjs
+```
+
+전체 게임 데이터/어셋은 위의 기존 적재 절차가 별도로 필요하다. 기존 DB의 E.G.O 단계 문구 누락은
+`scripts/repair/ego-stage-localization.ts`로 감사하고 `--apply`로 복구할 수 있다.

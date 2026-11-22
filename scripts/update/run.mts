@@ -7,6 +7,7 @@ import {collect,verifyDownload} from '../../src/update/fetch.js';
 import {buildCandidate} from '../../src/update/candidate.js';
 import {validateCandidate,validateCandidateReferences,validateCandidateAssets} from '../../src/update/validate.js';
 import {applyCandidate} from '../../src/update/apply.js';
+import {validateTextTokens} from '../../src/update/token-validation.js';
 import {publishAssets} from '../../src/update/publish.js';
 
 const args=process.argv.slice(2);
@@ -37,7 +38,11 @@ try{
  await verifyDownload(staging);
  Object.assign(report,{snapshot:manifest.id,heads:manifest.heads,files:manifest.files.length});
  const candidate=await buildCandidate(db,root,staging,manifest);
- const checks=[validateCandidate(candidate),await validateCandidateReferences(candidate,db),await validateCandidateAssets(candidate,manifest,root,staging)];
+ const [terms,statuses]=await Promise.all([db.termText.findMany(),db.statusText.findMany()]);
+ const tokens=validateTextTokens(candidate.tables,terms,statuses);
+ await writeFile(join(staging,'token-report.json'),JSON.stringify(tokens,null,2)+'\n');
+ report['tokens']={checkedTexts:tokens.checkedTexts,unresolved:tokens.issues.length,report:join(staging,'token-report.json')};
+ const checks=[tokens,validateCandidate(candidate),await validateCandidateReferences(candidate,db),await validateCandidateAssets(candidate,manifest,root,staging)];
  Object.assign(report,{newIdentityIds:candidate.newIdentityIds,newEgoIds:candidate.newEgoIds,removed:candidate.removed,counts:Object.fromEntries(Object.entries(candidate.tables).map(([k,v])=>[k,v.length])),warnings:checks.flatMap(c=>c.warnings),errors:checks.flatMap(c=>c.errors)});
  await writeFile(join(staging,'candidate.json'),JSON.stringify({tables:candidate.tables,identityIds:candidate.identityIds,egoIds:candidate.egoIds},null,2));
  await writeFile(join(staging,'provenance.json'),JSON.stringify({sources:candidate.meta.sources,gaps:candidate.meta.gaps},null,2));

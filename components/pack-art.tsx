@@ -1,4 +1,4 @@
-import { packBossIcon, packIcon } from '@/lib/assets';
+import { packBossIcon, packIcon, assetDimensions } from '@/lib/assets';
 import { PACK_BOSS_FIT, PACK_BOSS_SPRITE, PACK_NAME_COLOR, isExtremeCard } from '@/lib/pack-art';
 
 /**
@@ -15,7 +15,7 @@ import { PACK_BOSS_FIT, PACK_BOSS_SPRITE, PACK_NAME_COLOR, isExtremeCard } from 
  * 나머지 76 종(canto · event · extreme · walpurgis · railway)은 아트가 통째로 구워져
  * 있어 창이 없다 — 결손이 아니다.
  */
-export function PackArt({
+export async function PackArt({
 	id,
 	sprite,
 	name,
@@ -34,6 +34,7 @@ export function PackArt({
 	const base = packIcon(sprite);
 	if (!base) return <span className="icon icon-none packart-none" aria-hidden="true" />;
 
+	const dimensions=await assetDimensions(base);
 	// 규칙 밖인 7 종은 표를 먼저 본다. 나머지는 `{sprite}_boss` 다.
 	const boss = showBoss ? packBossIcon(PACK_BOSS_SPRITE[id] ?? sprite) : null;
 	const fit = boss ? PACK_BOSS_FIT[PACK_BOSS_SPRITE[id] ?? sprite] : undefined;
@@ -42,7 +43,7 @@ export function PackArt({
 	return (
 		<span className="packart">
 			{/* eslint-disable-next-line @next/next/no-img-element -- 로컬 정적 파일이다 */}
-			<img className="packart-base" src={base} alt="" loading="lazy" />
+			<img className="packart-base" src={base} width={dimensions?.width} height={dimensions?.height} style={dimensions?{aspectRatio:`${dimensions.width}/${dimensions.height}`}:undefined} alt="" loading="lazy" />
 			{boss ? (
 				<>
 					{/* eslint-disable-next-line @next/next/no-img-element */}

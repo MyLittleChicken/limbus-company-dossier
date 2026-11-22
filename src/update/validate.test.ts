@@ -35,3 +35,9 @@ test('new linked skill stages require ko/en names and source skill links cannot 
  assert.ok(errors.some(x=>x.includes('9999901')&&x.includes('name')));
  assert.ok(errors.some(x=>x.includes('9999902')&&x.includes('source')));
 });
+
+test('existing units also reject numeric-only stages with lost localized snapshots',()=>{
+ const c=candidate();c.tables['egoSkillStage']=[{skillId:'2010311',uptie:4}];
+ c.tables['egoSkillStageText']=[{skillId:'2010311',uptie:3,locale:'ko',name:'소망석'}];
+ assert(validateCandidate(c).errors.some(e=>e.includes('2010311/4')&&e.includes('inherited')));
+});

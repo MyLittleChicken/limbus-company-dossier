@@ -1,0 +1,44 @@
+{
+  "assets": [
+    {
+      "path": "public/current/season_8.webp",
+      "url": "https://raw.githubusercontent.com/eldritchtools/limbus-assets/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/banners/season_8.webp",
+      "sha256": "c956be942bcc0cdd9e1a576a9b9cc0e5cdd265a68255e49d7ccef6e651b0d2c6"
+    },
+    {
+      "path": "public/current/feature_2026-11-12.webp",
+      "url": "https://raw.githubusercontent.com/eldritchtools/limbus-assets/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/banners/feature_2026-11-12.webp",
+      "sha256": "67bae4f63a9447ab3a234cd78247e790aa42e1d69d77ef2c49dffbe8ec1096da"
+    },
+    {
+      "path": "public/current/feature2_2026-11-12.webp",
+      "url": "https://raw.githubusercontent.com/eldritchtools/limbus-assets/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/banners/feature2_2026-11-12.webp",
+      "sha256": "9b08585f7aa9f1e995c3acbe9de958ac43a1b221a0940a187367561f3d358a20"
+    },
+    {
+      "path": "public/current/walp_10.webp",
+      "url": "https://raw.githubusercontent.com/eldritchtools/limbus-assets/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/banners/walp_10.webp",
+      "sha256": "5b0e4094a58df719a783c16d20f8098a8425a4317fd47cf22de4d1fc0e660846"
+    },
+    {
+      "path": "public/game-ui/identity-recruitment.png",
+      "url": "https://limbuscompany.wiki.gg/wiki/Special:FilePath/Sinner_Recruitment_Event_Icon.png",
+      "sha256": "dc815011acde4f35482b4774b785d3e9a1ccc8cbe341be256d263576e8984d44"
+    },
+    {
+      "path": "public/game-ui/ego-emblem.webp",
+      "url": "https://raw.githubusercontent.com/eldritchtools/limbus-assets/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/statuses/E.G.O%20Passives.webp",
+      "sha256": "8fabc3db1e09d61e2992445738cb7002baf6c46e50d1a9b2d016e4f79babdcc8"
+    },
+    {
+      "path": "public/game-ui/gift-frame.webp",
+      "url": "https://raw.githubusercontent.com/eldritchtools/limbus-assets/11eac57bf565207ed8b15981129f8fcd41b9a22f/assets/ego_gift_background.webp",
+      "sha256": "3bb591eeff9af9799b394adc67c22002f75b5ae50108c39cf00025d3b2a05dab"
+    },
+    {
+      "path": "public/game-ui/dungeon-entrance.png",
+      "url": "https://limbuscompany.wiki.gg/wiki/Special:FilePath/Dungeon_Entrance_Icon.png",
+      "sha256": "4ec7dd45ca6ff55b5f02616ebe33bf9f8ce38c3434e478aa7f9d2b47784b6b5a"
+    }
+  ]
+}

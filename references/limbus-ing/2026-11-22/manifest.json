@@ -1,0 +1,68 @@
+{
+  "purpose": "Local research reference; not part of application runtime",
+  "files": [
+    {
+      "file": "engine.js",
+      "sourceUrl": "https://limbus.ing/assets/tool/engine.js",
+      "sha256": "2b9f51c6f66348b52c22f21dd8478a1e70ce16ad3e2e28e773075f436b150506",
+      "bytes": 27060,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "deck.js",
+      "sourceUrl": "https://limbus.ing/assets/tool/deck.js",
+      "sha256": "b0cfee0bb3ffa7d2f2bca2a57c7fb7720d57ab97001d7da9403de1124af85c65",
+      "bytes": 194136,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "catalog.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/catalog.json",
+      "sha256": "ae1aef5ba4e2878e51890dd09597554a7171f223ceeb4a406015ce2629b5032f",
+      "bytes": 290962,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "deck_d0.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/deck_d0.json",
+      "sha256": "b9aa003bcb456357332a86b4ae1f7126a5c633a68cbe8212639d12cad56eea56",
+      "bytes": 76232,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "deck_d1.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/deck_d1.json",
+      "sha256": "995dbec46571a215264dafb7db49324a91efbd774883a4449865c5bd7df2389f",
+      "bytes": 76611,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "deck_d2.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/deck_d2.json",
+      "sha256": "3a093ba3c0bfa1ef4bf958e174b2b612a13b38dbb3b15ff8e9bd6c4ad1f2977e",
+      "bytes": 70951,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "deck_d3.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/deck_d3.json",
+      "sha256": "6f6f1164017a50a5a313064e368bb91276cd4af2b7fcc3bfebce18106c4da586",
+      "bytes": 72944,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "deck_x.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/deck_x.json",
+      "sha256": "9e7dbfcf9478bbf7003f6cc0c2002932fe769a0847a1a742b8ee15cdfee7c793",
+      "bytes": 469442,
+      "capturedOn": "2026-11-22"
+    },
+    {
+      "file": "abno.json",
+      "sourceUrl": "https://limbus.ing/assets/tool/abno.json",
+      "sha256": "ac098b7030fb1c9abd25661be1fc99fa37b4a137c7430966c7ba1ede2fd81bf3",
+      "bytes": 413930,
+      "capturedOn": "2026-11-22"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import { buildEgos } from '../v2/canonical/egos.js';
 import { buildStatuses } from '../v2/canonical/statuses.js';
 import { buildSinners } from '../v2/canonical/sinners.js';
 import { Meta } from '../v2/canonical/meta.js';
+import { descOf } from '../v2/canonical/markup.js';
 import { supplement,supplementEgos,obj } from './adapter.js';
 import type { UpdateManifest } from './fetch.js';
 export type Row=Record<string,unknown>;
@@ -80,6 +81,33 @@ export async function buildCandidate(db:PrismaClient,root:string,work:string,man
  for(const id of assetsOnlyEgos){meta.source('ego',id,'core','assets-only',['limbus-assets']);meta.source('ego',id,'resists','assets-only',['limbus-assets']);}
  const tables={association:associationTables.association.filter(r=>newAssociations.has(r.id)),associationText:associationTables.associationText.filter(r=>newAssociations.has(r.associationId)),status:statusTables.status.filter(r=>newStatuses.has(r.id)),statusText:statusTables.statusText.filter(r=>newStatuses.has(r.statusId)),statusCategory:statusTables.statusCategory.filter(r=>newStatuses.has(r.statusId)),...skills,...identities,...egos} as unknown as Record<string,Row[]>;
  delete tables['toolAnnotation'];
+ // Match full canonical loading: desc is localized display text; keep the source
+ // in descRaw. Coin effects stay raw because the engine parses their tokens.
+ const tagTexts:Array<{termId:string;locale:'ko'|'en'|'ja';name:string}>=[];
+ for(const locale of ['ko','en','ja'] as const){
+  for(const [termId,row] of group('mechanics',`loc-${locale}`,'SkillTag')){
+   if(typeof row['name']==='string')tagTexts.push({termId,locale,name:row['name']});
+  }
+ }
+ if(tagTexts.length){
+  tables['term']=[...new Set(tagTexts.map(t=>t.termId))].map(id=>({id}));
+  tables['termText']=tagTexts;
+  for(const row of tagTexts)meta.source('term',row.termId,'name','loc-only',[`loc-${row.locale}/SkillTag.json`]);
+ }
+ const terms=[...await db.termText.findMany(),...tagTexts];
+ const dictionaries=new Map<string,Map<string,string>>();
+ for(const term of terms){
+  let dict=dictionaries.get(term.locale);
+  if(!dict){dict=new Map();dictionaries.set(term.locale,dict);}
+  dict.set(term.termId,term.name);
+ }
+ for(const table of ['skillStageText','passiveText','egoSkillStageText','egoPassiveText','statusText']){
+  tables[table]=(tables[table]??[]).map(row=>{
+   const dict=dictionaries.get(String(row['locale']));
+   const raw=row['descRaw']??row['desc'];
+   return dict&&typeof raw==='string'?{...row,...descOf(raw,dict)}:row;
+  });
+ }
  const removedIdentities=await preserveMissingIdentityDependencies(db,tables,existingIds.map(r=>r.id),new Set(assets.keys()),meta);
  const oldIds=new Set(existingIds.map(r=>r.id));const oldEgos=new Set(existingEgos.map(r=>r.id));
  const identityIds=identities.identity.map(r=>r.id);const egoIds=egos.ego.filter(r=>!r.presentationOnly).map(r=>r.id);

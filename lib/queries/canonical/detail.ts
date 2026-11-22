@@ -18,6 +18,7 @@ import {
 	statusIcon,
 } from '@/lib/assets';
 import { localeRows, nameOf, textOf } from './locale';
+import { substituteTokens } from '@/src/v2/canonical/markup';
 
 /**
  * 상세 화면이 쓰는 캐노니컬 질의 — 인격 · E.G.O · 팩.
@@ -182,10 +183,14 @@ export async function getIdentity(id: number, locale: Locale) {
 		`skill.attack_type` 은 `slash` · `pierce` · `blunt` 로 적혀 어휘 id 와 다르므로
 		여기서 맞춘다 — 화면이 그 어긋남을 알 필요가 없다.
 	*/
-	const [sinRows, vocabulary] = await Promise.all([
+	const [sinRows, vocabulary, termRows] = await Promise.all([
 		canonical.sinText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
 		canonical.keyword.findMany({ include: { texts: localeRows(locale) } }),
+		canonical.termText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
 	]);
+	const termDict = new Map([locale, 'en'].map(lang => [lang,
+		new Map(termRows.filter(t => t.locale === lang).map(t => [t.termId, t.name])),
+	]));
 	const sinNames: Record<string, string> = {};
 	for (const r of sinRows) if (r.locale === locale || !sinNames[r.sin]) sinNames[r.sin] = r.name;
 	const atkNames: Record<string, string> = {};
@@ -320,7 +325,9 @@ export async function getIdentity(id: number, locale: Locale) {
 							index,
 							type: picked?.type ?? null,
 							// 918행은 어느 언어로도 설명이 없다. 효과 없는 코인이라 결손이 아니다.
-							desc: picked && picked.effects.length > 0 ? picked.effects.join('\n') : null,
+							desc: picked && picked.effects.length > 0
+								? substituteTokens(picked.effects.join('\n'), termDict.get(picked.locale) ?? new Map()).text
+								: null,
 						};
 					}),
 			})),
@@ -379,10 +386,14 @@ export async function getEgo(id: number, locale: Locale) {
 		...ego.passives.map((p) => textOf(p.passive.texts, locale)?.desc ?? ''),
 	].join('\n');
 
-	const [sinRows, vocabulary] = await Promise.all([
+	const [sinRows, vocabulary, termRows] = await Promise.all([
 		canonical.sinText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
 		canonical.keyword.findMany({ include: { texts: localeRows(locale) } }),
+		canonical.termText.findMany({ where: { locale: { in: [locale, 'en'] } } }),
 	]);
+	const termDict = new Map([locale, 'en'].map(lang => [lang,
+		new Map(termRows.filter(t => t.locale === lang).map(t => [t.termId, t.name])),
+	]));
 	const sinNames: Record<string, string> = {};
 	for (const r of sinRows) if (r.locale === locale || !sinNames[r.sin]) sinNames[r.sin] = r.name;
 	const atkNames: Record<string, string> = {};
@@ -481,7 +492,9 @@ export async function getEgo(id: number, locale: Locale) {
 							rows.find((c) => c.locale === locale) ?? rows.find((c) => c.locale === 'en');
 						return {
 							index,
-							desc: picked && picked.effects.length > 0 ? picked.effects.join('\n') : null,
+							desc: picked && picked.effects.length > 0
+								? substituteTokens(picked.effects.join('\n'), termDict.get(picked.locale) ?? new Map()).text
+								: null,
 						};
 					}),
 			})),
@@ -573,6 +586,7 @@ export async function getPack(id: string, locale: Locale) {
 		bosses: pack.bosses.map((b) => ({
 			encounterId: b.encounterId,
 			targets: b.encounter.targets.map((t) => ({
+				groupIndex: t.groupIndex,
 				index: t.index,
 				// 등장 수가 원본에 없는 경우가 있다. 1로 지어내지 않는다.
 				count: t.num,
