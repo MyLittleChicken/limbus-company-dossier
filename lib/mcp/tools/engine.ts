@@ -53,6 +53,7 @@ export const STATE_NOTE =
 	'possible = 켜지는 길이 전투 중 조건 · 판정 불가 · 조건 결손에만 기댐. off = 막는 조건이 확정 미충족. ' +
 	"reason 'skill-supply-incomplete' · 'ego-not-judged' = 엔진은 미충족이라 했으나 놓친 공급을 더하면 문턱에 닿아 off 를 possible 로 낮춘 것(has · gte 만). " +
 	"'skill-supply-overcount' = 확정 충족이 축 제한(axis_restrict — 그 인격은 허용된 축으로만 취급) 밖의 인격 덕분에만 문턱을 넘어 on 을 possible 로 낮춘 것. " +
+	"기프트가 on 인데 reason 이 붙어 있으면, 다른 능력의 off 가 하향으로 풀려 partial 이 on 이 된 것이다. " +
 	SKILL_SUPPLY_NOTE;
 export const LIVE_NOTE = 'live · 점수는 엔진 판정(하향 전) 기준이다 — topGifts.state 에는 하향(skill-supply-incomplete · ego-not-judged · skill-supply-overcount, stateNote 참조)이 들어간다';
 export const PROVISIONAL_REASON = '저울추(적합 2 · 등급 3 · 전용 0.25)가 LLM 초안 표본에서 나왔고 사람 검토 전이다';

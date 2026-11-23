@@ -282,3 +282,22 @@ off       못 켠다 (근거 절 명시)
 2  ② 계정 · 서버 저장 (보유 목록 · 덱)         별도 설계. §7 · §8 을 입력으로
 3  개인화 도구                                2 위에. §6.4
 ```
+
+## 11. 1 덩어리 구현 뒤 남은 결손 (2026-11-23)
+
+비판 리뷰 5라운드(도메인 · 에이전트 사용성 · 보안 · 품질 · 성능, 최종 5/5 승인)를 거치며
+**MCP 응답 층에서 표기로만 막은** 것들이다. 엔진·화면은 고치지 않았다(골든 보존).
+
+```
+엔진 axisSkill    coin_token 기준이라 스킬 효과(코인 아님) · 특수 변형(SinkingWhite 등) 누락,
+                  axis_restrict(허용 축) 미적용. MCP 는 skill-supply-incomplete ·
+                  skill-supply-overcount 로 하향 표기. /recommend 와 score_packs live 는 엔진 그대로
+E.G.O · 보유       evaluateGifts 가 ego_equipped 게이트 · 보유 기프트를 안 본다 → ego-not-judged
+축 제한 범위       excludedFor 가 BULLET 에도 제한을 건다(부여 키워드 7종 밖). 현재 데이터 영향 0
+판 감지            인격·E.G.O 라이브 갱신(src/update/apply.ts)이 표지를 안 남겨 pg 통계에 기댄다.
+                  근본 수정은 apply 가 표지 행을 남기는 것. 엔진 슬롯 15분 백스톱
+검색 말뭉치        수명 10분 — 갱신 직후 최대 10분 낡은 search · list_statuses
+출격 규칙          12인 1건 대조. 8–11인 · 7명 미만 출전 내보내기는 미대조(응답·화면에 단서)
+판정 없는 기프트    거울 던전 19개(9284–9302) 저작 보류 → possible + no-judgement-data
+```
+
