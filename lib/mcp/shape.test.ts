@@ -42,3 +42,7 @@ test('stripMedia 는 키 이름을 몰라도 애셋 경로 값을 뺀다', () =>
 test('stripMedia 는 확장 애셋 키(rarityIcon · frame · bossIcon)를 뺀다', () => {
 	assert.deepEqual(stripMedia({ id: 1, rarityIcon: 'r', frame: 'f', bossIcon: 'b', images: ['a'] }), { id: 1 });
 });
+
+test('stripMedia 는 배열 안의 애셋 경로 문자열도 뺀다', () => {
+	assert.deepEqual(stripMedia({ list: ['/media/x.png', 'a', 'b.webp?v=2'] }), { list: ['a'] });
+});

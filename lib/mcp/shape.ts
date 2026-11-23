@@ -32,7 +32,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function strip(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(strip);
+	if (Array.isArray(value)) {
+		return value.filter((v) => !(typeof v === 'string' && ASSET_VALUE.test(v))).map(strip);
+	}
 	if (!isPlainObject(value)) return value;
 	const out: Record<string, unknown> = {};
 	for (const [key, v] of Object.entries(value)) {
