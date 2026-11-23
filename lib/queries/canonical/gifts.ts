@@ -406,3 +406,68 @@ export async function listSins(locale: Locale) {
 	});
 	return rows.map((s) => ({ id: s.sin, text: nameOf(s.texts, locale) }));
 }
+
+/**
+ * `listGifts` 를 쪽 없이 — MCP `list_gifts` 가 쓴다.
+ *
+ * **where · 정렬 · 행 모양이 `listGifts` 와 같다.** 쪽을 나누지 않고 한 번에 읽어 커서는
+ * 호출하는 쪽(`lib/mcp/page.ts`)이 자른다. 쪽마다 count + findMany 를 되풀이하지 않으려고
+ * 따로 둔다. 두 함수의 결과 집합 · 순서가 같은지는 `lib/mcp/tools/dungeon.test.ts` 가 지킨다.
+ */
+export async function listGiftsUnpaged(locale: Locale, filter: Omit<GiftFilter, 'page'>) {
+	const rows = await canonical.gift.findMany({
+		where: giftWhere({ ...filter, page: 1 }, locale),
+		orderBy: [{ tier: 'asc' }, { id: 'asc' }],
+		include: {
+			stages: baseStage(locale),
+			keyword: { include: { texts: localeRows(locale) } },
+			_count: { select: { packs: true, exclusivePacks: true } },
+		},
+	});
+	return rows.map((g) => ({
+		id: Number(g.id),
+		tier: tierOf(g),
+		enhanceable: g.enhanceable,
+		hardOnly: g.hardOnly,
+		mdCost: g.cost,
+		icon: giftIcon(g.sprite),
+		text: nameOf(g.stages[0]?.texts ?? [], locale),
+		keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
+		keywordId: g.keywordId,
+		packCount: g._count.packs,
+		exclusiveCount: g._count.exclusivePacks,
+	}));
+}
+
+/**
+ * 저주 · 축복을 **갈라서** — MCP `get_gift` 가 쓴다.
+ *
+ * 가리는 규칙은 `listCursedGiftIds` 와 같다(그 주석이 근거다). 다른 것은 둘을 한 칸에
+ * 섞지 않는다는 것뿐이다.
+ *
+ * ```
+ * curse     설명문 「기프트가 변경」으로 가린다 — 데이터에 적힌 것
+ * blessing  저주 id + 1 이면서 3 등급 · 키워드 없음 — 추정이다. 잇는 값이 데이터에 없다
+ * ```
+ */
+export async function listCurseBlessingGiftIds(): Promise<{ curse: number[]; blessing: number[] }> {
+	const cursed = await canonical.giftStageText.findMany({
+		where: { locale: 'ko', level: 0, desc: { contains: '기프트가 변경' } },
+		select: { giftId: true },
+	});
+	const candidates = cursed.map((r) => String(Number(r.giftId) + 1));
+	const blessed = await canonical.gift.findMany({
+		where: {
+			...MIRROR,
+			id: { in: candidates },
+			tier: 3,
+			OR: [{ keywordId: NONE_KEYWORD_ID }, { keywordId: null }],
+		},
+		select: { id: true },
+	});
+	const sorted = (ids: number[]) => [...new Set(ids)].sort((a, b) => a - b);
+	return {
+		curse: sorted(cursed.map((r) => Number(r.giftId))),
+		blessing: sorted(blessed.map((g) => Number(g.id))),
+	};
+}
