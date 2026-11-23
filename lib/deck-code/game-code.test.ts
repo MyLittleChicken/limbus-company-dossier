@@ -50,20 +50,19 @@ test('순번 16 인격은 넓은 필드로만 읽힌다', async () => {
 	assert.equal(readBlock(bits.value, 7).identityIndex, 16);
 });
 
-test('order 는 출전이 아니라 편성 순서다 — 1..12 의 순열', async () => {
-	// 출전이라면 최대 7이어야 하는데 12칸 전부 값을 갖고 겹치지 않는다.
-	// 덱 코드는 온필드 인원을 담지 않는다(docs/07 7.1).
+test('order 는 편성 순서다 — 1..12 의 순열', async () => {
+	// 12칸 전부 값을 갖고 겹치지 않는다. 출격은 이 순서의 앞 7 이다(설계 §6.2).
 	const bits = await decodeDeckCode(GAME_CODE);
 	if (!bits.ok) return assert.fail(bits.reason);
 	const orders = Array.from({ length: 12 }, (_, i) => readBlock(bits.value, i + 1).order);
 	assert.deepEqual([...orders].sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 });
 
-test('가져온 덱은 출전을 비운다', async () => {
-	// 코드에 없는 정보를 지어내지 않는다. 출전은 사용자가 화면에서 고른다.
+test('가져온 덱의 출격은 편성 순서 앞 7 이다', async () => {
+	// 2026-11-23 게임 편성창 캡처와 대조: 순서 1–7 이 출격, 8–12 가 대기(설계 §6.2).
 	const d = await deckFromCode(GAME_CODE, '실물');
 	if (!d.ok) return assert.fail(d.reason);
-	assert.deepEqual(d.value.deployed, []);
+	assert.deepEqual(d.value.deployed, [4, 5, 6, 8, 2, 1, 11]);
 });
 
 test('가져온 덱은 편성 순서를 담는다', async () => {

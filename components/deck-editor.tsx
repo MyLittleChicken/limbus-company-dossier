@@ -275,14 +275,15 @@ export function DeckEditor({
 							</div>
 
 							{/*
-								덱 코드는 편성만 담고 출전을 담지 않는다(07 7.1). 가져온 직후 출전이 비어 있는
-								것이 정상인데, 그 사실을 적지 않으면 "가져오기가 출전을 빠뜨렸다"로 읽힌다.
+								덱 코드는 출전 비트를 따로 담지 않지만 편성 순서 앞 7 이 출전이다(설계
+								docs/superpowers/specs/2026-11-23-mcp-server-design.md §6.2). 가져오기가 그 7 을
+								채우므로, 편성이 있는데 출전이 비어 있으면 예전에 가져온 덱이거나 사용자가 모두 끈 것이다.
 							*/}
 							{active.order.length > 0 && active.deployed.length === 0 && (
 								<p className="lede">
 									{ko
-										? '덱 코드는 출전을 담지 않습니다. 편성과 인격만 불러왔으니 출전은 직접 고르세요.'
-										: 'Deck codes carry no on-field selection. The squad was imported; choose who deploys.'}
+										? '출전이 비어 있습니다. 덱 코드로 가져오면 편성 순서 앞 7명이 출전으로 채워집니다. 출전은 직접 고르세요.'
+										: 'No one is deployed. Importing a deck code deploys the first 7 in formation order; choose who deploys.'}
 								</p>
 							)}
 

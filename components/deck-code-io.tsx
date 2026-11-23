@@ -7,8 +7,10 @@ import type { StoredDeck } from '@/lib/storage/schema';
 /**
  * 인게임 덱 코드 입출력.
  *
- * **덱 코드는 편성과 인격·E.G.O 만 담는다. 출전은 담지 않는다**(07-recommendation-system 7.1).
- * 가져오기는 출전을 비운 채로 두고 사용자가 편성 화면에서 고른다.
+ * **덱 코드는 편성 순서와 인격·E.G.O 를 담는다. 출전 비트는 따로 없고 순서 앞 7 이 출전이다**
+ * (2026-11-23 게임 편성창 캡처 대조, 설계 docs/superpowers/specs/2026-11-23-mcp-server-design.md §6.2).
+ * 가져오기는 그 7 을 출전으로 채우고, 사용자가 편성 화면에서 바꿀 수 있다. 내보내기는 반대로
+ * 출전을 순서 앞으로 옮겨 쓴다(출전끼리 · 대기끼리 상대 순서 유지) — 그래야 출전이 왕복한다.
  *
  * 내보낸 코드에는 미검증 표기가 붙는다 — 560비트는 실물 코드와 대조됐지만(7.3) 우리가 만든
  * gzip 컨테이너를 게임이 받아들이는지는 확인된 적이 없다. 되는 척하지 않는다.
@@ -73,8 +75,8 @@ export function DeckCodeIo({
 					{/* 560비트는 실물 코드와 대조됐다. 컨테이너는 아직 아니다 — 7.3 */}
 					<p className="notice" role="status">
 						{ko
-							? '내보낸 코드를 게임이 받아들이는지는 아직 확인되지 않았습니다. 편성 내용은 실물 코드와 비트 단위로 대조했습니다.'
-							: 'Whether the game accepts an exported code is unverified. The squad contents match a real code bit for bit.'}
+							? '내보낸 코드를 게임이 받아들이는지는 아직 확인되지 않았습니다. 편성 내용은 실물 코드와 비트 단위로 대조했습니다. 덱 코드는 출전을 따로 담지 않아 게임은 편성 순서 앞 7명을 출전으로 읽습니다 — 출전을 7명 미만으로 골랐다면 그 뒤 순서가 출전으로 읽힐 수 있습니다(미확인).'
+							: 'Whether the game accepts an exported code is unverified. The squad contents match a real code bit for bit. Deck codes carry no separate deployment, so the game reads the first 7 in formation order as deployed — with fewer than 7 chosen, the next in order may be read as deployed (unverified).'}
 					</p>
 				</>
 			)}

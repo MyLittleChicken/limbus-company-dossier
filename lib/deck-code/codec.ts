@@ -1,5 +1,5 @@
 import { ok, err, type Result } from '@/lib/storage/kv';
-import { EGO_RANKS, emptyDeck, type StoredDeck } from '@/lib/storage/schema';
+import { DEPLOY_MAX, EGO_RANKS, emptyDeck, type StoredDeck } from '@/lib/storage/schema';
 import { bitsToBytes, bytesToBits } from './bits';
 import { toBase64, fromBase64, gzip, gunzip } from './bytes';
 import {
@@ -91,11 +91,17 @@ export async function deckFromCode(code: string, name: string): Promise<Result<S
 	}
 
 	ordered.sort((a, b) => a.order - b.order);
-	// `FIELD.order` 는 **편성 순서**다. 실물 코드에서 1..12 의 순열로 나온다 — 12칸 전부
-	// 값을 갖고 겹치지 않으므로 출전(최대 7)일 수 없다. 덱 코드는 온필드 인원을 담지
-	// 않는다(docs/07 7.1). `deployed` 는 비운 채로 두고 사용자가 화면에서 고른다 —
-	// 없는 근거로 출전을 지어내면 상한 7을 넘겨 저장분을 못 읽게 만든다.
+	// `FIELD.order` 는 **편성 순서**다. 실물 코드에서 1..12 의 순열로 나온다.
+	// **순서 1–7 이 출격, 8–12 가 대기다** — 2026-11-23 게임 편성창 캡처(편성 #24)와 12칸을
+	// 맞대 확인했다(설계 docs/superpowers/specs/2026-11-23-mcp-server-design.md §6.2).
+	// 출격을 따로 담는 비트는 없다 — 순서 자체가 출격을 말한다. 앞 `DEPLOY_MAX` 만 자르므로
+	// 저장 검증의 출전 상한 7 을 넘지 않는다.
+	//
+	// 출격은 **인격이 든 칸만** 센다. 순서 값은 있는데 인격이 빈 칸이 끼면 그 칸이 출격 7 을
+	// 차지해 인격이 하나 덜 나간다 — `lib/mcp/deck.ts` `resolveDeck` 의 field 와 같은 규칙이다.
 	deck.order = ordered.map((o) => o.sinnerId);
+	const filled = new Set(deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId));
+	deck.deployed = deck.order.filter((id) => filled.has(id)).slice(0, DEPLOY_MAX);
 	return ok(deck);
 }
 
@@ -103,10 +109,17 @@ export function deckToCode(deck: StoredDeck): Promise<Result<string>> {
 	let bits = emptyBits();
 	// 편성 순서를 사용자가 정하는 화면이 아직 없다. 손으로 만든 덱은 `order` 가 비어 있으므로
 	// **인격이 든 칸을 수감자 번호 순으로 매긴다** — 지어내는 것이지만 0(미편성)으로 두면
-	// 게임이 빈 편성으로 읽는다. 가져온 덱은 코드가 준 순서를 그대로 쓴다(docs/07 7.1).
-	const order = deck.order.length > 0
+	// 게임이 빈 편성으로 읽는다. 가져온 덱은 코드가 준 순서를 바탕으로 쓴다(docs/07 7.1).
+	const base = deck.order.length > 0
 		? deck.order
 		: deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId);
+	// **출격은 순서 앞 7 이다**(설계 §6.2). 코드에 출격 비트가 없으므로 `deployed` 를 순서 앞으로
+	// 옮겨 쓴다 — 출격끼리 · 대기끼리는 원래 상대 순서를 지킨다. 그러지 않으면 화면에서 고른
+	// 출격이 내보내기에서 사라진다. 순서에 없는 수감자는 옮기지 않는다(편성에 넣지 않는다).
+	// 인격을 지운 칸은 출격으로 치지 않는다 — 앞으로 옮기면 출격 7 중 한 자리를 빈 칸이 차지한다.
+	const filled = new Set(deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId));
+	const deployed = new Set(deck.deployed.filter((id) => filled.has(id)));
+	const order = [...base.filter((id) => deployed.has(id)), ...base.filter((id) => !deployed.has(id))];
 
 	for (const slot of deck.slots) {
 		const at = order.indexOf(slot.sinnerId);

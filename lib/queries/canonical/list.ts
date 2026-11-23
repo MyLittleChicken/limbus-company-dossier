@@ -45,7 +45,7 @@ function nameOf(rows: TextRow[], locale: Locale) {
  *
  * 게임이 두 줄로 흘려 쓰는 이름이 있어 `title` 에 줄바꿈이 들어 있다 — 한 줄로 편다.
  */
-function identityName(rows: { locale: string; name: string; title: string | null }[], locale: Locale) {
+export function identityName(rows: { locale: string; name: string; title: string | null }[], locale: Locale) {
 	const pick = rows.find((r) => r.locale === locale) ?? rows.find((r) => r.locale === 'en');
 	if (!pick) return null;
 	return { name: clean(pick.title ?? pick.name), fellBack: pick.locale !== locale };
