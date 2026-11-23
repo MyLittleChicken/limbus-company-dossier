@@ -4,7 +4,14 @@ import type { Capability } from '@/lib/engine/v2/types';
 import { dataVersion } from './version';
 
 /** 단일 슬롯 — 지금 판 하나만 든다. 판이 바뀌면 이전 것은 버린다(쌓이지 않는다). */
-let slot: { version: string; value: Promise<EngineData> } | null = null;
+let slot: { version: string; loadedAt: number; value: Promise<EngineData> } | null = null;
+
+/**
+ * 상한 TTL 백스톱. dataVersion 이 그대로여도 이만큼 지나면 다시 읽는다 — 판 표지가 변화를
+ * 못 볼 때(Postgres 통계 off · 읽기 전용 standby 의 통계 · 권한 없음 `w?`) 낡은 판이 영영
+ * 남지 않게. 15 분 = 갱신 주기(수 시간 이상)보다 짧고, 다시 읽는 값(~수십 ms)은 작다.
+ */
+export const ENGINE_DATA_MAX_AGE_MS = 15 * 60_000;
 
 /**
  * 엔진 입력 묶음. 편성과 무관하게 고정이라 데이터 판(`dataVersion`)마다 한 번만 읽는다.
@@ -12,12 +19,14 @@ let slot: { version: string; value: Promise<EngineData> } | null = null;
  * 키는 봉투와 같은 `dataVersion` — 라이브 갱신(snapshot 행은 그대로)도 다음 호출부터 반영되고,
  * 응답의 dataVersion 과 판정 데이터가 어긋나지 않는다. 도구는 `engineData(ctx.dataVersion)` 으로
  * 호출 머리에 읽은 판을 넘긴다. 빠지면 지금 판을 읽는다. 읽다 실패하면 슬롯을 비운다.
+ * 판이 같아도 `ENGINE_DATA_MAX_AGE_MS` 가 지나면 다시 읽는다. `now` 는 시험이 시계를 주입하는 자리.
  * 조회 도구(인격 축)와 엔진 도구(판정)가 같은 것을 쓴다.
  */
-export async function engineData(version?: string): Promise<EngineData> {
+export async function engineData(version?: string, now: () => number = Date.now): Promise<EngineData> {
 	const key = version ?? (await dataVersion());
-	if (slot?.version === key) return slot.value;
-	const mine = { version: key, value: loadEngineData(canonical) };
+	const at = now();
+	if (slot?.version === key && at - slot.loadedAt < ENGINE_DATA_MAX_AGE_MS) return slot.value;
+	const mine = { version: key, loadedAt: at, value: loadEngineData(canonical) };
 	slot = mine;
 	mine.value.catch(() => {
 		if (slot === mine) slot = null;

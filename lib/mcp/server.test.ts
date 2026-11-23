@@ -7,6 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { connectInMemory } from './test-client';
+import { cachedToolList, computeToolList, createDossierServer } from './server';
 import { INTERNAL_ERROR } from './define-tool';
 
 const reachable = await canonicalReachable(canonical);
@@ -72,4 +73,22 @@ test('DB 장애 때 모든 도구가 INTERNAL_ERROR 만 주고 경로 · prisma 
 		assert.equal(r.text, INTERNAL_ERROR, `${r.name} 는 내부 오류 문구만: ${r.text.slice(0, 200)}`);
 		assert.doesNotMatch(r.text, /\/Users\/|prisma|database server|127\.0\.0\.1|postgres/i, r.name);
 	}
+});
+
+test('tools/list 는 프로세스에 한 번 만든 것을 다시 준다 — 덮어쓰지 않은 SDK 응답과 같다', async () => {
+	const first = await cachedToolList();
+	assert.equal(await cachedToolList(), first, '같은 Promise 결과');
+	assert.equal(first.tools.length, 18);
+	// 두 세션(무상태라 서버 둘)이 같은 목록을 받고, 클라이언트 쪽 파싱 뒤 모양도 같다
+	const [c1, c2] = await Promise.all([connectInMemory(), connectInMemory()]);
+	const [l1, l2] = await Promise.all([c1.listTools(), c2.listTools()]);
+	assert.deepEqual(l1, l2);
+	assert.deepEqual(l1.tools.map((t) => t.name), first.tools.map((t) => t.name));
+	// 기억한 목록은 SDK 가 바로 만든 것과 필드까지 같다 (outputSchema · annotations 포함)
+	assert.deepEqual(first, await computeToolList());
+	const raw = first.tools.find((t) => t.name === 'get_build_info')!;
+	assert.equal((raw.outputSchema as any).properties.dataVersion.type, 'string');
+	assert.deepEqual(raw.annotations, { readOnlyHint: true, openWorldHint: false });
+	await Promise.all([c1.close(), c2.close()]);
+	assert.ok(createDossierServer());
 });

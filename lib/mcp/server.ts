@@ -1,4 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { ListToolsRequestSchema, type JSONRPCMessage, type ListToolsResult } from '@modelcontextprotocol/sdk/types.js';
 import pkg from '@/package.json';
 import { registerCatalogTools } from './tools/catalog';
 import { registerDungeonTools } from './tools/dungeon';
@@ -23,8 +25,7 @@ Unofficial fan-made site; not affiliated with or endorsed by Project Moon. 데�
 - 팩 점수(score_packs)는 참고값이다 (provisional) — 저울추가 사람 검토 전이다. 사실처럼 단정하지 말 것.
 - 출격 규칙 / deploy rule: 편성 순서 1..7 이 출격(sortie), 8..12 가 대기. identityIds 는 목록 차례가 편성 순서다. deployedIds 를 주면 그것이 우선한다.`;
 
-/** 모든 도구를 등록한 MCP 서버. 프레임워크 무관 — 전송은 호출하는 쪽(`app/mcp/route.ts` · 시험)이 붙인다. */
-export function createDossierServer(): McpServer {
+function buildServer(): McpServer {
 	const server = new McpServer(
 		{ name: 'limbus-dossier', version: pkg.version },
 		{ instructions: SERVER_INSTRUCTIONS },
@@ -36,5 +37,58 @@ export function createDossierServer(): McpServer {
 	// 무상태 전송(요청마다 서버 생성)이라 도구 목록 변경 알림을 보낼 수 없다. 도구를 등록하면
 	// SDK 가 listChanged: true 를 넣으므로, 등록을 마친 뒤 연결 전에 덮어쓴다.
 	server.server.registerCapabilities({ tools: { listChanged: false } });
+	return server;
+}
+
+/**
+ * `tools/list` 응답을 프로세스에 한 번만 만든다.
+ *
+ * 무상태라 요청마다 서버가 새로 서고, SDK 는 `tools/list` 때마다 zod → JSON Schema 변환을 다시 한다
+ * (실측 23 ms · 69 KB). 도구 등록은 결정적이고(같은 코드 → 같은 목록) 런타임에 바꾸지 않으므로
+ * (enable/disable/update 를 쓰지 않는다) 첫 결과를 기억해도 된다.
+ *
+ * 만드는 법은 공개 API 만 쓴다 — 덮어쓰지 않은 서버 하나를 InMemoryTransport 에 붙이고 JSON-RPC
+ * `tools/list` 를 날 것으로 보내 SDK 자신의 응답을 그대로 받는다(클라이언트 파싱을 거치지 않아
+ * 필드가 깎이지 않는다). 이후 각 서버는 `setRequestHandler(ListToolsRequestSchema)` 로 그것을 준다.
+ * 실패하면 기억하지 않는다 — 다음 요청이 다시 만든다.
+ */
+let toolList: Promise<ListToolsResult> | null = null;
+
+/** 덮어쓰지 않은 서버의 날 `tools/list` 응답. 시험이 기억한 것과 대조할 때도 쓴다. */
+export async function computeToolList(): Promise<ListToolsResult> {
+	const server = buildServer();
+	const [mine, theirs] = InMemoryTransport.createLinkedPair();
+	const reply = new Promise<JSONRPCMessage>((resolve) => {
+		mine.onmessage = (message) => {
+			if ('id' in message && message.id === 1) resolve(message);
+		};
+	});
+	await server.connect(theirs);
+	await mine.start();
+	try {
+		await mine.send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+		const message = await reply;
+		if (!('result' in message)) throw new Error(`tools/list 실패: ${JSON.stringify(message).slice(0, 200)}`);
+		return message.result as ListToolsResult;
+	} finally {
+		await server.close();
+	}
+}
+
+export function cachedToolList(): Promise<ListToolsResult> {
+	if (!toolList) {
+		const mine = computeToolList();
+		toolList = mine;
+		mine.catch(() => {
+			if (toolList === mine) toolList = null;
+		});
+	}
+	return toolList;
+}
+
+/** 모든 도구를 등록한 MCP 서버. 프레임워크 무관 — 전송은 호출하는 쪽(`app/mcp/route.ts` · 시험)이 붙인다. */
+export function createDossierServer(): McpServer {
+	const server = buildServer();
+	server.server.setRequestHandler(ListToolsRequestSchema, () => cachedToolList());
 	return server;
 }

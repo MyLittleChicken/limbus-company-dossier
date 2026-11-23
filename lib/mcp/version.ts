@@ -21,6 +21,13 @@ import { getBuildInfo } from '@/lib/queries/canonical/reference';
  * 뿐이다(헛 무효화는 안전, 놓친 무효화가 위험). MCP 경로는 canonical 에 쓰지 않으므로
  * 읽기로는 바뀌지 않는다. 통계를 못 읽는 권한이면 `w?` 로 두고 표지 집합만으로 간다.
  * 통계 반영 지연(PG15+ 최대 수 초)은 60 초 캐시보다 짧다.
+ *
+ * **한계 (후속 과제).** 인격·E.G.O 라이브 갱신(`src/update/apply.ts`)은 표지를 남기지 않아
+ * 이 판은 Postgres 통계에 기댄다 — 통계가 꺼졌거나(track_counts=off), 읽기 전용 standby 에
+ * 붙었거나(primary 의 쓰기가 standby 통계에 안 잡힌다), 권한이 없으면(`w?`) 그 갱신을 못 본다.
+ * 그 구멍은 `engineData` 의 15 분 상한 TTL(axes.ts)이 시간으로만 메운다(그때 dataVersion 과 커서는 안 바뀐다).
+ * 근본 수정은 apply 가 같은 트랜잭션에서 표지 행(예: build_info 또는 field_source 에 갱신 id)을
+ * 남기는 것이고, 그러면 쓰기 누계 재료를 뺄 수 있다.
  */
 export interface ToolCtx {
 	snapshotId: string | null;

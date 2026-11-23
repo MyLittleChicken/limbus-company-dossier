@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { canonical } from '../db-canonical';
 import { canonicalReachable, NO_DB } from '../../src/v2/canonical/db-available';
-import { axesOf, engineData, identityAxes } from './axes';
+import { axesOf, ENGINE_DATA_MAX_AGE_MS, engineData, identityAxes } from './axes';
 
 const reachable = await canonicalReachable(canonical);
 after(async () => { await canonical.$disconnect(); });
@@ -47,4 +47,17 @@ test('engineData 는 판을 키로 하는 단일 슬롯이다 — 판이 바뀌�
 	const b = await engineData('test.b');
 	assert.notEqual(b, a, '판이 바뀌면 다시 읽는다');
 	assert.notEqual(await engineData('test.a'), a, '이전 판은 슬롯에서 버려졌다');
+});
+
+test('engineData 는 판이 같아도 15 분 상한 TTL 이 지나면 다시 읽는다 (시계 주입)', { skip: reachable ? false : NO_DB }, async () => {
+	assert.equal(ENGINE_DATA_MAX_AGE_MS, 15 * 60_000);
+	let t = 1_000_000;
+	const clock = () => t;
+	const a = await engineData('ttl.a', clock);
+	t += ENGINE_DATA_MAX_AGE_MS - 1;
+	assert.equal(await engineData('ttl.a', clock), a, 'TTL 안이면 같은 객체');
+	t += 1;
+	const b = await engineData('ttl.a', clock);
+	assert.notEqual(b, a, 'TTL 이 지나면 같은 판이어도 다시 읽는다');
+	assert.equal(await engineData('ttl.a', clock), b, '다시 읽은 것부터 새로 센다');
 });
