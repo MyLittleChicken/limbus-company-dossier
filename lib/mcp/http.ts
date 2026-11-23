@@ -10,14 +10,14 @@ import { clientIpConfig, clientKey, mcpSemaphore, retryAfterSeconds, takeToken, 
  * POST 차례(앞에서 막힐수록 싸다):
  *   켜짐(MCP_ENABLED) 404 → 끊긴 요청 499 → Host · Origin 403 → Content-Type 415 → 호출 제한 429
  *   → 본문 상한 413 → JSON 400(-32700) → 배치 400(-32600) → 동시 실행 상한 503(대기열 가득 · 대기 5 초 초과)
- *   → 전송(처리 15 초 상한, 넘으면 JSON-RPC -32603 「시간 초과」).
+ *   → 전송(처리 15 초 상한, 넘으면 JSON-RPC -32603 「시간 초과」. 자리는 처리가 실제로 끝날 때 돌려준다).
  */
 
 /** 요청 본문 상한. 도구 인자는 짧다 — 덱 코드 하나 · id 목록 정도. */
 export const MAX_BODY_BYTES = 64 * 1024;
 /** 동시 실행 자리를 기다리는 상한. 넘으면 503. */
 export const QUEUE_WAIT_MS = 5_000;
-/** 처리 전체 상한. 넘으면 -32603 「시간 초과」로 답하고 자리를 돌려준다. */
+/** 처리 전체 상한. 넘으면 -32603 「시간 초과」로 먼저 답한다. 자리는 처리가 실제로 끝날 때 돌려준다. */
 export const REQUEST_TIMEOUT_MS = 15_000;
 
 /** 시험이 바꿔 끼우는 것들. 기본은 실제 서버 · 공용 세마포어 · 위 상수. */
@@ -162,32 +162,52 @@ export async function handleMcpPost(request: Request, env: Env = process.env, op
 	const slot = await semaphore.acquire(queueWaitMs);
 	if (!slot.ok) return rpcError(503, -32000, 'Server busy. Retry later.', { 'Retry-After': '1' });
 
-	let server: McpServer | undefined;
-	let transport: WebStandardStreamableHTTPServerTransport | undefined;
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	try {
-		if (request.signal.aborted) return new Response(null, { status: 499 });
-		server = createServer();
+	if (request.signal.aborted) {
+		slot.release();
+		return new Response(null, { status: 499 });
+	}
+
+	// 실제 처리. 자리는 이것이 **실제로 끝날 때** 돌려준다 — 시간 초과로 응답을 먼저 돌려줘도 도구 안의 일
+	// (DB 질의 · 엔진)은 계속 돌기 때문이다. 자리를 일찍 돌려주면 실제로 도는 일이 상한을 넘는다.
+	// transport · server 도 그때 닫는다. 먼저 닫으면 JSON 응답 대기가 풀리지 않아 자리가 영영 안 돌아온다.
+	// 한계: 끝나지 않는 도구는 자리를 계속 쥔다 — 바닥은 DB 역할의 statement_timeout(README 체크리스트).
+	let timedOut = false;
+	const work = (async (): Promise<Response> => {
+		const server = createServer();
 		// sessionIdGenerator 를 주지 않는 것이 무상태다(SDK 문서의 `sessionIdGenerator: undefined` 와 같다 —
 		// exactOptionalPropertyTypes 라 생략으로 쓴다). 본문은 위에서 읽었으니 parsedBody 로 넘긴다
 		// (전송은 Accept 검사 뒤 그것을 쓴다).
-		transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
-		await server.connect(transport);
-		// 처리 상한. 넘으면 응답을 먼저 돌려주고 자리를 돌려준다. 도구 안의 일(DB 질의)은 멈추지 않는다 —
-		// 그 바닥은 DB 역할의 statement_timeout 이 받친다(README 체크리스트).
-		const timedOut = new Promise<Response>(resolve => {
-			timer = setTimeout(() => resolve(timeoutResponse(body)), requestTimeoutMs);
+		const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
+		try {
+			await server.connect(transport);
+			return await transport.handleRequest(request, { parsedBody: body });
+		} finally {
+			// JSON 응답 모드라 handleRequest 가 돌려줄 때 본문이 이미 다 찼다. 닫아도 응답은 그대로다.
+			await transport.close().catch(() => {});
+			await server.close().catch(() => {});
+		}
+	})();
+	// 시간 초과 뒤의 늦은 실패는 여기서 받는다(처리 안 된 거절로 새지 않게). 제때의 실패는 아래 race 가 받는다.
+	void work
+		.catch(error => {
+			if (timedOut) console.error('[mcp] request failed after timeout', error);
+		})
+		.finally(() => slot.release());
+
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const deadline = new Promise<'timeout'>(resolve => {
+			timer = setTimeout(() => resolve('timeout'), requestTimeoutMs);
 		});
-		return await Promise.race([transport.handleRequest(request, { parsedBody: body }), timedOut]);
+		const winner = await Promise.race([work, deadline]);
+		if (winner !== 'timeout') return winner;
+		timedOut = true;
+		return timeoutResponse(body);
 	} catch (error) {
 		console.error('[mcp] request failed', error);
 		return rpcError(500, -32603, 'Internal error');
 	} finally {
 		clearTimeout(timer);
-		// JSON 응답 모드라 handleRequest 가 돌려줄 때 본문이 이미 다 찼다. 닫아도 응답은 그대로다.
-		await transport?.close().catch(() => {});
-		await server?.close().catch(() => {});
-		slot.release();
 	}
 }
 

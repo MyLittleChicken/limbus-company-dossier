@@ -150,16 +150,23 @@ test('MCP_ENABLED — 프로덕션에서 1 이 아니면 POST · GET 모두 404'
 	assert.equal((await post(ping())).status, 404, '개발에서도 0 이면 끈다');
 });
 
-/** 부르면 `ms` 동안 매달리는 도구 하나만 있는 서버. */
-function slowServer(ms: number): () => McpServer {
+/** 부르면 `ms` 동안 매달리는 도구 하나만 있는 서버. `live` 가 지금 실제로 도는 도구 수 · 그 최댓값을 센다. */
+function slowServer(ms: number, live = { now: 0, max: 0 }): () => McpServer {
 	return () => {
 		const s = new McpServer({ name: 'slow', version: '0' });
 		s.registerTool('slow', { description: 'slow' }, async () => {
+			live.now += 1;
+			live.max = Math.max(live.max, live.now);
 			await new Promise(r => setTimeout(r, ms));
+			live.now -= 1;
 			return { content: [{ type: 'text', text: 'done' }] };
 		});
 		return s;
 	};
+}
+
+async function untilIdle(sem: ReturnType<typeof createSemaphore>): Promise<void> {
+	while (sem.stats().active > 0 || sem.stats().queued > 0) await new Promise(r => setTimeout(r, 5));
 }
 
 /** 첫 요청이 자리를 잡을 때까지 기다린다 — 두 번째 요청이 반드시 대기 쪽이 되게. */
@@ -183,7 +190,50 @@ test('처리 상한 — 넘으면 -32603 「시간 초과」(그 요청의 id), 
 	assert.equal(body.id, 7);
 	assert.equal(body.error.code, -32603);
 	assert.match(body.error.message, /timed out|시간 초과/);
+	// 응답은 먼저 왔지만 도구는 아직 돈다 — 자리는 그것이 끝날 때 돌아온다.
+	assert.deepEqual(semaphore.stats(), { active: 1, queued: 0 });
+	await untilIdle(semaphore);
 	assert.deepEqual(semaphore.stats(), { active: 0, queued: 0 });
+});
+
+test('시간 초과가 이어져도 실제로 도는 일은 상한(4)을 넘지 않고, 대기열을 넘으면 503', async () => {
+	const semaphore = createSemaphore(4, 2);
+	const live = { now: 0, max: 0 };
+	const opts = { createServer: slowServer(150, live), semaphore, requestTimeoutMs: 10, queueWaitMs: 2_000 };
+	const responses = await Promise.all(Array.from({ length: 10 }, (_, i) => handleMcpPost(callSlow(i + 1), env, opts)));
+	const statuses = responses.map(r => r.status);
+	assert.equal(statuses.filter(s => s === 503).length, 4, '4 실행 + 2 대기 밖의 4 개는 503');
+	const timedOut = await Promise.all(responses.filter(r => r.status === 200).map(r => r.json() as Promise<any>));
+	assert.equal(timedOut.length, 6);
+	for (const b of timedOut) assert.equal(b.error.code, -32603);
+	await untilIdle(semaphore);
+	assert.ok(live.max <= 4, `실제 동시 실행 최대 ${live.max}`);
+	assert.equal(live.max, 4);
+	assert.equal(live.now, 0);
+});
+
+test('처리 상한 뒤 늦은 실패도 자리를 돌려주고 처리 안 된 거절로 새지 않는다', async () => {
+	const semaphore = createSemaphore(1, 0);
+	let unhandled = 0;
+	const onUnhandled = () => (unhandled += 1);
+	process.on('unhandledRejection', onUnhandled);
+	try {
+		const failing = () => {
+			const s = new McpServer({ name: 'fail', version: '0' });
+			s.registerTool('slow', { description: 'slow' }, async () => {
+				await new Promise(r => setTimeout(r, 50));
+				throw new Error('late boom');
+			});
+			return s;
+		};
+		const r = await handleMcpPost(callSlow(3), env, { createServer: failing, semaphore, requestTimeoutMs: 10 });
+		assert.equal(((await r.json()) as any).error.code, -32603);
+		await untilIdle(semaphore);
+		await new Promise(r => setTimeout(r, 20));
+		assert.equal(unhandled, 0);
+	} finally {
+		process.off('unhandledRejection', onUnhandled);
+	}
 });
 
 test('대기 상한 — 자리를 못 얻고 기다림이 넘으면 503 + Retry-After', async () => {

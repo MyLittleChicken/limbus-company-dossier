@@ -75,6 +75,7 @@ export async function computeToolList(): Promise<ListToolsResult> {
 	}
 }
 
+// 개인화 층에서 사용자별 도구 목록이 생기면 이 기억의 키를 사용자(또는 권한 묶음)별로 나눌 것.
 export function cachedToolList(): Promise<ListToolsResult> {
 	if (!toolList) {
 		const mine = computeToolList();
