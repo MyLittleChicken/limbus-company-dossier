@@ -31,3 +31,14 @@ test('stripMedia 는 plain object · 배열만 들어가고 Map 등은 그대로
 	assert.equal(out.buf, buf);
 	assert.deepEqual({ ...out.bare }, { name: 'n' });
 });
+
+test('stripMedia 는 키 이름을 몰라도 애셋 경로 값을 뺀다', () => {
+	assert.deepEqual(
+		stripMedia({ id: 1, portrait: '/media/identity/10101.webp?v=1', banner: 'x/y.PNG', name: 'a.png 설명 아님 x' }),
+		{ id: 1, name: 'a.png 설명 아님 x' },
+	);
+});
+
+test('stripMedia 는 확장 애셋 키(rarityIcon · frame · bossIcon)를 뺀다', () => {
+	assert.deepEqual(stripMedia({ id: 1, rarityIcon: 'r', frame: 'f', bossIcon: 'b', images: ['a'] }), { id: 1 });
+});
