@@ -2,7 +2,7 @@ import type { Locale } from '@/lib/locale';
 import type { $Enums } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
 import { giftIcon, identityImage, packIcon } from '@/lib/assets';
-import { loadEngineData } from '@/lib/engine/v2/load';
+import { loadEngineData, type EngineData } from '@/lib/engine/v2/load';
 import { Profile } from '@/lib/engine/v2/profile';
 import { evaluateGifts } from '@/lib/engine/v2/evaluate';
 import { chain } from '@/lib/engine/v2/chain';
@@ -103,42 +103,23 @@ export interface Recommendation {
 	rankable: boolean;
 }
 
-export async function recommendForDeck(
-	locale: Locale,
-	options: {
-		identityIds?: number[];
-		/** 출전 인격 id. 비우면 편성 전체를 출전으로 본다 */
-		deployedIds?: number[];
-		floor?: number;
-		difficulty?: $Enums.Difficulty;
-		ownedIds?: number[];
-	} = {},
-): Promise<Recommendation> {
-	const identityIds = options.identityIds ?? HWAJIN_DECK;
-	const floor = options.floor ?? 3;
-	const difficulty = options.difficulty ?? 'hard';
-	const ownedIds = options.ownedIds ?? [];
+/**
+ * 기프트 판정 묶음 — 절 판정(`evaluateGifts`)과 보유 기프트 연쇄(`chain`).
+ *
+ * 화면(`recommendForSquad`)과 MCP `check_gifts` 가 **같은 길**을 탄다. 둘이 따로
+ * 세면 「켜진다」가 두 가지 답을 낸다.
+ *
+ * `data` 를 주면 그것을 쓴다 — 캐시한 엔진 데이터를 넘기는 자리다. 안 주면 여기서 읽는다.
+ */
+export async function judgeGifts(input: {
+	squad: Squad;
+	heldGiftIds: string[];
+	data?: EngineData;
+}): Promise<{ verdicts: Map<string, GiftVerdict>; chainDepth: Map<string, number> }> {
+	const { squad, heldGiftIds } = input;
+	const data = input.data ?? (await loadEngineData(canonical));
 
-	const data = await loadEngineData(canonical);
-
-	// 편성 12 와 출전 7 은 다르다 — 분모가 갈린다(v2/types.ts Squad 주석)
-	const roster = identityIds.map((id) => ({ identityId: String(id), egoIds: [] }));
-	/**
-	 * **빈 배열을 「비었다」로 읽는다.** `??` 로 쓰면 안 된다 — 화면은 주소에
-	 * `deployed` 가 없을 때 `[]` 를 넘기는데 `[] ?? x` 는 `[]` 다. 그러면 출전
-	 * 분모가 0 이 되어 `Profile` 이 세는 인원이 전부 0 이 되고, 조건 판정의
-	 * 기본 분모가 출전이라 공급이 통째로 사라진다. 앱을 띄워 보고 잡았다.
-	 */
-	const deployed = options.deployedIds ?? [];
-	const field = (deployed.length > 0 ? deployed : identityIds).map(String);
-	const squad: Squad = { roster, field };
-
-	// gift_held 게이트를 판정하려면 보유 기프트가 필요하다. chain() 에 넘기는
-	// 것과 같은 값이다 — 둘이 갈리면 「켜진다」가 두 가지 답을 낸다
-	const heldGiftIds = ownedIds.map(String);
-	const profile = new Profile(squad, data.capabilities, heldGiftIds);
-	// 판정은 절만 본다 — 폐기 5표가 하나도 안 들어간다. `profile` 은 아래
-	// 연쇄(`chain`)가 계속 쓰므로 남는다
+	// 판정은 절만 본다 — 폐기 5표가 하나도 안 들어간다
 	const verdicts = evaluateGifts({
 		squad,
 		abilities: data.abilities,
@@ -155,6 +136,70 @@ export async function recommendForDeck(
 		verdicts,
 	});
 	const depthByGift = new Map(links.map((l) => [l.giftId, l.depth]));
+
+	return { verdicts: byGift, chainDepth: depthByGift };
+}
+
+export async function recommendForDeck(
+	locale: Locale,
+	options: {
+		identityIds?: number[];
+		/** 출전 인격 id. 비우면 편성 전체를 출전으로 본다 */
+		deployedIds?: number[];
+		floor?: number;
+		difficulty?: $Enums.Difficulty;
+		ownedIds?: number[];
+	} = {},
+): Promise<Recommendation> {
+	const identityIds = options.identityIds ?? HWAJIN_DECK;
+	const floor = options.floor ?? 3;
+	const difficulty = options.difficulty ?? 'hard';
+	const ownedIds = options.ownedIds ?? [];
+
+	// 편성 12 와 출전 7 은 다르다 — 분모가 갈린다(v2/types.ts Squad 주석)
+	const roster = identityIds.map((id) => ({ identityId: String(id), egoIds: [] }));
+	/**
+	 * **빈 배열을 「비었다」로 읽는다.** `??` 로 쓰면 안 된다 — 화면은 주소에
+	 * `deployed` 가 없을 때 `[]` 를 넘기는데 `[] ?? x` 는 `[]` 다. 그러면 출전
+	 * 분모가 0 이 되어 `Profile` 이 세는 인원이 전부 0 이 되고, 조건 판정의
+	 * 기본 분모가 출전이라 공급이 통째로 사라진다. 앱을 띄워 보고 잡았다.
+	 */
+	const deployed = options.deployedIds ?? [];
+	const field = (deployed.length > 0 ? deployed : identityIds).map(String);
+	const squad: Squad = { roster, field };
+
+	return recommendForSquad(locale, {
+		squad,
+		floor,
+		difficulty,
+		heldGiftIds: ownedIds.map(String),
+	});
+}
+
+/**
+ * 편성 입력으로 추천을 낸다 — `recommendForDeck` 의 본체.
+ *
+ * `squad.roster[].egoIds` 를 그대로 엔진에 넘긴다 (`Profile` · 판정이 장착 E.G.O 를 본다).
+ * `heldGiftIds` 는 보유 기프트 id 문자열이다.
+ */
+export async function recommendForSquad(
+	locale: Locale,
+	input: { squad: Squad; floor: number; difficulty: $Enums.Difficulty; heldGiftIds: string[] },
+): Promise<Recommendation> {
+	const { squad, floor, difficulty } = input;
+	const field = squad.field;
+	// id 는 문자열로 받는다 — 엔진 표기와 같다. 숫자로 되돌려 세지 않는다
+	const identityIds = squad.roster.map((s) => s.identityId);
+
+	const data = await loadEngineData(canonical);
+
+	// gift_held 게이트를 판정하려면 보유 기프트가 필요하다. chain() 에 넘기는
+	// 것과 같은 값이다 — 둘이 갈리면 「켜진다」가 두 가지 답을 낸다
+	const heldGiftIds = input.heldGiftIds;
+	const profile = new Profile(squad, data.capabilities, heldGiftIds);
+	// 판정과 연쇄는 `judgeGifts` 가 한다 — MCP `check_gifts` 와 같은 길이다.
+	// `profile` 은 아래 축 공급 셈이 계속 쓰므로 남는다
+	const { verdicts: byGift, chainDepth: depthByGift } = await judgeGifts({ squad, heldGiftIds, data });
 
 	// 층 후보 팩. floor_pack 을 난이도로만 좁히고 구간은 코드로 편다
 	const floorRows = await canonical.floorPack.findMany({
@@ -201,7 +246,7 @@ export async function recommendForDeck(
 	// 분모는 출격 인원 — 덱과 무관한 고정된 자다(설계 §4.3). 최댓값 정규화는 회귀다
 	const axisSupply = axisSupplyOf(supplyRows, field.length);
 	// 문자열 id 로 통일해 둔다 — 점수 재료(scoreInput)와 합성 셈(fusionOf) 양쪽이 쓴다
-	const ownedSet = new Set(ownedIds.map(String));
+	const ownedSet = new Set(heldGiftIds);
 
 	// 합성 결과물의 적합도. **결과물은 팩 밖에 있을 수 있다** — 합성으로만 얻는
 	// 59종은 gift_pack 에 아예 없다
@@ -291,7 +336,7 @@ export async function recommendForDeck(
 
 	// 덱 표시
 	const identities = await canonical.identity.findMany({
-		where: { id: { in: identityIds.map(String) } },
+		where: { id: { in: identityIds } },
 		include: {
 			texts: localeRows(locale),
 			// `gate_kind = 'always'` 인 것만, `affects` 는 tag·both 만 — `canonical/squad.ts`
@@ -313,7 +358,7 @@ export async function recommendForDeck(
 	};
 
 	const ownedGifts = await canonical.gift.findMany({
-		where: { id: { in: ownedIds.map(String) } },
+		where: { id: { in: heldGiftIds } },
 		include: { stages: { where: { level: 0 }, include: { texts: localeRows(locale) } } },
 		orderBy: { id: 'asc' },
 	});
