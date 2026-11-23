@@ -28,9 +28,23 @@ import type { GiftVerdict, Reason } from '@/lib/engine/v2/types';
  *   판정 행 없음 → possible + no-judgement-data (저작 보류이지 무조건이 아니다)
  *
  * 판정은 편성(진입 시점) 조건만이다 — 전투 중 발동 조건은 범위 밖.
+ *
+ * **하향(리뷰 2라운드 R1).** 엔진이 「확정 미충족」이라 했지만 엔진 공급이 그 축을 못 볼 수
+ * 있는 경우가 있다. 그런 조건 하나로 죽은 그룹은 off 가 아니라 possible 로 낮추고 까닭을 단다.
+ *
+ *   skill-supply-incomplete  스킬 공급(coin_token)이 스킬 효과 · 특수 변형 토큰을 놓친다 —
+ *                            그 축을 인격 취급(tag)으로 가진 인격이 모집단에 있으면 스킬로도 줄 수 있다
+ *   ego-not-judged           판정은 장착 E.G.O 를 안 본다 — 모집단의 E.G.O 게이트가 그 축을 연다
+ *
+ * 무엇이 의심스러운지는 호출자가 `doubt` 로 알려 준다(이 파일은 DB · 덱을 모른다).
+ * 기프트 전체가 그 근거 때문에만 off 였다면 같이 낮춘다 — **엔진 fireable=false 를 덮는 유일한
+ * 예외다.** 엔진을 고치지 않고 MCP 응답에서만 과소 판정을 피한다.
  */
 export type FireState = 'on' | 'partial' | 'possible' | 'off';
 export type AbilityState = 'on' | 'possible' | 'off';
+export type Downgrade = 'skill-supply-incomplete' | 'ego-not-judged';
+/** 확정 미충족인 조건 하나를 엔진 공급이 놓쳤을 수 있나. 아니면 null */
+export type Doubt = (r: Reason) => Downgrade | null;
 
 export interface AbilityFire {
 	ordinal: number;
@@ -40,14 +54,16 @@ export interface AbilityFire {
 	state: AbilityState;
 	/** 무조건이 아닌데 조건이 0개 — 조건을 못 뽑은 결손이라 막지 않는다 */
 	missingConditions?: true;
+	/** off 를 possible 로 낮춘 까닭 */
+	reason?: Downgrade;
 	/** 이 능력의 조건 판정. triggerId 가 `능력/그룹/번호` */
 	reasons: Reason[];
 }
 
 export interface Fire {
 	state: FireState;
-	/** 판정 행이 아예 없는 기프트. 켜짐으로 두지 않는다 */
-	reason?: 'no-judgement-data';
+	/** 판정 행이 아예 없는 기프트(켜짐으로 두지 않는다) · 또는 하향으로 상태가 바뀐 까닭 */
+	reason?: 'no-judgement-data' | Downgrade;
 	abilities: AbilityFire[];
 }
 
@@ -57,7 +73,9 @@ function parseTrigger(id: string): { ordinal: number; group: number } | null {
 	return m ? { ordinal: Number(m[1]), group: Number(m[2]) } : null;
 }
 
-export function abilityState(a: Ability, reasons: readonly Reason[]): { state: AbilityState; missingConditions?: true } {
+export function abilityState(
+	a: Ability, reasons: readonly Reason[], doubt: Doubt = () => null,
+): { state: AbilityState; missingConditions?: true; reason?: Downgrade } {
 	if (a.unconditional) return { state: 'on' };
 	if (reasons.length === 0) return { state: 'possible', missingConditions: true };
 	const groups = new Map<number, Reason[]>();
@@ -66,7 +84,13 @@ export function abilityState(a: Ability, reasons: readonly Reason[]): { state: A
 		groups.set(g, [...(groups.get(g) ?? []), r]);
 	}
 	const gs = [...groups.values()];
-	if (gs.some((g) => g.every((r) => r.verdict === 'unsatisfied'))) return { state: 'off' };
+	const dead = gs.filter((g) => g.every((r) => r.verdict === 'unsatisfied'));
+	if (dead.length > 0) {
+		// 의심 가는 조건이 없는 죽은 그룹이 하나라도 있으면 off 그대로
+		const why = dead.map((g) => g.map(doubt).find((d) => d !== null) ?? null);
+		if (why.some((d) => d === null)) return { state: 'off' };
+		return { state: 'possible', reason: why[0]! };
+	}
 	if (gs.every((g) => g.some((r) => r.verdict === 'satisfied' && r.certainty === 'certain'))) return { state: 'on' };
 	return { state: 'possible' };
 }
@@ -75,7 +99,7 @@ export function abilityState(a: Ability, reasons: readonly Reason[]): { state: A
  * @param v          엔진 판정(`evaluateGifts`). 없으면 판정 행 없음
  * @param abilities  그 기프트의 능력(`EngineData.abilities.get(giftId)`, 강화 0단계)
  */
-export function fireState(v: GiftVerdict | undefined, abilities: readonly Ability[] = []): Fire {
+export function fireState(v: GiftVerdict | undefined, abilities: readonly Ability[] = [], doubt?: Doubt): Fire {
 	if (v === undefined) return { state: 'possible', reason: 'no-judgement-data', abilities: [] };
 
 	const byOrdinal = new Map<number, Reason[]>();
@@ -84,17 +108,28 @@ export function fireState(v: GiftVerdict | undefined, abilities: readonly Abilit
 		if (o === undefined) continue;
 		byOrdinal.set(o, [...(byOrdinal.get(o) ?? []), r]);
 	}
-	const fires: AbilityFire[] = [...abilities]
-		.sort((a, b) => a.ordinal - b.ordinal)
-		.map((a) => {
-			const reasons = byOrdinal.get(a.ordinal) ?? [];
-			return { ordinal: a.ordinal, refines: a.refines, unconditional: a.unconditional, ...abilityState(a, reasons), reasons };
-		});
+	const sorted = [...abilities].sort((a, b) => a.ordinal - b.ordinal);
+	const fires: AbilityFire[] = sorted.map((a) => {
+		const reasons = byOrdinal.get(a.ordinal) ?? [];
+		return { ordinal: a.ordinal, refines: a.refines, unconditional: a.unconditional, ...abilityState(a, reasons, doubt), reasons };
+	});
+	const state = fold(v, fires);
+	if (doubt === undefined) return { state, abilities: fires };
 
-	if (!v.fireable) return { state: 'off', abilities: fires };
-	const onIndependent = fires.some((f) => f.refines === null && f.state === 'on');
-	if (!onIndependent) return { state: 'possible', abilities: fires };
-	return { state: fires.some((f) => f.state === 'off') ? 'partial' : 'on', abilities: fires };
+	// 하향이 기프트 상태를 바꿨으면 그 까닭을 기프트에도 단다
+	const plain = fold(v, sorted.map((a) => ({ refines: a.refines, ...abilityState(a, byOrdinal.get(a.ordinal) ?? []) })));
+	const why = fires.find((f) => f.reason !== undefined)?.reason;
+	return state !== plain && why ? { state, reason: why, abilities: fires } : { state, abilities: fires };
+}
+
+function fold(v: GiftVerdict, fires: ReadonlyArray<{ refines: number | null; state: AbilityState; reason?: Downgrade }>): FireState {
+	const independent = fires.filter((f) => f.refines === null);
+	// 엔진 fireable=false 를 덮는 유일한 예외 — 독립 능력의 off 가 전부 하향으로 풀렸을 때
+	const lifted = independent.length > 0 && independent.every((f) => f.state !== 'off')
+		&& independent.some((f) => f.reason !== undefined);
+	if (!v.fireable && !lifted) return 'off';
+	if (!independent.some((f) => f.state === 'on')) return 'possible';
+	return fires.some((f) => f.state === 'off') ? 'partial' : 'on';
 }
 
 /** 정렬용 순위. 작을수록 앞 */

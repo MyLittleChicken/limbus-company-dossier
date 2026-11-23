@@ -5,7 +5,7 @@ import { canonical } from '@/lib/db-canonical';
 import { canonicalReachable, NO_DB } from '@/src/v2/canonical/db-available';
 import { connectInMemory } from '../test-client';
 import { engineData } from '../axes';
-import { PROVISIONAL_REASON, STAGE_NOTE, STATE_NOTE } from './engine';
+import { PROVISIONAL_REASON, SKILL_SUPPLY_NOTE, STAGE_NOTE, STATE_NOTE } from './engine';
 
 // 사용자 실물 덱 코드(편성 #24). 2026-11-23 게임 편성창 캡처와 12칸을 대조했다(설계 §6.2).
 const CODE_24 = 'H4sIAAAAAAAAE3P1dkyv8Ex3DAx09nDNLHdyLPd0BAJnL8d0EO2f7gyiHEsyAiPDPR2djR0zgxwjHT3LIcKFENWuwY4ZYENcg11dndKdnAI98/29gBK2tgAHpASdYAAAAA==';
@@ -59,7 +59,7 @@ test('analyze_deck(편성 #24) 는 출격 7 · 대기 5', { skip }, async () => 
 	assert.equal(b.waiting.length, 5);
 	assert.ok(b.supply.length > 0);
 	for (const s of b.supply) {
-		for (const c of [s.tag, s.skill, s.gated].filter(Boolean)) {
+		for (const c of [s.tag, s.skill, s.gated?.tag, s.gated?.skill].filter(Boolean)) {
 			assert.equal(c.roster, c.field + c.waiting, `${s.refKind}:${s.refId} roster = field + waiting`);
 			assert.ok(c.field <= 7 && c.waiting <= 5);
 		}
@@ -104,8 +104,8 @@ test('E.G.O 장착이 공급에 든다: gated 몫이 E.G.O 를 빼면 0', { skip
 
 	const without = await call('analyze_deck', { identityIds: [id] });
 	const withEgo = await call('analyze_deck', { identityIds: [id], egoIds: [Number(gated.gateRef)] });
-	assert.equal(row(without)?.gated.field ?? 0, 0, `E.G.O 없이 ${gated.refId} gated 0`);
-	assert.equal(row(withEgo)?.gated.field, 1, `E.G.O ${gated.gateRef} 장착 시 ${gated.refId} gated 1`);
+	assert.equal(row(without)?.gated.tag.field ?? 0, 0, `E.G.O 없이 ${gated.refId} gated 0`);
+	assert.equal(row(withEgo)?.gated.tag.field, 1, `E.G.O ${gated.gateRef} 장착 시 ${gated.refId} gated 1`);
 	assert.equal(row(withEgo)?.tag.field ?? 0, row(without)?.tag.field ?? 0, 'tag(엔진 표)는 E.G.O 와 무관');
 });
 
@@ -120,7 +120,7 @@ test('analyze_deck: tag + gated = score_packs 적합도가 쓰는 Profile 수', 
 	};
 	const profile = new Profile(squad, data.capabilities);
 	for (const s of b.supply.filter((x: Body) => x.refKind === 'axis')) {
-		assert.equal(s.tag.field + s.gated.field, profile.count('axis', s.refId, 'field'), s.refId);
+		assert.equal(s.tag.field + s.gated.tag.field, profile.count('axis', s.refId, 'field'), s.refId);
 	}
 });
 
@@ -150,7 +150,7 @@ async function assertParity(deck: Record<string, unknown>, refId: string) {
 	const a = await call('analyze_deck', deck);
 	const row = a.supply.find((s: Body) => s.refKind === 'axis' && s.refId === refId)
 		?? { tag: { roster: 0, field: 0, waiting: 0 }, skill: { roster: 0, field: 0, waiting: 0 } };
-	const b = await call('check_gifts', { ...deck, giftIds: ids.map(Number) });
+	const b = await call('check_gifts', { ...deck, giftIds: ids.map(Number), detail: 'full' });
 	let checked = 0;
 	for (const g of b.gifts) {
 		for (const ab of g.abilities) {
@@ -188,7 +188,7 @@ test('check_gifts 는 stageNote · stateNote 를 달고 능력 단위 상태를 
 	const mirror = (await canonical.gift.findMany({
 		where: { id: { in: [...data.abilities.keys()] }, domain: 'mirror_dungeon' }, select: { id: true }, orderBy: { id: 'asc' }, take: 30,
 	})).map((g) => Number(g.id));
-	const b = await call('check_gifts', { deckCode: CODE_24, giftIds: mirror });
+	const b = await call('check_gifts', { deckCode: CODE_24, giftIds: mirror, detail: 'full' });
 	assert.equal(b.stageNote, STAGE_NOTE);
 	assert.equal(b.stateNote, STATE_NOTE);
 	assert.equal(b.field.length, 7);
@@ -223,18 +223,58 @@ test('check_gifts: 능력이 전부 무조건인 기프트 표본은 on', { skip
 	assert.ok(b.gifts.every((g: Body) => g.state === 'on'), JSON.stringify(b.gifts.map((g: Body) => [g.id, g.state])));
 });
 
-test('check_gifts: 판정 행이 없는 기프트는 possible + no-judgement-data', { skip }, async () => {
+test('check_gifts: 판정 행이 없는 기프트는 possible + no-judgement-data', { skip }, async (t) => {
 	const data = await engineData();
 	const row = await canonical.gift.findFirst({
 		where: { id: { notIn: [...data.abilities.keys()] }, domain: 'mirror_dungeon' },
 		select: { id: true },
 		orderBy: { id: 'asc' },
 	});
-	if (!row) return; // 모든 기프트에 판정이 있으면 확인할 대상이 없다
+	if (!row) return t.skip('판정 행이 없는 거울 던전 기프트가 없다 — 확인할 대상 없음');
 	const b = await call('check_gifts', { identityIds: [10101], giftIds: [Number(row.id)] });
 	assert.equal(b.gifts[0].state, 'possible');
 	assert.equal(b.gifts[0].reason, 'no-judgement-data');
 	assert.equal(b.gifts[0].grade, null);
+});
+
+test('하향: 10110 단독의 9041 SINKING(스킬) 미충족은 off 가 아니라 possible + skill-supply-incomplete', { skip }, async () => {
+	const b = await call('check_gifts', { identityIds: [10110], giftIds: [9041], detail: 'full' });
+	const g = b.gifts[0];
+	assert.notEqual(g.state, 'off');
+	assert.equal(g.abilities[0].state, 'possible');
+	assert.equal(g.abilities[0].reason, 'skill-supply-incomplete');
+	assert.equal(g.abilities[0].reasons[0].have, 0, '엔진 have 는 그대로 싣는다');
+	assert.match(b.stateNote, /코인 토큰 기준/);
+});
+
+test('하향: 10110 + E.G.O 20109 의 9112 VIBRATION 미충족은 possible + ego-not-judged, E.G.O 없으면 off', { skip }, async () => {
+	const withEgo = await call('check_gifts', { identityIds: [10110], egoIds: [20109], giftIds: [9112] });
+	assert.equal(withEgo.gifts[0].state, 'possible');
+	assert.equal(withEgo.gifts[0].reason, 'ego-not-judged');
+	assert.equal(withEgo.gifts[0].abilities[0].reason, 'ego-not-judged');
+	const without = await call('check_gifts', { identityIds: [10110], giftIds: [9112] });
+	assert.equal(without.gifts[0].state, 'off');
+	const a = await call('analyze_deck', { identityIds: [10110], egoIds: [20109] });
+	const vib = a.supply.find((s: Body) => s.refKind === 'axis' && s.refId === 'VIBRATION');
+	assert.equal(vib.gated.skill.field, 1, 'gated.skill 에 E.G.O 몫');
+});
+
+test('check_gifts brief: 50개 < 20KB, on 능력은 근거 생략 · 나머지는 충족 안 된 근거만', { skip }, async () => {
+	const ids = (await canonical.gift.findMany({ where: { domain: 'mirror_dungeon' }, select: { id: true }, take: 50, orderBy: { id: 'asc' } })).map((g) => Number(g.id));
+	const r = await c.callTool({ name: 'check_gifts', arguments: { deckCode: CODE_24, giftIds: ids } });
+	assert.notEqual(r.isError, true);
+	const size = JSON.stringify(r.structuredContent).length;
+	assert.ok(size < 20_000, `brief structuredContent ${size}B`);
+	const full = await call('check_gifts', { deckCode: CODE_24, giftIds: ids, detail: 'full' });
+	const brief = r.structuredContent as Body;
+	brief.gifts.forEach((g: Body, i: number) => {
+		assert.equal(g.state, full.gifts[i].state, '상태는 detail 과 무관');
+		for (const a of g.abilities) {
+			if (a.state === 'on') assert.equal(a.reasons.length, 0);
+			assert.ok(a.reasons.every((x: Body) => x.verdict !== 'satisfied'));
+		}
+	});
+	assert.ok(SKILL_SUPPLY_NOTE.length > 0);
 });
 
 test('check_gifts: 없는 기프트 id · 스토리 던전 기프트는 isError', { skip }, async () => {

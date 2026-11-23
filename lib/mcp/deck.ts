@@ -4,6 +4,7 @@ import { DEPLOY_MAX, EGO_RANKS, SINNER_COUNT } from '@/lib/storage/schema';
 import { deckFromCode } from '@/lib/deck-code/codec';
 import { sinnerOf, indexOf } from '@/lib/deck-code/layout';
 import type { Squad } from '@/lib/engine/v2/types';
+import { idArg, toId } from './args';
 
 /**
  * MCP 엔진 도구들이 공유하는 덱 입력과 그 해석.
@@ -53,9 +54,9 @@ export const DECK_CODE_MAX = 512;
  * 「deckCode 와 identityIds 중 정확히 하나」는 shape 로 표현하지 않는다 — refine 을 단 객체는
  * 펼칠 수 없다. 그 검사는 `resolveDeck` 이 하고, 어기면 `err` 로 돌려준다.
  */
-/** 숫자 id. 숫자나 숫자 문자열('10101') 둘 다 받는다 — 응답에서 id 는 늘 number 로 나간다 */
-const idInput = z.union([z.number().int(), z.string().regex(/^\d+$/)]);
-const toIds = (xs: Array<number | string> | undefined): number[] | undefined => xs?.map(Number);
+/** 숫자 id 는 공용 `idArg`(숫자 또는 숫자 문자열) — 응답에서 id 는 늘 number 로 나간다 */
+const idInput = idArg;
+const toIds = (xs: Array<number | string> | undefined): number[] | undefined => xs?.map(toId);
 
 export const deckInputShape = {
 	deckCode: z.string().min(1).max(DECK_CODE_MAX).optional()
