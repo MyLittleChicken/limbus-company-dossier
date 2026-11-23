@@ -184,14 +184,40 @@ export async function recommendForDeck(
  */
 export async function recommendForSquad(
 	locale: Locale,
-	input: { squad: Squad; floor: number; difficulty: $Enums.Difficulty; heldGiftIds: string[] },
+	input: SquadRecommendInput,
 ): Promise<Recommendation> {
+	return (await recommendForSquadDetailed(locale, input)).recommendation;
+}
+
+export interface SquadRecommendInput {
+	squad: Squad;
+	floor: number;
+	difficulty: $Enums.Difficulty;
+	heldGiftIds: string[];
+	/** 캐시한 엔진 데이터. 주면 다시 읽지 않는다 */
+	data?: EngineData;
+}
+
+/**
+ * `recommendForSquad` 와 같은 셈에 판정 묶음을 함께 돌려준다.
+ *
+ * MCP `score_packs` 가 상위 기프트의 켜짐을 내려고 판정을 **한 번 더 돌지 않게** 하는
+ * 자리다 — 같은 판정을 두 번 세면 한쪽만 고쳐질 때 조용히 갈린다.
+ */
+export async function recommendForSquadDetailed(
+	locale: Locale,
+	input: SquadRecommendInput,
+): Promise<{
+	recommendation: Recommendation;
+	verdicts: Map<string, GiftVerdict>;
+	chainDepth: Map<string, number>;
+}> {
 	const { squad, floor, difficulty } = input;
 	const field = squad.field;
 	// id 는 문자열로 받는다 — 엔진 표기와 같다. 숫자로 되돌려 세지 않는다
 	const identityIds = squad.roster.map((s) => s.identityId);
 
-	const data = await loadEngineData(canonical);
+	const data = input.data ?? (await loadEngineData(canonical));
 
 	// gift_held 게이트를 판정하려면 보유 기프트가 필요하다. chain() 에 넘기는
 	// 것과 같은 값이다 — 둘이 갈리면 「켜진다」가 두 가지 답을 낸다
@@ -363,7 +389,7 @@ export async function recommendForSquad(
 		orderBy: { id: 'asc' },
 	});
 
-	return {
+	const recommendation: Recommendation = {
 		deck: identities.map((i) => ({
 			id: Number(i.id),
 			name: identityName(i.texts),
@@ -381,4 +407,5 @@ export async function recommendForSquad(
 		supply: supplyRows,
 		rankable: axisSupply.max > 0,
 	};
+	return { recommendation, verdicts: byGift, chainDepth: depthByGift };
 }
