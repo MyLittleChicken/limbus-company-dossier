@@ -19,7 +19,7 @@ Unofficial fan-made site; not affiliated with or endorsed by Project Moon. 데�
 - 응답에 이미지는 없다. 사용자에게 보여 줄 링크는 siteUrl 을 쓴다.
 - locale: 'ko' | 'en' (기본 ko). fellBack: true 면 다른 로케일 문구로 대신한 것이다.
 - 축은 두 층이다: tag(인격 취급) · skill(스킬 취급). 섞지 않는다.
-- 기프트 판정(check_gifts)은 강화 0단계 절만 본다 (enhancement stage 0 only). 켜짐은 on · possible · off 세 값이다.
+- 기프트 판정(check_gifts)은 강화 0단계 절만 본다 (enhancement stage 0 only). 켜짐은 on · partial · possible · off 네 값이다 (partial = 일부 능력만 켜짐). on 은 편성(진입 시점) 조건 확정 충족이며 전투 중 발동 조건은 범위 밖이다.
 - 팩 점수(score_packs)는 참고값이다 (provisional) — 저울추가 사람 검토 전이다. 사실처럼 단정하지 말 것.
 - 출격 규칙 / deploy rule: 편성 순서 1..7 이 출격(sortie), 8..12 가 대기. identityIds 는 목록 차례가 편성 순서다. deployedIds 를 주면 그것이 우선한다.`;
 

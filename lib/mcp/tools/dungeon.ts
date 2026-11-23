@@ -142,7 +142,7 @@ const curseBlessing = cacheReference(listCurseBlessingGiftIds, 60_000);
 const CURSE_NOTE =
 	'저주로 얻고 조건을 채우면 축복으로 바뀌는 기프트 무리다. 저주 쪽은 설명문(「기프트가 변경」)으로 가린 확정이다(거울 던전만). ' +
 	'축복 쪽과 짝(pairGuess)은 「저주 id + 1 이면서 3 등급 · 키워드 없음」 규칙으로 가린 추정(inferred)이다 — ' +
-	'게임 데이터에 둘을 잇는 값은 없다 (pair inferred from id + 1, not in data).';
+	'게임 데이터에 둘을 id 로 잇는 값은 없다 — 설명문에 짝 이름이 적힌 경우는 있다 (pair inferred from id + 1; no id link in data, though some descriptions name the pair).';
 
 // ── 층 ───────────────────────────────────────────────────────────
 
