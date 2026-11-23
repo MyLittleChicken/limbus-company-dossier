@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { getBuildInfo } from '@/lib/queries/canonical/reference';
+import { READ_ONLY } from '../args';
+import { defineTool } from '../define-tool';
 import { envelopeShape, ok } from '../envelope';
 
 export const DATA_SOURCE = '게임 클라이언트 데이터 — 저작권 Project Moon (Limbus Company). Game client data © Project Moon.';
@@ -9,7 +11,8 @@ export const FAN_NOTICE =
 	'Unofficial fan-made site, not affiliated with or endorsed by Project Moon.';
 
 export function registerMetaTools(server: McpServer): void {
-	server.registerTool(
+	defineTool(
+		server,
 		'get_build_info',
 		{
 			title: '데이터 기준 · 출처',
@@ -28,9 +31,9 @@ export function registerMetaTools(server: McpServer): void {
 				source: z.string(),
 				notice: z.string(),
 			}),
-			annotations: { readOnlyHint: true, openWorldHint: false },
+			annotations: READ_ONLY,
 		},
-		async () => {
+		async (_args, ctx) => {
 			const info = await getBuildInfo();
 			const data = {
 				snapshotVersion: info?.snapshotVersion ?? null,
@@ -46,7 +49,7 @@ export function registerMetaTools(server: McpServer): void {
 			const summary = info
 				? `데이터 기준 ${info.snapshotId} (v${info.snapshotVersion}${info.gameAnchor ? ` · ${info.gameAnchor}` : ''}). ${DATA_SOURCE}`
 				: `적재된 스냅샷이 없다. ${DATA_SOURCE}`;
-			return ok(data, summary);
+			return ok(data, summary, ctx);
 		},
 	);
 }

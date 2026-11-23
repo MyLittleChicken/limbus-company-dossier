@@ -2,7 +2,12 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { canonical } from '../db-canonical';
 import { canonicalReachable, NO_DB } from '../../src/v2/canonical/db-available';
+import { execFile } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { connectInMemory } from './test-client';
+import { INTERNAL_ERROR } from './define-tool';
 
 const reachable = await canonicalReachable(canonical);
 after(async () => { await canonical.$disconnect(); });
@@ -41,4 +46,30 @@ test('instructions 는 snapshotId 를 성공 응답에만 있다고 하고 dataV
 	assert.match(text, /dataVersion/);
 	assert.doesNotMatch(text, /모든 응답에 snapshotId/);
 	await client.close();
+});
+
+const HERE = import.meta.dirname;
+
+test('tools/*.ts 는 registerTool 을 직접 부르지 않는다 — 모두 defineTool 을 거친다 (오류 원문 차단)', () => {
+	const dir = join(HERE, 'tools');
+	const files = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+	assert.ok(files.length >= 4, '도구 파일을 찾았다');
+	const offenders = files.filter((f) => /registerTool\s*\(/.test(readFileSync(join(dir, f), 'utf8')));
+	assert.deepEqual(offenders, []);
+});
+
+test('DB 장애 때 모든 도구가 INTERNAL_ERROR 만 주고 경로 · prisma · DB 주소를 흘리지 않는다', { timeout: 120_000 }, async () => {
+	const { stdout } = await promisify(execFile)(
+		process.execPath,
+		['--import', 'tsx', join(HERE, 'no-db-probe.ts')],
+		{ env: { ...process.env, DATABASE_URL: 'postgresql://probe:probe@127.0.0.1:1/none' }, timeout: 110_000, maxBuffer: 8 << 20 },
+	);
+	const results = JSON.parse(stdout.trim().split('\n').at(-1)!) as Array<{ name: string; isError: boolean; text: string; probed: boolean }>;
+	assert.equal(results.length, 18, `도구 18개 — ${results.map((r) => r.name).join(', ')}`);
+	assert.deepEqual(results.filter((r) => !r.probed).map((r) => r.name), [], '모든 도구에 시험 인자가 있다');
+	for (const r of results) {
+		assert.equal(r.isError, true, `${r.name} 는 isError`);
+		assert.equal(r.text, INTERNAL_ERROR, `${r.name} 는 내부 오류 문구만: ${r.text.slice(0, 200)}`);
+		assert.doesNotMatch(r.text, /\/Users\/|prisma|database server|127\.0\.0\.1|postgres/i, r.name);
+	}
 });
