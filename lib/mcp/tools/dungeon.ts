@@ -1,20 +1,35 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as z from 'zod';
+import { canonical } from '@/lib/db-canonical';
 import { cacheReference } from '@/lib/query-cache';
-import type { Locale } from '@/lib/locale';
 import type { Named } from '@/lib/queries/shared';
 import {
 	GIFT_TIERS,
+	NO_KEYWORD,
 	getGift,
 	listCurseBlessingGiftIds,
 	listGiftsUnpaged,
+	listKeywords,
 	type GiftFilter,
 } from '@/lib/queries/canonical/gifts';
 import { listPacks } from '@/lib/queries/canonical/packs';
 import { getPack } from '@/lib/queries/canonical/detail';
-import { getDungeon, listFloorPacks, listStatuses } from '@/lib/queries/canonical/reference';
-import { currentSnapshotId, envelopeShape, fail, ok } from '../envelope';
+import { floorBounds } from '@/lib/queries/canonical/floor-range';
+import { getDungeon, listFloorPacks, listStatusesUnpaged } from '@/lib/queries/canonical/reference';
+import {
+	READ_ONLY,
+	cleanText,
+	cursorArg,
+	idArg,
+	localeArg,
+	packIdArg,
+	pageShape,
+	queryArg,
+	toId,
+	toPackId,
+} from '../args';
+import { defineTool, ToolInputError, type ToolCtx } from '../define-tool';
+import { envelopeShape, fail, ok } from '../envelope';
 import { paginate } from '../page';
 import { siteUrl } from '../site-url';
 
@@ -25,75 +40,116 @@ import { siteUrl } from '../site-url';
  *   - 출력은 **명시 매핑**이다 — 아이콘 · 스프라이트 · 아트는 처음부터 옮기지 않는다. 링크는 `siteUrl`.
  *   - `{ text: { name, fellBack } }` 를 `{ name, fellBack }` 로 편다 — 목록 행을 짧게.
  *   - id 형식: 기프트 id 는 number, 팩 id 는 string. 입력은 number · 숫자 문자열 둘 다 받는다.
- *   - 목록은 커서 페이지(`paginate`). 커서 범위(scope)에 스냅샷 id 를 넣어 데이터가 바뀌면
- *     이전 커서를 거절한다. 세부는 `get_*` 가 준다.
+ *   - 목록은 커서 페이지(`paginate`). 커서 범위(scope)에 `ctx.dataVersion` 을 넣어 데이터가
+ *     바뀌면 이전 커서를 거절한다. 세부는 `get_*` 가 준다.
  *   - 중첩 참조(팩 안의 기프트, 기프트 안의 팩)에는 siteUrl 을 일부러 안 단다 — id 로 get_* 를 부르면 있다.
  */
 
 // ── 공통 ─────────────────────────────────────────────────────────
-
-const LOCALE = z.enum(['ko', 'en']).default('ko').describe("응답 문구 로케일 'ko' | 'en' (기본 ko)");
-const CURSOR = z
-	.string()
-	.optional()
-	.describe('직전 응답의 nextCursor 를 그대로 넘긴다 (pagination). 필터를 바꾸면 cursor 없이 처음부터');
-
-const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
 
 const NESTED_NOTE = '중첩된 기프트 · 팩 참조에는 siteUrl 이 없다 — 그 id 로 get_gift · get_pack 을 부르면 siteUrl 이 있다.';
 
 /** 이름이 어느 로케일에도 없으면 `name: null` — 문자열을 지어내지 않는다. */
 const flat = (t: Named | null | undefined) => ({ name: t?.name ?? null, fellBack: t?.fellBack ?? false });
 
-/** 키워드 — id 와 이름을 함께, 이름의 fellBack 을 잃지 않게. id 가 없으면 null. */
-const keywordOf = (id: string | null, t: Named | null | undefined) => (id === null ? null : { id, ...flat(t) });
+/** 커서 범위 — 도구 이름 + 정규화된 필터 + 데이터 판. 판이 바뀌면 이전 커서는 「다른 질의」다. */
+const scopeOf = (tool: string, filters: Record<string, unknown>, ctx: ToolCtx) =>
+	JSON.stringify({ tool, ...filters, dataVersion: ctx.dataVersion });
 
-const NAME = {
-	name: z.string().nullable(),
-	fellBack: z.boolean().describe('요청 로케일 문구가 없어 영어로 대신했다'),
-};
-
-const KEYWORD = z
-	.object({
-		id: z.string().describe("키워드 id. 'None' = 키워드 없음(범용)"),
-		...NAME,
-	})
-	.nullable();
-
-const PAGE = {
-	total: z.number().describe('필터에 맞는 전체 행 수'),
-	nextCursor: z.string().nullable().describe('다음 페이지 커서. null 이면 마지막 페이지'),
-};
-
-/** 커서 오류(잘못된 · 다른 질의의 · 이전 스냅샷의 커서)를 `isError` 로 돌린다. */
-async function page<T>(rows: T[], cursor: string | undefined, scope: Record<string, unknown>) {
-	const snapshotId = await currentSnapshotId();
-	try {
-		return { page: paginate(rows, cursor, JSON.stringify({ ...scope, snapshotId })) } as const;
-	} catch (e) {
-		return { error: fail(e instanceof Error ? e.message : String(e)) } as const;
-	}
-}
-
-/** 기프트 id 입력 — number 또는 숫자 문자열. */
-const GIFT_ID = z.union([z.number().int(), z.string().regex(/^\d+$/)]).describe('기프트 id (예 9001 또는 "9001")');
-/** 팩 id 입력 — 문자열 또는 정수. 안에서 문자열로 바꾼다. */
-const PACK_ID = z.union([z.string().min(1), z.number().int()]).describe("팩 id (예 '1101' 또는 1101)");
+const pageSummary = (what: string, total: number, shown: number, next: string | null) =>
+	`${what} ${total}개 중 ${shown}개${next ? ' — 다음 페이지는 nextCursor' : ''}.`;
 
 /** 강화 단계 표기 — 게임이 카드에 찍는 그대로. */
 const STAGE_LABEL: Record<number, string> = { 0: '0', 1: '+', 2: '++' };
 
-/** 층 구간 표기 `1` · `6-10` → 시작 · 끝 층. 그 밖의 형식이면 둘 다 null(지어내지 않는다). */
-export function floorBounds(range: string): { floorFrom: number | null; floorTo: number | null } {
-	const m = /^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(range);
-	if (!m) return { floorFrom: null, floorTo: null };
-	const from = Number(m[1]);
-	return { floorFrom: from, floorTo: m[2] === undefined ? from : Number(m[2]) };
+// ── 키워드 어휘 ───────────────────────────────────────────────────
+
+/**
+ * 공격 유형 키워드 → 엔진 축 표기. 엔진은 `attack_type:slash · pierce · blunt` 로 쓰고
+ * 기프트 키워드 id 는 `Slash · Penetrate · Hit` 이다(실측, v_identity_capability).
+ */
+const ATTACK_TYPE_AXIS: Readonly<Record<string, string>> = { Slash: 'slash', Penetrate: 'pierce', Hit: 'blunt' };
+
+/**
+ * 기프트 키워드 어휘 — 입력 정규화와 출력 `axisRef` 를 한 곳에서.
+ *
+ * 받는 표기(대소문자 무시): 키워드 id(`Combustion`) · 엔진 축 표기(`axis:COMBUSTION` ·
+ * `attack_type:slash`) · ko/en 이름(`화상` · `Burn`) · 접두어 뒤 이름(`axis:burn`) · `none`.
+ * 키워드 없음(`None` 행 · `범용` · `Keywordless`)은 `none` 으로 모은다 — `listGifts` 의 `none` 은
+ * `None` 행과 null 둘 다 본다.
+ */
+export const keywordVocab = cacheReference(async () => {
+	const [ko, en, axes] = await Promise.all([
+		listKeywords('ko'),
+		listKeywords('en'),
+		canonical.axis.findMany({ select: { id: true } }),
+	]);
+	const axisIds = new Set(axes.map((a) => a.id));
+	const enName = new Map(en.map((k) => [k.id, k.text?.name ?? null]));
+	const axisRefOf = (id: string): string | null => {
+		if (axisIds.has(id.toUpperCase())) return `axis:${id.toUpperCase()}`;
+		const attack = ATTACK_TYPE_AXIS[id];
+		return attack ? `attack_type:${attack}` : null;
+	};
+	const entries = ko.map((k) => ({
+		id: k.id,
+		axisRef: axisRefOf(k.id),
+		ko: k.text?.name ?? null,
+		en: enName.get(k.id) ?? null,
+	}));
+	const aliases = new Map<string, string>();
+	const add = (alias: string | null, target: string) => {
+		if (!alias) return;
+		const key = alias.trim().toLowerCase();
+		if (key && !aliases.has(key)) aliases.set(key, target);
+	};
+	add(NO_KEYWORD, NO_KEYWORD);
+	for (const e of entries) {
+		const target = e.id === 'None' ? NO_KEYWORD : e.id;
+		for (const alias of [e.id, e.axisRef, e.ko, e.en]) add(alias, target);
+	}
+	return {
+		entries,
+		axisRef: Object.fromEntries(entries.map((e) => [e.id, e.axisRef])) as Record<string, string | null>,
+		aliases,
+	};
+}, 60_000);
+
+type KeywordVocab = Awaited<ReturnType<typeof keywordVocab>>;
+
+/** 키워드 필터 값 하나 → `listGifts` 가 받는 값. 모르면 `ToolInputError` + 받는 값 목록. */
+export function normalizeGiftKeyword(raw: string, vocab: KeywordVocab): string {
+	const key = raw.trim().toLowerCase();
+	const hit = vocab.aliases.get(key) ?? (key.includes(':') ? vocab.aliases.get(key.slice(key.indexOf(':') + 1)) : undefined);
+	if (hit) return hit;
+	const accepted = vocab.entries
+		.filter((e) => e.id !== 'None')
+		.map((e) => `${e.id}(${[e.axisRef, e.ko, e.en].filter(Boolean).join(' · ')})`)
+		.join(', ');
+	throw new ToolInputError(
+		`모르는 키워드: '${raw}'. 받는 값 (대소문자 무관): ${accepted}, 그리고 'none'(키워드 없음 · 범용 · Keywordless).`,
+	);
 }
+
+/** 키워드 객체 — id · 이름(fellBack 포함) · 엔진 축 표기. id 가 없으면 null. */
+const keywordOf = (vocab: KeywordVocab) => (id: string | null, t: Named | null | undefined) =>
+	id === null ? null : { id, ...flat(t), axisRef: vocab.axisRef[id] ?? null };
+
+// ── 저주 · 축복 ──────────────────────────────────────────────────
+
+const curseBlessing = cacheReference(listCurseBlessingGiftIds, 60_000);
+
+const CURSE_NOTE =
+	'저주로 얻고 조건을 채우면 축복으로 바뀌는 기프트 무리다. 저주 쪽은 설명문(「기프트가 변경」)으로 가린 확정이다(거울 던전만). ' +
+	'축복 쪽과 짝(pairGuess)은 「저주 id + 1 이면서 3 등급 · 키워드 없음」 규칙으로 가린 추정(inferred)이다 — ' +
+	'게임 데이터에 둘을 잇는 값은 없다 (pair inferred from id + 1, not in data).';
+
+// ── 층 ───────────────────────────────────────────────────────────
 
 /**
  * floor 필터. 표기를 못 읽은 구간(floorFrom/To null)은 그 층을 포함하는지 알 수 없어 빼되,
  * 조용히 빼지 않고 그 수와 표기를 note 에 적는다. floor 가 없으면 아무것도 빼지 않는다.
+ * 읽는 규칙은 `floor-range.ts` 하나다(추천의 `rangeCovers` 와 같다).
  */
 export function filterByFloor<G extends { difficulty: string; range: string; floorFrom: number | null; floorTo: number | null }>(
 	groups: G[],
@@ -113,16 +169,23 @@ export function filterByFloor<G extends { difficulty: string; range: string; flo
 	};
 }
 
-/** 저주 · 축복 가름. 잘 안 바뀌므로 잠깐 캐시한다. */
-const curseBlessing = cacheReference(listCurseBlessingGiftIds, 60_000);
-
-/** 기프트 id → 키워드(id · 이름). get_pack 이 풀의 키워드 id 를 붙이는 데 쓴다. 필터 없는 전량만 캐시한다. */
-const giftKeywordIndex = cacheReference(async (locale: Locale) => {
-	const rows = await listGiftsUnpaged(locale, { tiers: [], keywords: [] });
-	return rows.map((g) => [g.id, keywordOf(g.keywordId, g.keyword)] as const);
-}, 60_000);
-
 // ── 출력 모양 ─────────────────────────────────────────────────────
+
+const NAME = {
+	name: z.string().nullable(),
+	fellBack: z.boolean().describe('요청 로케일 문구가 없어 영어로 대신했다'),
+};
+
+const KEYWORD = z
+	.object({
+		id: z.string().describe("키워드 id. 'None' = 키워드 없음(범용)"),
+		...NAME,
+		axisRef: z
+			.string()
+			.nullable()
+			.describe("엔진 축 표기 (analyze_deck · list_identities 의 keyword 와 같다, 예 'axis:COMBUSTION' · 'attack_type:slash'). 축이 아니면 null"),
+	})
+	.nullable();
 
 const GIFT_ROW = z.object({
 	id: z.number().describe('기프트 id → get_gift'),
@@ -141,7 +204,7 @@ const PACK_REF = z.object({ id: z.string().describe('팩 id → get_pack'), ...N
 const GIFT_REF = z.object({ id: z.number().describe('기프트 id → get_gift'), ...NAME });
 const PACK_GIFT = GIFT_REF.extend({
 	tier: z.string(),
-	keywordId: z.string().nullable().describe('키워드 id — 이름은 distribution.keyword 에'),
+	keywordId: z.string().nullable().describe('키워드 id — 이름 · axisRef 는 distribution.keyword 에'),
 });
 const FLOOR = z.object({
 	difficulty: z.string().describe("'normal' | 'hard'"),
@@ -174,46 +237,54 @@ const STATUS_ROW = z.object({
 
 export function registerDungeonTools(server: McpServer): void {
 	// ── list_gifts ──
-	server.registerTool(
+	defineTool(
+		server,
 		'list_gifts',
 		{
 			title: 'E.G.O 기프트 목록',
 			description:
 				'거울 던전(Mirror Dungeon) E.G.O 기프트(gift) 요약 목록 — 사이트 기프트 목록과 같은 범위. ' +
-				'행: id(number) · 이름 · 등급(tier) · 키워드(keyword {id, name}) · 강화 가능(enhanceable) · 하드 전용(hardOnly) · ' +
+				'행: id(number) · 이름 · 등급(tier) · 키워드(keyword {id, name, axisRef}) · 강화 가능(enhanceable) · 하드 전용(hardOnly) · ' +
 				'가격(mdCost) · 팩 수(packCount · exclusiveCount) · siteUrl. 50개씩 커서 페이지(nextCursor). ' +
 				'강화 단계별 효과 문구 · 등장 팩 · 합성 레시피는 get_gift(id) 로 본다. ' +
-				"필터: q(이름·설명 부분 일치), tiers(['1'..'5','EX']), keywords(키워드 id 예 'Combustion' · 'Laceration' · " +
-				"'Vibration' · 'Burst' · 'Sinking' · 'Breath' · 'Charge' · 'Slash' · 'Penetrate' · 'Hit' · 'Random', 'none' = 키워드 없음), " +
+				"필터: q(이름·설명 부분 일치), tiers(['1'..'5','EX']), keywords — 키워드 id('Combustion' · 'Laceration' · 'Vibration' · " +
+				"'Burst' · 'Sinking' · 'Breath' · 'Charge' · 'Slash' · 'Penetrate' · 'Hit' · 'Random'), 엔진 축 표기('axis:COMBUSTION' · " +
+				"'attack_type:slash'), ko/en 이름('화상' · 'Burn') 모두 받는다(대소문자 무관). 'none' = 키워드 없음. 모르는 값은 isError + 받는 값 목록. " +
 				"enhanceable, hardOnly, pool('exclusive' 전용 팩 기프트 | 'general' 범용).",
 			inputSchema: {
-				locale: LOCALE,
-				q: z.string().optional().describe('이름 · 설명 부분 일치 (대소문자 무시)'),
-				tiers: z.array(z.enum(GIFT_TIERS)).optional().describe("등급 '1'~'5' · 'EX' (여럿이면 OR)"),
-				keywords: z.array(z.string()).optional().describe("키워드 id (여럿이면 OR). 'none' = 키워드 없음"),
+				locale: localeArg,
+				q: queryArg.optional().describe('이름 · 설명 부분 일치 (대소문자 무시)'),
+				tiers: z.array(z.enum(GIFT_TIERS)).max(20).optional().describe("등급 '1'~'5' · 'EX' (여럿이면 OR)"),
+				keywords: z
+					.array(z.string().max(64))
+					.max(20)
+					.optional()
+					.describe("키워드 (여럿이면 OR) — id · axisRef · ko/en 이름. 'none' = 키워드 없음"),
 				enhanceable: z.boolean().optional(),
 				hardOnly: z.boolean().optional(),
 				pool: z.enum(['exclusive', 'general']).optional(),
-				cursor: CURSOR,
+				cursor: cursorArg,
 			},
-			outputSchema: envelopeShape({ ...PAGE, items: z.array(GIFT_ROW) }),
+			outputSchema: envelopeShape(pageShape(GIFT_ROW)),
 			annotations: READ_ONLY,
 		},
-		async ({ locale, q, tiers, keywords, enhanceable, hardOnly, pool, cursor }): Promise<CallToolResult> => {
+		async ({ locale, q, tiers, keywords, enhanceable, hardOnly, pool, cursor }, ctx) => {
+			const vocab = await keywordVocab();
 			const filter: Omit<GiftFilter, 'page'> = {
-				q: q?.trim() || undefined,
-				tiers: tiers ?? [],
-				keywords: keywords ?? [],
+				q: cleanText(q),
+				tiers: [...new Set(tiers ?? [])].sort(),
+				keywords: [...new Set((keywords ?? []).map((k) => normalizeGiftKeyword(k, vocab)))].sort(),
 				enhanceable,
 				hardOnly,
 				pool,
 			};
+			const kw = keywordOf(vocab);
 			// 화면 질의(`listGifts`)와 같은 where · 정렬을 한 번에 읽는다.
 			const rows = (await listGiftsUnpaged(locale, filter)).map((g) => ({
 				id: g.id,
 				...flat(g.text),
 				tier: g.tier,
-				keyword: keywordOf(g.keywordId, g.keyword),
+				keyword: kw(g.keywordId, g.keyword),
 				enhanceable: g.enhanceable,
 				hardOnly: g.hardOnly,
 				mdCost: g.mdCost,
@@ -221,18 +292,14 @@ export function registerDungeonTools(server: McpServer): void {
 				exclusiveCount: g.exclusiveCount,
 				siteUrl: siteUrl(locale, 'gifts', g.id),
 			}));
-			const r = await page(rows, cursor, { tool: 'list_gifts', locale, ...filter });
-			if ('error' in r) return r.error;
-			const { items, nextCursor, total } = r.page;
-			return ok(
-				{ total, nextCursor, items },
-				`기프트 ${total}개 중 ${items.length}개${nextCursor ? ' — 다음 페이지는 nextCursor' : ''}.`,
-			);
+			const { items, nextCursor, total } = paginate(rows, cursor, scopeOf('list_gifts', { locale, ...filter }, ctx));
+			return ok({ items, total, nextCursor }, pageSummary('기프트', total, items.length, nextCursor), ctx);
 		},
 	);
 
 	// ── get_gift ──
-	server.registerTool(
+	defineTool(
+		server,
 		'get_gift',
 		{
 			title: 'E.G.O 기프트 상세',
@@ -240,9 +307,9 @@ export function registerDungeonTools(server: McpServer): void {
 				'E.G.O 기프트 하나의 상세. 강화 단계(stages: 0 · + · ++)별 이름과 효과 문구(desc), ' +
 				'전용 팩(exclusivePacks)과 기프트 풀에 든 팩(packs — 팩 id 는 get_pack 으로), ' +
 				'합성 레시피(recipes — 재료 기프트 id 는 get_gift 로)와 이 기프트를 재료로 쓰는 기프트(usedIn), ' +
-				'저주·축복(curse/blessing) 무리(curseBlessing), siteUrl. id 는 list_gifts · get_pack · search 에서 얻는다. ' +
+				'저주·축복(curse/blessing) 무리와 짝 추정(curseBlessing), siteUrl. id 는 list_gifts · get_pack · search 에서 얻는다. ' +
 				`${NESTED_NOTE} 없는 id 면 isError.`,
-			inputSchema: { id: GIFT_ID, locale: LOCALE },
+			inputSchema: { id: idArg.describe('기프트 id (예 9001 또는 "9001")'), locale: localeArg },
 			outputSchema: envelopeShape({
 				id: z.number(),
 				...NAME,
@@ -284,7 +351,10 @@ export function registerDungeonTools(server: McpServer): void {
 						inferred: z.boolean().describe('true = 이 기프트의 무리 소속이 추정이다 (축복 쪽)'),
 						curseIds: z.array(z.number()).describe('저주 기프트 — 설명문으로 가린 확정'),
 						blessingIds: z.array(z.number()).describe('축복 기프트 — 추정 (저주 id + 1 · 3 등급 · 키워드 없음)'),
-						pairKnown: z.literal(false),
+						pairGuess: z
+							.object({ curseId: z.number(), blessingId: z.number(), inferred: z.literal(true) })
+							.nullable()
+							.describe('이 기프트의 짝 추정 (저주 id + 1 규칙). 규칙에 맞는 짝이 없으면 null'),
 						note: z.string(),
 					})
 					.nullable()
@@ -293,19 +363,20 @@ export function registerDungeonTools(server: McpServer): void {
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ id, locale }): Promise<CallToolResult> => {
-			const gid = Number(id);
-			const [g, cb] = await Promise.all([getGift(gid, locale), curseBlessing()]);
-			if (!g) return fail(`없는 id: 기프트 ${id} — list_gifts 나 search 로 id 를 찾으세요`);
+		async ({ id, locale }, ctx) => {
+			const gid = toId(id);
+			const [g, cb, vocab] = await Promise.all([getGift(gid, locale), curseBlessing(), keywordVocab()]);
+			if (!g) return fail(`없는 id: 기프트 ${gid} — list_gifts 나 search 로 id 를 찾으세요`);
 			const ref = (x: { id: number; text: Named | null }) => ({ id: x.id, ...flat(x.text) });
 			const packRef = (x: { id: string; text: Named | null }) => ({ id: x.id, ...flat(x.text) });
 			const stage0 = g.stages.find((st) => st.level === 0) ?? g.stages[0];
 			const role = cb.curse.includes(g.id) ? 'curse' : cb.blessing.includes(g.id) ? 'blessing' : null;
+			const pair = cb.pairs.find((p) => p.curseId === g.id || p.blessingId === g.id);
 			const data = {
 				id: g.id,
 				...flat(stage0?.text),
 				tier: g.tier,
-				keyword: keywordOf(g.keywordId, g.keyword),
+				keyword: keywordOf(vocab)(g.keywordId, g.keyword),
 				enhanceable: g.enhanceable,
 				hardOnly: g.hardOnly,
 				mdCost: g.mdCost,
@@ -330,21 +401,19 @@ export function registerDungeonTools(server: McpServer): void {
 						inferred: role === 'blessing',
 						curseIds: cb.curse,
 						blessingIds: cb.blessing,
-						pairKnown: false as const,
-						note:
-							'저주로 얻고 조건을 채우면 축복으로 바뀌는 기프트 무리다. 저주 쪽은 설명문(「기프트가 변경」)으로 가린 확정이고, ' +
-							'축복 쪽은 저주 id + 1 이면서 3 등급 · 키워드 없음인 것으로 가린 추정(inferred)이다 — 둘을 잇는 값이 데이터에 없다. ' +
-							'어느 저주가 어느 축복이 되는지는 말하지 않는다 (pair not in data).',
+						pairGuess: pair ? { curseId: pair.curseId, blessingId: pair.blessingId, inferred: true as const } : null,
+						note: CURSE_NOTE,
 					},
 				siteUrl: siteUrl(locale, 'gifts', g.id),
 			};
 			const label = data.stages.map((st) => st.label).join('/');
-			return ok(data, `기프트 ${g.id} ${data.name ?? '(이름 없음)'} — 등급 ${g.tier}, 단계 ${label}, 팩 ${data.packs.length}곳.`);
+			return ok(data, `기프트 ${g.id} ${data.name ?? '(이름 없음)'} — 등급 ${g.tier}, 단계 ${label}, 팩 ${data.packs.length}곳.`, ctx);
 		},
 	);
 
 	// ── list_packs ──
-	server.registerTool(
+	defineTool(
+		server,
 		'list_packs',
 		{
 			title: '테마 팩 목록',
@@ -354,15 +423,15 @@ export function registerDungeonTools(server: McpServer): void {
 				'보스 수 · 등장 층(floors) · siteUrl. 50개씩 커서 페이지. 팩의 기프트 목록 · 보스는 get_pack(id). ' +
 				'층별로 어떤 팩이 나오는지는 list_floor_packs. q 는 팩 이름 검색 (한글 초성 검색 가능).',
 			inputSchema: {
-				locale: LOCALE,
-				q: z.string().optional().describe('팩 이름 검색 (ko · en 이름 모두, 한글 초성 가능)'),
-				cursor: CURSOR,
+				locale: localeArg,
+				q: queryArg.optional().describe('팩 이름 검색 (ko · en 이름 모두, 한글 초성 가능)'),
+				cursor: cursorArg,
 			},
-			outputSchema: envelopeShape({ ...PAGE, items: z.array(PACK_ROW) }),
+			outputSchema: envelopeShape(pageShape(PACK_ROW)),
 			annotations: READ_ONLY,
 		},
-		async ({ locale, q, cursor }): Promise<CallToolResult> => {
-			const query = q?.trim() || undefined;
+		async ({ locale, q, cursor }, ctx) => {
+			const query = cleanText(q);
 			const rows = (await listPacks(locale, { q: query })).map((p) => ({
 				id: p.id,
 				...flat(p.text),
@@ -377,27 +446,23 @@ export function registerDungeonTools(server: McpServer): void {
 				floors: p.floors.map((f) => ({ difficulty: f.difficulty, range: f.range })),
 				siteUrl: siteUrl(locale, 'packs', p.id),
 			}));
-			const r = await page(rows, cursor, { tool: 'list_packs', locale, q: query });
-			if ('error' in r) return r.error;
-			const { items, nextCursor, total } = r.page;
-			return ok(
-				{ total, nextCursor, items },
-				`팩 ${total}개 중 ${items.length}개${nextCursor ? ' — 다음 페이지는 nextCursor' : ''}.`,
-			);
+			const { items, nextCursor, total } = paginate(rows, cursor, scopeOf('list_packs', { locale, q: query }, ctx));
+			return ok({ items, total, nextCursor }, pageSummary('팩', total, items.length, nextCursor), ctx);
 		},
 	);
 
 	// ── get_pack ──
-	server.registerTool(
+	defineTool(
+		server,
 		'get_pack',
 		{
 			title: '테마 팩 상세',
 			description:
 				'테마 팩 하나의 상세. 등장 층 · 난이도(floors), 보스 조우(bosses — 적 이름 · 수), ' +
 				'전용 기프트(exclusiveGifts)와 기프트 풀(gifts — 전부, 최소 필드 {id, name, tier, keywordId}; 각 id 는 get_gift 로), ' +
-				'풀 크기(giftCount · exclusiveGiftCount), 풀의 등급 · 키워드 분포(distribution — 키워드 id ↔ 이름 사전 겸), siteUrl. ' +
+				'풀 크기(giftCount · exclusiveGiftCount), 풀의 등급 · 키워드 분포(distribution — 키워드 id ↔ 이름 · axisRef 사전 겸), siteUrl. ' +
 				`id 는 list_packs · list_floor_packs · get_gift 에서 얻는다. ${NESTED_NOTE} 없는 id 면 isError.`,
-			inputSchema: { id: PACK_ID, locale: LOCALE },
+			inputSchema: { id: packIdArg.describe("팩 id (예 '1101' 또는 1101)"), locale: localeArg },
 			outputSchema: envelopeShape({
 				id: z.string(),
 				...NAME,
@@ -435,36 +500,28 @@ export function registerDungeonTools(server: McpServer): void {
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ id, locale }): Promise<CallToolResult> => {
-			const packId = String(id);
-			const [p, index] = await Promise.all([getPack(packId, locale), giftKeywordIndex(locale)]);
-			if (!p) return fail(`없는 id: 팩 ${id} — list_packs 나 search 로 id 를 찾으세요`);
-			const keywordByGift = new Map(index);
-			const gift = (g: (typeof p.gifts)[number]) => ({
-				id: g.id,
-				...flat(g.text),
-				tier: g.tier,
-				keywordId: keywordByGift.get(g.id)?.id ?? null,
-			});
-			const gifts = p.gifts.map(gift);
+		async ({ id, locale }, ctx) => {
+			const packId = toPackId(id);
+			const [p, vocab] = await Promise.all([getPack(packId, locale), keywordVocab()]);
+			if (!p) return fail(`없는 id: 팩 ${packId} — list_packs 나 search 로 id 를 찾으세요`);
+			const kw = keywordOf(vocab);
+			type Row = (typeof p.gifts)[number];
+			const gift = (g: Row) => ({ id: g.id, ...flat(g.text), tier: g.tier, keywordId: g.keywordId });
 
-			// 분포 — 질의의 tally 와 같은 순서(많은 순, 같으면 처음 나온 차례)로 센다. 키워드는 id 로 묶는다.
-			const tally = <K>(keyOf: (g: (typeof gifts)[number]) => K) => {
-				const counts = new Map<K, { count: number; first: number }>();
-				for (const g of gifts) {
+			// 분포 — 질의의 tally 와 같은 순서(많은 순, 같으면 처음 나온 차례). 키워드는 id 로 묶는다.
+			const tally = <K>(keyOf: (g: Row) => K) => {
+				const counts = new Map<K, { count: number; first: Row }>();
+				for (const g of p.gifts) {
 					const k = keyOf(g);
 					const e = counts.get(k);
 					if (e) e.count += 1;
-					else counts.set(k, { count: 1, first: g.id });
+					else counts.set(k, { count: 1, first: g });
 				}
 				return [...counts.entries()].sort((a, b) => b[1].count - a[1].count);
 			};
 			const distribution = {
 				tier: tally((g) => g.tier).map(([tier, e]) => ({ tier, count: e.count })),
-				keyword: tally((g) => g.keywordId).map(([kid, e]) => ({
-					keyword: kid === null ? null : (keywordByGift.get(e.first) ?? null),
-					count: e.count,
-				})),
+				keyword: tally((g) => g.keywordId).map(([, e]) => ({ keyword: kw(e.first.keywordId, e.first.keyword), count: e.count })),
 			};
 
 			const data = {
@@ -486,10 +543,10 @@ export function registerDungeonTools(server: McpServer): void {
 						count: t.count,
 					})),
 				})),
-				giftCount: gifts.length,
+				giftCount: p.gifts.length,
 				exclusiveGiftCount: p.exclusiveGifts.length,
 				exclusiveGifts: p.exclusiveGifts.map(gift),
-				gifts,
+				gifts: p.gifts.map(gift),
 				distribution,
 				siteUrl: siteUrl(locale, 'packs', p.id),
 			};
@@ -497,12 +554,14 @@ export function registerDungeonTools(server: McpServer): void {
 			return ok(
 				data,
 				`팩 ${p.id} ${data.name ?? '(이름 없음)'} — 기프트 풀 ${data.giftCount} (전용 ${data.exclusiveGiftCount}), 등장 층 ${floors}.`,
+				ctx,
 			);
 		},
 	);
 
 	// ── list_floor_packs ──
-	server.registerTool(
+	defineTool(
+		server,
 		'list_floor_packs',
 		{
 			title: '층별 등장 팩',
@@ -512,7 +571,7 @@ export function registerDungeonTools(server: McpServer): void {
 				'구간 표기를 못 읽으면 floorFrom/floorTo 가 null 이고, floor 필터에서 빠진 수를 note 에 적는다. ' +
 				'팩 id(string) 는 get_pack 으로 상세(기프트 풀 · 보스 · siteUrl)를 본다. 페이지 없음 (전체 구간이 한 번에).',
 			inputSchema: {
-				locale: LOCALE,
+				locale: localeArg,
 				floor: z.number().int().min(1).max(15).optional().describe('층 번호 1–15'),
 				difficulty: z.enum(['normal', 'hard']).optional(),
 			},
@@ -530,7 +589,7 @@ export function registerDungeonTools(server: McpServer): void {
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ locale, floor, difficulty }): Promise<CallToolResult> => {
+		async ({ locale, floor, difficulty }, ctx) => {
 			const byDifficulty = (await listFloorPacks(locale))
 				.map((g) => ({
 					difficulty: g.difficulty as string,
@@ -545,19 +604,21 @@ export function registerDungeonTools(server: McpServer): void {
 				{ groups, note },
 				`구간 ${groups.length}개 · 팩 ${packCount}건${floor ? ` (층 ${floor})` : ''}${difficulty ? ` [${difficulty}]` : ''}.` +
 					(note ? ` ${note}` : ''),
+				ctx,
 			);
 		},
 	);
 
 	// ── get_dungeon ──
-	server.registerTool(
+	defineTool(
+		server,
 		'get_dungeon',
 		{
 			title: '거울 던전 구성 · 은총',
 			description:
 				'현재 거울 던전(Mirror Dungeon) 판의 구성 — 판(version 예 MD7) · 이름 · 전체 층 수(totalFloors) · ' +
 				'기본 층 수(baseFloors, normal 의 층 수) · 은총(grace — 별빛 강화) 목록(비용 cost · 강화 단계별 효과 descs). 인자는 locale 뿐.',
-			inputSchema: { locale: LOCALE },
+			inputSchema: { locale: localeArg },
 			outputSchema: envelopeShape({
 				version: z.string(),
 				...NAME,
@@ -574,7 +635,7 @@ export function registerDungeonTools(server: McpServer): void {
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ locale }): Promise<CallToolResult> => {
+		async ({ locale }, ctx) => {
 			const d = await getDungeon(locale);
 			if (!d) return fail('거울 던전 데이터가 적재되어 있지 않다');
 			const data = {
@@ -584,12 +645,13 @@ export function registerDungeonTools(server: McpServer): void {
 				baseFloors: d.baseFloors,
 				graces: d.graces.map((g) => ({ id: g.id, cost: g.cost, name: g.name, fellBack: g.fellBack, descs: g.descs })),
 			};
-			return ok(data, `거울 던전 ${d.version} ${data.name ?? ''} — ${d.totalFloors}층, 은총 ${d.graces.length}종.`);
+			return ok(data, `거울 던전 ${d.version} ${data.name ?? ''} — ${d.totalFloors}층, 은총 ${d.graces.length}종.`, ctx);
 		},
 	);
 
 	// ── list_statuses ──
-	server.registerTool(
+	defineTool(
+		server,
 		'list_statuses',
 		{
 			title: '상태 · 키워드 설명',
@@ -598,35 +660,26 @@ export function registerDungeonTools(server: McpServer): void {
 				'진동 Tremor · 파열 Rupture · 침잠 Sinking · 호흡 Poise · 충전 Charge)의 뜻을 찾을 때. ' +
 				"q 는 이름 · 설명 검색(한글 초성 가능), buffTypes 는 'Positive' · 'Negative' · 'Neutral'. 50개씩 커서 페이지.",
 			inputSchema: {
-				locale: LOCALE,
-				q: z.string().optional().describe('이름 · 설명 검색'),
-				buffTypes: z.array(z.enum(['Positive', 'Negative', 'Neutral'])).optional(),
-				cursor: CURSOR,
+				locale: localeArg,
+				q: queryArg.optional().describe('이름 · 설명 검색'),
+				buffTypes: z.array(z.enum(['Positive', 'Negative', 'Neutral'])).max(20).optional(),
+				cursor: cursorArg,
 			},
-			outputSchema: envelopeShape({ ...PAGE, items: z.array(STATUS_ROW) }),
+			outputSchema: envelopeShape(pageShape(STATUS_ROW)),
 			annotations: READ_ONLY,
 		},
-		async ({ locale, q, buffTypes, cursor }): Promise<CallToolResult> => {
-			const filter = { q: q?.trim() || undefined, buffTypes: buffTypes ?? [] };
-			// 화면 질의(`listStatuses`)를 쪽마다 읽어 이어 붙인다. 원문은 질의 쪽이 캐시해 DB 를 다시 읽지 않는다.
-			const first = await listStatuses(locale, { ...filter, page: 1 });
-			const rest = await Promise.all(
-				Array.from({ length: first.pageCount - 1 }, (_, i) => listStatuses(locale, { ...filter, page: i + 2 })),
-			);
-			const rows = [first, ...rest].flatMap((r) => r.items).map((st) => ({
+		async ({ locale, q, buffTypes, cursor }, ctx) => {
+			const filter = { q: cleanText(q), buffTypes: [...new Set(buffTypes ?? [])].sort() };
+			// 화면 질의(`listStatuses`)와 같은 필터 · 차례를 쪽 없이 한 번에.
+			const rows = (await listStatusesUnpaged(locale, filter)).map((st) => ({
 				id: st.id,
 				buffType: st.buffType,
 				name: st.text?.name ?? null,
 				fellBack: st.text?.fellBack ?? false,
 				desc: st.text?.desc ?? null,
 			}));
-			const r = await page(rows, cursor, { tool: 'list_statuses', locale, ...filter });
-			if ('error' in r) return r.error;
-			const { items, nextCursor, total } = r.page;
-			return ok(
-				{ total, nextCursor, items },
-				`상태 ${total}개 중 ${items.length}개${nextCursor ? ' — 다음 페이지는 nextCursor' : ''}.`,
-			);
+			const { items, nextCursor, total } = paginate(rows, cursor, scopeOf('list_statuses', { locale, ...filter }, ctx));
+			return ok({ items, total, nextCursor }, pageSummary('상태', total, items.length, nextCursor), ctx);
 		},
 	);
 }

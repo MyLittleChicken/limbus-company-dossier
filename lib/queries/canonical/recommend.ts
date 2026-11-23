@@ -8,6 +8,7 @@ import { evaluateGifts } from '@/lib/engine/v2/evaluate';
 import { chain } from '@/lib/engine/v2/chain';
 import type { GiftVerdict, Squad } from '@/lib/engine/v2/types';
 import { localeRows, nameOf } from './locale';
+import { floorRangeCovers } from './floor-range';
 import { axisSupplyOf, fitOf, fusionOf, scorePack, type ScoreGift } from '@/lib/engine/v2/score';
 
 /**
@@ -36,13 +37,8 @@ export const HWAJIN_DECK = [10216, 11009, 11216, 10512, 10716, 10916, 11013];
  * 안 걸린다 — 양끝을 펴서 본다.
  */
 export function rangeCovers(range: string, floor: number): boolean {
-	const parts = range.split('-').map(Number);
-	const lo = parts[0];
-	if (lo === undefined || !Number.isFinite(lo)) return false;
-	const hi = parts.length > 1 && Number.isFinite(parts[1] as number)
-		? (parts[1] as number)
-		: lo;
-	return floor >= lo && floor <= hi;
+	// 읽는 규칙은 `floor-range.ts` 하나다 — MCP list_floor_packs 와 같은 표기를 같게 읽는다.
+	return floorRangeCovers(range, floor);
 }
 
 export interface GiftLine {

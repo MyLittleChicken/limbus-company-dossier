@@ -11,11 +11,12 @@ import {
 	type GiftFilter,
 } from '../../queries/canonical/gifts';
 import { listPacks } from '../../queries/canonical/packs';
-import { listStatuses } from '../../queries/canonical/reference';
+import { listStatuses, listStatusesUnpaged } from '../../queries/canonical/reference';
+import { floorBounds } from '../../queries/canonical/floor-range';
+import { rangeCovers } from '../../queries/canonical/recommend';
 import { connectInMemory } from '../test-client';
-import { currentSnapshotId } from '../envelope';
 import { encodeCursor } from '../page';
-import { filterByFloor, floorBounds } from './dungeon';
+import { filterByFloor } from './dungeon';
 
 const reachable = await canonicalReachable(canonical);
 const DB = { skip: reachable ? false : NO_DB };
@@ -122,13 +123,17 @@ test('list_gifts 필터는 화면 질의와 같은 수를 준다 · 다른 질�
 	assert.equal(junk.isError, true);
 });
 
-test('저주·축복 기프트는 무리를 준다 · 짝은 말하지 않는다', DB, async (t) => {
+/** 스냅샷에 그 기프트가 있는지 DB 로 먼저 본다 — 없을 때만 skip, 도구 isError 는 실패다. */
+const giftsExist = async (...ids: number[]) =>
+	(await canonical.gift.count({ where: { id: { in: ids.map(String) } } })) === ids.length;
+
+test('저주·축복 기프트는 무리를 준다', DB, async (t) => {
+	if (!(await giftsExist(9227))) { t.skip('9227 이 이 스냅샷에 없다'); return; }
 	const r = await call('get_gift', { id: 9227 });
-	if (r.isError) { t.skip('9227 이 이 스냅샷에 없다'); return; }
+	assert.notEqual(r.isError, true, textOf(r));
 	const g = sc(r);
 	assert.ok(g.curseBlessing);
 	assert.ok(g.curseBlessing.curseIds.includes(9227));
-	assert.equal(g.curseBlessing.pairKnown, false);
 	const normal = sc(await call('get_gift', { id: sc(await call('list_gifts', { pool: 'exclusive' })).items[0].id }));
 	assert.equal(normal.curseBlessing, null);
 });
@@ -225,28 +230,73 @@ test('listGiftsUnpaged 는 화면 listGifts 쪽들과 결과 집합 · 순서가
 	}
 });
 
-test('list_gifts 커서는 스냅샷 id 에 묶인다 — 다른 스냅샷의 커서는 isError', DB, async () => {
-	const snapshotId = await currentSnapshotId();
-	const scope = (snap: string | null) => JSON.stringify({ tool: 'list_gifts', locale: 'ko', tiers: [], keywords: [], snapshotId: snap });
-	const good = await call('list_gifts', { cursor: encodeCursor(50, scope(snapshotId)) });
+test('list_gifts 커서는 데이터 판(dataVersion)에 묶인다 — 다른 판의 커서는 isError', DB, async () => {
+	const { dataVersion } = sc(await call('list_gifts'));
+	assert.equal(typeof dataVersion, 'string');
+	const scope = (v: string) => JSON.stringify({ tool: 'list_gifts', locale: 'ko', tiers: [], keywords: [], dataVersion: v });
+	const good = await call('list_gifts', { cursor: encodeCursor(50, scope(dataVersion)) });
 	assert.notEqual(good.isError, true, textOf(good));
 	assert.equal(sc(good).items.length, 50);
-	const stale = await call('list_gifts', { cursor: encodeCursor(50, scope('1999-01-01')) });
+	const stale = await call('list_gifts', { cursor: encodeCursor(50, scope('1999-01-01.oldhash0')) });
 	assert.equal(stale.isError, true);
 	assert.match(textOf(stale), /다른 질의/);
 });
 
-test('keyword 는 { id, name, fellBack } 이다 (list_gifts · get_gift · get_pack 분포)', DB, async () => {
+test('keyword 는 { id, name, fellBack, axisRef } 이다 (list_gifts · get_gift)', DB, async () => {
 	const rows = sc(await call('list_gifts', { keywords: ['Combustion'] })).items;
 	assert.ok(rows.length > 0);
 	for (const g of rows) {
 		assert.equal(g.keyword.id, 'Combustion');
 		assert.equal(typeof g.keyword.name, 'string');
 		assert.equal(typeof g.keyword.fellBack, 'boolean');
+		assert.equal(g.keyword.axisRef, 'axis:COMBUSTION');
 	}
 	const g = sc(await call('get_gift', { id: rows[0].id, locale: 'en' }));
 	assert.equal(g.keyword.id, 'Combustion');
-	assert.equal(typeof g.keyword.fellBack, 'boolean');
+	assert.equal(g.keyword.name, 'Burn');
+	assert.equal(g.keyword.axisRef, 'axis:COMBUSTION');
+	const slash = sc(await call('list_gifts', { keywords: ['Slash'] })).items[0];
+	assert.equal(slash.keyword.axisRef, 'attack_type:slash');
+	const none = sc(await call('list_gifts', { keywords: ['none'] })).items[0];
+	assert.equal(none.keyword.axisRef, null);
+});
+
+test('list_gifts keywords: 대소문자 · axisRef · ko/en 이름을 같은 값으로 받는다', DB, async () => {
+	const total = async (k: string) => {
+		const r = await call('list_gifts', { keywords: [k] });
+		assert.notEqual(r.isError, true, `${k}: ${textOf(r)}`);
+		return sc(r).total;
+	};
+	const base = await total('Combustion');
+	assert.ok(base > 0);
+	for (const k of ['combustion', 'COMBUSTION', 'axis:COMBUSTION', 'axis:combustion', '화상', 'Burn', 'burn', 'axis:BURN', ' Combustion ']) {
+		assert.equal(await total(k), base, k);
+	}
+	assert.equal(await total('attack_type:pierce'), await total('Penetrate'));
+	assert.equal(await total('Pierce'), await total('Penetrate'));
+	assert.equal(await total('범용'), await total('none'));
+	assert.equal(await total('None'), await total('none'));
+	assert.equal(await total('Keywordless'), await total('none'));
+	// 같은 뜻의 다른 표기는 같은 커서 범위다
+	const first = sc(await call('list_gifts', { keywords: ['Combustion', 'none'] }));
+	if (first.nextCursor) {
+		const next = await call('list_gifts', { keywords: ['none', '화상'], cursor: first.nextCursor });
+		assert.notEqual(next.isError, true, textOf(next));
+	}
+});
+
+test('list_gifts keywords: 모르는 값은 isError + 받는 값 목록', DB, async () => {
+	for (const k of ['nope', 'sin:wrath', 'axis:BULLET_X']) {
+		const r = await call('list_gifts', { keywords: [k] });
+		assert.equal(r.isError, true, k);
+		assert.match(textOf(r), /모르는 키워드/);
+		assert.match(textOf(r), /Combustion\(axis:COMBUSTION · 화상 · Burn\)/);
+		assert.match(textOf(r), /'none'/);
+	}
+	const tooMany = await call('list_gifts', { keywords: Array.from({ length: 21 }, () => 'Combustion') });
+	assert.equal(tooMany.isError, true);
+	const badTier = await call('list_gifts', { tiers: ['6'] });
+	assert.equal(badTier.isError, true);
 });
 
 test('get_pack: 풀은 전부 · 최소 필드 · giftCount · 키워드 분포 합이 맞다', DB, async () => {
@@ -261,10 +311,14 @@ test('get_pack: 풀은 전부 · 최소 필드 · giftCount · 키워드 분포 
 	assert.equal(sum(p.distribution.keyword), p.giftCount);
 	assert.equal(sum(p.distribution.tier), p.giftCount);
 	const ids = new Set(p.gifts.map((g: { keywordId: string | null }) => g.keywordId));
+	assert.equal(p.distribution.keyword.length, ids.size);
 	for (const d of p.distribution.keyword) {
 		if (d.keyword) {
 			assert.ok(ids.has(d.keyword.id));
 			assert.equal(typeof d.keyword.fellBack, 'boolean');
+			assert.ok('axisRef' in d.keyword);
+			const n = p.gifts.filter((g: { keywordId: string | null }) => g.keywordId === d.keyword.id).length;
+			assert.equal(d.count, n);
 		}
 	}
 });
@@ -285,17 +339,21 @@ test('id 형식: 기프트 id 는 number · 팩 id 는 string 으로 나오고, 
 	assert.equal(bad.isError, true);
 });
 
-test('저주 · 축복: 저주는 확정, 축복은 inferred, 합은 listCursedGiftIds 와 같다', DB, async (t) => {
+test('저주 · 축복: 저주는 확정, 축복은 inferred, 짝은 id + 1 추정, 합은 listCursedGiftIds 와 같다', DB, async (t) => {
+	if (!(await giftsExist(9227, 9228))) { t.skip('9227 · 9228 이 이 스냅샷에 없다'); return; }
 	const curse = await call('get_gift', { id: 9227 });
 	const bless = await call('get_gift', { id: 9228 });
-	if (curse.isError || bless.isError) { t.skip('9227 · 9228 이 이 스냅샷에 없다'); return; }
+	assert.notEqual(curse.isError, true, textOf(curse));
+	assert.notEqual(bless.isError, true, textOf(bless));
 	const c1 = sc(curse).curseBlessing;
 	const b1 = sc(bless).curseBlessing;
 	assert.equal(c1.role, 'curse');
 	assert.equal(c1.inferred, false);
 	assert.equal(b1.role, 'blessing');
 	assert.equal(b1.inferred, true);
-	assert.match(b1.note, /추정/);
+	assert.match(b1.note, /id \+ 1/);
+	assert.deepEqual(c1.pairGuess, { curseId: 9227, blessingId: 9228, inferred: true });
+	assert.deepEqual(b1.pairGuess, { curseId: 9227, blessingId: 9228, inferred: true });
 	assert.deepEqual(new Set([...c1.curseIds, ...c1.blessingIds]), await listCursedGiftIds());
 });
 
@@ -313,4 +371,52 @@ test('filterByFloor: 못 읽은 구간은 floor 필터에서 빼고 note 에 수
 	assert.match(r.note ?? '', /2개/);
 	assert.match(r.note ?? '', /'B1'/);
 	assert.equal(filterByFloor(groups.slice(0, 1), 7).note, null);
+});
+
+test('floorBounds 와 추천 rangeCovers 는 비정상 표기까지 같은 결과다', () => {
+	const ranges = ['1', '5', '6-10', '11-15', ' 6 - 10 ', '1-', '-3', '', 'B1', '6~10', '1-5-7', 'boss', '10-6'];
+	for (const range of ranges) {
+		for (let floor = 0; floor <= 16; floor++) {
+			const viaBounds = filterByFloor([{ difficulty: 'hard', range, ...floorBounds(range) }], floor).groups.length === 1;
+			assert.equal(rangeCovers(range, floor), viaBounds, `'${range}' @ ${floor}`);
+		}
+	}
+	assert.deepEqual(floorBounds('1-'), { floorFrom: null, floorTo: null });
+	assert.equal(rangeCovers('1-', 1), false);
+});
+
+test('listStatusesUnpaged 는 화면 listStatuses 쪽들과 결과 집합 · 순서가 같다', DB, async () => {
+	const filters = [
+		{ buffTypes: [] as string[] },
+		{ buffTypes: ['Negative'] },
+		{ q: 'e', buffTypes: [] as string[] },
+		{ q: '화상', buffTypes: ['Negative', 'Positive'] },
+		{ q: 'ㅎㅅ', buffTypes: [] as string[] },
+	];
+	for (const f of filters) {
+		const first = await listStatuses('ko', { ...f, page: 1 });
+		const pages = [first];
+		for (let p = 2; p <= first.pageCount; p++) pages.push(await listStatuses('ko', { ...f, page: p }));
+		const unpaged = await listStatusesUnpaged('ko', f);
+		assert.equal(unpaged.length, first.total, JSON.stringify(f));
+		assert.deepEqual(unpaged, pages.flatMap((r) => r.items), JSON.stringify(f));
+	}
+});
+
+/*
+	목표는 20ms 다. 지금 약 25ms 이고 거의 전부가 질의층의 한글 매처다 — `createKoreanMatcher` 가
+	부를 때마다 상태 원문 ~6,000 개(ko · en 이름 · 설명)를 자모로 푼다. 쪽마다 다시 부르던
+	때(수백 ms)의 회귀만 막는다. 20ms 는 `lib/korean-search.ts` 가 미리 푼 키를 받게 되면 맞춘다.
+*/
+test('list_statuses q:"e" 는 데운 뒤 한 번 읽기 비용 안쪽이다 (50ms)', DB, async () => {
+	await call('list_statuses', { q: 'e' });
+	const runs: number[] = [];
+	for (let i = 0; i < 5; i++) {
+		const t0 = performance.now();
+		const r = await call('list_statuses', { q: 'e' });
+		runs.push(performance.now() - t0);
+		assert.notEqual(r.isError, true);
+	}
+	const median = runs.sort((a, b) => a - b)[2] ?? Infinity;
+	assert.ok(median < 50, `median ${median.toFixed(1)}ms`);
 });

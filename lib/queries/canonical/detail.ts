@@ -550,6 +550,8 @@ export async function getPack(id: string, locale: Locale) {
 	const shape = (row: Row) => ({
 		id: Number(row.giftId),
 		tier: tierOf(row.gift),
+		/** 키워드 id — 분포 · MCP 가 이름 대신 id 로 묶을 수 있게. 화면은 쓰지 않는다 */
+		keywordId: row.gift.keywordId,
 		keyword: row.gift.keyword ? nameOf(row.gift.keyword.texts, locale) : null,
 		icon: giftIcon(row.gift.sprite),
 		text: nameOf(row.gift.stages[0]?.texts ?? [], locale),

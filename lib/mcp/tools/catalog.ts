@@ -1,12 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { canonical } from '@/lib/db-canonical';
+import type { EngineData } from '@/lib/engine/v2/load';
+import { cacheReference } from '@/lib/query-cache';
 import { getEgo, getIdentity } from '@/lib/queries/canonical/detail';
 import { listKeywords, listSins } from '@/lib/queries/canonical/gifts';
 import { listAxisLabels, listEgosFull, listIdentitiesFull, listSinners } from '@/lib/queries/canonical/list';
 import { searchAll, type SearchHit } from '@/lib/queries/canonical/reference';
-import { axesOf, engineData, identityAxes } from '../axes';
-import { currentSnapshotId, envelopeShape, fail, ok } from '../envelope';
+import { READ_ONLY, cleanText, cursorArg, idArg, localeArg, pageShape, queryArg, toId } from '../args';
+import { axesOf, engineData, identityAxes, type IdentityAxes } from '../axes';
+import { ToolInputError, defineTool, type ToolCtx } from '../define-tool';
+import { envelopeShape, fail, ok } from '../envelope';
 import { paginate } from '../page';
 import { stripMedia } from '../shape';
 import { siteUrl, type SiteKind } from '../site-url';
@@ -20,37 +24,15 @@ import { siteUrl, type SiteKind } from '../site-url';
 
 // ── 공통 조각 ────────────────────────────────────────────────────
 
-const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
+/** 숫자 또는 숫자 문자열. 범위는 handler 가 본다(문구를 고칠 수 있게 쓰려고). */
+const intArg = z.union([z.number().int(), z.string().regex(/^-?\d{1,6}$/)]);
 
-const localeArg = z
-	.enum(['ko', 'en'])
-	.default('ko')
-	.describe("표시 로케일 'ko' | 'en' (기본 ko). 문구가 없으면 다른 로케일로 폴백하고 fellBack: true");
-
-const cursorArg = z
-	.string()
-	.optional()
-	.describe('직전 응답의 nextCursor 를 그대로. 필터를 바꾸면 cursor 없이 처음부터');
-
-/** 숫자 id. 목록은 문자열('10101'), 세부는 숫자로 나오므로 둘 다 받는다. */
-const idArg = (what: string) =>
-	z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).describe(what);
-
-/** 화면용 질의 결과 → 에이전트용. 이미지 · 아이콘 · 화면 링크 · 애셋 경로 값이 하나도 남지 않는다. */
-const shapeOut = <T>(value: T): Record<string, unknown> => stripMedia(value) as Record<string, unknown>;
-
-/** 빈 문자열 · 공백뿐인 필터는 없는 것으로 친다. */
-const present = (v: string | undefined): string | undefined => {
-	const t = v?.trim();
-	return t ? t : undefined;
-};
-
-/**
- * 커서 범위. 정규화된 필터 값 + 스냅샷 id — 같은 뜻의 다른 표기는 같은 범위이고,
- * 스냅샷이 바뀌면 이전 커서는 「다른 질의」로 거절된다(행 차례가 바뀌었을 수 있다).
- */
-const scopeOf = async (filters: Record<string, unknown>) =>
-	JSON.stringify({ snapshotId: await currentSnapshotId(), ...filters });
+function intIn(name: string, v: number | string | undefined, min: number, max: number): number | undefined {
+	if (v === undefined) return undefined;
+	const n = Number(v);
+	if (n < min || n > max) throw new ToolInputError(`${name} 는 ${min}–${max}: ${v}`);
+	return n;
+}
 
 const named = z
 	.looseObject({ name: z.string(), fellBack: z.boolean() })
@@ -61,13 +43,14 @@ const described = z
 	.looseObject({ name: z.string(), desc: z.string().nullable(), fellBack: z.boolean() })
 	.nullable();
 
-const pageShape = {
-	total: z.number().describe('필터에 걸린 전체 수'),
-	nextCursor: z.string().nullable().describe('다음 페이지 커서. null 이면 끝'),
-};
-
 const pageSummary = (what: string, total: number, shown: number, next: string | null) =>
 	`${what} ${total}건 중 ${shown}건${next ? ' — 더 있다(nextCursor)' : ''}.`;
+
+/** 커서 범위 — 정규화된 필터 값 + 데이터 판. 판이 바뀌면 이전 커서는 「다른 질의」로 거절된다. */
+const scopeOf = (ctx: ToolCtx, filters: Record<string, unknown>) =>
+	JSON.stringify({ v: ctx.dataVersion, ...filters });
+
+// ── 축 ───────────────────────────────────────────────────────────
 
 /**
  * 엔진 축 값의 표기. 종류마다 값의 대소문자가 정해져 있다(실측):
@@ -91,7 +74,143 @@ export function normalizeAxisRef(raw: string): string {
 	return `${kind}:${value}`;
 }
 
+interface AxisIndex {
+	caps: Map<string, IdentityAxes>;
+	/** 엔진 `supply.axisSkill`(coin_token) 을 인격별로 편 것 — `axis:X` */
+	skillAxes: Map<string, string[]>;
+	/** 어느 인격에든 어느 층에든 있는 축 값 */
+	known: Set<string>;
+}
+
+const axisIndexCache = new WeakMap<EngineData, AxisIndex>();
+
+function axisIndex(engine: EngineData): AxisIndex {
+	const hit = axisIndexCache.get(engine);
+	if (hit) return hit;
+	const caps = identityAxes(engine.capabilities);
+	const skillAxes = new Map<string, string[]>();
+	for (const [axis, ids] of engine.supply.axisSkill) {
+		for (const id of ids) skillAxes.set(id, [...(skillAxes.get(id) ?? []), `axis:${axis}`]);
+	}
+	const known = new Set<string>();
+	for (const a of caps.values()) for (const v of [...a.tag, ...a.skill]) known.add(v);
+	for (const list of skillAxes.values()) for (const v of list) known.add(v);
+	const index = { caps, skillAxes, known };
+	axisIndexCache.set(engine, index);
+	return index;
+}
+
+/**
+ * 인격의 두 층 축 — 엔진이 세는 방식 그대로.
+ *
+ *   tag    identity_axis(gate always, affects tag|both) 와 나머지 종류 — `identityAxes` 의 tag
+ *   skill  키워드 축(`axis:*`)은 엔진 `supply.axisSkill`(스킬이 실제로 그 상태를 주는가, coin_token).
+ *          나머지 종류(죄악 · 소속 …)는 엔진이 층을 가르지 않으므로 tag 와 같은 출처다.
+ *
+ * capability 의 `affects` 로 skill 을 내면 엔진(`countSupply`, supply='skill')과 60 인격이 어긋난다.
+ */
+function identityLayers(index: AxisIndex, identityId: string): IdentityAxes {
+	const base = axesOf(index.caps, identityId);
+	const skill = [
+		...base.skill.filter((v) => !v.startsWith('axis:')),
+		...(index.skillAxes.get(identityId) ?? []),
+	].sort();
+	return { tag: base.tag, skill };
+}
+
 const keywordAxesOnly = (values: string[]) => values.filter((v) => v.startsWith('axis:'));
+
+/** 키워드 어휘 중 공격 유형인 셋 — 축 값은 `attack_type:` 이다(detail.ts 의 ATK_KEYWORD 와 같은 짝). */
+const ATK_KEYWORD: Record<string, string> = { Slash: 'slash', Penetrate: 'pierce', Hit: 'blunt' };
+
+const labelKey = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
+interface VocabIndex {
+	/** 이름 · id · 축 값(소문자) → 축 값 */
+	refs: Map<string, string>;
+	/** 죄악 id · ko/en 이름(소문자) → 죄악 id */
+	sins: Map<string, string>;
+	/** 키워드 id → 축 값 (없으면 null) */
+	keywordRef: (id: string) => string | null;
+	/** 오류 문구에 싣는 받을 수 있는 값 요약 */
+	keywordHint: string;
+	sinHint: string;
+}
+
+/** 데이터 판마다 한 번 — ko · en 어휘를 함께 읽어 이름으로도 축 값을 찾는다. */
+const vocabIndex = cacheReference(async (version: string): Promise<VocabIndex> => {
+	const [engine, kwKo, kwEn, sinKo, sinEn, lbKo, lbEn] = await Promise.all([
+		engineData(version),
+		listKeywords('ko'),
+		listKeywords('en'),
+		listSins('ko'),
+		listSins('en'),
+		listAxisLabels('ko'),
+		listAxisLabels('en'),
+	]);
+	const { known } = axisIndex(engine);
+	const refs = new Map<string, string>();
+	const add = (label: string | null | undefined, ref: string | null) => {
+		if (!label || !ref || !known.has(ref)) return;
+		const k = labelKey(label);
+		if (!refs.has(k)) refs.set(k, ref);
+	};
+	const keywordRef = (id: string): string | null => {
+		const atk = ATK_KEYWORD[id];
+		const ref = atk ? `attack_type:${atk}` : normalizeAxisRef(id);
+		return known.has(ref) ? ref : null;
+	};
+	for (const v of known) add(v, v);
+	for (const k of [...kwKo, ...kwEn]) {
+		const ref = keywordRef(k.id);
+		add(k.id, ref);
+		add(k.text?.name, ref);
+	}
+	for (const lb of [lbKo, lbEn]) {
+		for (const m of lb.mechanics) {
+			const ref = normalizeAxisRef(m.id);
+			add(m.id, ref);
+			add(m.text?.name, ref);
+		}
+		for (const a of lb.associations) {
+			const ref = `association:${a.id}`;
+			add(a.id, ref);
+			add(a.text?.name, ref);
+		}
+	}
+	const sins = new Map<string, string>();
+	for (const s of [...sinKo, ...sinEn]) {
+		sins.set(labelKey(s.id), s.id);
+		if (s.text) sins.set(labelKey(s.text.name), s.id);
+		add(s.id, `sin:${s.id}`);
+		add(s.text?.name, `sin:${s.id}`);
+	}
+
+	const enName = new Map(kwEn.map((k) => [k.id, k.text?.name]));
+	const keywordHint = kwKo
+		.filter((k) => keywordRef(k.id))
+		.map((k) => `${k.id}(${[k.text?.name, enName.get(k.id)].filter(Boolean).join('/')})`)
+		.join(' · ');
+	const sinEnName = new Map(sinEn.map((s) => [s.id, s.text?.name]));
+	const sinHint = sinKo.map((s) => `${s.id}(${s.text?.name ?? ''}/${sinEnName.get(s.id) ?? ''})`).join(' · ');
+	return { refs, sins, keywordRef, keywordHint, sinHint };
+}, 24 * 60 * 60_000);
+
+/** keyword 인자 → 축 값. 「종류:값」이면 정규화해 확인하고, 아니면 id · ko/en 이름 사전에서 찾는다. */
+function resolveKeyword(v: VocabIndex, raw: string): string {
+	const found = v.refs.get(labelKey(raw.includes(':') ? normalizeAxisRef(raw) : raw));
+	if (found) return found;
+	throw new ToolInputError(
+		`모르는 keyword: 「${raw}」 — 받는 값: 키워드 ${v.keywordHint} · 탄환(Bullet/Ammo) · ` +
+			'죄악 이름 · 소속 이름(list_vocab.axisLabels.associations) · 또는 axisRef(axis:VIBRATION · sin:wrath · association:ATL)',
+	);
+}
+
+function resolveSin(v: VocabIndex, raw: string): string {
+	const id = v.sins.get(labelKey(raw));
+	if (id) return id;
+	throw new ToolInputError(`모르는 sin: 「${raw}」 — 받는 값: ${v.sinHint}`);
+}
 
 // ── search ───────────────────────────────────────────────────────
 
@@ -103,17 +222,20 @@ const SEARCH_KIND: Record<SearchHit['kind'], { site: SiteKind; tool: string }> =
 };
 
 function registerSearch(server: McpServer): void {
-	server.registerTool(
+	defineTool(
+		server,
 		'search',
 		{
 			title: '통합 검색',
 			description:
 				'인격(identity) · E.G.O · 기프트(gift) · 테마 팩(pack)을 이름으로 한 번에 찾는다(기프트는 설명문도). ' +
 				'한글 초성 검색(예: "ㄷㅂ")과 조합 중인 글자도 걸린다. 종류마다 최대 8건. ' +
-				'각 결과 { kind, id(인격 · E.G.O · 기프트는 number, 팩은 string), name, fellBack, meta, detailTool, siteUrl } — 세부는 detailTool(get_identity · get_ego · get_gift · get_pack)에 id 를 넘긴다. ' +
-				'meta 는 종류별 짧은 표지(인격: 성급을 0 개수로, E.G.O: 등급, 기프트: 등급, 팩: 분류).',
+				'각 결과 { kind, id(인격 · E.G.O · 기프트는 number, 팩은 string), name, fellBack, meta, detailTool, siteUrl } — ' +
+				'세부는 detailTool(get_identity · get_ego · get_gift · get_pack)에 id 를 넘긴다. ' +
+				'meta 는 종류별 짧은 표지(인격: 성급을 0 개수로, E.G.O: 등급, 기프트: 등급, 팩: 분류). ' +
+				'수감자 이름(이상 · 파우스트 …)은 여기서 찾지 말고 list_vocab.sinners 에서 id 를 얻어 list_identities(sinnerId) · list_egos(sinnerId) 로.',
 			inputSchema: {
-				query: z.string().min(1).describe('검색어 (ko/en 이름 둘 다 본다)'),
+				query: queryArg.describe('검색어 (ko/en 이름 둘 다 본다). 한 글자 이상 또는 초성 두 개 이상'),
 				locale: localeArg,
 			},
 			outputSchema: envelopeShape({
@@ -131,8 +253,10 @@ function registerSearch(server: McpServer): void {
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ query, locale }) => {
-			const hits = (await searchAll(query, locale)).map((h) => ({
+		async ({ query, locale }, ctx) => {
+			const q = cleanText(query);
+			if (q === undefined) throw new ToolInputError('검색어가 비었다 — query 에 이름 일부를 넣으세요');
+			const hits = (await searchAll(q, locale)).map((h) => ({
 				kind: h.kind,
 				id: h.kind === 'pack' ? h.id : Number(h.id),
 				name: h.name,
@@ -147,44 +271,122 @@ function registerSearch(server: McpServer): void {
 				.map(([k, n]) => `${k} ${n}`);
 			return ok(
 				{ hits },
-				hits.length ? `「${query}」 ${hits.length}건 (${counts.join(' · ')}).` : `「${query}」에 걸린 것이 없다.`,
+				hits.length ? `「${q}」 ${hits.length}건 (${counts.join(' · ')}).` : `「${q}」에 걸린 것이 없다.`,
+				ctx,
 			);
 		},
 	);
 }
 
+// ── 동기화 단계 ──────────────────────────────────────────────────
+
+const uptieArg = z
+	.union([z.number().int().min(1).max(9), z.string().regex(/^[1-9]$/), z.literal('all')])
+	.optional()
+	.describe("동기화(uptie) 단계. 생략하면 그 인격/E.G.O 의 최고 단계 하나만, 'all' 이면 모든 단계. 최고보다 크면 최고로 맞춘다");
+
+const uptieShape = z
+	.object({
+		shown: z.union([z.number(), z.literal('all')]).describe('응답에 담은 단계'),
+		max: z.number().describe('이 대상의 최고 단계'),
+	})
+	.describe('어느 동기화 단계를 줬나');
+
+type Staged = { uptie: number };
+/** 단계 행은 바뀔 때만 있다 — 단계 n 의 모습은 n 이하 중 마지막 행이다. */
+const lastAtOrBelow = <T extends Staged>(rows: readonly T[], n: number): T | undefined =>
+	rows.filter((r) => r.uptie <= n).at(-1);
+
+function pickUptie(sel: number | string | undefined, max: number): number | 'all' {
+	if (sel === 'all') return 'all';
+	return sel === undefined ? max : Math.min(Number(sel), max);
+}
+
+type IdentityDetail = NonNullable<Awaited<ReturnType<typeof getIdentity>>>;
+type EgoDetail = NonNullable<Awaited<ReturnType<typeof getEgo>>>;
+
+function identityAtUptie(d: IdentityDetail, shown: number | 'all'): IdentityDetail {
+	if (shown === 'all') return d;
+	const skills = d.skills.flatMap((s) => {
+		const st = lastAtOrBelow(s.stages, shown);
+		return st ? [{ ...s, stages: [st] }] : [];
+	});
+	const speed = lastAtOrBelow(d.speeds, shown);
+	/*
+		패시브 행은 「그 단계에서 켜져 있는 패시브」의 전체 목록이다 — 1101602 는 1·2·3 단계에 모두
+		행이 있고, 1101604(라 무아송)는 1·2 단계에만 있다가 3 단계에서 1101614(같은 이름)로 바뀐다.
+		그래서 갈래(battle · supporter)마다 n 이하 중 가장 높은 단계 L 을 찾고 L 의 행만 남긴다.
+	*/
+	const levelOf = new Map<string, number>();
+	for (const p of d.passives) {
+		if (p.uptie <= shown && p.uptie > (levelOf.get(p.kind) ?? 0)) levelOf.set(p.kind, p.uptie);
+	}
+	const passives = d.passives.filter((p) => p.uptie === levelOf.get(p.kind));
+	return { ...d, skills, speeds: speed ? [speed] : [], passives };
+}
+
+function egoAtUptie(d: EgoDetail, shown: number | 'all'): EgoDetail {
+	if (shown === 'all') return d;
+	const skills = d.skills.flatMap((s) => {
+		const st = lastAtOrBelow(s.stages, shown);
+		return st ? [{ ...s, stages: [st] }] : [];
+	});
+	return { ...d, skills };
+}
+
+const maxOf = (values: number[]) => (values.length ? Math.max(...values) : 1);
+
+/** 최상위 `text` 를 `name` · `fellBack` 으로 편다. 나머지는 `stripMedia` 만. */
+function flattenTop<T extends { text: { name: string; fellBack: boolean } | null }>(d: T) {
+	const { text, ...rest } = d;
+	return { name: text?.name ?? null, fellBack: text?.fellBack ?? false, ...(stripMedia(rest) as Record<string, unknown>) };
+}
+
+const placeholderNote =
+	'본문의 [Id] 자리표시(예: [Sinking])는 상태 id 다 — statuses 는 본문에 나오는 상태의 { id, name } 만 담고, 설명문은 list_statuses 에 있다.';
+
+/** 본문에 나오는 상태 — 이름만. 설명문은 list_statuses 가 준다(상세 응답 크기를 1/4 줄인다). */
+const compactStatuses = (rows: ReadonlyArray<{ id: string; text: { name: string; fellBack: boolean } | null }>) =>
+	rows.map((s) => ({ id: s.id, name: s.text?.name ?? null, fellBack: s.text?.fellBack ?? false }));
+
+const statusRow = z.object({ id: z.string(), name: z.string().nullable(), fellBack: z.boolean() });
+
 // ── 인격 ─────────────────────────────────────────────────────────
 
 const axesShape = z.object({
 	tag: z.array(z.string()).describe('인격 취급 — 「진동 인격 N인」 같은 인격 수 조건에 드는 축'),
-	skill: z.array(z.string()).describe('스킬 취급 — 「진동을 부여하는 스킬 사용 시」 같은 조건에 드는 축'),
+	skill: z.array(z.string()).describe('스킬 취급 — 「진동을 부여하는 스킬 사용 시」 같은 조건에 드는 축(스킬이 실제로 주는 상태)'),
 });
 
+const keywordRow = z.looseObject({ id: z.string(), text: named, axisRef: z.string().nullable() });
+
 function registerIdentityTools(server: McpServer): void {
-	server.registerTool(
+	defineTool(
+		server,
 		'list_identities',
 		{
 			title: '인격 목록',
 			description:
 				'인격(identity) 요약 목록을 커서 페이지(50건)로 준다. 행 { id, sinnerId, name, fellBack, star, season, sins, axes: { tag, skill }, siteUrl }. ' +
 				'행의 axes 는 키워드 축(axis:*)만 담는다 — 죄악 · 소속 · 공격 유형 등 전체 축은 get_identity. ' +
-				'축은 두 층이다: tag(인격 취급) · skill(스킬 취급). 섞지 말 것 — 예: 10104 는 VIBRATION 이 skill 에만 있다. ' +
-				'필터: sinnerId(list_vocab.sinners) · star(1–3) · sin(wrath·lust·sloth·gluttony·gloom·pride·envy, 스킬 죄악) · season · ' +
-				"keyword + axisLayer(기본 'tag'). keyword 는 list_vocab 의 id 나 axisRef(`Vibration` · `VIBRATION` · `axis:VIBRATION` 모두 같다); " +
-				'`sin:gluttony` · `association:ATL` 처럼 다른 종류의 축 값도 받는다(대소문자 무관). 빈 문자열 필터는 없는 것으로 친다. ' +
+				'축은 두 층이다: tag(인격 취급 — 게임이 그 인격을 그 축으로 분류) · skill(스킬 취급 — 스킬이 실제로 그 상태를 준다). ' +
+				'섞지 말 것 — 예: 10104 는 VIBRATION 이 skill 에만 있다. 엔진 판정(check_gifts 등)과 같은 출처다. ' +
+				'필터: sinnerId(1–12, list_vocab.sinners) · star(1–3) · sin(스킬 죄악 — id 또는 ko/en 이름) · season · ' +
+				"keyword + axisLayer(기본 'tag'). keyword 는 키워드 id · ko/en 이름(Vibration · 진동 · Tremor) · axisRef(axis:VIBRATION · sin:wrath · association:ATL) · " +
+				'소속/죄악 이름을 받는다(대소문자 무관). 모르는 값은 받을 수 있는 값과 함께 오류. 빈 문자열 필터는 없는 것으로 친다. ' +
 				'세부(스킬 · 패시브 · 내성 · 속도)는 get_identity 에 id 를 넘긴다.',
 			inputSchema: {
 				locale: localeArg,
-				sinnerId: z.number().int().optional().describe('수감자 id (1–12)'),
-				star: z.number().int().min(1).max(3).optional().describe('성급 1–3'),
-				sin: z.string().optional().describe('스킬 죄악 (소문자 id, 예: gluttony)'),
-				keyword: z.string().optional().describe('축 값 — VIBRATION · axis:VIBRATION · sin:gluttony …'),
+				sinnerId: intArg.optional().describe('수감자 id 1–12 (list_vocab.sinners)'),
+				star: intArg.optional().describe('성급 1–3'),
+				sin: z.string().max(40).optional().describe('스킬 죄악 — wrath · 분노 · Wrath …'),
+				keyword: z.string().max(80).optional().describe('축 — VIBRATION · 진동 · Tremor · axis:VIBRATION · sin:gluttony · association:ATL …'),
 				axisLayer: z.enum(['tag', 'skill']).default('tag').describe("keyword 를 볼 층. 기본 'tag'"),
-				season: z.number().int().optional().describe('시즌 번호 (0 = 상시, 9xxx = 발푸르기스 등)'),
+				season: intArg.optional().describe('시즌 번호 (0 = 상시, 9xxx = 발푸르기스 등)'),
 				cursor: cursorArg,
 			},
 			outputSchema: envelopeShape({
-				items: z.array(
+				...pageShape(
 					z.object({
 						id: z.number(),
 						sinnerId: z.number(),
@@ -197,28 +399,36 @@ function registerIdentityTools(server: McpServer): void {
 						siteUrl: z.string(),
 					}),
 				),
-				...pageShape,
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ locale, sinnerId, star, sin, keyword, axisLayer, season, cursor }) => {
-			const [rows, engine] = await Promise.all([listIdentitiesFull(locale), engineData()]);
-			const axisMap = identityAxes(engine.capabilities);
-			const sinLc = present(sin)?.toLowerCase();
-			const kw = present(keyword);
-			const ref = kw === undefined ? undefined : normalizeAxisRef(kw);
+		async (args, ctx) => {
+			const { locale, axisLayer } = args;
+			const sinnerId = intIn('sinnerId', args.sinnerId, 1, 12);
+			const star = intIn('star', args.star, 1, 3);
+			const season = args.season === undefined ? undefined : Number(args.season);
+			const [rows, engine, vocab] = await Promise.all([
+				listIdentitiesFull(locale),
+				engineData(ctx.dataVersion),
+				vocabIndex(ctx.dataVersion),
+			]);
+			const sinRaw = cleanText(args.sin);
+			const kwRaw = cleanText(args.keyword);
+			const sin = sinRaw === undefined ? undefined : resolveSin(vocab, sinRaw);
+			const ref = kwRaw === undefined ? undefined : resolveKeyword(vocab, kwRaw);
+			const index = axisIndex(engine);
 			const filtered = rows.filter(
 				(r) =>
 					(sinnerId === undefined || r.sinnerId === sinnerId) &&
 					(star === undefined || r.star === star) &&
 					(season === undefined || r.season === season) &&
-					(sinLc === undefined || r.sins.includes(sinLc)) &&
-					(ref === undefined || axesOf(axisMap, r.id)[axisLayer].includes(ref)),
+					(sin === undefined || r.sins.includes(sin)) &&
+					(ref === undefined || identityLayers(index, r.id)[axisLayer].includes(ref)),
 			);
-			const scope = await scopeOf({ locale, sinnerId, star, sin: sinLc, ref, axisLayer: ref ? axisLayer : undefined, season });
-			const page = paginate(filtered, present(cursor), scope);
+			const scope = scopeOf(ctx, { locale, sinnerId, star, sin, ref, axisLayer: ref ? axisLayer : undefined, season });
+			const page = paginate(filtered, cleanText(args.cursor), scope);
 			const items = page.items.map((r) => {
-				const axes = axesOf(axisMap, r.id);
+				const axes = identityLayers(index, r.id);
 				return {
 					id: Number(r.id),
 					sinnerId: r.sinnerId,
@@ -233,25 +443,29 @@ function registerIdentityTools(server: McpServer): void {
 			});
 			return ok(
 				{ items, total: page.total, nextCursor: page.nextCursor },
-				pageSummary('인격', page.total, items.length, page.nextCursor) +
-					(ref ? ` 축 ${ref} (${axisLayer} 층).` : ''),
+				pageSummary('인격', page.total, items.length, page.nextCursor) + (ref ? ` 축 ${ref} (${axisLayer} 층).` : ''),
+				ctx,
 			);
 		},
 	);
 
-	server.registerTool(
+	defineTool(
+		server,
 		'get_identity',
 		{
 			title: '인격 상세',
 			description:
-				'인격 하나의 세부. 기본 정보(sinnerId · sinner 이름 · rarity = 성급 · season · releaseDate · hpBase · hpPerLevel · defCorrection · breakSection = 흐트러짐 구간), ' +
-				'resists(공격 유형별 내성) · speeds(동기화 단계별 속도) · affiliations(소속) · statuses(본문에 나오는 상태) · keywords(기믹 키워드) · ' +
-				'passives · skills(동기화 단계 stages · 코인 coins 설명 포함) · sinNames/atkNames(죄악 · 공격 유형 이름표) · ' +
-				'axes { tag, skill }(엔진 판정에 쓰이는 전체 축, 두 층) · siteUrl. ' +
-				'id 는 list_identities · search 의 id. 수감자 이름은 list_vocab.sinners. 없는 id 면 isError.',
-			inputSchema: { id: idArg('인격 id (예: 10101)'), locale: localeArg },
+				'인격 하나의 세부. name · fellBack · 기본 정보(sinnerId · sinner 이름 · rarity = 성급 · season · releaseDate · hpBase · hpPerLevel · defCorrection · breakSection = 흐트러짐 구간), ' +
+				'resists(공격 유형별 내성) · speeds(속도) · affiliations(소속) · statuses(본문에 나오는 상태) · keywords(기믹 키워드, axisRef 포함) · ' +
+				'passives · skills(stages · 코인 coins 설명) · sinNames/atkNames(죄악 · 공격 유형 이름표) · ' +
+				'axes { tag, skill }(엔진 판정에 쓰이는 전체 축, 두 층) · uptie { shown, max } · siteUrl. ' +
+				"기본은 최고 동기화 단계 하나만 준다(skills · speeds · passives) — 단계별 변화가 필요하면 uptie: 'all' 또는 숫자. " +
+				`${placeholderNote} id 는 list_identities · search 의 id. 수감자 이름은 list_vocab.sinners. 없는 id 면 isError.`,
+			inputSchema: { id: idArg.describe('인격 id (예: 10101)'), locale: localeArg, uptie: uptieArg },
 			outputSchema: envelopeShape({
 				id: z.number(),
+				name: z.string().nullable().describe('인격 이름'),
+				fellBack: z.boolean(),
 				sinnerId: z.number(),
 				sinner: named,
 				rarity: z.number().describe('성급 1–3'),
@@ -261,31 +475,47 @@ function registerIdentityTools(server: McpServer): void {
 				hpPerLevel: z.number().nullable(),
 				defCorrection: z.number().nullable(),
 				breakSection: z.array(z.number()).describe('흐트러짐 구간 (길이가 인격마다 다르다)'),
-				text: named.describe('인격 이름'),
 				resists: z.array(z.looseObject({ atkType: z.string(), value: z.number() })),
 				speeds: z.array(z.looseObject({ uptie: z.number(), min: z.number(), max: z.number() })),
 				affiliations: z.array(z.looseObject({ id: z.string(), text: named })),
-				statuses: z.array(z.looseObject({ id: z.string(), text: described })),
-				keywords: z.array(z.looseObject({ id: z.string(), text: named })),
+				statuses: z.array(statusRow).describe('본문에 나오는 상태 { id, name } — 설명문은 list_statuses'),
+				keywords: z.array(keywordRow),
 				sinNames: z.record(z.string(), z.string()),
 				atkNames: z.record(z.string(), z.string()),
-				passives: z.array(z.looseObject({ id: z.string(), text: described })),
+				passives: z.array(z.looseObject({ id: z.string(), uptie: z.number(), text: described })),
 				skills: z.array(
 					z.looseObject({ id: z.number(), stages: z.array(z.looseObject({ uptie: z.number() })) }),
 				),
 				axes: axesShape,
+				uptie: uptieShape,
 				siteUrl: z.string(),
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ id, locale }) => {
-			const [detail, engine] = await Promise.all([getIdentity(Number(id), locale), engineData()]);
-			if (!detail) return fail(`없는 id: 인격 ${id} — list_identities 나 search 로 id 를 확인하세요`);
-			const axes = axesOf(identityAxes(engine.capabilities), String(detail.id));
-			const data = { ...shapeOut(detail), axes, siteUrl: siteUrl(locale, 'identities', detail.id) };
+		async ({ id, locale, uptie }, ctx) => {
+			const n = toId(id);
+			const [full, engine, vocab] = await Promise.all([
+				getIdentity(n, locale),
+				engineData(ctx.dataVersion),
+				vocabIndex(ctx.dataVersion),
+			]);
+			if (!full) return fail(`없는 id: 인격 ${id} — list_identities 나 search 로 id 를 확인하세요`);
+			const max = maxOf([...full.skills.flatMap((s) => s.stages.map((st) => st.uptie)), ...full.speeds.map((s) => s.uptie)]);
+			const shown = pickUptie(uptie, max);
+			const detail = identityAtUptie(full, shown);
+			const data = {
+				...flattenTop(detail),
+				statuses: compactStatuses(detail.statuses),
+				keywords: stripMedia(detail.keywords).map((k) => ({ ...k, axisRef: vocab.keywordRef(k.id) })),
+				axes: identityLayers(axisIndex(engine), String(detail.id)),
+				uptie: { shown, max },
+				siteUrl: siteUrl(locale, 'identities', detail.id),
+			};
 			return ok(
 				data,
-				`인격 ${detail.id} ${detail.text?.name ?? '(이름 없음)'}${detail.sinner ? ` · ${detail.sinner.name}` : ''} · ${detail.rarity}성 · 스킬 ${detail.skills.length} · 패시브 ${detail.passives.length}.`,
+				`인격 ${detail.id} ${detail.text?.name ?? '(이름 없음)'}${detail.sinner ? ` · ${detail.sinner.name}` : ''} · ${detail.rarity}성 · ` +
+					`동기화 ${shown === 'all' ? `전 단계(최고 ${max})` : `${shown}/${max}`} · 스킬 ${detail.skills.length} · 패시브 ${detail.passives.length}.`,
+				ctx,
 			);
 		},
 	);
@@ -293,8 +523,11 @@ function registerIdentityTools(server: McpServer): void {
 
 // ── E.G.O ────────────────────────────────────────────────────────
 
+const EGO_RANKS = ['ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'] as const;
+
 function registerEgoTools(server: McpServer): void {
-	server.registerTool(
+	defineTool(
+		server,
 		'list_egos',
 		{
 			title: 'E.G.O 목록',
@@ -302,16 +535,17 @@ function registerEgoTools(server: McpServer): void {
 				'E.G.O 요약 목록을 커서 페이지(50건)로 준다(컷신 전용은 뺀다). ' +
 				'행 { id, sinnerId, name, fellBack, rank, sin, attackType, season, keywords, siteUrl }. ' +
 				'rank 는 ZAYIN · TETH · HE · WAW · ALEPH, sin 은 각성 죄악 하나, keywords 는 상태에서 뽑은 기믹 키워드 id(인격의 키워드와 유래가 다르다). ' +
-				'필터: sinnerId(list_vocab.sinners) · rank · sin. 세부(비용 · 내성 · 스킬 · 침식 확률)는 get_ego 에 id 를 넘긴다.',
+				'필터: sinnerId(1–12, list_vocab.sinners) · rank(대소문자 무관) · sin(id 또는 ko/en 이름). 모르는 값은 오류. ' +
+				'세부(비용 · 내성 · 스킬 · 침식 확률)는 get_ego 에 id 를 넘긴다.',
 			inputSchema: {
 				locale: localeArg,
-				sinnerId: z.number().int().optional().describe('수감자 id (1–12)'),
-				rank: z.string().optional().describe('ZAYIN · TETH · HE · WAW · ALEPH'),
-				sin: z.string().optional().describe('각성 죄악 (소문자 id, 예: wrath)'),
+				sinnerId: intArg.optional().describe('수감자 id 1–12'),
+				rank: z.string().max(10).optional().describe('ZAYIN · TETH · HE · WAW · ALEPH (대소문자 무관)'),
+				sin: z.string().max(40).optional().describe('각성 죄악 — wrath · 분노 · Wrath …'),
 				cursor: cursorArg,
 			},
 			outputSchema: envelopeShape({
-				items: z.array(
+				...pageShape(
 					z.object({
 						id: z.number(),
 						sinnerId: z.number(),
@@ -325,22 +559,26 @@ function registerEgoTools(server: McpServer): void {
 						siteUrl: z.string(),
 					}),
 				),
-				...pageShape,
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ locale, sinnerId, rank, sin, cursor }) => {
-			const rows = await listEgosFull(locale);
-			const rankUc = present(rank)?.toUpperCase();
-			const sinLc = present(sin)?.toLowerCase();
+		async (args, ctx) => {
+			const { locale } = args;
+			const sinnerId = intIn('sinnerId', args.sinnerId, 1, 12);
+			const rank = cleanText(args.rank)?.toUpperCase();
+			if (rank !== undefined && !(EGO_RANKS as readonly string[]).includes(rank)) {
+				throw new ToolInputError(`모르는 rank: 「${args.rank}」 — 받는 값: ${EGO_RANKS.join(' · ')}`);
+			}
+			const [rows, vocab] = await Promise.all([listEgosFull(locale), vocabIndex(ctx.dataVersion)]);
+			const sinRaw = cleanText(args.sin);
+			const sin = sinRaw === undefined ? undefined : resolveSin(vocab, sinRaw);
 			const filtered = rows.filter(
 				(r) =>
 					(sinnerId === undefined || r.sinnerId === sinnerId) &&
-					(rankUc === undefined || r.rank === rankUc) &&
-					(sinLc === undefined || r.sin === sinLc),
+					(rank === undefined || r.rank === rank) &&
+					(sin === undefined || r.sin === sin),
 			);
-			const scope = await scopeOf({ locale, sinnerId, rank: rankUc, sin: sinLc });
-			const page = paginate(filtered, present(cursor), scope);
+			const page = paginate(filtered, cleanText(args.cursor), scopeOf(ctx, { locale, sinnerId, rank, sin }));
 			const items = page.items.map((r) => ({
 				id: Number(r.id),
 				sinnerId: r.sinnerId,
@@ -356,22 +594,27 @@ function registerEgoTools(server: McpServer): void {
 			return ok(
 				{ items, total: page.total, nextCursor: page.nextCursor },
 				pageSummary('E.G.O', page.total, items.length, page.nextCursor),
+				ctx,
 			);
 		},
 	);
 
-	server.registerTool(
+	defineTool(
+		server,
 		'get_ego',
 		{
 			title: 'E.G.O 상세',
 			description:
-				'E.G.O 하나의 세부. sinnerId · sinner · rank · season · releaseDate · awakenAffinity/awakenAtkType(각성 죄악 · 공격 유형) · ' +
+				'E.G.O 하나의 세부. name · fellBack · sinnerId · sinner · rank · season · releaseDate · awakenAffinity/awakenAtkType(각성 죄악 · 공격 유형) · ' +
 				'corrosionAffinity/corrosionAtkType(침식) · extractable · maxThreadspin · costs(죄악 자원 소모 { sin, amount }) · resists(죄악별 내성) · ' +
-				'statuses · keywords · corrosion(정신력 sp 별 침식 확률) · skills(role = 각성/침식, stages · coins) · passives · sinNames/atkNames · siteUrl. ' +
-				'id 는 list_egos · search 의 id. 없는 id 와 컷신 전용(목록에 없는) E.G.O 는 isError.',
-			inputSchema: { id: idArg('E.G.O id (예: 20101)'), locale: localeArg },
+				'statuses · keywords(axisRef 포함) · corrosion(정신력 sp 별 침식 확률) · skills(role = 각성/침식, stages · coins) · passives · sinNames/atkNames · uptie { shown, max } · siteUrl. ' +
+				"기본은 최고 단계 하나만 준다 — 단계별 변화가 필요하면 uptie: 'all' 또는 숫자. " +
+				`${placeholderNote} id 는 list_egos · search 의 id. 없는 id 와 컷신 전용(목록에 없는) E.G.O 는 isError.`,
+			inputSchema: { id: idArg.describe('E.G.O id (예: 20101)'), locale: localeArg, uptie: uptieArg },
 			outputSchema: envelopeShape({
 				id: z.number(),
+				name: z.string().nullable().describe('E.G.O 이름'),
+				fellBack: z.boolean(),
 				sinnerId: z.number(),
 				sinner: named,
 				rank: z.string().nullable(),
@@ -383,11 +626,10 @@ function registerEgoTools(server: McpServer): void {
 				corrosionAtkType: z.string().nullable(),
 				extractable: z.boolean(),
 				maxThreadspin: z.number().nullable(),
-				text: named.describe('E.G.O 이름'),
 				costs: z.array(z.looseObject({ sin: z.string(), amount: z.number() })),
 				resists: z.array(z.looseObject({ sin: z.string(), value: z.number() })),
-				statuses: z.array(z.looseObject({ id: z.string(), text: described })),
-				keywords: z.array(z.looseObject({ id: z.string(), text: named })),
+				statuses: z.array(statusRow).describe('본문에 나오는 상태 { id, name } — 설명문은 list_statuses'),
+				keywords: z.array(keywordRow),
 				corrosion: z
 					.array(z.looseObject({ sp: z.number(), probability: z.number() }))
 					.describe('정신력(SP −45..45)별 침식 확률'),
@@ -401,19 +643,35 @@ function registerEgoTools(server: McpServer): void {
 					}),
 				),
 				passives: z.array(z.looseObject({ index: z.number(), text: described })),
+				uptie: uptieShape,
 				siteUrl: z.string(),
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ id, locale }) => {
+		async ({ id, locale, uptie }, ctx) => {
+			const n = toId(id);
 			// 컷신 전용(presentationOnly)은 플레이할 수 없어 목록에 없다 — 상세도 없는 id 로 친다.
-			const row = await canonical.ego.findUnique({ where: { id: String(Number(id)) }, select: { presentationOnly: true } });
-			const detail = row && !row.presentationOnly ? await getEgo(Number(id), locale) : null;
-			if (!detail) return fail(`없는 id: E.G.O ${id} — list_egos 나 search 로 id 를 확인하세요`);
-			const data = { ...shapeOut(detail), siteUrl: siteUrl(locale, 'egos', detail.id) };
+			const row = await canonical.ego.findUnique({ where: { id: String(n) }, select: { presentationOnly: true } });
+			const [full, vocab] = await Promise.all([
+				row && !row.presentationOnly ? getEgo(n, locale) : Promise.resolve(null),
+				vocabIndex(ctx.dataVersion),
+			]);
+			if (!full) return fail(`없는 id: E.G.O ${id} — list_egos 나 search 로 id 를 확인하세요`);
+			const max = maxOf(full.skills.flatMap((s) => s.stages.map((st) => st.uptie)));
+			const shown = pickUptie(uptie, max);
+			const detail = egoAtUptie(full, shown);
+			const data = {
+				...flattenTop(detail),
+				statuses: compactStatuses(detail.statuses),
+				keywords: stripMedia(detail.keywords).map((k) => ({ ...k, axisRef: vocab.keywordRef(k.id) })),
+				uptie: { shown, max },
+				siteUrl: siteUrl(locale, 'egos', detail.id),
+			};
 			return ok(
 				data,
-				`E.G.O ${detail.id} ${detail.text?.name ?? '(이름 없음)'}${detail.sinner ? ` · ${detail.sinner.name}` : ''} · ${detail.rank ?? '등급 없음'} · 스킬 ${detail.skills.length}.`,
+				`E.G.O ${detail.id} ${detail.text?.name ?? '(이름 없음)'}${detail.sinner ? ` · ${detail.sinner.name}` : ''} · ${detail.rank ?? '등급 없음'} · ` +
+					`단계 ${shown === 'all' ? `전부(최고 ${max})` : `${shown}/${max}`} · 스킬 ${detail.skills.length}.`,
+				ctx,
 			);
 		},
 	);
@@ -433,7 +691,8 @@ type Text = { name: string; fellBack: boolean } | null;
 const flat = (text: Text) => ({ name: text?.name ?? null, fellBack: text?.fellBack ?? false });
 
 function registerVocab(server: McpServer): void {
-	server.registerTool(
+	defineTool(
+		server,
 		'list_vocab',
 		{
 			title: 'id ↔ 이름 사전',
@@ -441,7 +700,7 @@ function registerVocab(server: McpServer): void {
 				'다른 도구 응답의 id 를 이름으로 풀 사전을 한 번에 준다. ' +
 				'sinners(수감자 id → 이름; list_* 의 sinnerId) · keywords(기믹 키워드 · 공격 유형) · sins(죄악 7) · ' +
 				'axisLabels { associations(소속), mechanics(특수: 탄환 · 보호) }. ' +
-				'keywords · sins · associations · mechanics 행의 axisRef 는 엔진 축 값(axis:VIBRATION · sin:wrath · association:ATL)이며 ' +
+				'keywords · sins · associations · mechanics 행의 axisRef 는 엔진 축 값(axis:VIBRATION · attack_type:slash · sin:wrath · association:ATL)이며 ' +
 				'list_identities 의 keyword 필터와 axes 에 그대로 쓰인다. 대화 처음에 한 번 불러 두면 된다.',
 			inputSchema: { locale: localeArg },
 			outputSchema: envelopeShape({
@@ -455,32 +714,28 @@ function registerVocab(server: McpServer): void {
 			}),
 			annotations: READ_ONLY,
 		},
-		async ({ locale }) => {
-			const [sinners, keywords, sins, labels, engine] = await Promise.all([
+		async ({ locale }, ctx) => {
+			const [sinners, keywords, sins, labels, vocab] = await Promise.all([
 				listSinners(locale),
 				listKeywords(locale),
 				listSins(locale),
 				listAxisLabels(locale),
-				engineData(),
+				vocabIndex(ctx.dataVersion),
 			]);
-			const known = new Set(engine.capabilities.map((c) => `${c.refKind}:${c.refId}`));
-			const withRef = (id: string, text: Text, ref: string) => ({
-				id,
-				...flat(text),
-				axisRef: known.has(ref) ? ref : null,
-			});
+			const known = (ref: string) => vocab.refs.get(labelKey(ref)) ?? null;
 			const data = {
 				sinners: sinners.map((s) => ({ id: s.id, ...flat(s.text) })),
-				keywords: keywords.map((k) => withRef(k.id, k.text, normalizeAxisRef(k.id))),
-				sins: sins.map((s) => withRef(s.id, s.text, `sin:${s.id}`)),
+				keywords: keywords.map((k) => ({ id: k.id, ...flat(k.text), axisRef: vocab.keywordRef(k.id) })),
+				sins: sins.map((s) => ({ id: s.id, ...flat(s.text), axisRef: known(`sin:${s.id}`) })),
 				axisLabels: {
-					associations: labels.associations.map((a) => withRef(a.id, a.text, `association:${a.id}`)),
-					mechanics: labels.mechanics.map((m) => withRef(m.id, m.text, normalizeAxisRef(m.id))),
+					associations: labels.associations.map((a) => ({ id: a.id, ...flat(a.text), axisRef: known(`association:${a.id}`) })),
+					mechanics: labels.mechanics.map((m) => ({ id: m.id, ...flat(m.text), axisRef: known(normalizeAxisRef(m.id)) })),
 				},
 			};
 			return ok(
 				data,
 				`수감자 ${data.sinners.length} · 키워드 ${data.keywords.length} · 죄악 ${data.sins.length} · 소속 ${data.axisLabels.associations.length} · 특수 ${data.axisLabels.mechanics.length}.`,
+				ctx,
 			);
 		},
 	);

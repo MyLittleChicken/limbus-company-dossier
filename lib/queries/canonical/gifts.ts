@@ -160,6 +160,47 @@ const baseStage = (locale: Locale) => ({
 	include: { texts: localeRows(locale) },
 });
 
+/** 목록 행이 읽는 관계 — `listGifts` 와 `listGiftsUnpaged` 가 같이 쓴다. */
+const giftRowInclude = (locale: Locale) => ({
+	stages: baseStage(locale),
+	keyword: { include: { texts: localeRows(locale) } },
+	_count: { select: { packs: true, exclusivePacks: true } },
+});
+
+type LocaleName = { locale: string; name: string };
+
+/** 목록 행 모양 — `listGifts` 와 `listGiftsUnpaged` 가 같이 쓴다. */
+function toGiftRow(
+	g: {
+		id: string;
+		tier: number | null;
+		tierLabel: string | null;
+		enhanceable: boolean;
+		hardOnly: boolean;
+		cost: number | null;
+		sprite: string | null;
+		keywordId: string | null;
+		stages: Array<{ texts: LocaleName[] }>;
+		keyword: { texts: LocaleName[] } | null;
+		_count: { packs: number; exclusivePacks: number };
+	},
+	locale: Locale,
+) {
+	return {
+		id: Number(g.id),
+		tier: tierOf(g),
+		enhanceable: g.enhanceable,
+		hardOnly: g.hardOnly,
+		mdCost: g.cost,
+		icon: giftIcon(g.sprite),
+		text: nameOf(g.stages[0]?.texts ?? [], locale),
+		keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
+		keywordId: g.keywordId,
+		packCount: g._count.packs,
+		exclusiveCount: g._count.exclusivePacks,
+	};
+}
+
 export async function listGifts(locale: Locale, filter: GiftFilter) {
 	const where = giftWhere(filter, locale);
 
@@ -170,11 +211,7 @@ export async function listGifts(locale: Locale, filter: GiftFilter) {
 			orderBy: [{ tier: 'asc' }, { id: 'asc' }],
 			skip: (filter.page - 1) * PAGE_SIZE,
 			take: PAGE_SIZE,
-			include: {
-				stages: baseStage(locale),
-				keyword: { include: { texts: localeRows(locale) } },
-				_count: { select: { packs: true, exclusivePacks: true } },
-			},
+			include: giftRowInclude(locale),
 		}),
 	]);
 
@@ -182,19 +219,7 @@ export async function listGifts(locale: Locale, filter: GiftFilter) {
 		total,
 		page: filter.page,
 		pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
-		items: rows.map((g) => ({
-			id: Number(g.id),
-			tier: tierOf(g),
-			enhanceable: g.enhanceable,
-			hardOnly: g.hardOnly,
-			mdCost: g.cost,
-			icon: giftIcon(g.sprite),
-			text: nameOf(g.stages[0]?.texts ?? [], locale),
-			keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
-			keywordId: g.keywordId,
-			packCount: g._count.packs,
-			exclusiveCount: g._count.exclusivePacks,
-		})),
+		items: rows.map((g) => toGiftRow(g, locale)),
 	};
 }
 
@@ -215,42 +240,9 @@ export type GiftListItem = Awaited<ReturnType<typeof listGifts>>['items'][number
  * 한다. 아래 주석에 근거를 적었다.
  */
 export async function listCursedGiftIds(): Promise<Set<number>> {
-	const cursed = await canonical.giftStageText.findMany({
-		where: { locale: 'ko', level: 0, desc: { contains: '기프트가 변경' } },
-		select: { giftId: true },
-	});
-
-	/*
-		바뀐 뒤의 축복 기프트.
-
-		**둘을 잇는 값이 데이터에 없다.** `gift_effect` · `choice_event_gift` · `fusion_recipe`
-		를 다 봤지만 짝을 가리키는 것이 없다 — 저주 셋만 `choice_event_gift` 에 있고 축복
-		셋은 어디에도 걸리지 않는다.
-
-		그래서 **id 하나 뒤**라는 관찰을 쓰되 그대로 믿지 않고 걸러 확인한다. 저주는 전부
-		1 등급이고 축복은 3 등급이며 둘 다 키워드가 없다. 조건에 맞지 않으면 버린다 —
-		규칙이 깨졌는데 엉뚱한 기프트를 특수로 표시하는 것보다 낫다.
-
-		나무위키의 기프트 문서가 축복 기프트가 셋(신검합일 · 황금빛 시간 · 가능성)이라고
-		적고 있어 수는 맞는다. 다만 **어느 저주가 어느 축복이 되는지는 그 문서도 밝히지
-		않는다.** 여기서도 짝으로 잇지 않고 같은 칸에 넣기만 한다.
-	*/
-	const candidates = cursed.map((r) => String(Number(r.giftId) + 1));
-	const blessed = await canonical.gift.findMany({
-		// 「키워드가 없다」는 캐노니컬에서 keywordId='None' 이다 — null 이 아니다
-		where: {
-			...MIRROR,
-			id: { in: candidates },
-			tier: 3,
-			OR: [{ keywordId: NONE_KEYWORD_ID }, { keywordId: null }],
-		},
-		select: { id: true },
-	});
-
-	return new Set([
-		...cursed.map((r) => Number(r.giftId)),
-		...blessed.map((g) => Number(g.id)),
-	]);
+	// 가리는 규칙은 `listCurseBlessingGiftIds` 하나다. 여기는 두 쪽을 한 칸에 합칠 뿐이다
+	const { curse, blessing } = await listCurseBlessingGiftIds();
+	return new Set([...curse, ...blessing]);
 }
 
 /**
@@ -410,53 +402,54 @@ export async function listSins(locale: Locale) {
 /**
  * `listGifts` 를 쪽 없이 — MCP `list_gifts` 가 쓴다.
  *
- * **where · 정렬 · 행 모양이 `listGifts` 와 같다.** 쪽을 나누지 않고 한 번에 읽어 커서는
- * 호출하는 쪽(`lib/mcp/page.ts`)이 자른다. 쪽마다 count + findMany 를 되풀이하지 않으려고
- * 따로 둔다. 두 함수의 결과 집합 · 순서가 같은지는 `lib/mcp/tools/dungeon.test.ts` 가 지킨다.
+ * **where · 정렬 · 행 모양이 `listGifts` 와 같다**(`giftWhere` · `giftRowInclude` · `toGiftRow`
+ * 를 같이 쓴다). 쪽을 나누지 않고 한 번에 읽어 커서는 호출하는 쪽(`lib/mcp/page.ts`)이 자른다.
+ * 두 함수의 결과 집합 · 순서가 같은지는 `lib/mcp/tools/dungeon.test.ts` 가 지킨다.
  */
 export async function listGiftsUnpaged(locale: Locale, filter: Omit<GiftFilter, 'page'>) {
 	const rows = await canonical.gift.findMany({
 		where: giftWhere({ ...filter, page: 1 }, locale),
 		orderBy: [{ tier: 'asc' }, { id: 'asc' }],
-		include: {
-			stages: baseStage(locale),
-			keyword: { include: { texts: localeRows(locale) } },
-			_count: { select: { packs: true, exclusivePacks: true } },
-		},
+		include: giftRowInclude(locale),
 	});
-	return rows.map((g) => ({
-		id: Number(g.id),
-		tier: tierOf(g),
-		enhanceable: g.enhanceable,
-		hardOnly: g.hardOnly,
-		mdCost: g.cost,
-		icon: giftIcon(g.sprite),
-		text: nameOf(g.stages[0]?.texts ?? [], locale),
-		keyword: g.keyword ? nameOf(g.keyword.texts, locale) : null,
-		keywordId: g.keywordId,
-		packCount: g._count.packs,
-		exclusiveCount: g._count.exclusivePacks,
-	}));
+	return rows.map((g) => toGiftRow(g, locale));
 }
 
 /**
- * 저주 · 축복을 **갈라서** — MCP `get_gift` 가 쓴다.
- *
- * 가리는 규칙은 `listCursedGiftIds` 와 같다(그 주석이 근거다). 다른 것은 둘을 한 칸에
- * 섞지 않는다는 것뿐이다.
+ * 저주 · 축복을 **갈라서**, 짝 추정과 함께. `listCursedGiftIds` 와 MCP `get_gift` 가 쓴다.
  *
  * ```
- * curse     설명문 「기프트가 변경」으로 가린다 — 데이터에 적힌 것
- * blessing  저주 id + 1 이면서 3 등급 · 키워드 없음 — 추정이다. 잇는 값이 데이터에 없다
+ * curse     설명문 「기프트가 변경」으로 가린다 — 데이터에 적힌 것. 거울 던전만
+ * blessing  저주 id + 1 이면서 3 등급 · 키워드 없음 — 추정이다
+ * pairs     그 규칙이 곧 짝 추정이다 — { curseId, blessingId: curseId + 1 }
  * ```
+ *
+ * **한국어 행으로 가린다.** 화면 로케일과 무관하게 같은 셋이 나와야 하기 때문이다.
+ *
+ * 바뀐 뒤의 축복 기프트 — **둘을 잇는 값이 데이터에 없다.** `gift_effect` ·
+ * `choice_event_gift` · `fusion_recipe` 를 다 봤지만 짝을 가리키는 것이 없다 — 저주 셋만
+ * `choice_event_gift` 에 있고 축복 셋은 어디에도 걸리지 않는다.
+ *
+ * 그래서 **id 하나 뒤**라는 관찰을 쓰되 그대로 믿지 않고 걸러 확인한다. 저주는 전부
+ * 1 등급이고 축복은 3 등급이며 둘 다 키워드가 없다. 조건에 맞지 않으면 버린다 —
+ * 규칙이 깨졌는데 엉뚱한 기프트를 특수로 표시하는 것보다 낫다.
+ *
+ * 나무위키의 기프트 문서가 축복 기프트가 셋(신검합일 · 황금빛 시간 · 가능성)이라고
+ * 적고 있어 수는 맞는다. 다만 **어느 저주가 어느 축복이 되는지는 그 문서도 밝히지
+ * 않는다.** 짝은 id + 1 규칙에서 나온 추정이며 그렇게 표시해 낸다.
  */
-export async function listCurseBlessingGiftIds(): Promise<{ curse: number[]; blessing: number[] }> {
+export async function listCurseBlessingGiftIds(): Promise<{
+	curse: number[];
+	blessing: number[];
+	pairs: Array<{ curseId: number; blessingId: number }>;
+}> {
 	const cursed = await canonical.giftStageText.findMany({
-		where: { locale: 'ko', level: 0, desc: { contains: '기프트가 변경' } },
+		where: { locale: 'ko', level: 0, desc: { contains: '기프트가 변경' }, stage: { gift: MIRROR } },
 		select: { giftId: true },
 	});
 	const candidates = cursed.map((r) => String(Number(r.giftId) + 1));
 	const blessed = await canonical.gift.findMany({
+		// 「키워드가 없다」는 캐노니컬에서 keywordId='None' 이다 — null 이 아니다
 		where: {
 			...MIRROR,
 			id: { in: candidates },
@@ -466,8 +459,12 @@ export async function listCurseBlessingGiftIds(): Promise<{ curse: number[]; ble
 		select: { id: true },
 	});
 	const sorted = (ids: number[]) => [...new Set(ids)].sort((a, b) => a - b);
+	const curse = sorted(cursed.map((r) => Number(r.giftId)));
+	const blessing = sorted(blessed.map((g) => Number(g.id)));
+	const blessingSet = new Set(blessing);
 	return {
-		curse: sorted(cursed.map((r) => Number(r.giftId))),
-		blessing: sorted(blessed.map((g) => Number(g.id))),
+		curse,
+		blessing,
+		pairs: curse.filter((c) => blessingSet.has(c + 1)).map((c) => ({ curseId: c, blessingId: c + 1 })),
 	};
 }

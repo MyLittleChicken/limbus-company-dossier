@@ -123,10 +123,28 @@ export function readGlossaryFilter(params: SearchParams): GlossaryFilter {
 }
 
 const statusCorpus=cacheReference(()=>canonical.status.findMany({orderBy:{id:'asc'},include:{texts:{where:{locale:{in:['ko','en']}}}}}));
-export async function listStatuses(locale: Locale, filter: GlossaryFilter) {
+
+/** 필터에 맞는 상태 원본 행 — `listStatuses` 와 `listStatusesUnpaged` 가 같이 쓴다. 차례는 id 순 그대로다. */
+async function matchStatuses(filter: Omit<GlossaryFilter, 'page'>) {
  const matches=createKoreanMatcher(filter.q??'');
  const candidates=(await statusCorpus()).filter(s=>!filter.buffTypes.length||filter.buffTypes.includes(s.buffType??''));
- const matched=candidates.filter(s=>!filter.q||s.texts.some(t=>matches(t.name)||matches(t.desc)));
+ return candidates.filter(s=>!filter.q||s.texts.some(t=>matches(t.name)||matches(t.desc)));
+}
+
+type StatusSource = Awaited<ReturnType<typeof statusCorpus>>[number];
+
+function toStatusRow(s: StatusSource, locale: Locale) {
+	return {
+		id: s.id,
+		buffType: s.buffType,
+		// 아이콘 없는 254종은 수치 변화형이라 게임에도 아이콘이 없다. 결손이 아니다.
+		icon: statusIcon(s.sprite),
+		text: textOf(s.texts, locale),
+	};
+}
+
+export async function listStatuses(locale: Locale, filter: GlossaryFilter) {
+ const matched=await matchStatuses(filter);
  const total=matched.length;
  const rows=matched.slice((filter.page-1)*GLOSSARY_PAGE,filter.page*GLOSSARY_PAGE);
 
@@ -134,14 +152,16 @@ export async function listStatuses(locale: Locale, filter: GlossaryFilter) {
 		total,
 		page: filter.page,
 		pageCount: Math.max(1, Math.ceil(total / GLOSSARY_PAGE)),
-		items: rows.map((s) => ({
-			id: s.id,
-			buffType: s.buffType,
-			// 아이콘 없는 254종은 수치 변화형이라 게임에도 아이콘이 없다. 결손이 아니다.
-			icon: statusIcon(s.sprite),
-			text: textOf(s.texts, locale),
-		})),
+		items: rows.map((s) => toStatusRow(s, locale)),
 	};
+}
+
+/**
+ * `listStatuses` 를 쪽 없이 — MCP `list_statuses` 가 쓴다. 필터 · 차례 · 행 모양이 같다
+ * (`matchStatuses` · `toStatusRow` 를 같이 쓴다). 커서는 호출하는 쪽이 자른다.
+ */
+export async function listStatusesUnpaged(locale: Locale, filter: Omit<GlossaryFilter, 'page'>) {
+	return (await matchStatuses(filter)).map((s) => toStatusRow(s, locale));
 }
 
 export const listGlossaryAxes=cacheReference(async(locale: Locale)=>{
@@ -216,28 +236,68 @@ export interface SearchHit {
 	meta: string;
 }
 
+/*
+	검색 열쇠 — `lib/korean-search.ts` 의 `createKoreanMatcher` 와 **같은 계산**을 말뭉치 쪽에서 미리 해 둔다.
+	전에는 질의마다 모든 이름 · 설명문을 자모로 다시 풀었다(기프트 설명문이 커서 질의당 수십 ms).
+	이제 말뭉치를 캐시할 때 한 번 풀고, 질의는 needle 하나만 풀어 `includes` 로 본다.
+	규칙이 같다는 것은 `lib/mcp/tools/catalog.test.ts` 가 전후 결과를 대조해 지킨다 —
+	korean-search.ts 를 고치면 여기도 고칠 것(그쪽이 jamo · initials 를 내보내면 이 사본은 지운다).
+*/
+const INITIALS=[...'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'];
+const VOWELS=[...'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ'];
+const FINALS=['ㄱ','ㄲ','ㄱㅅ','ㄴ','ㄴㅈ','ㄴㅎ','ㄷ','ㄹ','ㄹㄱ','ㄹㅁ','ㄹㅂ','ㄹㅅ','ㄹㅌ','ㄹㅍ','ㄹㅎ','ㅁ','ㅂ','ㅂㅅ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const normalizedKey=(value:string)=>value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/gu,'');
+const jamoKey=(value:string)=>[...normalizedKey(value).normalize('NFD')].map(c=>{const n=c.codePointAt(0)!;return INITIALS[n-0x1100]??VOWELS[n-0x1161]??FINALS[n-0x11a8]??c}).join('');
+const initialsKey=(value:string)=>[...normalizedKey(value)].map(c=>{const n=c.codePointAt(0)!;return n>=0xac00&&n<=0xd7a3?INITIALS[Math.floor((n-0xac00)/588)]:jamoKey(c)}).join('');
+
+/** 한 행의 검색 열쇠 — 자모 풀이(`j`)와 초성(`i`). 빈 값은 담지 않는다(원래 matcher 도 빈 값은 안 맞는다). */
+interface SearchKeys { j: string[]; i: string[] }
+function searchKeys(values: Array<string|null|undefined>): SearchKeys {
+ const present=values.filter((v):v is string=>!!v);
+ return { j: present.map(jamoKey), i: present.map(initialsKey) };
+}
+/** `createKoreanMatcher(query)` 와 같은 판정 — needle 이 초성뿐이면 초성 열쇠, 아니면 자모 열쇠에서 찾는다. */
+function keyMatcher(query:string):(keys:SearchKeys)=>boolean {
+ const needle=jamoKey(query);
+ if(!needle)return ()=>false;
+ const initialOnly=/^[ㄱ-ㅎ]+$/.test(needle);
+ return keys=>(initialOnly?keys.i:keys.j).some(k=>k.includes(needle));
+}
+
 const searchCorpus=cacheReference(async()=>{
  const searchableTexts={where:{locale:{in:['ko','en'] as $Enums.Locale[]}}};
  // Match the small canonical text corpus on the server, before limiting each group.
  // SQL contains cannot match Korean initial consonants or unfinished IME syllables.
- return Promise.all([
+ const [giftRows,packRows,identityRows,egoRows]=await Promise.all([
   canonical.gift.findMany({where:{domain:'mirror_dungeon'},orderBy:{id:'asc'},include:{stages:{orderBy:{level:'asc'},include:{texts:searchableTexts}}}}),
   canonical.pack.findMany({orderBy:{id:'asc'},include:{texts:searchableTexts}}),
   canonical.identity.findMany({orderBy:{id:'asc'},include:{texts:searchableTexts}}),
   canonical.ego.findMany({where:{presentationOnly:false},orderBy:{id:'asc'},include:{texts:searchableTexts}}),
  ]);
+ // 질의 텍스트는 캐시 키가 아니다 — 말뭉치만 캐시한다(query-cache 의 규칙).
+ return [
+  giftRows.map(row=>({row,keys:searchKeys(row.stages.flatMap(s=>s.texts.flatMap(t=>[t.name,t.desc])))})),
+  packRows.map(row=>({row,keys:searchKeys(row.texts.map(t=>t.name))})),
+  identityRows.map(row=>({row,keys:searchKeys(row.texts.map(t=>t.title))})),
+  egoRows.map(row=>({row,keys:searchKeys(row.texts.map(t=>t.name))})),
+ ] as const;
 });
 
 export async function searchAll(query: string, locale: Locale): Promise<SearchHit[]> {
 	const q = query.trim();
 	if (!canSearch(q)) return [];
 
-	const matches=createKoreanMatcher(q);
+	const matches=keyMatcher(q);
  const [giftRows,packRows,identityRows,egoRows]=await searchCorpus();
- const gifts=giftRows.filter(g=>g.stages.some(s=>s.texts.some(t=>matches(t.name)||matches(t.desc)))).slice(0,PER_KIND);
- const packs=packRows.filter(p=>p.texts.some(t=>matches(t.name))).slice(0,PER_KIND);
- const identities=identityRows.filter(i=>i.texts.some(t=>matches(t.title))).slice(0,PER_KIND);
- const egos=egoRows.filter(e=>e.texts.some(t=>matches(t.name))).slice(0,PER_KIND);
+ const pick=<T,>(rows:ReadonlyArray<{row:T;keys:SearchKeys}>)=>{
+  const out:T[]=[];
+  for(const r of rows){if(matches(r.keys)){out.push(r.row);if(out.length>=PER_KIND)break;}}
+  return out;
+ };
+ const gifts=pick(giftRows);
+ const packs=pick(packRows);
+ const identities=pick(identityRows);
+ const egos=pick(egoRows);
 
 	const hits: SearchHit[] = [];
 
