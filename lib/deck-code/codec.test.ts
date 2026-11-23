@@ -69,6 +69,20 @@ test('출격을 순서 앞으로 옮기되 출격끼리 · 대기끼리 상대 �
 	assert.deepEqual([...back.value.deployed].sort(), [...d.deployed].sort(), '출격 집합이 왕복한다');
 });
 
+test('인격을 지운 칸은 출격으로 앞에 옮기지 않는다', async () => {
+	const d = emptyDeck('빈 출격', 'id-7');
+	for (let i = 0; i < 9; i++) d.slots[i]!.identityId = 10101 + i * 100;
+	d.order = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+	d.deployed = [2, 3, 4, 5, 6, 7, 9];
+	d.slots[8]!.identityId = null; // 9 의 인격을 지웠다 — deployed 에는 남아 있다
+	const code = await deckToCode(d);
+	if (!code.ok) return assert.fail(code.reason);
+	const back = await deckFromCode(code.value, 'x');
+	if (!back.ok) return assert.fail(back.reason);
+	assert.deepEqual(back.value.order, [2, 3, 4, 5, 6, 7, 1, 8, 9], '빈 칸 9 는 앞으로 가지 않는다');
+	assert.deepEqual(back.value.deployed, [2, 3, 4, 5, 6, 7, 1]);
+});
+
 test('편성 순서가 없으면 인격이 든 칸을 번호 순으로 매긴다', async () => {
 	// 순서를 정하는 화면이 아직 없다. 0(미편성)으로 두면 게임이 빈 편성으로 읽으므로
 	// 지어내되, 무엇을 지어냈는지 여기에 고정해 둔다.

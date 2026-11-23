@@ -75,8 +75,8 @@ export function DeckCodeIo({
 					{/* 560비트는 실물 코드와 대조됐다. 컨테이너는 아직 아니다 — 7.3 */}
 					<p className="notice" role="status">
 						{ko
-							? '내보낸 코드를 게임이 받아들이는지는 아직 확인되지 않았습니다. 편성 내용은 실물 코드와 비트 단위로 대조했습니다.'
-							: 'Whether the game accepts an exported code is unverified. The squad contents match a real code bit for bit.'}
+							? '내보낸 코드를 게임이 받아들이는지는 아직 확인되지 않았습니다. 편성 내용은 실물 코드와 비트 단위로 대조했습니다. 덱 코드는 출전을 따로 담지 않아 게임은 편성 순서 앞 7명을 출전으로 읽습니다 — 출전을 7명 미만으로 골랐다면 그 뒤 순서가 출전으로 읽힐 수 있습니다(미확인).'
+							: 'Whether the game accepts an exported code is unverified. The squad contents match a real code bit for bit. Deck codes carry no separate deployment, so the game reads the first 7 in formation order as deployed — with fewer than 7 chosen, the next in order may be read as deployed (unverified).'}
 					</p>
 				</>
 			)}

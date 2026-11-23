@@ -116,7 +116,9 @@ export function deckToCode(deck: StoredDeck): Promise<Result<string>> {
 	// **출격은 순서 앞 7 이다**(설계 §6.2). 코드에 출격 비트가 없으므로 `deployed` 를 순서 앞으로
 	// 옮겨 쓴다 — 출격끼리 · 대기끼리는 원래 상대 순서를 지킨다. 그러지 않으면 화면에서 고른
 	// 출격이 내보내기에서 사라진다. 순서에 없는 수감자는 옮기지 않는다(편성에 넣지 않는다).
-	const deployed = new Set(deck.deployed);
+	// 인격을 지운 칸은 출격으로 치지 않는다 — 앞으로 옮기면 출격 7 중 한 자리를 빈 칸이 차지한다.
+	const filled = new Set(deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId));
+	const deployed = new Set(deck.deployed.filter((id) => filled.has(id)));
 	const order = [...base.filter((id) => deployed.has(id)), ...base.filter((id) => !deployed.has(id))];
 
 	for (const slot of deck.slots) {
