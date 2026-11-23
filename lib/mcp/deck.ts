@@ -18,6 +18,23 @@ import type { Squad } from '@/lib/engine/v2/types';
 
 const MAX_ROSTER = SINNER_COUNT;
 const MAX_EGOS = SINNER_COUNT * EGO_RANKS.length;
+/** 대기 상한. 편성창 머리 「대기 인원 편성 5/5」(설계 §6.2) — 편성 12 · 출격 7 */
+export const WAITING_MAX = MAX_ROSTER - DEPLOY_MAX;
+
+/**
+ * 출격 규칙(순서 앞 7)의 근거 단서.
+ *
+ * 규칙의 표본은 **12인 편성 1건**(편성 #24)이다. 7인 이하는 전원 출격이라 갈릴 것이 없고, 12인은
+ * 대조됐다. 그 사이(8–11인)는 대기 상한 규칙상 같을 것이나 실물로 대조하지 않았다 — 그 경우에만
+ * 단서를 준다. `deployedIds` 를 직접 받았을 때는 규칙을 쓰지 않으니 호출자가 부르지 않는다.
+ */
+export function deployCaveat(rosterSize: number): string | null {
+	if (rosterSize <= DEPLOY_MAX || rosterSize >= MAX_ROSTER) return null;
+	return `편성 ${rosterSize}인: 출격 규칙(순서 앞 ${DEPLOY_MAX})의 표본은 12인 1건 — 8–11인은 실물 미대조`;
+}
+
+/** codec 문구는 단계만 말한다. 잘린 복사가 「base64 가 아니다」로 나오기도 해 원인 힌트를 붙인다 */
+export const DECK_CODE_HINT = '덱 코드가 잘렸거나 다른 문자열일 수 있다 — 게임에서 다시 복사';
 
 /**
  * 덱 코드 길이 상한. 실물 코드는 ~160자다(편성 #24 = 156자).
@@ -111,7 +128,7 @@ export async function resolveDeck(raw: DeckInput | DeckInputArgs): Promise<Resul
 		// 스키마를 거치지 않는 호출자도 막는다 — 풀기 전에 길이부터
 		if (input.deckCode!.length > DECK_CODE_MAX) return err(`덱 코드가 너무 길다: ${input.deckCode!.length}자 (최대 ${DECK_CODE_MAX})`);
 		const deck = await deckFromCode(input.deckCode!, 'mcp');
-		if (!deck.ok) return deck;
+		if (!deck.ok) return err(`${deck.reason} (${DECK_CODE_HINT})`);
 		order = [];
 		// 편성 순서(order)에 든 수감자만 편성이다. 순서 0 인 칸은 게임이 미편성으로 읽는다.
 		for (const sinnerId of deck.value.order) {
@@ -170,6 +187,10 @@ export async function resolveDeck(raw: DeckInput | DeckInputArgs): Promise<Resul
 	}
 	const fieldSet = new Set(field);
 	const waiting = order.filter((id) => !fieldSet.has(id));
+	// 규칙(앞 7)으로는 넘을 수 없다. deployedIds 를 적게 주면 넘는다 — 게임이 받지 않는 편성이다.
+	if (waiting.length > WAITING_MAX) {
+		return err(`대기는 최대 ${WAITING_MAX} (편성 ${MAX_ROSTER} · 출격 ${DEPLOY_MAX}): 편성 ${order.length} − 출격 ${field.length} = 대기 ${waiting.length}`);
+	}
 
 	return ok({
 		squad: {

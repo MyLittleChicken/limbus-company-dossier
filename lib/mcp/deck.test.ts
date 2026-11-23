@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DECK_CODE_MAX, deckInputSchema, resolveDeck } from './deck';
+import { DECK_CODE_MAX, deckInputSchema, deployCaveat, resolveDeck } from './deck';
 import { deckFromCode, encodeDeckCode } from '@/lib/deck-code/codec';
 import { emptyBits, writeBlock, identityId } from '@/lib/deck-code/layout';
 
@@ -28,9 +28,12 @@ test('5인 인격 목록: 전원 출격, 대기 없음', async () => {
 });
 
 test('deployedIds 가 순서 규칙보다 우선한다', async () => {
+	// 계획 원문은 deployedIds [10801] · 대기 7 이었다. 대기 상한 5 를 넣으며 대기 5 가 되도록 바꿨다.
 	const ids = [10101, 10201, 10301, 10401, 10501, 10601, 10701, 10801];
-	const r = await resolveDeck({ identityIds: ids, deployedIds: [10801] });
-	assert.ok(r.ok); assert.deepEqual(r.value.field, [10801]); assert.equal(r.value.waiting.length, 7);
+	const r = await resolveDeck({ identityIds: ids, deployedIds: [10801, 10201, 10101] });
+	assert.ok(r.ok);
+	assert.deepEqual(r.value.field, [10101, 10201, 10801], '출격은 편성 순서대로');
+	assert.deepEqual(r.value.waiting, [10301, 10401, 10501, 10601, 10701]);
 });
 
 test('deployedIds 가 편성 밖이면 실패', async () => {
@@ -78,16 +81,43 @@ test('id 형식이 아니면 실패 (인격 1SSII · E.G.O 2SSII)', async () => 
 });
 
 test('덱 코드와 deployedIds 를 함께 주면 출격이 그것으로 바뀐다', async () => {
-	const r = await resolveDeck({ deckCode: CODE_24, deployedIds: [10808, 11116] });
+	// 순서 앞 7 중 10711 을 빼고 대기의 10808 을 넣는다.
+	const r = await resolveDeck({ deckCode: CODE_24, deployedIds: [10808, 11116, 11017, 10316, 10216, 11216, 10611] });
 	assert.ok(r.ok);
-	assert.deepEqual(r.value.field, [11116, 10808], '출격은 편성 순서대로');
-	assert.equal(r.value.waiting.length, 10);
+	assert.deepEqual(r.value.field, [11116, 11017, 10316, 10216, 11216, 10611, 10808], '출격은 편성 순서대로');
+	assert.deepEqual(r.value.waiting, [10711, 10514, 10408, 10116, 10910]);
+});
+
+test('대기가 5 를 넘으면 실패 (편성 12 · 출격 7 · 대기 5)', async () => {
+	const ids = Array.from({ length: 12 }, (_, i) => 10101 + i * 100);
+	const r = await resolveDeck({ identityIds: ids, deployedIds: [10101] });
+	assert.equal(r.ok, false);
+	if (!r.ok) assert.match(r.reason, /대기는 최대 5/);
+	const code = await resolveDeck({ deckCode: CODE_24, deployedIds: [10808, 11116] });
+	assert.equal(code.ok, false);
+	assert.ok((await resolveDeck({ identityIds: ids, deployedIds: ids.slice(5, 12) })).ok, '12 − 7 = 5 는 통과');
+});
+
+test('deployCaveat: 8–11인만 미대조 단서', () => {
+	assert.equal(deployCaveat(5), null);
+	assert.equal(deployCaveat(7), null);
+	assert.equal(deployCaveat(12), null);
+	for (const n of [8, 9, 10, 11]) assert.match(deployCaveat(n) ?? '', /8–11인은 실물 미대조/);
 });
 
 test('잘못된 덱 코드는 코덱 문구로 실패', async () => {
 	const r = await resolveDeck({ deckCode: 'not-a-code' });
 	assert.equal(r.ok, false);
-	if (!r.ok) assert.match(r.reason, /덱 코드를 풀지 못했다/);
+	if (!r.ok) {
+		assert.match(r.reason, /덱 코드를 풀지 못했다/);
+		assert.match(r.reason, /잘렸거나 다른 문자열일 수 있다 — 게임에서 다시 복사/);
+	}
+});
+
+test('잘린 덱 코드도 다시 복사 힌트를 준다', async () => {
+	const r = await resolveDeck({ deckCode: CODE_24.slice(0, 50) });
+	assert.equal(r.ok, false);
+	if (!r.ok) assert.match(r.reason, /게임에서 다시 복사/);
 });
 
 test('수감자당 E.G.O 는 5개까지 (등급당 하나)', async () => {

@@ -141,7 +141,7 @@ deckId        내 저장 덱 id — 로그인 시에만 (§6.4)
 
 | 도구 | 감싸는 것 | 단정/참고 |
 | --- | --- | --- |
-| `decode_deck_code` | `lib/deck-code` | 단정. 출전 인원은 코드에 없다고 응답에 적는다 |
+| `decode_deck_code` | `lib/deck-code` | 단정. 순서 1–7 이 출격, 8–12 가 대기로 응답에 적는다 |
 | `analyze_deck` | `listSquadAxes` 계열 · `Profile` | 단정. 편성이 공급하는 키워드 · 죄악 · 메카닉 축 |
 | `check_gifts` | `evaluateGifts` · `chain` | 단정. 기프트 id 들에 대해 켜짐 여부 + 절 단위 근거. 보유 기프트(`heldGiftIds`)를 받으면 연쇄까지 |
 | `score_packs` | `recommendForDeck` 의 점수 부분 | **참고.** 층 · 난이도 · 보유 기프트를 받아 팩별 점수와 근거. `provisional: true` 와 이유 |

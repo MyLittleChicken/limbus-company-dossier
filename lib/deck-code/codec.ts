@@ -109,10 +109,15 @@ export function deckToCode(deck: StoredDeck): Promise<Result<string>> {
 	let bits = emptyBits();
 	// 편성 순서를 사용자가 정하는 화면이 아직 없다. 손으로 만든 덱은 `order` 가 비어 있으므로
 	// **인격이 든 칸을 수감자 번호 순으로 매긴다** — 지어내는 것이지만 0(미편성)으로 두면
-	// 게임이 빈 편성으로 읽는다. 가져온 덱은 코드가 준 순서를 그대로 쓴다(docs/07 7.1).
-	const order = deck.order.length > 0
+	// 게임이 빈 편성으로 읽는다. 가져온 덱은 코드가 준 순서를 바탕으로 쓴다(docs/07 7.1).
+	const base = deck.order.length > 0
 		? deck.order
 		: deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId);
+	// **출격은 순서 앞 7 이다**(설계 §6.2). 코드에 출격 비트가 없으므로 `deployed` 를 순서 앞으로
+	// 옮겨 쓴다 — 출격끼리 · 대기끼리는 원래 상대 순서를 지킨다. 그러지 않으면 화면에서 고른
+	// 출격이 내보내기에서 사라진다. 순서에 없는 수감자는 옮기지 않는다(편성에 넣지 않는다).
+	const deployed = new Set(deck.deployed);
+	const order = [...base.filter((id) => deployed.has(id)), ...base.filter((id) => !deployed.has(id))];
 
 	for (const slot of deck.slots) {
 		const at = order.indexOf(slot.sinnerId);

@@ -50,9 +50,23 @@ test('덱 왕복이 일치한다', async () => {
 	assert.equal(back.value.slots[0]?.egos.ZAYIN, 20101);
 	assert.equal(back.value.slots[4]?.identityId, 10508);
 	assert.equal(back.value.slots[4]?.egos.TETH, 20503);
-	assert.deepEqual(back.value.order, [5, 1], '편성 순서는 왕복한다');
-	// 출격은 편성 순서 앞 7 이다(설계 §6.2). 넣은 deployed=[1] 은 코드에 실리지 않고, 순서에서 다시 나온다.
-	assert.deepEqual(back.value.deployed, [5, 1], '출격 = 편성 순서 앞 7');
+	// 출격은 편성 순서 앞 7 이다(설계 §6.2). 내보내기가 deployed=[1] 을 순서 앞으로 옮겨 쓰므로
+	// 수감자 1 이 첫째로 돌아온다. 출격 7 에 빈자리가 남아 대기였던 5 도 출격으로 읽힌다.
+	assert.deepEqual(back.value.order, [1, 5], '출격이 순서 앞으로 간다');
+	assert.deepEqual(back.value.deployed, [1, 5], '출격 = 편성 순서 앞 7');
+});
+
+test('출격을 순서 앞으로 옮기되 출격끼리 · 대기끼리 상대 순서를 지킨다', async () => {
+	const d = emptyDeck('재배치', 'id-6');
+	for (let i = 0; i < 9; i++) d.slots[i]!.identityId = 10101 + i * 100;
+	d.order = [9, 8, 7, 6, 5, 4, 3, 2, 1];
+	d.deployed = [1, 3, 5, 7, 9, 2, 4];
+	const code = await deckToCode(d);
+	if (!code.ok) return assert.fail(code.reason);
+	const back = await deckFromCode(code.value, 'x');
+	if (!back.ok) return assert.fail(back.reason);
+	assert.deepEqual(back.value.order, [9, 7, 5, 4, 3, 2, 1, 8, 6]);
+	assert.deepEqual([...back.value.deployed].sort(), [...d.deployed].sort(), '출격 집합이 왕복한다');
 });
 
 test('편성 순서가 없으면 인격이 든 칸을 번호 순으로 매긴다', async () => {
