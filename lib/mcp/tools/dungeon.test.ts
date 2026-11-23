@@ -403,12 +403,8 @@ test('listStatusesUnpaged 는 화면 listStatuses 쪽들과 결과 집합 · 순
 	}
 });
 
-/*
-	목표는 20ms 다. 지금 약 25ms 이고 거의 전부가 질의층의 한글 매처다 — `createKoreanMatcher` 가
-	부를 때마다 상태 원문 ~6,000 개(ko · en 이름 · 설명)를 자모로 푼다. 쪽마다 다시 부르던
-	때(수백 ms)의 회귀만 막는다. 20ms 는 `lib/korean-search.ts` 가 미리 푼 키를 받게 되면 맞춘다.
-*/
-test('list_statuses q:"e" 는 데운 뒤 한 번 읽기 비용 안쪽이다 (50ms)', DB, async () => {
+/* 상태 말뭉치가 행별 검색 열쇠를 미리 갖는다(reference.ts statusCorpus). 질의마다 자모를 다시 풀지 않는다. */
+test('list_statuses q:"e" 는 데운 뒤 10ms 안쪽이다', DB, async () => {
 	await call('list_statuses', { q: 'e' });
 	const runs: number[] = [];
 	for (let i = 0; i < 5; i++) {
@@ -418,5 +414,14 @@ test('list_statuses q:"e" 는 데운 뒤 한 번 읽기 비용 안쪽이다 (50m
 		assert.notEqual(r.isError, true);
 	}
 	const median = runs.sort((a, b) => a - b)[2] ?? Infinity;
-	assert.ok(median < 50, `median ${median.toFixed(1)}ms`);
+	assert.ok(median < 10, `median ${median.toFixed(1)}ms`);
+});
+
+test('list_statuses: 동시 20회도 한 번씩 다시 풀지 않는다 (합계 200ms 안쪽)', DB, async () => {
+	await call('list_statuses', { q: 'e' });
+	const t0 = performance.now();
+	const rs = await Promise.all(Array.from({ length: 20 }, () => call('list_statuses', { q: 'e' })));
+	const ms = performance.now() - t0;
+	assert.ok(rs.every((r) => r.isError !== true));
+	assert.ok(ms < 200, `${ms.toFixed(0)}ms`);
 });

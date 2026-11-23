@@ -1,7 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { canonical } from '@/lib/db-canonical';
-import { cacheReference } from '@/lib/query-cache';
 import type { Named } from '@/lib/queries/shared';
 import {
 	GIFT_TIERS,
@@ -62,6 +61,26 @@ const pageSummary = (what: string, total: number, shown: number, next: string | 
 /** 강화 단계 표기 — 게임이 카드에 찍는 그대로. */
 const STAGE_LABEL: Record<number, string> = { 0: '0', 1: '+', 2: '++' };
 
+// ── 판 캐시 ─────────────────────────────────────────────────────
+
+/**
+ * 데이터 판(`ctx.dataVersion`) 키 단일 슬롯 — `engineData`(axes.ts)와 같은 방식.
+ * 한 응답 안의 봉투 · 커서 · 어휘가 같은 판을 보고, 판이 바뀌면 이전 것은 버린다(쌓이지 않는다).
+ * 읽다 실패하면 슬롯을 비운다.
+ */
+function versionSlot<T>(load: () => Promise<T>): (version: string) => Promise<T> {
+	let slot: { version: string; value: Promise<T> } | null = null;
+	return (version) => {
+		if (slot?.version === version) return slot.value;
+		const mine = { version, value: load() };
+		slot = mine;
+		mine.value.catch(() => {
+			if (slot === mine) slot = null;
+		});
+		return mine.value;
+	};
+}
+
 // ── 키워드 어휘 ───────────────────────────────────────────────────
 
 /**
@@ -78,7 +97,7 @@ const ATTACK_TYPE_AXIS: Readonly<Record<string, string>> = { Slash: 'slash', Pen
  * 키워드 없음(`None` 행 · `범용` · `Keywordless`)은 `none` 으로 모은다 — `listGifts` 의 `none` 은
  * `None` 행과 null 둘 다 본다.
  */
-export const keywordVocab = cacheReference(async () => {
+export const keywordVocab = versionSlot(async () => {
 	const [ko, en, axes] = await Promise.all([
 		listKeywords('ko'),
 		listKeywords('en'),
@@ -113,7 +132,7 @@ export const keywordVocab = cacheReference(async () => {
 		axisRef: Object.fromEntries(entries.map((e) => [e.id, e.axisRef])) as Record<string, string | null>,
 		aliases,
 	};
-}, 60_000);
+});
 
 type KeywordVocab = Awaited<ReturnType<typeof keywordVocab>>;
 
@@ -137,7 +156,7 @@ const keywordOf = (vocab: KeywordVocab) => (id: string | null, t: Named | null |
 
 // ── 저주 · 축복 ──────────────────────────────────────────────────
 
-const curseBlessing = cacheReference(listCurseBlessingGiftIds, 60_000);
+const curseBlessing = versionSlot(listCurseBlessingGiftIds);
 
 const CURSE_NOTE =
 	'저주로 얻고 조건을 채우면 축복으로 바뀌는 기프트 무리다. 저주 쪽은 설명문(「기프트가 변경」)으로 가린 확정이다(거울 던전만). ' +
@@ -269,7 +288,7 @@ export function registerDungeonTools(server: McpServer): void {
 			annotations: READ_ONLY,
 		},
 		async ({ locale, q, tiers, keywords, enhanceable, hardOnly, pool, cursor }, ctx) => {
-			const vocab = await keywordVocab();
+			const vocab = await keywordVocab(ctx.dataVersion);
 			const filter: Omit<GiftFilter, 'page'> = {
 				q: cleanText(q),
 				tiers: [...new Set(tiers ?? [])].sort(),
@@ -365,7 +384,7 @@ export function registerDungeonTools(server: McpServer): void {
 		},
 		async ({ id, locale }, ctx) => {
 			const gid = toId(id);
-			const [g, cb, vocab] = await Promise.all([getGift(gid, locale), curseBlessing(), keywordVocab()]);
+			const [g, cb, vocab] = await Promise.all([getGift(gid, locale), curseBlessing(ctx.dataVersion), keywordVocab(ctx.dataVersion)]);
 			if (!g) return fail(`없는 id: 기프트 ${gid} — list_gifts 나 search 로 id 를 찾으세요`);
 			const ref = (x: { id: number; text: Named | null }) => ({ id: x.id, ...flat(x.text) });
 			const packRef = (x: { id: string; text: Named | null }) => ({ id: x.id, ...flat(x.text) });
@@ -502,7 +521,7 @@ export function registerDungeonTools(server: McpServer): void {
 		},
 		async ({ id, locale }, ctx) => {
 			const packId = toPackId(id);
-			const [p, vocab] = await Promise.all([getPack(packId, locale), keywordVocab()]);
+			const [p, vocab] = await Promise.all([getPack(packId, locale), keywordVocab(ctx.dataVersion)]);
 			if (!p) return fail(`없는 id: 팩 ${packId} — list_packs 나 search 로 id 를 찾으세요`);
 			const kw = keywordOf(vocab);
 			type Row = (typeof p.gifts)[number];

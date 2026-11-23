@@ -1,5 +1,5 @@
 import {cacheReference} from '@/lib/query-cache';
-import {createKeysMatcher,createKoreanMatcher,canSearch,searchKeys,type SearchKeys} from '@/lib/korean-search';
+import {createKeysMatcher,canSearch,searchKeys,type SearchKeys} from '@/lib/korean-search';
 import type { Locale } from '@/lib/locale';
 import type { $Enums, Prisma } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
@@ -122,16 +122,27 @@ export function readGlossaryFilter(params: SearchParams): GlossaryFilter {
 	};
 }
 
-const statusCorpus=cacheReference(()=>canonical.status.findMany({orderBy:{id:'asc'},include:{texts:{where:{locale:{in:['ko','en']}}}}}));
+/*
+	상태 말뭉치 — 행마다 검색 열쇠(자모 · 초성)를 한 번 풀어 둔다(`searchKeys`, searchCorpus 와 같은 방식).
+	전에는 질의마다 1,530 건의 ko · en 이름 · 설명을 다시 풀었다(warm 수십 ms).
+	판정은 `createKeysMatcher` — `createKoreanMatcher` 와 같은 규칙이다.
+*/
+const statusCorpus=cacheReference(async()=>(await canonical.status.findMany({orderBy:{id:'asc'},include:{texts:{where:{locale:{in:['ko','en']}}}}}))
+ .map(row=>({row,keys:searchKeys(row.texts.flatMap(t=>[t.name,t.desc]))})));
 
 /** 필터에 맞는 상태 원본 행 — `listStatuses` 와 `listStatusesUnpaged` 가 같이 쓴다. 차례는 id 순 그대로다. */
 async function matchStatuses(filter: Omit<GlossaryFilter, 'page'>) {
- const matches=createKoreanMatcher(filter.q??'');
- const candidates=(await statusCorpus()).filter(s=>!filter.buffTypes.length||filter.buffTypes.includes(s.buffType??''));
- return candidates.filter(s=>!filter.q||s.texts.some(t=>matches(t.name)||matches(t.desc)));
+ const matches=createKeysMatcher(filter.q??'');
+ const out:StatusSource[]=[];
+ for(const {row,keys} of await statusCorpus()){
+  if(filter.buffTypes.length&&!filter.buffTypes.includes(row.buffType??''))continue;
+  if(filter.q&&!matches(keys))continue;
+  out.push(row);
+ }
+ return out;
 }
 
-type StatusSource = Awaited<ReturnType<typeof statusCorpus>>[number];
+type StatusSource = Awaited<ReturnType<typeof statusCorpus>>[number]['row'];
 
 function toStatusRow(s: StatusSource, locale: Locale) {
 	return {
