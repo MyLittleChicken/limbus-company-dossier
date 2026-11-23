@@ -6,7 +6,10 @@ import {
 	KEY_LIMIT,
 	MAX_KEYS,
 	bucketCount,
+	clientIpConfig,
 	clientKey,
+	createSemaphore,
+	normalizeIp,
 	createLimiter,
 	resetBuckets,
 	retryAfterSeconds,
@@ -109,15 +112,71 @@ test('1 만 키 순환으로 몰아쳐도 소진된 피해자 버킷은 충전 �
 	assert.ok(l.take('victim', 1_000));
 });
 
-test('clientKey — MCP_TRUST_PROXY 가 아니면 모두 direct', () => {
-	assert.equal(clientKey(new Headers({ 'x-forwarded-for': '1.2.3.4' }), false), 'direct');
-	assert.equal(clientKey(new Headers(), false), 'direct');
+const OFF = clientIpConfig({});
+const ON = clientIpConfig({ MCP_TRUST_PROXY: '1' });
+const xff = (v: string) => new Headers({ 'x-forwarded-for': v });
+
+test('clientIpConfig — 기본값과 잘못된 값', () => {
+	assert.deepEqual(OFF, { trustProxy: false, trustedHops: 1, ipHeader: null });
+	assert.equal(clientIpConfig({ MCP_TRUSTED_HOPS: '2' }).trustedHops, 2);
+	assert.equal(clientIpConfig({ MCP_TRUSTED_HOPS: '0' }).trustedHops, 1);
+	assert.equal(clientIpConfig({ MCP_TRUSTED_HOPS: 'x' }).trustedHops, 1);
+	assert.equal(clientIpConfig({ MCP_CLIENT_IP_HEADER: ' CF-Connecting-IP ' }).ipHeader, 'cf-connecting-ip');
+	assert.equal(clientIpConfig({ MCP_CLIENT_IP_HEADER: 'bad header' }).ipHeader, null);
 });
 
-test('clientKey — 믿으면 첫 값 trim · 소문자, 비거나 선두 콤마면 unknown', () => {
-	assert.equal(clientKey(new Headers({ 'x-forwarded-for': ' 1.2.3.4 , 5.6.7.8' }), true), 'ip:1.2.3.4');
-	assert.equal(clientKey(new Headers({ 'x-forwarded-for': '2001:DB8::1' }), true), 'ip:2001:db8::1');
-	assert.equal(clientKey(new Headers({ 'x-forwarded-for': ', 1.2.3.4' }), true), 'unknown');
-	assert.equal(clientKey(new Headers({ 'x-forwarded-for': '   ' }), true), 'unknown');
-	assert.equal(clientKey(new Headers(), true), 'unknown');
+test('clientKey — MCP_TRUST_PROXY 가 아니면 모두 direct', () => {
+	assert.equal(clientKey(xff('1.2.3.4'), OFF), 'direct');
+	assert.equal(clientKey(new Headers(), OFF), 'direct');
+});
+
+test('clientKey — 믿으면 x-forwarded-for 오른쪽에서 N 번째(왼쪽은 위조 가능)', () => {
+	assert.equal(clientKey(xff('6.6.6.6, 1.2.3.4'), ON), 'ip:1.2.3.4');
+	assert.equal(clientKey(xff('6.6.6.6, 1.2.3.4, 10.0.0.1'), { ...ON, trustedHops: 2 }), 'ip:1.2.3.4');
+	assert.equal(clientKey(xff('1.2.3.4'), { ...ON, trustedHops: 2 }), 'unknown');
+	assert.equal(clientKey(xff('1.2.3.4,'), ON), 'unknown');
+	assert.equal(clientKey(xff('not-an-ip'), ON), 'unknown');
+	assert.equal(clientKey(new Headers(), ON), 'unknown');
+	assert.equal(clientKey(xff('1.2.3.4,' + 'a'.repeat(5_000)), ON), 'unknown');
+});
+
+test('clientKey — MCP_CLIENT_IP_HEADER 를 주면 그 머리가 우선', () => {
+	const cfg = { ...ON, ipHeader: 'cf-connecting-ip' };
+	const h = new Headers({ 'x-forwarded-for': '6.6.6.6', 'cf-connecting-ip': '1.2.3.4' });
+	assert.equal(clientKey(h, cfg), 'ip:1.2.3.4');
+	assert.equal(clientKey(xff('6.6.6.6'), cfg), 'unknown');
+});
+
+test('normalizeIp — 검증 · 포트 떼기 · IPv6 한 표기 · IPv4-mapped', () => {
+	assert.equal(normalizeIp(' 1.2.3.4 '), '1.2.3.4');
+	assert.equal(normalizeIp('1.2.3.4:5678'), '1.2.3.4');
+	assert.equal(normalizeIp('2001:DB8:0:0::1'), '2001:db8::1');
+	assert.equal(normalizeIp('0:0:0:0:0:0:0:1'), '::1');
+	assert.equal(normalizeIp('[2001:db8::1]:443'), '2001:db8::1');
+	assert.equal(normalizeIp('::ffff:1.2.3.4'), '1.2.3.4');
+	assert.equal(normalizeIp('::FFFF:7f00:1'), '127.0.0.1');
+	assert.equal(normalizeIp('999.1.1.1'), null);
+	assert.equal(normalizeIp('fe80::1%eth0'), null);
+	assert.equal(normalizeIp(''), null);
+	assert.equal(normalizeIp('1'.repeat(100)), null);
+});
+
+test('createSemaphore — 상한만큼 동시에, 넘치면 대기열, 대기열도 차면 null', async () => {
+	const sem = createSemaphore(2, 1);
+	const r1 = await sem.acquire()!;
+	const r2 = await sem.acquire()!;
+	const waiting = sem.acquire();
+	assert.ok(waiting);
+	assert.equal(sem.acquire(), null);
+	assert.deepEqual(sem.stats(), { active: 2, queued: 1 });
+	let got = false;
+	void waiting!.then(() => (got = true));
+	r1();
+	r1(); // 두 번 불러도 한 번만 푼다
+	await new Promise(r => setImmediate(r));
+	assert.ok(got);
+	assert.deepEqual(sem.stats(), { active: 2, queued: 0 });
+	r2();
+	(await waiting!)();
+	assert.deepEqual(sem.stats(), { active: 0, queued: 0 });
 });

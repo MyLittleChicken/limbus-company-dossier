@@ -14,10 +14,10 @@ test('document locale uses only a supported first path segment, including docume
 
 test('proxy includes dotted document and namespace lookalikes while excluding actual asset namespaces', async () => {
  const {config}=await import('../proxy');
- for(const path of ['/','/en/missing.html','/ko/missing.html','/ja/missing.html','/mediafoo','/mediafoo/a.webp','/_nextfoo','/favicon.ico']){
+ for(const path of ['/','/en/missing.html','/ko/missing.html','/ja/missing.html','/mediafoo','/mediafoo/a.webp','/_nextfoo','/favicon.ico','/mcpfoo','/mcpfoo/a']){
   assert.equal(unstable_doesMiddlewareMatch({config,url:`http://localhost${path}`}),true,path);
  }
- for(const path of ['/media','/media/a.webp','/_next','/_next/static/a.js','/_next/image?url=x']){
+ for(const path of ['/media','/media/a.webp','/_next','/_next/static/a.js','/_next/image?url=x','/mcp','/mcp/x']){
   assert.equal(unstable_doesMiddlewareMatch({config,url:`http://localhost${path}`}),false,path);
  }
 });

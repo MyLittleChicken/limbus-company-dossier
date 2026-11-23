@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 /**
  * `/mcp` 호출 제한 — 토큰 버킷 두 겹. 수치는 빌더 결정(설계 §5 · §9).
  *
@@ -131,18 +133,126 @@ export function bucketCount(): number {
 	return limiter.size();
 }
 
+/** 호출 제한 키를 정하는 설정. 환경변수에서 읽는다(`clientIpConfig`). */
+export type ClientIpConfig = {
+	/** `MCP_TRUST_PROXY=1` — 앞단 프록시가 클라이언트 IP 머리를 덮어쓴다고 믿는다. */
+	trustProxy: boolean;
+	/** `MCP_TRUSTED_HOPS`(기본 1) — `x-forwarded-for` 의 오른쪽에서 몇 번째 값을 쓸지. 믿는 프록시 수다. */
+	trustedHops: number;
+	/** `MCP_CLIENT_IP_HEADER` — 예: `cf-connecting-ip` · `x-real-ip`. 주면 `x-forwarded-for` 대신 이것을 쓴다. */
+	ipHeader: string | null;
+};
+
+export function clientIpConfig(env: Record<string, string | undefined> = process.env): ClientIpConfig {
+	const hops = Number(env.MCP_TRUSTED_HOPS);
+	const header = env.MCP_CLIENT_IP_HEADER?.trim().toLowerCase();
+	return {
+		trustProxy: env.MCP_TRUST_PROXY === '1',
+		trustedHops: Number.isInteger(hops) && hops >= 1 ? hops : 1,
+		ipHeader: header && /^[a-z0-9-]{1,64}$/.test(header) ? header : null,
+	};
+}
+
+/** 머리 값 하나의 상한. 정상 IP 표기는 이보다 훨씬 짧다(IPv6 최대 45자 + 대괄호·포트). */
+const MAX_IP_TEXT = 64;
+
+/**
+ * IP 표기 하나를 검증·정규화한다. 아니면 null.
+ * - `[v6]:port` · `v4:port` 꼴의 포트를 뗀다.
+ * - IPv6 는 WHATWG URL 직렬화로 한 표기에 맞춘다(소문자 · 0 압축). `::1` 과 `0:0:0:0:0:0:0:1` 이 같다.
+ * - IPv4-mapped(`::ffff:1.2.3.4` · `::ffff:102:304`)는 IPv4 로 바꾼다.
+ * - 한계: IPv6 는 주소 하나가 키 하나다(/64 로 묶지 않는다). 한 사람이 주소를 바꿔 가며 키당 제한을
+ *   비켜 갈 수 있다 — 전역 상한이 그 바닥을 받친다. zone id(`%eth0`)는 거부된다.
+ */
+export function normalizeIp(raw: string): string | null {
+	let text = raw.trim();
+	if (!text || text.length > MAX_IP_TEXT) return null;
+	const bracketed = /^\[([^\]]+)\](?::\d{1,5})?$/.exec(text);
+	if (bracketed) text = bracketed[1]!;
+	else {
+		const v4port = /^(\d{1,3}(?:\.\d{1,3}){3}):\d{1,5}$/.exec(text);
+		if (v4port) text = v4port[1]!;
+	}
+	const kind = isIP(text);
+	if (kind === 4) return text;
+	if (kind !== 6) return null;
+	let v6: string;
+	try {
+		v6 = new URL(`http://[${text}]`).hostname.slice(1, -1);
+	} catch {
+		return null;
+	}
+	const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(v6);
+	if (mapped) {
+		const hi = parseInt(mapped[1]!, 16);
+		const lo = parseInt(mapped[2]!, 16);
+		return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+	}
+	return v6;
+}
+
 /**
  * 호출 제한 키.
  *
  * - `trustProxy` 가 아니면 모두 'direct' 하나로 센다. 배포처가 정해지지 않았고(§3) 로컬은 사용자
- *   한 명이다. 믿을 앞단 없이 `x-forwarded-for` 를 쓰면 호출자가 키를 마음대로 바꾼다.
- * - `trustProxy` 면 `x-forwarded-for` 첫 값을 trim · 소문자로. 머리가 없거나 첫 값이 비면(선두 콤마 등)
- *   'unknown' 하나를 함께 쓴다.
- * - 한계: IPv6 는 소문자화만 한다. `::1` 과 `0:0:0:0:0:0:0:1`, 포트 붙은 표기, IPv4-mapped 주소 등은
- *   다른 키가 된다. 앞단이 표기를 한 가지로 맞춘다는 전제다. 전역 상한이 그 틈의 바닥을 받친다.
+ *   한 명이다. 믿을 앞단 없이 클라이언트 IP 머리를 쓰면 호출자가 키를 마음대로 바꾼다.
+ * - `trustProxy` 면 `ipHeader` 가 있으면 그 값, 없으면 `x-forwarded-for` 의 오른쪽에서 `trustedHops` 번째 값.
+ *   (왼쪽 값은 호출자가 써 넣은 것일 수 있다. 오른쪽 끝이 믿는 프록시가 덧붙인 것이다.)
+ * - 값이 없거나 IP 가 아니면 'unknown' 하나를 함께 쓴다.
  */
-export function clientKey(headers: Headers, trustProxy: boolean): string {
-	if (!trustProxy) return 'direct';
-	const first = headers.get('x-forwarded-for')?.split(',')[0]?.trim().toLowerCase();
-	return first ? `ip:${first}` : 'unknown';
+export function clientKey(headers: Headers, config: ClientIpConfig): string {
+	if (!config.trustProxy) return 'direct';
+	let raw: string | undefined;
+	if (config.ipHeader) {
+		raw = headers.get(config.ipHeader) ?? undefined;
+	} else {
+		const xff = headers.get('x-forwarded-for');
+		if (xff && xff.length <= MAX_IP_TEXT * 32) {
+			const parts = xff.split(',');
+			raw = parts[parts.length - config.trustedHops];
+		}
+	}
+	const ip = raw === undefined ? null : normalizeIp(raw);
+	return ip ? `ip:${ip}` : 'unknown';
 }
+
+/**
+ * 동시 실행 상한 — MCP 처리(도구 = DB 질의 · 엔진)가 사이트 전체를 붙잡지 못하게.
+ * 자리가 없으면 대기열에 선다. 대기열도 차면 null — 호출하는 쪽이 503 으로 답한다.
+ */
+export function createSemaphore(limit: number, maxQueue: number) {
+	let active = 0;
+	const queue: Array<() => void> = [];
+	const release = () => {
+		const next = queue.shift();
+		if (next) next();
+		else active -= 1;
+	};
+	return {
+		/** 자리를 얻으면 풀어 주는 함수를 준다. 대기열이 차 있으면 null. */
+		acquire(): Promise<() => void> | null {
+			if (active < limit) {
+				active += 1;
+				return Promise.resolve(once(release));
+			}
+			if (queue.length >= maxQueue) return null;
+			return new Promise(resolve => queue.push(() => resolve(once(release))));
+		},
+		stats: () => ({ active, queued: queue.length }),
+	};
+}
+
+function once(fn: () => void): () => void {
+	let done = false;
+	return () => {
+		if (done) return;
+		done = true;
+		fn();
+	};
+}
+
+export const MAX_CONCURRENT = 4;
+export const MAX_QUEUE = 16;
+
+/** `/mcp` 가 같이 쓰는 동시 실행 상한. */
+export const mcpSemaphore = createSemaphore(MAX_CONCURRENT, MAX_QUEUE);
