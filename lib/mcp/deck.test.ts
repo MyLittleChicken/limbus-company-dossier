@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveDeck } from './deck';
+import { DECK_CODE_MAX, deckInputSchema, resolveDeck } from './deck';
 import { deckFromCode, encodeDeckCode } from '@/lib/deck-code/codec';
 import { emptyBits, writeBlock, identityId } from '@/lib/deck-code/layout';
 
@@ -114,4 +114,23 @@ test('순서 칸은 있는데 인격이 빈 덱: deckFromCode.deployed 와 resol
 	if (!r.ok) return assert.fail(r.reason);
 	assert.deepEqual(r.value.field, deck.value.deployed.map((s) => identityId(s, 1)));
 	assert.deepEqual(r.value.waiting, [identityId(9, 1)]);
+});
+
+test('덱 코드 길이 상한: 스키마와 resolveDeck 둘 다 512자를 넘으면 막는다', async () => {
+	assert.ok(CODE_24.length < DECK_CODE_MAX, '실물 코드는 상한 안');
+	const long = 'H4sI' + 'A'.repeat(DECK_CODE_MAX);
+	assert.equal(deckInputSchema.safeParse({ deckCode: long }).success, false);
+	assert.equal(deckInputSchema.safeParse({ deckCode: CODE_24 }).success, true);
+	const r = await resolveDeck({ deckCode: long });
+	assert.equal(r.ok, false);
+	assert.match(!r.ok ? r.reason : '', /너무 길다/);
+});
+
+test('숫자 문자열 id 도 받아 number 로 편다', async () => {
+	const r = await resolveDeck({ identityIds: ['10101', 10201], egoIds: ['20101'], deployedIds: ['10201'] });
+	assert.ok(r.ok);
+	assert.deepEqual(r.value.order, [10101, 10201]);
+	assert.deepEqual(r.value.field, [10201]);
+	assert.deepEqual(r.value.egoIds, [20101]);
+	assert.equal(deckInputSchema.safeParse({ identityIds: ['10a01'] }).success, false);
 });

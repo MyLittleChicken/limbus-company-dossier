@@ -20,6 +20,13 @@ const MAX_ROSTER = SINNER_COUNT;
 const MAX_EGOS = SINNER_COUNT * EGO_RANKS.length;
 
 /**
+ * 덱 코드 길이 상한. 실물 코드는 ~160자다(편성 #24 = 156자).
+ * codec 의 gunzip 에는 출력 상한이 없지만 입력을 512자(압축 ~384바이트)로 막으면 deflate 최대
+ * 압축비(~1032:1)로도 풀린 크기가 ~400KB 를 못 넘는다 — 압축 폭탄은 이 길이 상한으로 충분하다.
+ */
+export const DECK_CODE_MAX = 512;
+
+/**
  * 도구 inputSchema 에 **펼쳐 넣는** zod 원시 shape.
  *
  * ```ts
@@ -29,14 +36,18 @@ const MAX_EGOS = SINNER_COUNT * EGO_RANKS.length;
  * 「deckCode 와 identityIds 중 정확히 하나」는 shape 로 표현하지 않는다 — refine 을 단 객체는
  * 펼칠 수 없다. 그 검사는 `resolveDeck` 이 하고, 어기면 `err` 로 돌려준다.
  */
+/** 숫자 id. 숫자나 숫자 문자열('10101') 둘 다 받는다 — 응답에서 id 는 늘 number 로 나간다 */
+const idInput = z.union([z.number().int(), z.string().regex(/^\d+$/)]);
+const toIds = (xs: Array<number | string> | undefined): number[] | undefined => xs?.map(Number);
+
 export const deckInputShape = {
-	deckCode: z.string().min(1).optional()
+	deckCode: z.string().min(1).max(DECK_CODE_MAX).optional()
 		.describe('게임 덱 코드. identityIds 와 함께 주지 않는다'),
-	identityIds: z.array(z.number().int()).min(1).max(MAX_ROSTER).optional()
+	identityIds: z.array(idInput).min(1).max(MAX_ROSTER).optional()
 		.describe('편성 인격 id(1SSII) 목록, 최대 12. 차례가 편성 순서다. 수감자당 하나'),
-	egoIds: z.array(z.number().int()).max(MAX_EGOS).optional()
+	egoIds: z.array(idInput).max(MAX_EGOS).optional()
 		.describe('장착 E.G.O id(2SSII). identityIds 와만 쓴다 — 덱 코드는 E.G.O 를 이미 담는다'),
-	deployedIds: z.array(z.number().int()).min(1).max(DEPLOY_MAX).optional()
+	deployedIds: z.array(idInput).min(1).max(DEPLOY_MAX).optional()
 		.describe('출격 인격 id, 최대 7. 생략하면 편성 순서 앞 7 이 출격'),
 };
 
@@ -79,7 +90,14 @@ const isEgoId = (id: number): boolean =>
 
 const dup = (ids: number[]): number | undefined => ids.find((v, i) => ids.indexOf(v) !== i);
 
-export async function resolveDeck(input: DeckInput | DeckInputArgs): Promise<Result<ResolvedDeck>> {
+export async function resolveDeck(raw: DeckInput | DeckInputArgs): Promise<Result<ResolvedDeck>> {
+	// 숫자 문자열 id 를 여기서 한 번 숫자로 편다 — 아래는 number 만 본다
+	const input = {
+		deckCode: raw.deckCode,
+		identityIds: toIds(raw.identityIds),
+		egoIds: toIds(raw.egoIds),
+		deployedIds: toIds(raw.deployedIds),
+	};
 	const hasCode = input.deckCode !== undefined;
 	const hasIds = input.identityIds !== undefined;
 	if (hasCode === hasIds) return err('deckCode 와 identityIds 중 정확히 하나를 준다');
@@ -90,6 +108,8 @@ export async function resolveDeck(input: DeckInput | DeckInputArgs): Promise<Res
 
 	if (hasCode) {
 		if (input.egoIds !== undefined) return err('egoIds 는 identityIds 와만 쓴다 — 덱 코드가 E.G.O 를 담는다');
+		// 스키마를 거치지 않는 호출자도 막는다 — 풀기 전에 길이부터
+		if (input.deckCode!.length > DECK_CODE_MAX) return err(`덱 코드가 너무 길다: ${input.deckCode!.length}자 (최대 ${DECK_CODE_MAX})`);
 		const deck = await deckFromCode(input.deckCode!, 'mcp');
 		if (!deck.ok) return deck;
 		order = [];
