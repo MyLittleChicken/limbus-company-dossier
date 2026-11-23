@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { canonical } from '@/lib/db-canonical';
 import type { EngineData } from '@/lib/engine/v2/load';
-import { cacheReference } from '@/lib/query-cache';
+import { versionSlot } from '@/lib/mcp/version-slot';
 import { getEgo, getIdentity } from '@/lib/queries/canonical/detail';
 import { listKeywords, listSins } from '@/lib/queries/canonical/gifts';
 import { listAxisLabels, listEgosFull, listIdentitiesFull, listSinners } from '@/lib/queries/canonical/list';
@@ -157,7 +157,8 @@ interface VocabIndex {
 }
 
 /** 데이터 판마다 한 번 — ko · en 어휘를 함께 읽어 이름으로도 축 값을 찾는다. */
-const vocabIndex = cacheReference(async (version: string): Promise<VocabIndex> => {
+/** dataVersion 키 단일 슬롯 — 판이 바뀌면 이전 색인을 버린다(cacheReference 는 지난 키를 지우지 않는다). */
+const vocabIndex = versionSlot(async (version: string): Promise<VocabIndex> => {
 	const [engine, kwKo, kwEn, sinKo, sinEn, lbKo, lbEn] = await Promise.all([
 		engineData(version),
 		listKeywords('ko'),
@@ -213,7 +214,7 @@ const vocabIndex = cacheReference(async (version: string): Promise<VocabIndex> =
 	const sinEnName = new Map(sinEn.map((s) => [s.id, s.text?.name]));
 	const sinHint = sinKo.map((s) => `${s.id}(${s.text?.name ?? ''}/${sinEnName.get(s.id) ?? ''})`).join(' · ');
 	return { refs, sins, keywordRef, keywordHint, sinHint };
-}, 24 * 60 * 60_000);
+});
 
 /** keyword 인자 → 축 값. 「종류:값」이면 정규화해 확인하고, 아니면 id · ko/en 이름 사전에서 찾는다. */
 function resolveKeyword(v: VocabIndex, raw: string): string {

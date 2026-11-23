@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
+import { versionSlot } from '@/lib/mcp/version-slot';
 import { canonical } from '@/lib/db-canonical';
 import type { Named } from '@/lib/queries/shared';
 import {
@@ -68,18 +69,6 @@ const STAGE_LABEL: Record<number, string> = { 0: '0', 1: '+', 2: '++' };
  * 한 응답 안의 봉투 · 커서 · 어휘가 같은 판을 보고, 판이 바뀌면 이전 것은 버린다(쌓이지 않는다).
  * 읽다 실패하면 슬롯을 비운다.
  */
-function versionSlot<T>(load: () => Promise<T>): (version: string) => Promise<T> {
-	let slot: { version: string; value: Promise<T> } | null = null;
-	return (version) => {
-		if (slot?.version === version) return slot.value;
-		const mine = { version, value: load() };
-		slot = mine;
-		mine.value.catch(() => {
-			if (slot === mine) slot = null;
-		});
-		return mine.value;
-	};
-}
 
 // ── 키워드 어휘 ───────────────────────────────────────────────────
 
@@ -156,7 +145,7 @@ const keywordOf = (vocab: KeywordVocab) => (id: string | null, t: Named | null |
 
 // ── 저주 · 축복 ──────────────────────────────────────────────────
 
-const curseBlessing = versionSlot(listCurseBlessingGiftIds);
+const curseBlessing = versionSlot(() => listCurseBlessingGiftIds());
 
 const CURSE_NOTE =
 	'저주로 얻고 조건을 채우면 축복으로 바뀌는 기프트 무리다. 저주 쪽은 설명문(「기프트가 변경」)으로 가린 확정이다(거울 던전만). ' +
