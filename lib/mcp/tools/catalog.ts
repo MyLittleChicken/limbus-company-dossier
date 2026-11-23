@@ -374,7 +374,7 @@ const statusRow = z.object({ id: z.string(), name: z.string().nullable(), fellBa
 
 const axesShape = z.object({
 	tag: z.array(z.string()).describe('인격 취급 — 「진동 인격 N인」 같은 인격 수 조건에 드는 축'),
-	skill: z.array(z.string()).describe('스킬 취급 — 「진동을 부여하는 스킬 사용 시」 같은 조건에 드는 축(스킬이 실제로 주는 상태)'),
+	skill: z.array(z.string()).describe('스킬 취급 — 「진동을 부여하는 스킬 사용 시」 같은 조건에 드는 축. 엔진 공급 표(코인 토큰 기준)라 코인 아닌 스킬 효과·특수 변형(예: 특수 침잠) 일부를 놓치고, 소수 인격(10109·11109)은 제한 미적용으로 과대일 수 있다'),
 });
 
 const keywordRow = z.object({ id: z.string(), name: z.string().nullable(), fellBack: z.boolean(), axisRef: z.string().nullable() });
@@ -406,7 +406,7 @@ function registerIdentityTools(server: McpServer): void {
 				star: intArg.optional().describe('성급 1–3'),
 				sin: z.string().max(40).optional().describe('스킬 죄악 — wrath · 분노 · Wrath …'),
 				keyword: z.string().max(80).optional().describe('축 — VIBRATION · 진동 · Tremor · axis:VIBRATION · sin:gluttony · association:ATL …'),
-				axisLayer: z.enum(['tag', 'skill']).default('tag').describe("keyword 를 볼 층. 기본 'tag'"),
+				axisLayer: z.enum(['tag', 'skill']).default('tag').describe("keyword 를 볼 층. 기본 'tag'. 'skill' 은 엔진 코인 토큰 기준이라 스킬 효과·특수 변형 일부 누락이 있다"),
 				season: intArg.optional().describe('시즌 번호 (0 = 상시, 9xxx = 발푸르기스 등)'),
 				cursor: cursorArg,
 			},
