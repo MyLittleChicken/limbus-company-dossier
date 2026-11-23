@@ -1,5 +1,5 @@
 import {cacheReference} from '@/lib/query-cache';
-import {createKoreanMatcher,canSearch} from '@/lib/korean-search';
+import {createKeysMatcher,createKoreanMatcher,canSearch,searchKeys,type SearchKeys} from '@/lib/korean-search';
 import type { Locale } from '@/lib/locale';
 import type { $Enums, Prisma } from '@/src/v2/generated/client';
 import { canonical } from '@/lib/db-canonical';
@@ -237,33 +237,10 @@ export interface SearchHit {
 }
 
 /*
-	검색 열쇠 — `lib/korean-search.ts` 의 `createKoreanMatcher` 와 **같은 계산**을 말뭉치 쪽에서 미리 해 둔다.
-	전에는 질의마다 모든 이름 · 설명문을 자모로 다시 풀었다(기프트 설명문이 커서 질의당 수십 ms).
-	이제 말뭉치를 캐시할 때 한 번 풀고, 질의는 needle 하나만 풀어 `includes` 로 본다.
-	규칙이 같다는 것은 `lib/mcp/tools/catalog.test.ts` 가 전후 결과를 대조해 지킨다 —
-	korean-search.ts 를 고치면 여기도 고칠 것(그쪽이 jamo · initials 를 내보내면 이 사본은 지운다).
+	검색 열쇠 — 말뭉치를 캐시할 때 행마다 자모 · 초성을 한 번 풀어 둔다(`searchKeys`).
+	전에는 질의마다 모든 이름 · 설명문을 다시 풀었다(기프트 설명문이 커서 질의당 수십 ms).
+	판정은 `createKeysMatcher` — `createKoreanMatcher` 와 같은 규칙을 같은 파일에서 공유한다.
 */
-const INITIALS=[...'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'];
-const VOWELS=[...'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ'];
-const FINALS=['ㄱ','ㄲ','ㄱㅅ','ㄴ','ㄴㅈ','ㄴㅎ','ㄷ','ㄹ','ㄹㄱ','ㄹㅁ','ㄹㅂ','ㄹㅅ','ㄹㅌ','ㄹㅍ','ㄹㅎ','ㅁ','ㅂ','ㅂㅅ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-const normalizedKey=(value:string)=>value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/gu,'');
-const jamoKey=(value:string)=>[...normalizedKey(value).normalize('NFD')].map(c=>{const n=c.codePointAt(0)!;return INITIALS[n-0x1100]??VOWELS[n-0x1161]??FINALS[n-0x11a8]??c}).join('');
-const initialsKey=(value:string)=>[...normalizedKey(value)].map(c=>{const n=c.codePointAt(0)!;return n>=0xac00&&n<=0xd7a3?INITIALS[Math.floor((n-0xac00)/588)]:jamoKey(c)}).join('');
-
-/** 한 행의 검색 열쇠 — 자모 풀이(`j`)와 초성(`i`). 빈 값은 담지 않는다(원래 matcher 도 빈 값은 안 맞는다). */
-interface SearchKeys { j: string[]; i: string[] }
-function searchKeys(values: Array<string|null|undefined>): SearchKeys {
- const present=values.filter((v):v is string=>!!v);
- return { j: present.map(jamoKey), i: present.map(initialsKey) };
-}
-/** `createKoreanMatcher(query)` 와 같은 판정 — needle 이 초성뿐이면 초성 열쇠, 아니면 자모 열쇠에서 찾는다. */
-function keyMatcher(query:string):(keys:SearchKeys)=>boolean {
- const needle=jamoKey(query);
- if(!needle)return ()=>false;
- const initialOnly=/^[ㄱ-ㅎ]+$/.test(needle);
- return keys=>(initialOnly?keys.i:keys.j).some(k=>k.includes(needle));
-}
-
 const searchCorpus=cacheReference(async()=>{
  const searchableTexts={where:{locale:{in:['ko','en'] as $Enums.Locale[]}}};
  // Match the small canonical text corpus on the server, before limiting each group.
@@ -287,7 +264,7 @@ export async function searchAll(query: string, locale: Locale): Promise<SearchHi
 	const q = query.trim();
 	if (!canSearch(q)) return [];
 
-	const matches=keyMatcher(q);
+	const matches=createKeysMatcher(q);
  const [giftRows,packRows,identityRows,egoRows]=await searchCorpus();
  const pick=<T,>(rows:ReadonlyArray<{row:T;keys:SearchKeys}>)=>{
   const out:T[]=[];

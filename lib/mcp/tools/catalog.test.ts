@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { canonical } from '../../db-canonical';
 import { canonicalReachable, NO_DB } from '../../../src/v2/canonical/db-available';
-import { canSearch, createKoreanMatcher } from '../../korean-search';
+import { canSearch, createKeysMatcher, createKoreanMatcher, searchKeys } from '../../korean-search';
 import { searchAll } from '../../queries/canonical/reference';
 import { engineData } from '../axes';
 import { connectInMemory } from '../test-client';
@@ -65,6 +65,17 @@ test('normalizeAxisRef: 접두어는 소문자, 값은 종류별 대소문자로
 	assert.equal(normalizeAxisRef('Attack_Type:Blunt'), 'attack_type:blunt');
 });
 
+test('createKeysMatcher(미리 푼 열쇠)는 createKoreanMatcher 와 같은 판정', () => {
+	const values = ['쐐기 사무소 해결사', 'Wedge Office', '도착증', '작열우모', 'LCB 수감자', '', '개화 E.G.O:: 동백', '화상 3 부여'];
+	const queries = ['쐐', '쐑', 'ㅆㄱ', 'ㄷㅊ', '도ㅊ', 'wedge', 'WEDGEoffice', 'ㄱ', '', '  ', '동백', 'e.g.o', '화상', 'ㅎㅅ', '1'];
+	for (const q of queries) {
+		const a = createKoreanMatcher(q);
+		const b = createKeysMatcher(q);
+		for (const v of values) assert.equal(b(searchKeys([v])), a(v), `${q} / ${v}`);
+		assert.equal(b(searchKeys(values)), values.some((v) => a(v)), `${q} / 묶음`);
+	}
+});
+
 // ── 등록 ────────────────────────────────────────────────────────
 
 test('조회 도구 6개가 읽기 전용으로 등록된다', db, async () => {
@@ -105,6 +116,29 @@ test('axes 는 엔진 supply 와 같다 — tag = axisTag, skill = axisSkill(coi
 		if (r.axes.tag.join() !== r.axes.skill.join()) differs++;
 	}
 	assert.ok(differs > 0, '두 층이 갈리는 인격이 있어야 한다');
+
+	// 비축 값도 엔진 supply 그대로 — resonance 는 supply.sin(공명 판정), coin 은 minus 만
+	const members = (m: Map<string, Set<string>>, kind: string, id: string) =>
+		[...m].filter(([, ids]) => ids.has(id)).map(([v]) => `${kind}:${v}`).sort();
+	for (const id of ['10508', '10707', '10104', '10101']) {
+		const { sc: d } = await call('get_identity', { id });
+		for (const layerName of ['tag', 'skill'] as const) {
+			const got = d.axes[layerName] as string[];
+			assert.deepEqual(got.filter((v) => v.startsWith('resonance:')), members(engine.supply.sin, 'resonance', id), `${id} resonance`);
+			assert.deepEqual(got.filter((v) => v.startsWith('sin:')), members(engine.supply.sin, 'sin', id), `${id} sin`);
+			assert.deepEqual(got.filter((v) => v.startsWith('association:')), members(engine.supply.association, 'association', id));
+			assert.deepEqual(got.filter((v) => v.startsWith('attack_type:')), members(engine.supply.attackType, 'attack_type', id));
+			assert.deepEqual(got.filter((v) => v.startsWith('coin:')), engine.supply.minusCoin.has(id) ? ['coin:minus'] : []);
+		}
+	}
+	const resonance = await idsOf({ keyword: 'resonance:wrath' });
+	assert.deepEqual(resonance.map(String).sort(), [...(engine.supply.sin.get('wrath') ?? [])].sort());
+	const minus = await idsOf({ keyword: 'coin:minus' });
+	assert.deepEqual(minus.map(String).sort(), [...engine.supply.minusCoin].sort());
+	for (const kw of ['coin:plus', 'coin:single']) {
+		const r = await client!.callTool({ name: 'list_identities', arguments: { keyword: kw } });
+		assert.equal(r.isError, true, `${kw} 는 엔진이 안 쓰는 값이라 어휘에 없다`);
+	}
 
 	// 상세도 같은 출처 — 10109 는 capability affects 로는 LACERATION 하나뿐이지만 스킬은 다섯 축을 준다
 	const { sc } = await call('get_identity', { id: 10109 });
@@ -219,6 +253,11 @@ test('get_identity: 이미지 없음 · siteUrl · name 평평 · keywords axisR
 	assert.ok(sc.skills.every((s: Sc) => s.stages[0].uptie <= sc.uptie.max));
 	assert.ok(sc.speeds.length <= 1);
 	assert.ok(sc.keywords.every((k: Sc) => 'axisRef' in k));
+	// 중첩 text 없이 평평하게 — affiliations · keywords · passives
+	for (const key of ['affiliations', 'keywords', 'passives']) {
+		assert.ok(sc[key].every((x: Sc) => !('text' in x) && 'name' in x && typeof x.fellBack === 'boolean'), key);
+	}
+	assert.ok(sc.passives.every((p: Sc) => 'desc' in p));
 
 	const all = await call('get_identity', { id: '10101', uptie: 'all' });
 	assert.equal(all.sc.uptie.shown, 'all');
@@ -262,6 +301,7 @@ test('get_ego: 이미지 없음 · siteUrl · name 평평 · 단계 인자', db,
 	assert.match(sc.siteUrl, /\/ko\/egos\/20101$/);
 	assert.equal(typeof sc.name, 'string');
 	assert.ok(!('text' in sc));
+	for (const key of ['keywords', 'passives']) assert.ok(sc[key].every((x: Sc) => !('text' in x) && 'name' in x), key);
 	assert.ok(sc.costs.length > 0);
 	assert.equal(sc.uptie.shown, sc.uptie.max);
 	assert.ok(sc.skills.every((s: Sc) => s.stages.length === 1));

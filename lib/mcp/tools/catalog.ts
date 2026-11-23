@@ -8,7 +8,7 @@ import { listKeywords, listSins } from '@/lib/queries/canonical/gifts';
 import { listAxisLabels, listEgosFull, listIdentitiesFull, listSinners } from '@/lib/queries/canonical/list';
 import { searchAll, type SearchHit } from '@/lib/queries/canonical/reference';
 import { READ_ONLY, cleanText, cursorArg, idArg, localeArg, pageShape, queryArg, toId } from '../args';
-import { axesOf, engineData, identityAxes, type IdentityAxes } from '../axes';
+import { engineData, type IdentityAxes } from '../axes';
 import { ToolInputError, defineTool, type ToolCtx } from '../define-tool';
 import { envelopeShape, fail, ok } from '../envelope';
 import { paginate } from '../page';
@@ -75,47 +75,66 @@ export function normalizeAxisRef(raw: string): string {
 }
 
 interface AxisIndex {
-	caps: Map<string, IdentityAxes>;
-	/** 엔진 `supply.axisSkill`(coin_token) 을 인격별로 편 것 — `axis:X` */
-	skillAxes: Map<string, string[]>;
+	layers: Map<string, IdentityAxes>;
 	/** 어느 인격에든 어느 층에든 있는 축 값 */
 	known: Set<string>;
 }
 
 const axisIndexCache = new WeakMap<EngineData, AxisIndex>();
 
+/**
+ * 인격의 두 층 축 — **엔진 `supply` 표에서만** 낸다. 엔진(`countSupply`)이 조건을 세는 출처와 같다.
+ *
+ *   axis:X         tag = supply.axisTag(identity_axis) · skill = supply.axisSkill(coin_token — 스킬이 실제로 주는가)
+ *   sin:X          supply.sin            ┐
+ *   resonance:X    supply.sin (공명 판정) │ 엔진이 층을 가르지 않는다 → 두 층 같다
+ *   association:X  supply.association     │
+ *   unit_keyword:X supply.unitKeyword     │
+ *   attack_type:X  supply.attackType      │
+ *   skill_kind:X   supply.skillKind       │
+ *   coin:minus     supply.minusCoin       ┘ (coin:plus · single 은 엔진이 안 쓰므로 없다)
+ *
+ * capability(v_identity_capability) 로 내면 skill 층 축이 60 인격, resonance 가 16 짝 어긋난다.
+ */
 function axisIndex(engine: EngineData): AxisIndex {
 	const hit = axisIndexCache.get(engine);
 	if (hit) return hit;
-	const caps = identityAxes(engine.capabilities);
-	const skillAxes = new Map<string, string[]>();
-	for (const [axis, ids] of engine.supply.axisSkill) {
-		for (const id of ids) skillAxes.set(id, [...(skillAxes.get(id) ?? []), `axis:${axis}`]);
-	}
+	const t = engine.supply;
+	const tag = new Map<string, Set<string>>();
+	const skill = new Map<string, Set<string>>();
+	const put = (into: Map<string, Set<string>>, id: string, v: string) => {
+		let set = into.get(id);
+		if (!set) into.set(id, (set = new Set()));
+		set.add(v);
+	};
+	const both = (kind: string, m: Map<string, Set<string>>) => {
+		for (const [v, ids] of m) for (const id of ids) { put(tag, id, `${kind}:${v}`); put(skill, id, `${kind}:${v}`); }
+	};
+	for (const [v, ids] of t.axisTag) for (const id of ids) put(tag, id, `axis:${v}`);
+	for (const [v, ids] of t.axisSkill) for (const id of ids) put(skill, id, `axis:${v}`);
+	both('sin', t.sin);
+	both('resonance', t.sin);
+	both('association', t.association);
+	both('unit_keyword', t.unitKeyword);
+	both('attack_type', t.attackType);
+	both('skill_kind', t.skillKind);
+	for (const id of t.minusCoin) { put(tag, id, 'coin:minus'); put(skill, id, 'coin:minus'); }
+
+	const layers = new Map<string, IdentityAxes>();
 	const known = new Set<string>();
-	for (const a of caps.values()) for (const v of [...a.tag, ...a.skill]) known.add(v);
-	for (const list of skillAxes.values()) for (const v of list) known.add(v);
-	const index = { caps, skillAxes, known };
+	for (const id of new Set([...tag.keys(), ...skill.keys()])) {
+		const a = { tag: [...(tag.get(id) ?? [])].sort(), skill: [...(skill.get(id) ?? [])].sort() };
+		layers.set(id, a);
+		for (const v of [...a.tag, ...a.skill]) known.add(v);
+	}
+	const index = { layers, known };
 	axisIndexCache.set(engine, index);
 	return index;
 }
 
-/**
- * 인격의 두 층 축 — 엔진이 세는 방식 그대로.
- *
- *   tag    identity_axis(gate always, affects tag|both) 와 나머지 종류 — `identityAxes` 의 tag
- *   skill  키워드 축(`axis:*`)은 엔진 `supply.axisSkill`(스킬이 실제로 그 상태를 주는가, coin_token).
- *          나머지 종류(죄악 · 소속 …)는 엔진이 층을 가르지 않으므로 tag 와 같은 출처다.
- *
- * capability 의 `affects` 로 skill 을 내면 엔진(`countSupply`, supply='skill')과 60 인격이 어긋난다.
- */
 function identityLayers(index: AxisIndex, identityId: string): IdentityAxes {
-	const base = axesOf(index.caps, identityId);
-	const skill = [
-		...base.skill.filter((v) => !v.startsWith('axis:')),
-		...(index.skillAxes.get(identityId) ?? []),
-	].sort();
-	return { tag: base.tag, skill };
+	const a = index.layers.get(identityId);
+	return a ? { tag: [...a.tag], skill: [...a.skill] } : { tag: [], skill: [] };
 }
 
 const keywordAxesOnly = (values: string[]) => values.filter((v) => v.startsWith('axis:'));
@@ -358,7 +377,13 @@ const axesShape = z.object({
 	skill: z.array(z.string()).describe('스킬 취급 — 「진동을 부여하는 스킬 사용 시」 같은 조건에 드는 축(스킬이 실제로 주는 상태)'),
 });
 
-const keywordRow = z.looseObject({ id: z.string(), text: named, axisRef: z.string().nullable() });
+const keywordRow = z.object({ id: z.string(), name: z.string().nullable(), fellBack: z.boolean(), axisRef: z.string().nullable() });
+const namedRow = z.object({ id: z.string(), name: z.string().nullable(), fellBack: z.boolean() });
+
+type Txt = { name: string; fellBack: boolean; desc?: string | null } | null;
+/** `{ id, text: { name, fellBack } }` → `{ id, name, fellBack }`. */
+const flatName = (text: Txt) => ({ name: text?.name ?? null, fellBack: text?.fellBack ?? false });
+const flatDesc = (text: Txt) => ({ ...flatName(text), desc: text?.desc ?? null });
 
 function registerIdentityTools(server: McpServer): void {
 	defineTool(
@@ -477,12 +502,14 @@ function registerIdentityTools(server: McpServer): void {
 				breakSection: z.array(z.number()).describe('흐트러짐 구간 (길이가 인격마다 다르다)'),
 				resists: z.array(z.looseObject({ atkType: z.string(), value: z.number() })),
 				speeds: z.array(z.looseObject({ uptie: z.number(), min: z.number(), max: z.number() })),
-				affiliations: z.array(z.looseObject({ id: z.string(), text: named })),
+				affiliations: z.array(namedRow),
 				statuses: z.array(statusRow).describe('본문에 나오는 상태 { id, name } — 설명문은 list_statuses'),
 				keywords: z.array(keywordRow),
 				sinNames: z.record(z.string(), z.string()),
 				atkNames: z.record(z.string(), z.string()),
-				passives: z.array(z.looseObject({ id: z.string(), uptie: z.number(), text: described })),
+				passives: z.array(
+					z.looseObject({ id: z.string(), kind: z.string(), uptie: z.number(), name: z.string().nullable(), desc: z.string().nullable(), fellBack: z.boolean() }),
+				),
 				skills: z.array(
 					z.looseObject({ id: z.number(), stages: z.array(z.looseObject({ uptie: z.number() })) }),
 				),
@@ -506,7 +533,9 @@ function registerIdentityTools(server: McpServer): void {
 			const data = {
 				...flattenTop(detail),
 				statuses: compactStatuses(detail.statuses),
-				keywords: stripMedia(detail.keywords).map((k) => ({ ...k, axisRef: vocab.keywordRef(k.id) })),
+				affiliations: stripMedia(detail.affiliations.map((a) => ({ id: a.id, ...flatName(a.text) }))),
+				keywords: detail.keywords.map((k) => ({ id: k.id, ...flatName(k.text), axisRef: vocab.keywordRef(k.id) })),
+				passives: stripMedia(detail.passives.map(({ text, ...p }) => ({ ...p, ...flatDesc(text) }))),
 				axes: identityLayers(axisIndex(engine), String(detail.id)),
 				uptie: { shown, max },
 				siteUrl: siteUrl(locale, 'identities', detail.id),
@@ -642,7 +671,7 @@ function registerEgoTools(server: McpServer): void {
 						stages: z.array(z.looseObject({ uptie: z.number() })),
 					}),
 				),
-				passives: z.array(z.looseObject({ index: z.number(), text: described })),
+				passives: z.array(z.object({ index: z.number(), name: z.string().nullable(), desc: z.string().nullable(), fellBack: z.boolean() })),
 				uptie: uptieShape,
 				siteUrl: z.string(),
 			}),
@@ -663,7 +692,8 @@ function registerEgoTools(server: McpServer): void {
 			const data = {
 				...flattenTop(detail),
 				statuses: compactStatuses(detail.statuses),
-				keywords: stripMedia(detail.keywords).map((k) => ({ ...k, axisRef: vocab.keywordRef(k.id) })),
+				keywords: detail.keywords.map((k) => ({ id: k.id, ...flatName(k.text), axisRef: vocab.keywordRef(k.id) })),
+				passives: stripMedia(detail.passives.map((p) => ({ index: p.index, ...flatDesc(p.text) }))),
 				uptie: { shown, max },
 				siteUrl: siteUrl(locale, 'egos', detail.id),
 			};
