@@ -1,5 +1,5 @@
 import { ok, err, type Result } from '@/lib/storage/kv';
-import { EGO_RANKS, emptyDeck, type StoredDeck } from '@/lib/storage/schema';
+import { DEPLOY_MAX, EGO_RANKS, emptyDeck, type StoredDeck } from '@/lib/storage/schema';
 import { bitsToBytes, bytesToBits } from './bits';
 import { toBase64, fromBase64, gzip, gunzip } from './bytes';
 import {
@@ -91,11 +91,17 @@ export async function deckFromCode(code: string, name: string): Promise<Result<S
 	}
 
 	ordered.sort((a, b) => a.order - b.order);
-	// `FIELD.order` 는 **편성 순서**다. 실물 코드에서 1..12 의 순열로 나온다 — 12칸 전부
-	// 값을 갖고 겹치지 않으므로 출전(최대 7)일 수 없다. 덱 코드는 온필드 인원을 담지
-	// 않는다(docs/07 7.1). `deployed` 는 비운 채로 두고 사용자가 화면에서 고른다 —
-	// 없는 근거로 출전을 지어내면 상한 7을 넘겨 저장분을 못 읽게 만든다.
+	// `FIELD.order` 는 **편성 순서**다. 실물 코드에서 1..12 의 순열로 나온다.
+	// **순서 1–7 이 출격, 8–12 가 대기다** — 2026-11-23 게임 편성창 캡처(편성 #24)와 12칸을
+	// 맞대 확인했다(설계 docs/superpowers/specs/2026-11-23-mcp-server-design.md §6.2).
+	// 출격을 따로 담는 비트는 없다 — 순서 자체가 출격을 말한다. 앞 `DEPLOY_MAX` 만 자르므로
+	// 저장 검증의 출전 상한 7 을 넘지 않는다.
+	//
+	// 출격은 **인격이 든 칸만** 센다. 순서 값은 있는데 인격이 빈 칸이 끼면 그 칸이 출격 7 을
+	// 차지해 인격이 하나 덜 나간다 — `lib/mcp/deck.ts` `resolveDeck` 의 field 와 같은 규칙이다.
 	deck.order = ordered.map((o) => o.sinnerId);
+	const filled = new Set(deck.slots.filter((s) => s.identityId !== null).map((s) => s.sinnerId));
+	deck.deployed = deck.order.filter((id) => filled.has(id)).slice(0, DEPLOY_MAX);
 	return ok(deck);
 }
 

@@ -37,8 +37,9 @@ export interface StoredDeck {
 	/**
 	 * 출전 수감자 id. 최대 7.
 	 *
-	 * **덱 코드에 없다.** 온필드 인원은 전투를 시작할 때 고르는 것이라 편성 코드가 담지
-	 * 않는다. 가져오기는 이 값을 비우고 사용자가 화면에서 고른다.
+	 * **덱 코드에 따로 담기지 않고 편성 순서 앞 7 이 출전이다** — 2026-11-23 게임 편성창
+	 * 캡처와 대조했다(설계 docs/superpowers/specs/2026-11-23-mcp-server-design.md §6.2).
+	 * 가져오기는 `order` 중 인격이 든 칸의 앞 7 로 채우고, 사용자가 화면에서 바꿀 수 있다.
 	 */
 	deployed: number[];
 	updatedAt: string;
