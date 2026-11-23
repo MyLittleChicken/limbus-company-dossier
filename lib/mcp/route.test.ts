@@ -1,8 +1,9 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { DELETE, GET, POST } from '../../app/mcp/route';
-import { BURST, resetBuckets, takeToken } from './rate-limit';
-import { MAX_BODY_BYTES } from './http';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { BURST, createSemaphore, resetBuckets, takeToken } from './rate-limit';
+import { MAX_BODY_BYTES, handleMcpPost } from './http';
 
 /**
  * `app/mcp/route.ts` 를 Request 로 직접 부른다. DB 를 건드리는 도구 호출은 없다
@@ -147,4 +148,65 @@ test('MCP_ENABLED — 프로덕션에서 1 이 아니면 POST · GET 모두 404'
 	env.MCP_ENABLED = '0';
 	delete env.NODE_ENV;
 	assert.equal((await post(ping())).status, 404, '개발에서도 0 이면 끈다');
+});
+
+/** 부르면 `ms` 동안 매달리는 도구 하나만 있는 서버. */
+function slowServer(ms: number): () => McpServer {
+	return () => {
+		const s = new McpServer({ name: 'slow', version: '0' });
+		s.registerTool('slow', { description: 'slow' }, async () => {
+			await new Promise(r => setTimeout(r, ms));
+			return { content: [{ type: 'text', text: 'done' }] };
+		});
+		return s;
+	};
+}
+
+/** 첫 요청이 자리를 잡을 때까지 기다린다 — 두 번째 요청이 반드시 대기 쪽이 되게. */
+async function untilActive(sem: ReturnType<typeof createSemaphore>): Promise<void> {
+	while (sem.stats().active === 0) await new Promise(r => setImmediate(r));
+}
+
+const callSlow = (id: number) =>
+	new Request(URL_, {
+		method: 'POST',
+		headers: HEADERS,
+		body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'slow', arguments: {} } }),
+	});
+
+test('처리 상한 — 넘으면 -32603 「시간 초과」(그 요청의 id), 자리를 돌려준다', async () => {
+	const semaphore = createSemaphore(1, 4);
+	const started = Date.now();
+	const r = await handleMcpPost(callSlow(7), env, { createServer: slowServer(300), semaphore, requestTimeoutMs: 30 });
+	assert.ok(Date.now() - started < 250, '상한에서 바로 돌아온다');
+	const body = (await r.json()) as any;
+	assert.equal(body.id, 7);
+	assert.equal(body.error.code, -32603);
+	assert.match(body.error.message, /timed out|시간 초과/);
+	assert.deepEqual(semaphore.stats(), { active: 0, queued: 0 });
+});
+
+test('대기 상한 — 자리를 못 얻고 기다림이 넘으면 503 + Retry-After', async () => {
+	const semaphore = createSemaphore(1, 4);
+	const opts = { createServer: slowServer(200), semaphore, queueWaitMs: 20 };
+	const first = handleMcpPost(callSlow(1), env, opts);
+	await untilActive(semaphore);
+	const second = await handleMcpPost(callSlow(2), env, opts);
+	assert.equal(second.status, 503);
+	assert.equal(second.headers.get('retry-after'), '1');
+	const ok = (await (await first).json()) as any;
+	assert.equal(ok.result.content[0].text, 'done');
+	assert.deepEqual(semaphore.stats(), { active: 0, queued: 0 });
+});
+
+test('대기열이 가득이면 기다리지 않고 503', async () => {
+	const semaphore = createSemaphore(1, 0);
+	const opts = { createServer: slowServer(100), semaphore };
+	const first = handleMcpPost(callSlow(1), env, opts);
+	await untilActive(semaphore);
+	const started = Date.now();
+	const second = await handleMcpPost(callSlow(2), env, opts);
+	assert.equal(second.status, 503);
+	assert.ok(Date.now() - started < 80);
+	await first;
 });

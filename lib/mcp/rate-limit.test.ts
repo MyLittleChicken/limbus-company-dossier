@@ -9,6 +9,7 @@ import {
 	clientIpConfig,
 	clientKey,
 	createSemaphore,
+	ipv6Prefix64,
 	normalizeIp,
 	createLimiter,
 	resetBuckets,
@@ -161,22 +162,57 @@ test('normalizeIp — 검증 · 포트 떼기 · IPv6 한 표기 · IPv4-mapped'
 	assert.equal(normalizeIp('1'.repeat(100)), null);
 });
 
-test('createSemaphore — 상한만큼 동시에, 넘치면 대기열, 대기열도 차면 null', async () => {
+test('clientKey — IPv6 는 /64 로 묶는다(2001:db8::1 ~ ::25 는 같은 키), IPv4-mapped 는 IPv4', () => {
+	const keys = new Set<string>();
+	for (let i = 1; i <= 0x25; i++) keys.add(clientKey(xff(`2001:db8::${i.toString(16)}`), ON));
+	assert.deepEqual([...keys], ['ip6:2001:db8:0:0::/64']);
+	assert.equal(clientKey(xff('2001:DB8:0:0:ffff::1'), ON), 'ip6:2001:db8:0:0::/64');
+	assert.notEqual(clientKey(xff('2001:db8:0:1::1'), ON), 'ip6:2001:db8:0:0::/64');
+	assert.equal(clientKey(xff('::ffff:1.2.3.4'), ON), 'ip:1.2.3.4');
+	assert.equal(clientKey(xff('::1'), ON), 'ip6:0:0:0:0::/64');
+});
+
+test('ipv6Prefix64 — :: 위치와 무관하게 앞 4 hextet', () => {
+	assert.equal(ipv6Prefix64('2001:db8:1:2:3:4:5:6'), '2001:db8:1:2::/64');
+	assert.equal(ipv6Prefix64('2001:db8::'), '2001:db8:0:0::/64');
+	assert.equal(ipv6Prefix64('::5:6'), '0:0:0:0::/64');
+	assert.equal(ipv6Prefix64('fe80::1:2:3:4'), 'fe80:0:0:0::/64');
+	assert.equal(ipv6Prefix64('2001:db8:1:2:3::'), '2001:db8:1:2::/64');
+});
+
+const tick = () => new Promise(r => setImmediate(r));
+
+test('createSemaphore — 상한만큼 동시에, 넘치면 대기열, 대기열도 차면 full', async () => {
 	const sem = createSemaphore(2, 1);
-	const r1 = await sem.acquire()!;
-	const r2 = await sem.acquire()!;
+	const a = await sem.acquire();
+	const b = await sem.acquire();
+	assert.ok(a.ok && b.ok);
 	const waiting = sem.acquire();
-	assert.ok(waiting);
-	assert.equal(sem.acquire(), null);
+	assert.deepEqual(await sem.acquire(), { ok: false, reason: 'full' });
 	assert.deepEqual(sem.stats(), { active: 2, queued: 1 });
 	let got = false;
-	void waiting!.then(() => (got = true));
-	r1();
-	r1(); // 두 번 불러도 한 번만 푼다
-	await new Promise(r => setImmediate(r));
+	void waiting.then(() => (got = true));
+	a.release();
+	a.release(); // 두 번 불러도 한 번만 푼다
+	await tick();
 	assert.ok(got);
 	assert.deepEqual(sem.stats(), { active: 2, queued: 0 });
-	r2();
-	(await waiting!)();
+	b.release();
+	const w = await waiting;
+	assert.ok(w.ok);
+	w.release();
 	assert.deepEqual(sem.stats(), { active: 0, queued: 0 });
+});
+
+test('createSemaphore — 대기 상한을 넘으면 timeout, 대기열에서 빠지고 자리는 그대로', async () => {
+	const sem = createSemaphore(1, 4);
+	const a = await sem.acquire();
+	assert.ok(a.ok);
+	const late = await sem.acquire(20);
+	assert.deepEqual(late, { ok: false, reason: 'timeout' });
+	assert.deepEqual(sem.stats(), { active: 1, queued: 0 });
+	a.release();
+	assert.deepEqual(sem.stats(), { active: 0, queued: 0 });
+	const again = await sem.acquire(20);
+	assert.ok(again.ok);
 });

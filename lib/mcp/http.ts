@@ -1,7 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createDossierServer } from './server';
-import { clientIpConfig, clientKey, mcpSemaphore, retryAfterSeconds, takeToken } from './rate-limit';
+import { clientIpConfig, clientKey, mcpSemaphore, retryAfterSeconds, takeToken, type createSemaphore } from './rate-limit';
 
 /**
  * `/mcp` HTTP 처리 — `app/mcp/route.ts` 가 부른다. Next.js 의 route 파일은 HTTP 메서드 외의 export 를
@@ -9,11 +9,24 @@ import { clientIpConfig, clientKey, mcpSemaphore, retryAfterSeconds, takeToken }
  *
  * POST 차례(앞에서 막힐수록 싸다):
  *   켜짐(MCP_ENABLED) 404 → 끊긴 요청 499 → Host · Origin 403 → Content-Type 415 → 호출 제한 429
- *   → 본문 상한 413 → JSON 400(-32700) → 배치 400(-32600) → 동시 실행 상한 503 → 전송.
+ *   → 본문 상한 413 → JSON 400(-32700) → 배치 400(-32600) → 동시 실행 상한 503(대기열 가득 · 대기 5 초 초과)
+ *   → 전송(처리 15 초 상한, 넘으면 JSON-RPC -32603 「시간 초과」).
  */
 
 /** 요청 본문 상한. 도구 인자는 짧다 — 덱 코드 하나 · id 목록 정도. */
 export const MAX_BODY_BYTES = 64 * 1024;
+/** 동시 실행 자리를 기다리는 상한. 넘으면 503. */
+export const QUEUE_WAIT_MS = 5_000;
+/** 처리 전체 상한. 넘으면 -32603 「시간 초과」로 답하고 자리를 돌려준다. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
+/** 시험이 바꿔 끼우는 것들. 기본은 실제 서버 · 공용 세마포어 · 위 상수. */
+export type McpHttpOptions = {
+	createServer?: () => McpServer;
+	semaphore?: ReturnType<typeof createSemaphore>;
+	queueWaitMs?: number;
+	requestTimeoutMs?: number;
+};
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const DEFAULT_SITE_URL = 'http://127.0.0.1:3100';
@@ -108,7 +121,13 @@ function warnTrustOnce(env: Env): void {
 	console.warn('[mcp] MCP_TRUST_PROXY 가 꺼져 있다 — 모든 호출자가 호출 제한 키 하나(direct)를 같이 쓴다.');
 }
 
-export async function handleMcpPost(request: Request, env: Env = process.env): Promise<Response> {
+export async function handleMcpPost(request: Request, env: Env = process.env, options: McpHttpOptions = {}): Promise<Response> {
+	const {
+		createServer = createDossierServer,
+		semaphore = mcpSemaphore,
+		queueWaitMs = QUEUE_WAIT_MS,
+		requestTimeoutMs = REQUEST_TIMEOUT_MS,
+	} = options;
 	if (!mcpEnabled(env)) return notFound();
 	warnTrustOnce(env);
 	// 이미 끊긴 요청은 토큰도 쓰지 않고 버린다. 처리 도중의 중단을 도구 안(DB 질의 등)까지
@@ -140,30 +159,46 @@ export async function handleMcpPost(request: Request, env: Env = process.env): P
 	// 배치는 받지 않는다(2025-06-18 판부터 프로토콜에서 빠졌다). 받으면 요청 하나가 호출 제한을 배수로 비켜 간다.
 	if (Array.isArray(body)) return rpcError(400, -32600, 'Invalid Request: batch not supported');
 
-	const waiting = mcpSemaphore.acquire();
-	if (!waiting) return rpcError(503, -32000, 'Server busy. Retry later.', { 'Retry-After': '1' });
-	const release = await waiting;
+	const slot = await semaphore.acquire(queueWaitMs);
+	if (!slot.ok) return rpcError(503, -32000, 'Server busy. Retry later.', { 'Retry-After': '1' });
 
 	let server: McpServer | undefined;
 	let transport: WebStandardStreamableHTTPServerTransport | undefined;
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		if (request.signal.aborted) return new Response(null, { status: 499 });
-		server = createDossierServer();
+		server = createServer();
 		// sessionIdGenerator 를 주지 않는 것이 무상태다(SDK 문서의 `sessionIdGenerator: undefined` 와 같다 —
 		// exactOptionalPropertyTypes 라 생략으로 쓴다). 본문은 위에서 읽었으니 parsedBody 로 넘긴다
 		// (전송은 Accept 검사 뒤 그것을 쓴다).
 		transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
 		await server.connect(transport);
-		return await transport.handleRequest(request, { parsedBody: body });
+		// 처리 상한. 넘으면 응답을 먼저 돌려주고 자리를 돌려준다. 도구 안의 일(DB 질의)은 멈추지 않는다 —
+		// 그 바닥은 DB 역할의 statement_timeout 이 받친다(README 체크리스트).
+		const timedOut = new Promise<Response>(resolve => {
+			timer = setTimeout(() => resolve(timeoutResponse(body)), requestTimeoutMs);
+		});
+		return await Promise.race([transport.handleRequest(request, { parsedBody: body }), timedOut]);
 	} catch (error) {
 		console.error('[mcp] request failed', error);
 		return rpcError(500, -32603, 'Internal error');
 	} finally {
+		clearTimeout(timer);
 		// JSON 응답 모드라 handleRequest 가 돌려줄 때 본문이 이미 다 찼다. 닫아도 응답은 그대로다.
 		await transport?.close().catch(() => {});
 		await server?.close().catch(() => {});
-		release();
+		slot.release();
 	}
+}
+
+/**
+ * 시간 초과 응답. JSON-RPC 요청에 대한 오류이므로 HTTP 200 에 그 요청의 id 를 실어 보낸다 —
+ * 클라이언트가 어느 요청의 실패인지 맞춰 볼 수 있게.
+ */
+function timeoutResponse(body: unknown): Response {
+	const raw = body && typeof body === 'object' ? (body as { id?: unknown }).id : undefined;
+	const id = typeof raw === 'string' || typeof raw === 'number' ? raw : null;
+	return Response.json({ jsonrpc: '2.0', error: { code: -32603, message: 'Request timed out (시간 초과).' }, id });
 }
 
 /** GET(SSE) · DELETE(세션 종료) — 무상태라 받지 않는다. */

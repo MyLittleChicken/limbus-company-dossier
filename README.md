@@ -292,10 +292,12 @@ DB 가 없으면 DB 에 붙는 시험은 건너뛴다. 시험 파일은 프로�
   실패 응답(`isError`)에는 넣지 않는다.
 - **호출 제한** — 토큰 버킷 두 겹. 넘으면 429 와 `Retry-After`(초).
   - 전역: 키와 무관하게 순간 200 회, 분당 600 회. 먼저 본다 — 키를 꾸며도 이 선은 못 넘는다.
-  - 키당: 순간 20 회, 분당 60 회. 키 규칙은 아래 체크리스트의 `MCP_TRUST_PROXY` 줄.
+  - 키당: 순간 20 회, 분당 60 회. 키 규칙은 아래 체크리스트의 `MCP_TRUST_PROXY` 줄. IPv6 는 /64 로 묶는다.
   - 버킷은 프로세스 메모리에 있고 키는 1만 개까지 든다. 인스턴스끼리 나누지 않는다.
-- **동시 실행 상한** — MCP 처리는 한 프로세스에서 동시에 4 개까지, 대기열 16 개. 대기열도 차면 503 +
-  `Retry-After: 1`. 무거운 도구 호출이 사이트 렌더를 붙잡지 않게.
+- **동시 실행 · 시간 상한** — MCP 처리는 한 프로세스에서 동시에 4 개까지, 대기열 16 개. 대기열이 차 있거나
+  자리를 5 초 안에 못 얻으면 503 + `Retry-After: 1`. 처리 전체는 15 초까지 — 넘으면 JSON-RPC `-32603`
+  「시간 초과」로 답하고 자리를 돌려준다(도구 안의 DB 질의는 멈추지 않는다 — 아래 `statement_timeout`).
+  무거운 도구 호출이 사이트 렌더를 붙잡지 않게.
 - **요청 검사** — 본문 64 KB 까지(413). `Host` 는 `SITE_URL` 의 호스트 또는 루프백, `Origin` 이 있으면
   `SITE_URL` 의 origin(개발에서는 `http://127.0.0.1:*` · `http://localhost:*` 도) — 밖이면 403.
 
@@ -324,11 +326,12 @@ npx @modelcontextprotocol/inspector                                        # Ins
 | 항목 | 할 일 |
 | --- | --- |
 | `SITE_URL` | 공개 주소(`https://…`). 응답의 `siteUrl` 링크와 Host · Origin 허용 목록이 이것을 쓴다. 없으면 `http://127.0.0.1:3100` 링크가 나간다 |
+| 앞단의 Host | 앞단 프록시가 원래 `Host` 를 그대로 넘겨야 한다. 내부 주소로 바꿔 넘기면 Host 허용 목록(SITE_URL 호스트 · 루프백)에 걸려 403 |
 | `MCP_ENABLED` | 프로덕션(`NODE_ENV=production`)에서는 `1` 일 때만 켜진다. 그 밖에는 404. 개발에서는 켜져 있고 `0` 이면 끈다 |
 | `MCP_TRUST_PROXY` | `1` 일 때만 클라이언트 IP 를 키로 쓴다. 아니면 모든 호출이 키 하나(`direct`)를 같이 쓴다(프로덕션에서 꺼져 있으면 첫 요청 때 경고 한 줄). 믿을 앞단이 IP 머리를 덮어쓸 때만 켠다 |
-| `MCP_TRUSTED_HOPS` | 기본 1. `x-forwarded-for` 의 **오른쪽에서** N 번째 값을 쓴다(왼쪽 값은 호출자가 써 넣을 수 있다). 믿는 프록시 수 |
-| `MCP_CLIENT_IP_HEADER` | 예: `cf-connecting-ip` · `x-real-ip`. 주면 `x-forwarded-for` 대신 이것. 값은 `net.isIP` 로 검증 · 정규화(IPv6 한 표기, IPv4-mapped → IPv4), 아니면 `unknown` 키 |
-| 읽기 전용 DB 역할 | MCP 경로에 쓰기는 없지만, 공개 프로세스의 `DATABASE_URL` 은 canonical `SELECT` 만 가진 역할이나 `default_transaction_read_only=on` 역할로 준다 |
+| `MCP_TRUSTED_HOPS` | 기본 1. `x-forwarded-for` 의 **오른쪽에서** N 번째 값을 쓴다(왼쪽 값은 호출자가 써 넣을 수 있다). 믿는 프록시 수. 그 자리가 없거나 IP 가 아니면 모두 `unknown` 공용 버킷 하나로 센다 — 앞단 설정이 틀리면 전원이 한 버킷을 나눠 쓰게 된다 |
+| `MCP_CLIENT_IP_HEADER` | 예: `cf-connecting-ip` · `x-real-ip`. 주면 `x-forwarded-for` 대신 이것. 값은 `net.isIP` 로 검증 · 정규화(IPv6 한 표기 후 /64, IPv4-mapped → IPv4), 아니면 `unknown` 공용 버킷 |
+| 읽기 전용 DB 역할 | MCP 경로에 쓰기는 없지만, 공개 프로세스의 `DATABASE_URL` 은 canonical `SELECT` 만 가진 역할이나 `default_transaction_read_only=on` 역할로 준다. 그 역할에 `statement_timeout`(예: `5s`)도 건다 — 처리 시간 상한은 응답만 끊고 질의는 멈추지 않는다 |
 | 인스턴스 수 | 호출 제한 · 동시 실행 상한은 프로세스마다 따로다. 여럿이면 앞단에서도 제한한다 |
 
 ## 커밋·PR 제목 규약

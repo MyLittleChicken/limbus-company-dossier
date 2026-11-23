@@ -161,8 +161,9 @@ const MAX_IP_TEXT = 64;
  * - `[v6]:port` · `v4:port` 꼴의 포트를 뗀다.
  * - IPv6 는 WHATWG URL 직렬화로 한 표기에 맞춘다(소문자 · 0 압축). `::1` 과 `0:0:0:0:0:0:0:1` 이 같다.
  * - IPv4-mapped(`::ffff:1.2.3.4` · `::ffff:102:304`)는 IPv4 로 바꾼다.
- * - 한계: IPv6 는 주소 하나가 키 하나다(/64 로 묶지 않는다). 한 사람이 주소를 바꿔 가며 키당 제한을
- *   비켜 갈 수 있다 — 전역 상한이 그 바닥을 받친다. zone id(`%eth0`)는 거부된다.
+ * - 주소 하나를 그대로 돌려준다. 키로 쓸 때 IPv6 는 /64 로 묶는다(`clientKey` · `ipv6Prefix64`).
+ * - 한계: zone id(`%eth0`)는 거부된다. /48 등 더 큰 블록을 가진 쪽은 /64 를 바꿔 가며 키당 제한을
+ *   비켜 갈 수 있다 — 전역 상한이 그 바닥을 받친다.
  */
 export function normalizeIp(raw: string): string | null {
 	let text = raw.trim();
@@ -199,6 +200,7 @@ export function normalizeIp(raw: string): string | null {
  * - `trustProxy` 면 `ipHeader` 가 있으면 그 값, 없으면 `x-forwarded-for` 의 오른쪽에서 `trustedHops` 번째 값.
  *   (왼쪽 값은 호출자가 써 넣은 것일 수 있다. 오른쪽 끝이 믿는 프록시가 덧붙인 것이다.)
  * - 값이 없거나 IP 가 아니면 'unknown' 하나를 함께 쓴다.
+ * - IPv4 는 `ip:<주소>`, IPv6 는 `ip6:<앞 4 hextet>::/64`.
  */
 export function clientKey(headers: Headers, config: ClientIpConfig): string {
 	if (!config.trustProxy) return 'direct';
@@ -213,13 +215,32 @@ export function clientKey(headers: Headers, config: ClientIpConfig): string {
 		}
 	}
 	const ip = raw === undefined ? null : normalizeIp(raw);
-	return ip ? `ip:${ip}` : 'unknown';
+	if (!ip) return 'unknown';
+	return ip.includes(':') ? `ip6:${ipv6Prefix64(ip)}` : `ip:${ip}`;
+}
+
+/**
+ * 정규화된 IPv6 의 /64 접두(앞 4 hextet). 한 가입자는 보통 /64 를 통째로 받는다 — 주소 하나를 키로
+ * 하면 그 안에서 주소를 바꿔 가며 키당 제한을 비켜 간다. IPv4-mapped 는 normalizeIp 가 이미 IPv4 로 바꿨다.
+ */
+export function ipv6Prefix64(ip: string): string {
+	const [head = '', tail] = ip.split('::');
+	const left = head ? head.split(':') : [];
+	const right = tail ? tail.split(':') : [];
+	const groups = tail === undefined ? left : [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+	return `${groups
+		.slice(0, 4)
+		.map(g => (parseInt(g, 16) || 0).toString(16))
+		.join(':')}::/64`;
 }
 
 /**
  * 동시 실행 상한 — MCP 처리(도구 = DB 질의 · 엔진)가 사이트 전체를 붙잡지 못하게.
- * 자리가 없으면 대기열에 선다. 대기열도 차면 null — 호출하는 쪽이 503 으로 답한다.
+ * 자리가 없으면 대기열에 선다. 대기열이 차 있으면 'full', 대기가 waitMs 를 넘으면 'timeout'
+ * (대기열에서 빠진다) — 호출하는 쪽이 503 으로 답한다.
  */
+export type Acquired = { ok: true; release: () => void } | { ok: false; reason: 'full' | 'timeout' };
+
 export function createSemaphore(limit: number, maxQueue: number) {
 	let active = 0;
 	const queue: Array<() => void> = [];
@@ -229,14 +250,27 @@ export function createSemaphore(limit: number, maxQueue: number) {
 		else active -= 1;
 	};
 	return {
-		/** 자리를 얻으면 풀어 주는 함수를 준다. 대기열이 차 있으면 null. */
-		acquire(): Promise<() => void> | null {
+		acquire(waitMs = Infinity): Promise<Acquired> {
 			if (active < limit) {
 				active += 1;
-				return Promise.resolve(once(release));
+				return Promise.resolve({ ok: true, release: once(release) });
 			}
-			if (queue.length >= maxQueue) return null;
-			return new Promise(resolve => queue.push(() => resolve(once(release))));
+			if (queue.length >= maxQueue) return Promise.resolve({ ok: false, reason: 'full' });
+			return new Promise(resolve => {
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				const grant = () => {
+					clearTimeout(timer);
+					resolve({ ok: true, release: once(release) });
+				};
+				queue.push(grant);
+				if (Number.isFinite(waitMs)) {
+					timer = setTimeout(() => {
+						const at = queue.indexOf(grant);
+						if (at >= 0) queue.splice(at, 1);
+						resolve({ ok: false, reason: 'timeout' });
+					}, waitMs);
+				}
+			});
 		},
 		stats: () => ({ active, queued: queue.length }),
 	};
