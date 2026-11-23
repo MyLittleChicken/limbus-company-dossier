@@ -10,9 +10,10 @@ const MEDIA_KEYS: ReadonlySet<string> = new Set([
 
 /**
  * 키 이름을 놓쳐도 값이 애셋 경로면 뺀다 — 질의 함수가 새 애셋 키를 더해도 응답에 새지 않게.
- * `/media/…` 경로이거나 이미지 확장자로 끝나는(쿼리 문자열 허용) 문자열이다.
+ * `/media/…` 경로이거나, 공백 없이 `/` 를 품고 이미지 확장자로 끝나는(쿼리 문자열 허용) 경로꼴 문자열이다.
+ * 설명문이 우연히 `….png` 로 끝나도 공백이 있으면 지우지 않는다.
  */
-const ASSET_VALUE = /^\/media\/|\.(?:png|webp|jpe?g|gif|svg|avif)(?:\?.*)?$/i;
+const ASSET_VALUE = /^\/media\/|^[^\s]*\/[^\s]*\.(?:png|webp|jpe?g|gif|svg|avif)(?:\?\S*)?$/i;
 
 /**
  * `MEDIA_KEYS` 의 키와 애셋 경로 값(`ASSET_VALUE`)을 재귀적으로 뺀다. 원본은 건드리지 않는다.

@@ -44,5 +44,9 @@ test('stripMedia 는 확장 애셋 키(rarityIcon · frame · bossIcon)를 뺀�
 });
 
 test('stripMedia 는 배열 안의 애셋 경로 문자열도 뺀다', () => {
-	assert.deepEqual(stripMedia({ list: ['/media/x.png', 'a', 'b.webp?v=2'] }), { list: ['a'] });
+	assert.deepEqual(stripMedia({ list: ['/media/x.png', 'a', 'x/b.webp?v=2'] }), { list: ['a'] });
+});
+
+test('stripMedia 는 이미지 확장자로 끝나는 설명문(공백 포함)을 지우지 않는다', () => {
+	assert.deepEqual(stripMedia({ desc: '파일 이름은 icon.png', name: 'logo.png' }), { desc: '파일 이름은 icon.png', name: 'logo.png' });
 });
