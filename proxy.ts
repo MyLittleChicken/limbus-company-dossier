@@ -11,5 +11,6 @@ export function proxy(request: NextRequest) {
 export const config = {
 	// Do not exclude arbitrary dotted paths: /en/missing.html is still a document.
 	// No public files currently exist; only actual serving namespaces bypass this proxy.
-	matcher: ['/((?!media(?:/|$)|_next(?:/|$)).*)'],
+	// /mcp is the MCP endpoint (JSON-RPC over HTTP), not a document.
+	matcher: ['/((?!media(?:/|$)|_next(?:/|$)|mcp(?:/|$)).*)'],
 };

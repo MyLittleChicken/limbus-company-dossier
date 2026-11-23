@@ -269,6 +269,43 @@ npm run dev                    # http://localhost:3000
 `prisma/schema.sql`은 `prisma migrate diff` 산출물이며, 마이그레이션 러너를 쓰지 않으므로
 데이터베이스에 관리 테이블이 생기지 않는다([adr/02](docs/adr/02-pipeline.md) 3.2).
 
+## MCP 서버
+
+웹 앱 안의 `/mcp` 경로가 MCP 서버다. 설계는 [mcp-server-design](docs/superpowers/specs/2026-11-23-mcp-server-design.md)에 있다.
+
+- **Streamable HTTP · 무상태** — 요청마다 서버를 새로 만들고 세션 id 를 쓰지 않는다. `POST` 만 받고
+  `GET` · `DELETE` 는 405 다.
+- **읽기 전용 · 로그인 없음** — canonical 만 읽는다. 응답에 이미지는 없고 사이트 상세 주소(`siteUrl`)를 준다.
+  성공 응답 머리에는 데이터 기준 `snapshotId` 가 있다. DB 에 스냅샷 기록이 없으면 `null` 이다.
+  실패 응답(`isError`)에는 넣지 않는다.
+- **호출 제한** — 토큰 버킷 두 겹. 넘으면 429 와 `Retry-After`(초).
+  - 전역: 키와 무관하게 순간 200 회, 분당 600 회. 먼저 본다 — 키를 꾸며도 이 선은 못 넘는다.
+  - 키당: 순간 20 회, 분당 60 회. 키는 `MCP_TRUST_PROXY=1` 일 때만 `x-forwarded-for` 첫 값(trim · 소문자,
+    비면 `unknown` 하나로 묶음)이다. 그 밖에는 모든 요청이 `direct` 키 하나를 같이 쓴다 — 믿을 앞단이
+    없으면 그 머리는 호출자가 마음대로 쓴다. IPv6 는 표기를 정규화하지 않는다(앞단이 맞춘다는 전제).
+  - 버킷은 프로세스 메모리에 있고 키는 1만 개까지 든다. 인스턴스끼리 나누지 않는다.
+- **본문 상한** — 64 KB. 넘으면 413.
+
+연결 (웹 앱을 `npm run dev -- --hostname 127.0.0.1 --port 3100` 으로 띄운 뒤):
+
+```
+claude mcp add --transport http limbus-dossier http://127.0.0.1:3100/mcp   # Claude Code
+npx @modelcontextprotocol/inspector                                        # Inspector → Streamable HTTP 로 같은 주소
+```
+
+도구 18개:
+
+| 묶음 | 도구 |
+| --- | --- |
+| 메타 | `get_build_info` |
+| 조회 | `search` · `list_identities` · `get_identity` · `list_egos` · `get_ego` · `list_vocab` |
+| 던전 | `list_gifts` · `get_gift` · `list_packs` · `get_pack` · `list_floor_packs` · `get_dungeon` · `list_statuses` |
+| 엔진 | `decode_deck_code` · `analyze_deck` · `check_gifts` · `score_packs` |
+
+**공개 배포는 막혀 있다**(설계 §3). 배포처가 정해지지 않았고([adr/05](docs/adr/05-web-serving.md) 3.5),
+2차 창작 가이드라인 원문을 확인하기 전이다 — 「DB 를 도구로 내려준다」는 사이트보다 재배포 성격이 강하다.
+지금은 로컬 연결까지다.
+
 ## 커밋·PR 제목 규약
 
 [Conventional Commits](https://www.conventionalcommits.org/)를 따른다.
