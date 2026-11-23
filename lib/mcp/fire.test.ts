@@ -154,3 +154,13 @@ test('supplyDoubt: 충족이 axis_restrict 인격 덕분에만 문턱을 넘으�
 	assert.equal(supplyDoubt(base({ verdict: 'satisfied', have: 2, skill: new Set(['a', 'b']), restricted: new Set(['a']) })), null);
 	assert.equal(supplyDoubt(base({ verdict: 'satisfied', supply: 'tag', have: 1, tag: new Set(['a']), restricted: new Set(['a']) })), null, 'tag 층은 안 본다');
 });
+
+test('supplyDoubt: extra 는 (tag ∪ E.G.O 스킬) − 이미 스킬 하나로 센다 — 따로는 못 닿아도 합치면 닿는다', () => {
+	// have 0 · need 2: tag 몫 1(a) · E.G.O 몫 1(b) — 어느 쪽 혼자로는 1, 합쳐 2
+	const x = base({ op: 'gte', need: 2, tag: new Set(['a']), egoSkill: new Set(['b']) });
+	assert.equal(supplyDoubt(x), 'ego-not-judged', 'E.G.O 몫이 결정적');
+	// 같은 인격이 둘 다면 한 번만 센다 → 1 < 2
+	assert.equal(supplyDoubt(base({ op: 'gte', need: 2, tag: new Set(['a']), egoSkill: new Set(['a']) })), null);
+	// tag 몫만으로 닿으면 skill-supply-incomplete
+	assert.equal(supplyDoubt(base({ op: 'gte', need: 2, tag: new Set(['a', 'c']), egoSkill: new Set(['b']) })), 'skill-supply-incomplete');
+});

@@ -88,7 +88,10 @@ export interface SupplyDoubtInput {
 	/** 장착 E.G.O 게이트가 그 층에 그 축을 여는 인격 */
 	egoTag: ReadonlySet<string>;
 	egoSkill: ReadonlySet<string>;
-	/** axis_restrict(skill · both) 대상 인격 — 엔진 스킬 공급이 제한 없이 세는 쪽 */
+	/**
+	 * 이 축에서 빼야 할 인격 — axis_restrict(skill · both)가 허용 목록이라 「다른 축으로만 취급」되는 인격.
+	 * 엔진 스킬 공급은 제한을 안 걸어 이들을 이 축에도 센다(과대)
+	 */
 	restricted: ReadonlySet<string> | undefined;
 }
 
@@ -97,11 +100,13 @@ export interface SupplyDoubtInput {
  * 문턱에 실제로 닿거나(미충족) 실제로 밑돌 때(충족)만 의심한다.
  *
  * 확정 미충족 — 놓친 몫 extra 를 더해 닿을 때만: `extra > 0 && have + extra ≥ (need ?? 1)`
- *   ego-not-judged           extra = 모집단 ∩ (E.G.O 가 그 층을 여는 인격 − 그 층 엔진 표)
- *   skill-supply-incomplete  supply=skill, extra = 모집단 ∩ (인격 취급 − 이미 스킬 공급으로 센 인격)
- *                            예: 9165 진동 have 2 · need 5 · extra 0 → 의심 없음(off 그대로)
+ *   supply=skill  extra = |모집단 ∩ ((인격 취급 ∪ E.G.O 가 스킬 층에 연 인격) − 이미 스킬로 센 인격)| 하나로 센다.
+ *                 인격 취급 몫만으로 닿으면 skill-supply-incomplete, E.G.O 몫이 있어야 닿으면 ego-not-judged
+ *                 예: 9165 진동 have 2 · need 5 · extra 0 → 의심 없음(off 그대로)
+ *   supply=tag    extra = |모집단 ∩ (E.G.O 가 tag 층에 연 인격 − 인격 취급)| → ego-not-judged
+ *   supply=any    두 층 중 큰 쪽(엔진의 max 와 같다) → ego-not-judged
  * 확정 충족
- *   skill-supply-overcount   스킬 공급에서 axis_restrict 대상 인격을 빼면 문턱 밑
+ *   skill-supply-overcount   스킬 공급에서 `restricted`(다른 축으로만 취급되는 인격)를 빼면 문턱 밑
  */
 export function supplyDoubt(x: SupplyDoubtInput): Downgrade | null {
 	if (x.op !== 'has' && x.op !== 'gte') return null;
@@ -120,15 +125,17 @@ export function supplyDoubt(x: SupplyDoubtInput): Downgrade | null {
 		return fixed < need ? 'skill-supply-overcount' : null;
 	}
 
+	const reaches = (extra: number) => extra > 0 && x.have + extra >= need;
+	if (x.supply === 'skill') {
+		const union = new Set([...(x.tag ?? []), ...x.egoSkill]);
+		if (!reaches(count(union, x.skill))) return null;
+		// 인격 취급 몫만으로 닿으면 공급 누락, E.G.O 몫이 결정적이면 E.G.O 미판정
+		return reaches(count(x.tag, x.skill)) ? 'skill-supply-incomplete' : 'ego-not-judged';
+	}
 	const egoTagX = count(x.egoTag, x.tag);
 	const egoSkillX = count(x.egoSkill, x.skill);
-	const reaches = (extra: number) => extra > 0 && x.have + extra >= need;
-	const egoExtra = x.supply === 'skill' ? egoSkillX
-		: x.supply === 'any' ? Math.max(tagN + egoTagX, skillN + egoSkillX) - x.have
-		: egoTagX;
-	if (reaches(egoExtra)) return 'ego-not-judged';
-	if (x.supply === 'skill' && reaches(count(x.tag, x.skill))) return 'skill-supply-incomplete';
-	return null;
+	const egoExtra = x.supply === 'any' ? Math.max(tagN + egoTagX, skillN + egoSkillX) - x.have : egoTagX;
+	return reaches(egoExtra) ? 'ego-not-judged' : null;
 }
 
 /** `triggerId` = `ordinal/group/idx` (ability.ts 의 judgeGift). 모양이 다르면 null */
