@@ -35,6 +35,8 @@ import type { GiftVerdict, Reason } from '@/lib/engine/v2/types';
  *   skill-supply-incomplete  스킬 공급(coin_token)이 스킬 효과 · 특수 변형 토큰을 놓친다 —
  *                            그 축을 인격 취급(tag)으로 가진 인격이 모집단에 있으면 스킬로도 줄 수 있다
  *   ego-not-judged           판정은 장착 E.G.O 를 안 본다 — 모집단의 E.G.O 게이트가 그 축을 연다
+ *   skill-supply-overcount   거꾸로, 확정 충족이 축 제한(axis_restrict) 대상 인격 덕분에만 문턱을 넘는다 →
+ *                            on 을 possible 로 낮춘다
  *
  * 무엇이 의심스러운지는 호출자가 `doubt` 로 알려 준다(이 파일은 DB · 덱을 모른다).
  * 기프트 전체가 그 근거 때문에만 off 였다면 같이 낮춘다 — **엔진 fireable=false 를 덮는 유일한
@@ -42,8 +44,11 @@ import type { GiftVerdict, Reason } from '@/lib/engine/v2/types';
  */
 export type FireState = 'on' | 'partial' | 'possible' | 'off';
 export type AbilityState = 'on' | 'possible' | 'off';
-export type Downgrade = 'skill-supply-incomplete' | 'ego-not-judged';
-/** 확정 미충족인 조건 하나를 엔진 공급이 놓쳤을 수 있나. 아니면 null */
+export type Downgrade = 'skill-supply-incomplete' | 'ego-not-judged' | 'skill-supply-overcount';
+/**
+ * 엔진의 확정 판정 하나를 공급 오차로 의심하나. 아니면 null.
+ * 확정 미충족(unsatisfied)에는 놓친 공급(incomplete · ego), 확정 충족(satisfied)에는 과대 공급(overcount).
+ */
 export type Doubt = (r: Reason) => Downgrade | null;
 
 export interface AbilityFire {
@@ -54,7 +59,7 @@ export interface AbilityFire {
 	state: AbilityState;
 	/** 무조건이 아닌데 조건이 0개 — 조건을 못 뽑은 결손이라 막지 않는다 */
 	missingConditions?: true;
-	/** off 를 possible 로 낮춘 까닭 */
+	/** off · on 을 possible 로 낮춘 까닭 */
 	reason?: Downgrade;
 	/** 이 능력의 조건 판정. triggerId 가 `능력/그룹/번호` */
 	reasons: Reason[];
@@ -65,6 +70,65 @@ export interface Fire {
 	/** 판정 행이 아예 없는 기프트(켜짐으로 두지 않는다) · 또는 하향으로 상태가 바뀐 까닭 */
 	reason?: 'no-judgement-data' | Downgrade;
 	abilities: AbilityFire[];
+}
+
+export interface SupplyDoubtInput {
+	verdict: Reason['verdict'];
+	/** 엔진이 센 수 · 문턱(has 면 1) */
+	have: number;
+	need: number | null;
+	/** 조건의 op · supply(tag · skill · any) */
+	op: string;
+	supply: string;
+	/** 조건 모집단(scope 의 인격 id) */
+	pool: ReadonlySet<string>;
+	/** 엔진 공급 표 — 그 축의 인격 취급(identity_axis always) · 스킬 취급(coin_token) */
+	tag: ReadonlySet<string> | undefined;
+	skill: ReadonlySet<string> | undefined;
+	/** 장착 E.G.O 게이트가 그 층에 그 축을 여는 인격 */
+	egoTag: ReadonlySet<string>;
+	egoSkill: ReadonlySet<string>;
+	/** axis_restrict(skill · both) 대상 인격 — 엔진 스킬 공급이 제한 없이 세는 쪽 */
+	restricted: ReadonlySet<string> | undefined;
+}
+
+/**
+ * axis 조건 하나를 공급 오차로 의심하나(리뷰 3라운드 · R1). **op 가 has · gte 일 때만** — eq 는 안 건드린다.
+ * 문턱에 실제로 닿거나(미충족) 실제로 밑돌 때(충족)만 의심한다.
+ *
+ * 확정 미충족 — 놓친 몫 extra 를 더해 닿을 때만: `extra > 0 && have + extra ≥ (need ?? 1)`
+ *   ego-not-judged           extra = 모집단 ∩ (E.G.O 가 그 층을 여는 인격 − 그 층 엔진 표)
+ *   skill-supply-incomplete  supply=skill, extra = 모집단 ∩ (인격 취급 − 이미 스킬 공급으로 센 인격)
+ *                            예: 9165 진동 have 2 · need 5 · extra 0 → 의심 없음(off 그대로)
+ * 확정 충족
+ *   skill-supply-overcount   스킬 공급에서 axis_restrict 대상 인격을 빼면 문턱 밑
+ */
+export function supplyDoubt(x: SupplyDoubtInput): Downgrade | null {
+	if (x.op !== 'has' && x.op !== 'gte') return null;
+	if (x.verdict === 'unknown') return null;
+	const need = x.need ?? 1;
+	const count = (inc: ReadonlySet<string> | undefined, exc?: ReadonlySet<string>) =>
+		inc ? [...x.pool].filter((id) => inc.has(id) && !exc?.has(id)).length : 0;
+	const tagN = count(x.tag);
+	const skillN = count(x.skill);
+
+	if (x.verdict === 'satisfied') {
+		if (x.supply !== 'skill' && x.supply !== 'any') return null;
+		const kept = count(x.skill, x.restricted);
+		if (kept === skillN) return null;
+		const fixed = x.supply === 'any' ? Math.max(tagN, kept) : kept;
+		return fixed < need ? 'skill-supply-overcount' : null;
+	}
+
+	const egoTagX = count(x.egoTag, x.tag);
+	const egoSkillX = count(x.egoSkill, x.skill);
+	const reaches = (extra: number) => extra > 0 && x.have + extra >= need;
+	const egoExtra = x.supply === 'skill' ? egoSkillX
+		: x.supply === 'any' ? Math.max(tagN + egoTagX, skillN + egoSkillX) - x.have
+		: egoTagX;
+	if (reaches(egoExtra)) return 'ego-not-judged';
+	if (x.supply === 'skill' && reaches(count(x.tag, x.skill))) return 'skill-supply-incomplete';
+	return null;
 }
 
 /** `triggerId` = `ordinal/group/idx` (ability.ts 의 judgeGift). 모양이 다르면 null */
@@ -91,7 +155,14 @@ export function abilityState(
 		if (why.some((d) => d === null)) return { state: 'off' };
 		return { state: 'possible', reason: why[0]! };
 	}
-	if (gs.every((g) => g.some((r) => r.verdict === 'satisfied' && r.certainty === 'certain'))) return { state: 'on' };
+	const sure = (r: Reason) => r.verdict === 'satisfied' && r.certainty === 'certain';
+	if (gs.every((g) => g.some((r) => sure(r) && doubt(r) === null))) return { state: 'on' };
+	// 확정 충족이 과대 공급 의심뿐인 그룹이 있어 on 을 못 준다
+	if (gs.every((g) => g.some(sure))) {
+		const why = gs.flatMap((g) => (g.some((r) => sure(r) && doubt(r) === null) ? [] : g.filter(sure).map(doubt)))
+			.find((d) => d !== null);
+		return why ? { state: 'possible', reason: why } : { state: 'possible' };
+	}
 	return { state: 'possible' };
 }
 
@@ -116,10 +187,14 @@ export function fireState(v: GiftVerdict | undefined, abilities: readonly Abilit
 	const state = fold(v, fires);
 	if (doubt === undefined) return { state, abilities: fires };
 
-	// 하향이 기프트 상태를 바꿨으면 그 까닭을 기프트에도 단다
-	const plain = fold(v, sorted.map((a) => ({ refines: a.refines, ...abilityState(a, byOrdinal.get(a.ordinal) ?? []) })));
-	const why = fires.find((f) => f.reason !== undefined)?.reason;
-	return state !== plain && why ? { state, reason: why, abilities: fires } : { state, abilities: fires };
+	// 하향이 기프트 상태를 바꿨으면 그 까닭을 기프트에도 단다 — 상태를 실제로 바꾼 능력의 것,
+	// 독립 능력을 먼저(첫 능력이 아니라)
+	const plainAbilities = sorted.map((a) => ({ refines: a.refines, ...abilityState(a, byOrdinal.get(a.ordinal) ?? []) }));
+	const plain = fold(v, plainAbilities);
+	if (state === plain) return { state, abilities: fires };
+	const changed = fires.filter((f, i) => f.reason !== undefined && f.state !== plainAbilities[i]!.state);
+	const why = (changed.find((f) => f.refines === null) ?? changed[0])?.reason;
+	return why ? { state, reason: why, abilities: fires } : { state, abilities: fires };
 }
 
 function fold(v: GiftVerdict, fires: ReadonlyArray<{ refines: number | null; state: AbilityState; reason?: Downgrade }>): FireState {

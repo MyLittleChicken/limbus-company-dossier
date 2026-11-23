@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Ability } from '@/lib/engine/v2/ability.js';
 import type { GiftVerdict, Reason } from '@/lib/engine/v2/types';
-import { fireState } from './fire';
+import { fireState, supplyDoubt, type SupplyDoubtInput } from './fire';
 
 const v = (over: Partial<GiftVerdict>): GiftVerdict => ({
 	giftId: '9001', grade: 'A', decidable: 0, satisfied: 0, certain: 0, total: 0,
@@ -98,5 +98,59 @@ test('partial 의 off 능력이 하향되면 on, 기프트 reason 은 바뀐 까
 
 test('doubt 가 상태를 안 바꾸면 기프트 reason 없음', () => {
 	const reasons = [r('0/0/0', 'satisfied')];
-	assert.equal(fireState(v({ reasons }), [ab(0)], () => 'ego-not-judged').reason, undefined);
+	const doubt = (x: Reason) => (x.verdict === 'unsatisfied' ? 'ego-not-judged' as const : null);
+	assert.equal(fireState(v({ reasons }), [ab(0)], doubt).reason, undefined);
+});
+
+test('확정 충족이 과대 공급 의심뿐이면 on → possible + skill-supply-overcount, 기프트 reason 도', () => {
+	const reasons = [r('0/0/0', 'satisfied')];
+	const f = fireState(v({ reasons }), [ab(0)], () => 'skill-supply-overcount');
+	assert.equal(f.state, 'possible');
+	assert.equal(f.reason, 'skill-supply-overcount');
+});
+
+test('기프트 reason 은 상태를 바꾼 독립 능력의 것 (첫 능력 아님)', () => {
+	// 0 은 on(과대 의심 없음) · 1 은 강화 절 하향(상태 무관) · 2 는 off 에서 하향된 독립 능력
+	const reasons = [r('1/0/0', 'satisfied'), r('2/0/0', 'unsatisfied')];
+	const doubt = (x: Reason) => (x.triggerId === '1/0/0' ? 'skill-supply-overcount' as const : x.triggerId === '2/0/0' ? 'ego-not-judged' as const : null);
+	const f = fireState(v({ reasons }), [ab(0, { unconditional: true }), ab(1, { refines: 0 }), ab(2)], doubt);
+	assert.equal(f.state, 'on', 'partial(2 off) → on');
+	assert.equal(f.reason, 'ego-not-judged');
+});
+
+// ── supplyDoubt — 문턱 상한 검사 ──
+
+const base = (over: Partial<SupplyDoubtInput>): SupplyDoubtInput => ({
+	verdict: 'unsatisfied', have: 0, need: 1, op: 'has', supply: 'skill',
+	pool: new Set(['a', 'b', 'c']), tag: new Set(), skill: new Set(),
+	egoTag: new Set(), egoSkill: new Set(), restricted: undefined, ...over,
+});
+
+test('supplyDoubt: 스킬 미충족 + 모집단에 그 축 tag 인격 → skill-supply-incomplete (10110 · 9041 꼴)', () =>
+	assert.equal(supplyDoubt(base({ tag: new Set(['a']) })), 'skill-supply-incomplete'));
+
+test('supplyDoubt 반례: tag 인격이 이미 스킬 공급으로 세어졌으면 extra 0 → 의심 없음', () =>
+	assert.equal(supplyDoubt(base({ op: 'gte', have: 1, need: 2, tag: new Set(['a']), skill: new Set(['a']) })), null));
+
+test('supplyDoubt 반례: need 미도달(have 2 + extra 0 < 5, 9165 꼴 · have 0 + extra 1 < 3) → 의심 없음', () => {
+	assert.equal(supplyDoubt(base({ op: 'gte', have: 2, need: 5, tag: new Set(['a', 'b']), skill: new Set(['a', 'b']) })), null);
+	assert.equal(supplyDoubt(base({ op: 'gte', have: 0, need: 3, tag: new Set(['a']) })), null);
+});
+
+test('supplyDoubt: eq 는 하향하지 않는다', () =>
+	assert.equal(supplyDoubt(base({ op: 'eq', tag: new Set(['a']) })), null));
+
+test('supplyDoubt: 모집단 밖의 tag 인격은 안 센다', () =>
+	assert.equal(supplyDoubt(base({ tag: new Set(['z']) })), null));
+
+test('supplyDoubt: E.G.O 가 그 층을 열고 엔진 표에 없으면 ego-not-judged, 이미 있으면 없음', () => {
+	assert.equal(supplyDoubt(base({ egoSkill: new Set(['a']) })), 'ego-not-judged');
+	assert.equal(supplyDoubt(base({ op: 'gte', have: 1, need: 2, skill: new Set(['a']), egoSkill: new Set(['a']) })), null);
+	assert.equal(supplyDoubt(base({ supply: 'tag', egoSkill: new Set(['a']) })), null, '층이 다르면 안 연다');
+});
+
+test('supplyDoubt: 충족이 axis_restrict 인격 덕분에만 문턱을 넘으면 overcount, 빼도 넘으면 없음', () => {
+	assert.equal(supplyDoubt(base({ verdict: 'satisfied', have: 1, skill: new Set(['a']), restricted: new Set(['a']) })), 'skill-supply-overcount');
+	assert.equal(supplyDoubt(base({ verdict: 'satisfied', have: 2, skill: new Set(['a', 'b']), restricted: new Set(['a']) })), null);
+	assert.equal(supplyDoubt(base({ verdict: 'satisfied', supply: 'tag', have: 1, tag: new Set(['a']), restricted: new Set(['a']) })), null, 'tag 층은 안 본다');
 });

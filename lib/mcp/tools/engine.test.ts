@@ -5,7 +5,7 @@ import { canonical } from '@/lib/db-canonical';
 import { canonicalReachable, NO_DB } from '@/src/v2/canonical/db-available';
 import { connectInMemory } from '../test-client';
 import { engineData } from '../axes';
-import { PROVISIONAL_REASON, SKILL_SUPPLY_NOTE, STAGE_NOTE, STATE_NOTE } from './engine';
+import { LIVE_NOTE, PROVISIONAL_REASON, SKILL_SUPPLY_NOTE, STAGE_NOTE, STATE_NOTE } from './engine';
 
 // 사용자 실물 덱 코드(편성 #24). 2026-11-23 게임 편성창 캡처와 12칸을 대조했다(설계 §6.2).
 const CODE_24 = 'H4sIAAAAAAAAE3P1dkyv8Ex3DAx09nDNLHdyLPd0BAJnL8d0EO2f7gyiHEsyAiPDPR2djR0zgxwjHT3LIcKFENWuwY4ZYENcg11dndKdnAI98/29gBK2tgAHpASdYAAAAA==';
@@ -204,7 +204,7 @@ test('check_gifts 는 stageNote · stateNote 를 달고 능력 단위 상태를 
 });
 
 test('check_gifts: 9001 은 partial — 기본 효과 on, 분노 공명 효과 off (편성 #24)', { skip }, async () => {
-	const b = await call('check_gifts', { deckCode: CODE_24, giftIds: [9001] });
+	const b = await call('check_gifts', { deckCode: CODE_24, giftIds: [9001], detail: 'full' });
 	const g = b.gifts[0];
 	assert.equal(g.state, 'partial');
 	assert.deepEqual(g.abilities.map((a: Body) => a.state), ['on', 'off']);
@@ -231,7 +231,7 @@ test('check_gifts: 판정 행이 없는 기프트는 possible + no-judgement-dat
 		orderBy: { id: 'asc' },
 	});
 	if (!row) return t.skip('판정 행이 없는 거울 던전 기프트가 없다 — 확인할 대상 없음');
-	const b = await call('check_gifts', { identityIds: [10101], giftIds: [Number(row.id)] });
+	const b = await call('check_gifts', { identityIds: [10101], giftIds: [Number(row.id)], detail: 'full' });
 	assert.equal(b.gifts[0].state, 'possible');
 	assert.equal(b.gifts[0].reason, 'no-judgement-data');
 	assert.equal(b.gifts[0].grade, null);
@@ -259,19 +259,48 @@ test('하향: 10110 + E.G.O 20109 의 9112 VIBRATION 미충족은 possible + ego
 	assert.equal(vib.gated.skill.field, 1, 'gated.skill 에 E.G.O 몫');
 });
 
+test('하향 상한: 편성 #24 의 9165(진동 have 2 · need 5) · 9802 는 off 그대로, #24 전체 하향 0건', { skip }, async () => {
+	const b = await call('check_gifts', { deckCode: CODE_24, giftIds: [9165, 9802], detail: 'full' });
+	for (const g of b.gifts) {
+		assert.equal(g.state, 'off', `${g.id}`);
+		assert.ok(g.abilities.every((a: Body) => a.reason === undefined), `${g.id} 하향 없음`);
+	}
+	const ids = (await canonical.gift.findMany({ where: { domain: 'mirror_dungeon' }, select: { id: true }, orderBy: { id: 'asc' } })).map((g) => Number(g.id));
+	let downgraded = 0;
+	for (let i = 0; i < ids.length; i += 50) {
+		const r = await call('check_gifts', { deckCode: CODE_24, giftIds: ids.slice(i, i + 50), detail: 'full' });
+		downgraded += r.gifts.reduce((n: number, g: Body) => n + g.abilities.filter((a: Body) => a.reason !== undefined).length, 0);
+	}
+	assert.equal(downgraded, 0);
+});
+
+test('과대 공급: R1 탐침 덱(10109 · 11109 LACERATION 스킬 제한 미적용)에서 skill-supply-overcount 가 난다', { skip }, async () => {
+	const deck = { identityIds: [10109, 10208, 10301, 10412, 10614, 10715, 11109] };
+	const b = await call('check_gifts', { ...deck, giftIds: [9090, 9161, 9162], detail: 'full' });
+	for (const g of b.gifts) {
+		assert.equal(g.state, 'possible', `${g.id}`);
+		assert.equal(g.reason, 'skill-supply-overcount', `${g.id}`);
+		const doubted = g.abilities.filter((a: Body) => a.reason === 'skill-supply-overcount');
+		assert.ok(doubted.length > 0);
+		assert.ok(doubted.every((a: Body) => a.reasons.some((x: Body) => x.refId === 'LACERATION' && x.verdict === 'satisfied')));
+	}
+});
+
 test('check_gifts brief: 50개 < 20KB, on 능력은 근거 생략 · 나머지는 충족 안 된 근거만', { skip }, async () => {
 	const ids = (await canonical.gift.findMany({ where: { domain: 'mirror_dungeon' }, select: { id: true }, take: 50, orderBy: { id: 'asc' } })).map((g) => Number(g.id));
 	const r = await c.callTool({ name: 'check_gifts', arguments: { deckCode: CODE_24, giftIds: ids } });
 	assert.notEqual(r.isError, true);
 	const size = JSON.stringify(r.structuredContent).length;
 	assert.ok(size < 20_000, `brief structuredContent ${size}B`);
+	assert.ok(text(r).length <= 20_000, `brief text ${text(r).length}B`);
 	const full = await call('check_gifts', { deckCode: CODE_24, giftIds: ids, detail: 'full' });
 	const brief = r.structuredContent as Body;
 	brief.gifts.forEach((g: Body, i: number) => {
 		assert.equal(g.state, full.gifts[i].state, '상태는 detail 과 무관');
+		assert.ok(!('total' in g) && !('grade' in g), 'brief 에는 고정 칸이 없다');
 		for (const a of g.abilities) {
-			if (a.state === 'on') assert.equal(a.reasons.length, 0);
-			assert.ok(a.reasons.every((x: Body) => x.verdict !== 'satisfied'));
+			if (a.state !== 'possible') assert.deepEqual(Object.keys(a).sort(), ['ordinal', 'state']);
+			else assert.ok(a.reasons.every((x: Body) => x.verdict !== 'satisfied' || a.reason === 'skill-supply-overcount'));
 		}
 	});
 	assert.ok(SKILL_SUPPLY_NOTE.length > 0);
@@ -291,6 +320,7 @@ test('score_packs 는 provisional 표시를 단다', { skip }, async () => {
 	const b = await call('score_packs', { deckCode: CODE_24, floor: 3 });
 	assert.equal(b.provisional, true);
 	assert.equal(b.provisionalReason, PROVISIONAL_REASON);
+	assert.equal(b.liveNote, LIVE_NOTE);
 	assert.equal(b.difficulty, 'hard');
 	assert.equal(b.field.length, 7);
 	assert.equal(b.waiting.length, 5);

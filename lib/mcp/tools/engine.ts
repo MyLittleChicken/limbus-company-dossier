@@ -15,7 +15,7 @@ import { envelopeShape, ok } from '../envelope';
 import { defineTool, ToolInputError } from '../define-tool';
 import { idArg, localeArg, READ_ONLY, toId } from '../args';
 import { engineData } from '../axes';
-import { FIRE_RANK, fireState, type Doubt, type FireState } from '../fire';
+import { FIRE_RANK, fireState, supplyDoubt, type Doubt, type FireState } from '../fire';
 import { siteUrl } from '../site-url';
 
 /**
@@ -50,8 +50,10 @@ export const STATE_NOTE =
 	'on = 편성(진입 시점) 조건 확정 충족 — 전투 중 발동 조건은 범위 밖. ' +
 	'partial = 켜지는 능력이 있으나 다른 능력(또는 강화 절)은 확정 미충족. ' +
 	'possible = 켜지는 길이 전투 중 조건 · 판정 불가 · 조건 결손에만 기댐. off = 막는 조건이 확정 미충족. ' +
-	"reason 'skill-supply-incomplete' · 'ego-not-judged' = 엔진은 미충족이라 했으나 스킬 공급 누락 · 장착 E.G.O 미판정일 수 있어 off 를 possible 로 낮춘 것. " +
+	"reason 'skill-supply-incomplete' · 'ego-not-judged' = 엔진은 미충족이라 했으나 놓친 공급을 더하면 문턱에 닿아 off 를 possible 로 낮춘 것(has · gte 만). " +
+	"'skill-supply-overcount' = 확정 충족이 축 제한(axis_restrict) 대상 인격 덕분에만 문턱을 넘어 on 을 possible 로 낮춘 것. " +
 	SKILL_SUPPLY_NOTE;
+export const LIVE_NOTE = 'live · 점수는 엔진 판정(하향 전) 기준이다 — topGifts.state 에는 하향(skill-supply-incomplete · ego-not-judged)이 들어간다';
 export const PROVISIONAL_REASON = '저울추(적합 2 · 등급 3 · 전용 0.25)가 LLM 초안 표본에서 나왔고 사람 검토 전이다';
 
 const deployOut = {
@@ -275,25 +277,46 @@ function poolOf(squad: Squad, scope: string): Set<string> {
 	return new Set(squad.field);
 }
 
+/** `canonical.axis_restrict` 중 스킬 층(skill · both) — 엔진 공급이 제한을 안 걸어 과대로 세는 짝. 판마다 한 번 읽는다 */
+let restrictSlot: { version: string; value: Promise<Map<string, Set<string>>> } | null = null;
+function skillRestricts(version: string): Promise<Map<string, Set<string>>> {
+	if (restrictSlot?.version === version) return restrictSlot.value;
+	const value = canonical.axisRestrict
+		.findMany({ where: { affects: { in: ['skill', 'both'] } }, select: { identityId: true, axisId: true } })
+		.then((rows) => {
+			const m = new Map<string, Set<string>>();
+			for (const r of rows) m.set(r.axisId, (m.get(r.axisId) ?? new Set()).add(r.identityId));
+			return m;
+		});
+	restrictSlot = { version, value };
+	value.catch(() => { if (restrictSlot?.value === value) restrictSlot = null; });
+	return value;
+}
+
 /**
- * 하향 판단(fire.ts `Doubt`) — 엔진이 확정 미충족이라 한 axis 조건을 엔진 공급이 놓쳤을 수 있나.
- *
- *   ego-not-judged           모집단 인격의 장착 E.G.O 게이트(ego_equipped, 층이 맞는 것)가 그 축을 연다
- *   skill-supply-incomplete  supply=skill 인데 모집단에 그 축의 인격 취급(identity_axis always) 인격이 있다
+ * 하향 판단(fire.ts `Doubt`) — axis 조건 하나를 덱 · 엔진 표에 비춰 `supplyDoubt`(fire.ts, 규칙은 거기)에 넘긴다.
+ * 모집단은 조건의 scope(`countSupply` 의 poolOf 와 같다), E.G.O 는 이 덱에서 열린 ego_equipped 행.
  */
-function doubtFor(squad: Squad, data: EngineData): (giftId: string) => Doubt {
+function doubtFor(squad: Squad, data: EngineData, restricts: Map<string, Set<string>>): (giftId: string) => Doubt {
 	const egoOpen = activeCapabilities(squad, data.capabilities).filter((c) => c.gateKind === 'ego_equipped' && c.refKind === 'axis');
+	const egoIds = (refId: string, layer: 'tag' | 'skill') => new Set(egoOpen
+		.filter((c) => c.refId === refId && (c.affects === 'both' || c.affects === layer))
+		.map((c) => c.identityId));
 	return (giftId) => (r) => {
-		if (r.verdict !== 'unsatisfied' || r.refKind !== 'axis') return null;
+		if (r.refKind !== 'axis') return null;
 		const m = /^(\d+)\/(\d+)\/(\d+)$/.exec(r.triggerId);
 		if (!m) return null;
 		const cond = data.abilityConds.get(giftId)?.get(m[1]!)?.find((c) => c.group === Number(m[2]) && c.idx === Number(m[3]));
 		if (!cond) return null;
-		const pool = poolOf(squad, cond.scope);
-		const layerOk = (affects: string) => affects === 'both' || cond.supply === 'any' || affects === cond.supply;
-		if (egoOpen.some((c) => c.refId === cond.refId && pool.has(c.identityId) && layerOk(c.affects))) return 'ego-not-judged';
-		if (cond.supply === 'skill' && [...pool].some((id) => data.supply.axisTag.get(cond.refId)?.has(id))) return 'skill-supply-incomplete';
-		return null;
+		return supplyDoubt({
+			verdict: r.verdict, have: r.have, need: r.need, op: cond.op, supply: cond.supply,
+			pool: poolOf(squad, cond.scope),
+			tag: data.supply.axisTag.get(cond.refId),
+			skill: data.supply.axisSkill.get(cond.refId),
+			egoTag: egoIds(cond.refId, 'tag'),
+			egoSkill: egoIds(cond.refId, 'skill'),
+			restricted: restricts.get(cond.refId),
+		});
 	};
 }
 
@@ -426,8 +449,8 @@ export function registerEngineTools(server: McpServer): void {
 				'possible(켜지는 길이 전투 중 조건 · 판정 불가 · 조건 결손에만 기댐) · off(막는 조건이 확정 미충족). ' +
 				"판정 데이터가 없는 기프트는 possible + reason 'no-judgement-data'. " +
 				'abilities[].reasons 의 triggerId 는 `능력/그룹/번호`(그룹끼리 AND · 그룹 안 OR), blocking=false 는 강화 절 조건이라 켜짐을 막지 않는다. ' +
-				"detail 기본 'brief' 는 on 능력의 근거를 생략하고 나머지는 충족 안 된 근거만 준다(전부는 'full'). " +
-				"엔진이 미충족이라 했어도 스킬 공급 누락 · 장착 E.G.O 미판정일 수 있으면 off 대신 possible + reason('skill-supply-incomplete' · 'ego-not-judged'). " +
+				"detail 기본 'brief' 는 확정(on · off) 능력을 { ordinal, state } 로만, possible 능력은 충족 안 된 근거만 주고 grade · 수치 칸을 뺀다(전부는 'full'). " +
+				"엔진 판정이 공급 오차로 갈릴 수 있으면 possible + reason('skill-supply-incomplete' · 'ego-not-judged' · 'skill-supply-overcount') — stateNote 참조. " +
 				SKILL_SUPPLY_NOTE + '. ' +
 				'판정은 강화 0단계 절만 본다. heldGiftIds 는 연쇄 깊이(chainDepth)에만 쓴다. 스토리 던전 기프트는 받지 않는다. ' +
 				DECK_INPUT_NOTE,
@@ -448,21 +471,21 @@ export function registerEngineTools(server: McpServer): void {
 					name: z.string().nullable(),
 					fellBack: z.boolean(),
 					state: fireSchema,
-					reason: z.enum(['no-judgement-data', 'skill-supply-incomplete', 'ego-not-judged']).optional(),
-					grade: z.enum(['A', 'B', 'C']).nullable().describe('A 전부 판정 가능 · B 일부 · C 판정 불가. 판정 데이터가 없으면 null'),
-					decidable: z.number(),
-					satisfied: z.number(),
-					certain: z.number(),
-					total: z.number(),
+					reason: z.enum(['no-judgement-data', 'skill-supply-incomplete', 'ego-not-judged', 'skill-supply-overcount']).optional(),
+					grade: z.enum(['A', 'B', 'C']).nullable().optional().describe('full 만. A 전부 판정 가능 · B 일부 · C 판정 불가. 판정 데이터가 없으면 null'),
+					decidable: z.number().optional().describe('full 만'),
+					satisfied: z.number().optional().describe('full 만'),
+					certain: z.number().optional().describe('full 만'),
+					total: z.number().optional().describe('full 만'),
 					abilities: z.array(z.object({
 						ordinal: z.number(),
-						refines: z.number().nullable().describe('강화 절이면 원 능력 ordinal. 독립이면 null'),
-						unconditional: z.boolean(),
+						refines: z.number().nullable().optional().describe('강화 절이면 원 능력 ordinal. 독립이면 null. brief 의 on · off 능력에는 없다'),
+						unconditional: z.boolean().optional(),
 						state: z.enum(['on', 'possible', 'off']),
 						missingConditions: z.literal(true).optional().describe('무조건이 아닌데 조건 0개 — 결손이라 막지 않는다'),
-						reason: z.enum(['skill-supply-incomplete', 'ego-not-judged']).optional().describe('off 를 possible 로 낮춘 까닭'),
-						reasons: z.array(reasonSchema),
-						omittedReasons: z.number().optional().describe('brief 에서 생략한 근거 수(충족된 것)'),
+						reason: z.enum(['skill-supply-incomplete', 'ego-not-judged', 'skill-supply-overcount']).optional().describe('off 를 possible 로 낮춘 까닭'),
+						reasons: z.array(reasonSchema).optional().describe('brief 의 on · off 능력에는 없다'),
+						omittedReasons: z.number().optional().describe('brief 에서 생략한 근거 수'),
 					})),
 					chainDepth: z.number().nullable().describe('보유 기프트가 이것을 켜는 홉 수. 없으면 null'),
 				})),
@@ -480,7 +503,7 @@ export function registerEngineTools(server: McpServer): void {
 			const [data, label] = await Promise.all([engineData(ctx.dataVersion), labeler(locale)]);
 			const { verdicts, chainDepth } = await judgeGifts({ squad: deck.squad, heldGiftIds: heldIds, data });
 			const lab = withLabel(label);
-			const doubt = doubtFor(deck.squad, data);
+			const doubt = doubtFor(deck.squad, data, await skillRestricts(ctx.dataVersion));
 			const brief = args.detail === 'brief';
 			const gifts = ids.map((id) => {
 				const v = verdicts.get(id);
@@ -491,15 +514,19 @@ export function registerEngineTools(server: McpServer): void {
 					fellBack: names.get(id)?.fellBack ?? false,
 					state: fire.state,
 					...(fire.reason ? { reason: fire.reason } : {}),
-					grade: v?.grade ?? null,
-					decidable: v?.decidable ?? 0,
-					satisfied: v?.satisfied ?? 0,
-					certain: v?.certain ?? 0,
-					total: v?.total ?? 0,
+					...(brief ? {} : {
+						grade: v?.grade ?? null,
+						decidable: v?.decidable ?? 0,
+						satisfied: v?.satisfied ?? 0,
+						certain: v?.certain ?? 0,
+						total: v?.total ?? 0,
+					}),
 					abilities: fire.abilities.map((a) => {
 						if (!brief) return { ...a, reasons: a.reasons.map(lab) };
-						// brief — on 능력은 근거 전부 생략, 나머지는 막는 · 남은(충족 안 된) 근거만
-						const kept = a.state === 'on' ? [] : a.reasons.filter((r) => r.verdict !== 'satisfied');
+						// brief — 확정(on · off) 능력은 상태만. possible 은 갈림을 보여 주는 근거만:
+						// 충족 안 된 것, 과대 공급 하향이면 의심받은 충족까지
+						if (a.state !== 'possible') return { ordinal: a.ordinal, state: a.state };
+						const kept = a.reason === 'skill-supply-overcount' ? a.reasons : a.reasons.filter((r) => r.verdict !== 'satisfied');
 						const omitted = a.reasons.length - kept.length;
 						return { ...a, reasons: kept.map(lab), ...(omitted > 0 ? { omittedReasons: omitted } : {}) };
 					}),
@@ -530,7 +557,7 @@ export function registerEngineTools(server: McpServer): void {
 				'rankable 이 false 면 편성이 축을 공급하지 않아 점수가 전부 0 이고 팩 id 순이다. ' +
 				'난이도마다 유효 층이 다르다(normal 은 1–5층) — 밖이면 오류. ' +
 				'topGifts 는 팩 기프트 중 보유하지 않은 것을 켜짐(on → partial → possible → off) 순으로 5개. ' +
-				'보유 기프트는 후보에서 빠지고 합성 · 연쇄 셈에 든다. ' + DECK_INPUT_NOTE,
+				'보유 기프트는 후보에서 빠지고 합성 · 연쇄 셈에 든다. ' + LIVE_NOTE + '. ' + DECK_INPUT_NOTE,
 			inputSchema: {
 				...deckInputShape,
 				floor: z.number().int().min(1).max(15).describe('층 1–15 (normal 은 1–5)'),
@@ -542,6 +569,7 @@ export function registerEngineTools(server: McpServer): void {
 				...deployOut,
 				provisional: z.literal(true),
 				provisionalReason: z.string(),
+				liveNote: z.string(),
 				floor: z.number(),
 				difficulty: z.enum(['normal', 'hard']),
 				rankable: z.boolean(),
@@ -558,7 +586,7 @@ export function registerEngineTools(server: McpServer): void {
 						id: z.number(),
 						name: z.string().nullable(),
 						state: fireSchema,
-						reason: z.enum(['no-judgement-data', 'skill-supply-incomplete', 'ego-not-judged']).optional(),
+						reason: z.enum(['no-judgement-data', 'skill-supply-incomplete', 'ego-not-judged', 'skill-supply-overcount']).optional(),
 					})),
 				})),
 			}),
@@ -584,7 +612,7 @@ export function registerEngineTools(server: McpServer): void {
 				squad: deck.squad, floor: args.floor, difficulty, heldGiftIds: heldIds, data,
 			});
 
-			const doubt = doubtFor(deck.squad, data);
+			const doubt = doubtFor(deck.squad, data, await skillRestricts(ctx.dataVersion));
 			const scored = rec.packs.map((p) => {
 				const topGifts = p.gifts
 					.filter((g) => !g.owned)
@@ -619,7 +647,7 @@ export function registerEngineTools(server: McpServer): void {
 			return ok(
 				{
 					field: deck.field, waiting: deck.waiting, deployNote: deployNote(args, deck),
-					provisional: true as const, provisionalReason: PROVISIONAL_REASON,
+					provisional: true as const, provisionalReason: PROVISIONAL_REASON, liveNote: LIVE_NOTE,
 					floor: args.floor, difficulty, rankable: rec.rankable, packs,
 				},
 				`참고값(provisional) — ${args.floor}층 ${difficulty} 후보 팩 ${packs.length}개. ` +
