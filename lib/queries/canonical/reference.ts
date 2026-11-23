@@ -122,17 +122,17 @@ export function readGlossaryFilter(params: SearchParams): GlossaryFilter {
 	};
 }
 
-/*
-	상태 말뭉치 — 행마다 검색 열쇠(자모 · 초성)를 한 번 풀어 둔다(`searchKeys`, searchCorpus 와 같은 방식).
-	전에는 질의마다 1,530 건의 ko · en 이름 · 설명을 다시 풀었다(warm 수십 ms).
-	판정은 `createKeysMatcher` — `createKoreanMatcher` 와 같은 규칙이다.
-*/
 /**
  * 검색 말뭉치 수명. 열쇠 사전계산이 이벤트 루프를 ~150ms 붙잡으므로 30초 기본값으로 자주 다시 굽지 않는다.
  * 원본은 라이브 갱신 때만 바뀐다 — 갱신 뒤 최대 10분 낡은 검색 결과를 받아들인다.
  */
 const CORPUS_TTL=10*60_000;
 
+/*
+	상태 말뭉치 — 행마다 검색 열쇠(자모 · 초성)를 한 번 풀어 둔다(`searchKeys`, searchCorpus 와 같은 방식).
+	전에는 질의마다 1,530 건의 ko · en 이름 · 설명을 다시 풀었다(warm 수십 ms).
+	판정은 `createKeysMatcher` — `createKoreanMatcher` 와 같은 규칙이다.
+*/
 const statusCorpus=cacheReference(async()=>(await canonical.status.findMany({orderBy:{id:'asc'},include:{texts:{where:{locale:{in:['ko','en']}}}}}))
  .map(row=>({row,keys:searchKeys(row.texts.flatMap(t=>[t.name,t.desc]))})),CORPUS_TTL);
 
