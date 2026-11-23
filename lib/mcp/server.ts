@@ -15,7 +15,7 @@ export const SERVER_INSTRUCTIONS = `Limbus Company 도감 (limbus-dossier) — �
 비공식 팬 제작 2차 창작 사이트다. Project Moon 과 관계없고 승인받지 않았다.
 Unofficial fan-made site; not affiliated with or endorsed by Project Moon. 데이터가 게임과 다를 수 있다 — 정확성을 보증하지 않는다.
 
-- 모든 응답에 snapshotId(데이터 기준 스냅샷)가 있다. 상세는 get_build_info.
+- 성공 응답에는 snapshotId(데이터 기준 스냅샷)와 dataVersion(라이브 갱신까지 반영한 판)이 있다. 상세는 get_build_info. dataVersion 이 바뀌면 이전 nextCursor 는 못 쓴다 — 처음부터 다시 부른다.
 - 응답에 이미지는 없다. 사용자에게 보여 줄 링크는 siteUrl 을 쓴다.
 - locale: 'ko' | 'en' (기본 ko). fellBack: true 면 다른 로케일 문구로 대신한 것이다.
 - 축은 두 층이다: tag(인격 취급) · skill(스킬 취급). 섞지 않는다.
@@ -33,5 +33,8 @@ export function createDossierServer(): McpServer {
 	registerCatalogTools(server);
 	registerDungeonTools(server);
 	registerEngineTools(server);
+	// 무상태 전송(요청마다 서버 생성)이라 도구 목록 변경 알림을 보낼 수 없다. 도구를 등록하면
+	// SDK 가 listChanged: true 를 넣으므로, 등록을 마친 뒤 연결 전에 덮어쓴다.
+	server.server.registerCapabilities({ tools: { listChanged: false } });
 	return server;
 }

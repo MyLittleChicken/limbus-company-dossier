@@ -1,23 +1,28 @@
 import { canonical } from '@/lib/db-canonical';
 import { loadEngineData, type EngineData } from '@/lib/engine/v2/load';
 import type { Capability } from '@/lib/engine/v2/types';
-import { cacheReference } from '@/lib/query-cache';
-import { currentSnapshotId } from './envelope';
+import { dataVersion } from './version';
 
-/** 스냅샷 id 하나당 한 번 읽는다. 같은 스냅샷이면 다시 읽을 이유가 없어 TTL 은 길다. */
-const engineDataFor = cacheReference(
-	(_snapshotId: string | null) => loadEngineData(canonical),
-	24 * 60 * 60_000,
-);
+/** 단일 슬롯 — 지금 판 하나만 든다. 판이 바뀌면 이전 것은 버린다(쌓이지 않는다). */
+let slot: { version: string; value: Promise<EngineData> } | null = null;
 
 /**
- * 엔진 입력 묶음. 편성과 무관하게 고정이라 스냅샷마다 한 번만 읽는다.
- * 키는 봉투와 같은 `currentSnapshotId()`(1 분 캐시) — 스냅샷이 바뀌면 다음 호출부터 다시 읽고,
- * 응답의 snapshotId 와 판정 데이터가 어긋나지 않는다.
+ * 엔진 입력 묶음. 편성과 무관하게 고정이라 데이터 판(`dataVersion`)마다 한 번만 읽는다.
+ *
+ * 키는 봉투와 같은 `dataVersion` — 라이브 갱신(snapshot 행은 그대로)도 다음 호출부터 반영되고,
+ * 응답의 dataVersion 과 판정 데이터가 어긋나지 않는다. 도구는 `engineData(ctx.dataVersion)` 으로
+ * 호출 머리에 읽은 판을 넘긴다. 빠지면 지금 판을 읽는다. 읽다 실패하면 슬롯을 비운다.
  * 조회 도구(인격 축)와 엔진 도구(판정)가 같은 것을 쓴다.
  */
-export async function engineData(): Promise<EngineData> {
-	return engineDataFor(await currentSnapshotId());
+export async function engineData(version?: string): Promise<EngineData> {
+	const key = version ?? (await dataVersion());
+	if (slot?.version === key) return slot.value;
+	const mine = { version: key, value: loadEngineData(canonical) };
+	slot = mine;
+	mine.value.catch(() => {
+		if (slot === mine) slot = null;
+	});
+	return mine.value;
 }
 
 export interface IdentityAxes {

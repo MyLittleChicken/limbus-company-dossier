@@ -40,3 +40,11 @@ test('engineData 로 실제 10104 는 진동이 skill 에만 있다', { skip: re
 	assert.ok(axes.skill.includes('axis:VIBRATION'));
 	assert.ok(!axes.tag.includes('axis:VIBRATION'));
 });
+
+test('engineData 는 판을 키로 하는 단일 슬롯이다 — 판이 바뀌면 다시 읽고 이전 판은 버린다', { skip: reachable ? false : NO_DB }, async () => {
+	const a = await engineData('test.a');
+	assert.equal(await engineData('test.a'), a, '같은 판이면 같은 객체');
+	const b = await engineData('test.b');
+	assert.notEqual(b, a, '판이 바뀌면 다시 읽는다');
+	assert.notEqual(await engineData('test.a'), a, '이전 판은 슬롯에서 버려졌다');
+});

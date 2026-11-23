@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { ToolInputError } from './define-tool';
 import { paginate } from './page';
 
 const SCOPE = JSON.stringify({ locale: 'ko', sinnerId: 1 });
@@ -36,4 +37,16 @@ test('다른 질의(scope)의 커서는 오류다', () => {
 	const a = paginate([1, 2, 3], undefined, SCOPE, 2);
 	const other = JSON.stringify({ locale: 'ko', sinnerId: 2 });
 	assert.throws(() => paginate([1, 2, 3], a.nextCursor!, other, 2), /이 커서는 다른 질의의 것이다/);
+});
+
+test('커서 오류는 ToolInputError 다 (defineTool 이 문구 그대로 돌려준다)', () => {
+	assert.throws(() => paginate([1, 2, 3], 'garbage!!', SCOPE), ToolInputError);
+	const a = paginate([1, 2, 3], undefined, SCOPE, 2);
+	assert.throws(() => paginate([1, 2, 3], a.nextCursor!, SCOPE + 'x', 2), ToolInputError);
+});
+
+test('dataVersion 을 scope 에 넣으면 판이 바뀐 뒤의 커서는 거절된다', () => {
+	const scope = (v: string) => JSON.stringify({ locale: 'ko', dataVersion: v });
+	const a = paginate([1, 2, 3], undefined, scope('s.aaaaaaaa'), 2);
+	assert.throws(() => paginate([1, 2, 3], a.nextCursor!, scope('s.bbbbbbbb'), 2), /다른 질의/);
 });

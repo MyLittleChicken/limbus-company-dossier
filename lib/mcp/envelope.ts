@@ -1,23 +1,21 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as z from 'zod';
-import { cacheReference } from '@/lib/query-cache';
-import { getBuildInfo } from '@/lib/queries/canonical/reference';
+import { readToolCtx, type ToolCtx } from './version';
+
+export { currentSnapshotId, dataVersion, readToolCtx, type ToolCtx } from './version';
 
 /**
- * MCP 응답 봉투 — 모든 도구 응답 머리에 `snapshotId` 하나(설계 §5 「데이터 기준 표시」).
- *
- * 스냅샷 id 는 자주 바뀌지 않으므로 1 분 캐시한다. DB 에 스냅샷 행이 없으면 `null`.
- * `engineData()`(axes.ts) 도 이것을 캐시 키로 쓴다 — 봉투의 snapshotId 와 판정 데이터가
- * 같은 스냅샷을 가리키게.
+ * MCP 응답 봉투 — 성공 응답 머리에 `snapshotId` · `dataVersion`(설계 §5 「데이터 기준 표시」).
+ * 판 계산은 `./version` 이 맡는다. 이전 호출부 호환으로 `currentSnapshotId` 등을 여기서도 내보낸다.
  */
-export const currentSnapshotId = cacheReference(
-	async (): Promise<string | null> => (await getBuildInfo())?.snapshotId ?? null,
-	60_000,
-);
 
 /** 도구 `outputSchema` 에 봉투 머리를 더한다. 모든 도구가 이것으로 출력 모양을 선언한다. */
 export function envelopeShape<S extends z.ZodRawShape>(shape: S) {
-	return { snapshotId: z.string().nullable(), ...shape };
+	return {
+		snapshotId: z.string().nullable().describe('데이터 기준 스냅샷 id. 상세는 get_build_info'),
+		dataVersion: z.string().describe('라이브 갱신까지 반영한 데이터 판. 바뀌면 이전 커서는 못 쓴다'),
+		...shape,
+	};
 }
 
 /**
@@ -50,25 +48,32 @@ function assertJsonSafe(value: unknown, path: string): void {
 }
 
 /**
- * 성공 응답. `structuredContent = { ...data, snapshotId }`, `content[0].text = summary`.
- * `data` 에 `snapshotId` 가 있어도 봉투의 것이 이긴다.
+ * 성공 응답.
+ *
+ *   structuredContent = { ...data, snapshotId: ctx.snapshotId, dataVersion: ctx.dataVersion } — 봉투가 이긴다
+ *   content[0].text   = summary + '\n' + JSON.stringify(structuredContent)  (압축 JSON)
+ *
+ * text 에도 JSON 을 싣는다 — structuredContent 를 안 읽고 text 만 모델에 넘기는 클라이언트가
+ * 있어서다(요약 한 줄만 주면 그런 클라이언트에서 데이터가 사라진다).
+ *
+ * `ctx` 는 `defineTool` 이 호출 머리에 한 번 읽어 넘긴다. 빠지면 여기서 읽는다(2인자 호출 호환).
  *
  * `data` 는 JSON 으로 한 번 왕복시킨다 — `Date` 는 ISO 문자열로, `undefined` 키는 빠진다.
- * HTTP 전송이면 어차피 그렇게 되지만 in-memory 전송은 객체를 그대로 넘겨서, 클라이언트의
- * outputSchema 검사(JSON Schema)가 `Date` 를 문자열로 보지 않는다. 두 전송의 답을 같게 한다.
- * 왕복 전에 `assertJsonSafe` 로 Map · Set · 클래스 인스턴스를 거른다(던진다).
+ * in-memory 전송은 객체를 그대로 넘겨서 클라이언트의 outputSchema 검사가 `Date` 를 문자열로
+ * 보지 않는다. 왕복 전에 `assertJsonSafe` 로 Map · Set · 클래스 인스턴스를 거른다(던진다).
  */
-export async function ok<T extends object>(data: T, summary: string): Promise<CallToolResult> {
+export async function ok<T extends object>(data: T, summary: string, ctx?: ToolCtx): Promise<CallToolResult> {
 	assertJsonSafe(data, 'data');
-	const snapshotId = await currentSnapshotId();
+	const { snapshotId, dataVersion } = ctx ?? (await readToolCtx());
 	const body = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+	const structuredContent = { ...body, snapshotId, dataVersion };
 	return {
-		structuredContent: { ...body, snapshotId },
-		content: [{ type: 'text', text: summary }],
+		structuredContent,
+		content: [{ type: 'text', text: `${summary}\n${JSON.stringify(structuredContent)}` }],
 	};
 }
 
-/** 실패 응답. 도구는 throw 하지 않고 이것을 돌려준다 — 「없는 id」「덱 코드를 풀지 못했다」 등. snapshotId 는 일부러 없다. */
+/** 실패 응답. 「없는 id」「덱 코드를 풀지 못했다」 등. snapshotId 는 일부러 없다. */
 export function fail(message: string): CallToolResult {
 	return { isError: true, content: [{ type: 'text', text: message }] };
 }
